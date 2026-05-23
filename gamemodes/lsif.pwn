@@ -14,11 +14,70 @@
 
 #define MAX_PAY_AMOUNT  50000
 
+#define JOB_NONE        0
+#define JOB_COURIER     1
+
+#define WORK_NONE       0
+#define WORK_COURIER    1
+
+#define MAX_COURIER_POINTS 5
+
 new PlayerMoney[MAX_PLAYERS];
 new PlayerXP[MAX_PLAYERS];
 new PlayerLevel[MAX_PLAYERS];
 new PlayerAdmin[MAX_PLAYERS];
 new PlayerVehicle[MAX_PLAYERS];
+
+//job
+new PlayerJob[MAX_PLAYERS];
+new PlayerWorking[MAX_PLAYERS];
+new PlayerWorkType[MAX_PLAYERS];
+new PlayerWorkPoint[MAX_PLAYERS];
+
+new Float:CourierPointX[MAX_COURIER_POINTS] =
+{
+    2102.8870,
+    1836.2458,
+    1365.8962,
+    2229.3215,
+    2495.5024
+};
+
+new Float:CourierPointY[MAX_COURIER_POINTS] =
+{
+    -1806.4775,
+        -1682.0194,
+        -1279.8245,
+        -1159.7343,
+        -1687.8154
+    };
+
+new Float:CourierPointZ[MAX_COURIER_POINTS] =
+{
+    13.5547,
+    13.3750,
+    13.5469,
+    25.7331,
+    13.5152
+};
+
+new CourierReward[MAX_COURIER_POINTS] =
+{
+    250,
+    300,
+    350,
+    450,
+    400
+};
+
+new CourierXP[MAX_COURIER_POINTS] =
+{
+    20,
+    25,
+    30,
+    35,
+    30
+};
 
 stock IsNumericString(const str[])
 {
@@ -149,6 +208,107 @@ stock GivePlayerXPEx(playerid, amount)
     return 1;
 }
 
+//Jobs
+stock GetJobName(jobid, output[], size)
+{
+    if (jobid == JOB_COURIER)
+    {
+        format(output, size, "Courier");
+        return 1;
+    }
+
+    format(output, size, "None");
+    return 1;
+}
+
+stock StartCourierWork(playerid)
+{
+    if (PlayerJob[playerid] != JOB_COURIER)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum bekerja sebagai courier. Gunakan /joinjob courier.");
+        return 0;
+    }
+
+    if (PlayerWorking[playerid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu sedang menjalankan pekerjaan. Gunakan /cancelwork untuk membatalkan.");
+        return 0;
+    }
+
+    new point = random(MAX_COURIER_POINTS);
+
+    PlayerWorking[playerid] = 1;
+    PlayerWorkType[playerid] = WORK_COURIER;
+    PlayerWorkPoint[playerid] = point;
+
+    SetPlayerCheckpoint(
+        playerid,
+        CourierPointX[point],
+        CourierPointY[point],
+        CourierPointZ[point],
+        4.0
+    );
+
+    new msg[144];
+    format(
+        msg,
+        sizeof(msg),
+        "Courier: antarkan paket ke checkpoint. Reward: $%d dan %d XP.",
+        CourierReward[point],
+        CourierXP[point]
+    );
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    SendClientMessage(playerid, COLOR_WHITE, "Tips: gunakan /veh 482 untuk spawn kendaraan van sementara.");
+
+    return 1;
+}
+
+stock CompleteCourierWork(playerid)
+{
+    if (!PlayerWorking[playerid] || PlayerWorkType[playerid] != WORK_COURIER)
+    {
+        return 0;
+    }
+
+    new point = PlayerWorkPoint[playerid];
+    new reward = CourierReward[point];
+    new xp = CourierXP[point];
+
+    GivePlayerCash(playerid, reward);
+    GivePlayerXPEx(playerid, xp);
+
+    DisablePlayerCheckpoint(playerid);
+
+    PlayerWorking[playerid] = 0;
+    PlayerWorkType[playerid] = WORK_NONE;
+    PlayerWorkPoint[playerid] = -1;
+
+    new msg[144];
+    format(msg, sizeof(msg), "Paket berhasil diantar. Kamu mendapat $%d dan %d XP.", reward, xp);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    SendClientMessage(playerid, COLOR_WHITE, "Gunakan /work lagi untuk mengambil delivery berikutnya.");
+
+    return 1;
+}
+
+stock CancelPlayerWork(playerid)
+{
+    if (!PlayerWorking[playerid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak sedang bekerja.");
+        return 0;
+    }
+
+    DisablePlayerCheckpoint(playerid);
+
+    PlayerWorking[playerid] = 0;
+    PlayerWorkType[playerid] = WORK_NONE;
+    PlayerWorkPoint[playerid] = -1;
+
+    SendClientMessage(playerid, COLOR_YELLOW, "Pekerjaan aktif dibatalkan.");
+    return 1;
+}
+
 main()
 {
     print("========================================");
@@ -159,7 +319,7 @@ main()
 
 public OnGameModeInit()
 {
-    SetGameModeText("LSIF Dev v0.2 Economy");
+    SetGameModeText("LSIF Dev v0.3 Courier");
 
     AddPlayerClass(
         0,
@@ -179,9 +339,15 @@ public OnGameModeInit()
         PlayerLevel[i] = 1;
         PlayerAdmin[i] = 0;
         PlayerVehicle[i] = INVALID_VEHICLE_ID;
+
+        //Jobs
+        PlayerJob[i] = JOB_NONE;
+        PlayerWorking[i] = 0;
+        PlayerWorkType[i] = WORK_NONE;
+        PlayerWorkPoint[i] = -1;
     }
 
-    print("[LSIF] Gamemode v0.2 Economy berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.3 Courier berhasil dijalankan.");
     return 1;
 }
 
@@ -206,6 +372,12 @@ public OnPlayerConnect(playerid)
 
     PlayerVehicle[playerid] = INVALID_VEHICLE_ID;
 
+    //Jobs
+    PlayerJob[playerid] = JOB_NONE;
+    PlayerWorking[playerid] = 0;
+    PlayerWorkType[playerid] = WORK_NONE;
+    PlayerWorkPoint[playerid] = -1;
+
     SendClientMessage(playerid, COLOR_GREEN, "Selamat datang di LSIF - Los Santos Indonesia Freeroam.");
     SendClientMessage(playerid, COLOR_WHITE, "Server development awal berhasil dijalankan.");
     SendClientMessage(playerid, COLOR_YELLOW, "Gunakan /help untuk melihat command.");
@@ -220,6 +392,14 @@ public OnPlayerDisconnect(playerid, reason)
         DestroyVehicle(PlayerVehicle[playerid]);
         PlayerVehicle[playerid] = INVALID_VEHICLE_ID;
     }
+
+    DisablePlayerCheckpoint(playerid);
+
+    //JOBS
+    PlayerJob[playerid] = JOB_NONE;
+    PlayerWorking[playerid] = 0;
+    PlayerWorkType[playerid] = WORK_NONE;
+    PlayerWorkPoint[playerid] = -1;
 
     return 1;
 }
@@ -251,6 +431,17 @@ public OnPlayerSpawn(playerid)
     return 1;
 }
 
+public OnPlayerEnterCheckpoint(playerid)
+{
+    if (PlayerWorking[playerid] && PlayerWorkType[playerid] == WORK_COURIER)
+    {
+        CompleteCourierWork(playerid);
+        return 1;
+    }
+
+    return 1;
+}
+
 public OnPlayerCommandText(playerid, cmdtext[])
 {
     if (!strcmp(cmdtext, "/help", true))
@@ -268,6 +459,11 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/fixveh - Perbaiki kendaraan");
         SendClientMessage(playerid, COLOR_WHITE, "/dv - Hapus kendaraan pribadi sementara");
         SendClientMessage(playerid, COLOR_ORANGE, "Admin dev: /goto [id], /gethere [id]");
+        SendClientMessage(playerid, COLOR_WHITE, "/jobs - Melihat daftar job");
+        SendClientMessage(playerid, COLOR_WHITE, "/joinjob courier - Ambil job courier");
+        SendClientMessage(playerid, COLOR_WHITE, "/leavejob - Keluar dari job");
+        SendClientMessage(playerid, COLOR_WHITE, "/work - Mulai pekerjaan aktif");
+        SendClientMessage(playerid, COLOR_WHITE, "/cancelwork - Batalkan pekerjaan aktif");
 
         return 1;
     }
@@ -291,6 +487,15 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         format(msg, sizeof(msg), "Admin Level: %d", PlayerAdmin[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        new jobName[32];
+        GetJobName(PlayerJob[playerid], jobName, sizeof(jobName));
+
+        format(msg, sizeof(msg), "Job: %s", jobName);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Working: %s", PlayerWorking[playerid] ? ("Yes") : ("No"));
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         return 1;
@@ -519,6 +724,80 @@ public OnPlayerCommandText(playerid, cmdtext[])
         format(msg, sizeof(msg), "Kamu menerima $%d dari player ID %d.", amount, playerid);
         SendClientMessage(targetid, COLOR_GREEN, msg);
 
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/jobs", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "========== JOBS ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "courier - Antar paket ke beberapa lokasi di Los Santos.");
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan: /joinjob courier");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/joinjob courier", true))
+    {
+        if (PlayerWorking[playerid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Selesaikan atau batalkan pekerjaan aktif dulu.");
+            return 1;
+        }
+
+        PlayerJob[playerid] = JOB_COURIER;
+
+        SendClientMessage(playerid, COLOR_GREEN, "Kamu sekarang bekerja sebagai Courier.");
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan /work untuk mulai mengantar paket.");
+        SendClientMessage(playerid, COLOR_WHITE, "Rekomendasi kendaraan: /veh 482");
+
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/joinjob", true) == 0)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /joinjob courier");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/leavejob", true))
+    {
+        if (PlayerWorking[playerid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Batalkan pekerjaan aktif dulu dengan /cancelwork.");
+            return 1;
+        }
+
+        if (PlayerJob[playerid] == JOB_NONE)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum memiliki job.");
+            return 1;
+        }
+
+        PlayerJob[playerid] = JOB_NONE;
+        SendClientMessage(playerid, COLOR_YELLOW, "Kamu keluar dari job saat ini.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/work", true))
+    {
+        if (PlayerJob[playerid] == JOB_NONE)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum punya job. Gunakan /jobs.");
+            return 1;
+        }
+
+        if (PlayerJob[playerid] == JOB_COURIER)
+        {
+            StartCourierWork(playerid);
+            return 1;
+        }
+
+        SendClientMessage(playerid, COLOR_RED, "Job kamu belum memiliki sistem work.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/cancelwork", true))
+    {
+        CancelPlayerWork(playerid);
         return 1;
     }
 

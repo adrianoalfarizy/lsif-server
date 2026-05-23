@@ -1,0 +1,30 @@
+# Logs
+logs/
+*.log
+
+# Backups
+backups/
+*.bak
+*.zip
+*.tar.gz
+
+# Runtime/cache
+scriptfiles/cache/
+scriptfiles/logs/
+
+# Editor
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local compiler/tools
+qawno/
+pawno/
+
+# Sensitive config
+config.json
+server.cfg
+
+# Optional: kalau nanti tidak mau simpan hasil compile
+# *.amx

@@ -12,11 +12,142 @@
 #define SPAWN_Z         15.3746
 #define SPAWN_A         269.1425
 
+#define MAX_PAY_AMOUNT  50000
+
 new PlayerMoney[MAX_PLAYERS];
 new PlayerXP[MAX_PLAYERS];
 new PlayerLevel[MAX_PLAYERS];
 new PlayerAdmin[MAX_PLAYERS];
 new PlayerVehicle[MAX_PLAYERS];
+
+stock IsNumericString(const str[])
+{
+    if (str[0] == EOS)
+    {
+        return 0;
+    }
+
+    for (new i = 0; str[i] != EOS; i++)
+    {
+        if (str[i] < '0' || str[i] > '9')
+        {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+stock GetTwoParams(const input[], param1[], param1Size, param2[], param2Size)
+{
+    new i = 0;
+    new p = 0;
+
+    while (input[i] == ' ')
+    {
+        i++;
+    }
+
+    while (input[i] != EOS && input[i] != ' ' && p < param1Size - 1)
+    {
+        param1[p] = input[i];
+        p++;
+        i++;
+    }
+    param1[p] = EOS;
+
+    while (input[i] == ' ')
+    {
+        i++;
+    }
+
+    p = 0;
+
+    while (input[i] != EOS && input[i] != ' ' && p < param2Size - 1)
+    {
+        param2[p] = input[i];
+        p++;
+        i++;
+    }
+    param2[p] = EOS;
+
+    if (param1[0] == EOS || param2[0] == EOS)
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+stock GivePlayerCash(playerid, amount)
+{
+    if (amount <= 0)
+    {
+        return 0;
+    }
+
+    PlayerMoney[playerid] += amount;
+    GivePlayerMoney(playerid, amount);
+
+    return 1;
+}
+
+stock TakePlayerCash(playerid, amount)
+{
+    if (amount <= 0)
+    {
+        return 0;
+    }
+
+    if (PlayerMoney[playerid] < amount)
+    {
+        return 0;
+    }
+
+    PlayerMoney[playerid] -= amount;
+    GivePlayerMoney(playerid, -amount);
+
+    return 1;
+}
+
+stock GetRequiredXP(level)
+{
+    return level * level * 500;
+}
+
+stock CheckPlayerLevelUp(playerid)
+{
+    new requiredXP = GetRequiredXP(PlayerLevel[playerid] + 1);
+
+    if (PlayerXP[playerid] >= requiredXP)
+    {
+        PlayerLevel[playerid]++;
+
+        new msg[144];
+        format(msg, sizeof(msg), "LEVEL UP! Sekarang kamu level %d.", PlayerLevel[playerid]);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+    }
+
+    return 1;
+}
+
+stock GivePlayerXPEx(playerid, amount)
+{
+    if (amount <= 0)
+    {
+        return 0;
+    }
+
+    PlayerXP[playerid] += amount;
+
+    new msg[144];
+    format(msg, sizeof(msg), "Kamu mendapatkan %d XP.", amount);
+    SendClientMessage(playerid, COLOR_CYAN, msg);
+
+    CheckPlayerLevelUp(playerid);
+
+    return 1;
+}
 
 main()
 {
@@ -28,7 +159,7 @@ main()
 
 public OnGameModeInit()
 {
-    SetGameModeText("LSIF Dev v0.1");
+    SetGameModeText("LSIF Dev v0.2 Economy");
 
     AddPlayerClass(
         0,
@@ -50,7 +181,7 @@ public OnGameModeInit()
         PlayerVehicle[i] = INVALID_VEHICLE_ID;
     }
 
-    print("[LSIF] Gamemode v0.1 berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.2 Economy berhasil dijalankan.");
     return 1;
 }
 
@@ -65,6 +196,9 @@ public OnPlayerConnect(playerid)
     PlayerMoney[playerid] = 500;
     PlayerXP[playerid] = 0;
     PlayerLevel[playerid] = 1;
+
+    ResetPlayerMoney(playerid);
+    GivePlayerMoney(playerid, PlayerMoney[playerid]);
 
     // Untuk development awal, semua player dibuat owner sementara.
     // Nanti kalau database sudah ada, ini akan diganti dari data akun.
@@ -124,12 +258,17 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF HELP ==========");
         SendClientMessage(playerid, COLOR_WHITE, "/help - Menampilkan bantuan");
         SendClientMessage(playerid, COLOR_WHITE, "/stats - Melihat statistik player");
+        SendClientMessage(playerid, COLOR_WHITE, "/money - Melihat uang kamu");
+        SendClientMessage(playerid, COLOR_WHITE, "/givemoney - Dev test tambah uang");
+        SendClientMessage(playerid, COLOR_WHITE, "/givemexp - Dev test tambah XP");
+        SendClientMessage(playerid, COLOR_WHITE, "/pay [id] [amount] - Kirim uang ke player lain");
         SendClientMessage(playerid, COLOR_WHITE, "/spawn - Kembali ke spawn utama");
         SendClientMessage(playerid, COLOR_WHITE, "/kill - Respawn test");
         SendClientMessage(playerid, COLOR_WHITE, "/veh [modelid] - Spawn kendaraan, contoh: /veh 411");
         SendClientMessage(playerid, COLOR_WHITE, "/fixveh - Perbaiki kendaraan");
         SendClientMessage(playerid, COLOR_WHITE, "/dv - Hapus kendaraan pribadi sementara");
         SendClientMessage(playerid, COLOR_ORANGE, "Admin dev: /goto [id], /gethere [id]");
+
         return 1;
     }
 
@@ -286,6 +425,99 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         SendClientMessage(playerid, COLOR_GREEN, "Target berhasil ditarik ke posisimu.");
         SendClientMessage(targetid, COLOR_ORANGE, "Kamu ditarik oleh admin.");
+
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/money", true))
+    {
+        new msg[144];
+        format(msg, sizeof(msg), "Uang kamu saat ini: $%d", PlayerMoney[playerid]);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/givemoney", true))
+    {
+        if (PlayerAdmin[playerid] < 1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+            return 1;
+        }
+
+        GivePlayerCash(playerid, 1000);
+        GivePlayerXPEx(playerid, 50);
+
+        SendClientMessage(playerid, COLOR_GREEN, "Dev test: kamu mendapat $1000 dan 50 XP.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/givemexp", true))
+    {
+        if (PlayerAdmin[playerid] < 1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+            return 1;
+        }
+
+        GivePlayerXPEx(playerid, 250);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/pay ", true) == 0)
+    {
+        new targetStr[16];
+        new amountStr[16];
+
+        if (!GetTwoParams(cmdtext[5], targetStr, sizeof(targetStr), amountStr, sizeof(amountStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /pay [playerid] [amount]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /pay 1 500");
+            return 1;
+        }
+
+        if (!IsNumericString(targetStr) || !IsNumericString(amountStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Player ID dan jumlah uang harus angka.");
+            return 1;
+        }
+
+        new targetid = strval(targetStr);
+        new amount = strval(amountStr);
+
+        if (!IsPlayerConnected(targetid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Target player tidak online.");
+            return 1;
+        }
+
+        if (targetid == playerid)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu tidak bisa membayar diri sendiri.");
+            return 1;
+        }
+
+        if (amount <= 0 || amount > MAX_PAY_AMOUNT)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Jumlah uang tidak valid atau melebihi batas.");
+            return 1;
+        }
+
+        if (!TakePlayerCash(playerid, amount))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Uang kamu tidak cukup.");
+            return 1;
+        }
+
+        GivePlayerCash(targetid, amount);
+
+        new msg[144];
+
+        format(msg, sizeof(msg), "Kamu mengirim $%d ke player ID %d.", amount, targetid);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+
+        format(msg, sizeof(msg), "Kamu menerima $%d dari player ID %d.", amount, playerid);
+        SendClientMessage(targetid, COLOR_GREEN, msg);
 
         return 1;
     }

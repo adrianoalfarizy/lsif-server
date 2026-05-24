@@ -1,4 +1,5 @@
 #include <open.mp>
+#include <a_mysql>
 
 #define COLOR_WHITE     0xFFFFFFFF
 #define COLOR_GREEN     0x00FF00FF
@@ -6,6 +7,14 @@
 #define COLOR_YELLOW    0xFFFF00FF
 #define COLOR_CYAN      0x00FFFFFF
 #define COLOR_ORANGE    0xFF9900FF
+
+#define MYSQL_HOST      "localhost"
+#define MYSQL_USER      "lsif_user"
+#define MYSQL_PASSWORD  "LSIF_DB_PASS_Dev2026!"
+#define MYSQL_DATABASE  "lsif_db"
+
+#define DIALOG_REGISTER 1000
+#define DIALOG_LOGIN    1001
 
 #define SPAWN_X         1958.3783
 #define SPAWN_Y         1343.1572
@@ -29,6 +38,16 @@
 #define VEHICLE_MULE 414
 #define VEHICLE_PONY 413
 #define VEHICLE_RUMPO 440
+
+new MySQL:g_SQL;
+
+new PlayerDBID[MAX_PLAYERS];
+new PlayerLoggedIn[MAX_PLAYERS];
+
+new Float:PlayerLastX[MAX_PLAYERS];
+new Float:PlayerLastY[MAX_PLAYERS];
+new Float:PlayerLastZ[MAX_PLAYERS];
+new Float:PlayerLastA[MAX_PLAYERS];
 
 new PlayerMoney[MAX_PLAYERS];
 new PlayerXP[MAX_PLAYERS];
@@ -87,6 +106,136 @@ new CourierXP[MAX_COURIER_POINTS] =
     35,
     30
 };
+
+forward OnAccountCheck(playerid);
+forward OnAccountRegister(playerid);
+forward OnAccountLogin(playerid);
+
+stock GetPlayerAccountName(playerid, output[], size)
+{
+    GetPlayerName(playerid, output, size);
+    return 1;
+}
+
+stock ResetPlayerAccountData(playerid)
+{
+    PlayerDBID[playerid] = 0;
+    PlayerLoggedIn[playerid] = 0;
+
+    PlayerMoney[playerid] = 500;
+    PlayerXP[playerid] = 0;
+    PlayerLevel[playerid] = 1;
+    PlayerAdmin[playerid] = 0;
+    PlayerVehicle[playerid] = INVALID_VEHICLE_ID;
+
+    PlayerJob[playerid] = JOB_NONE;
+    PlayerWorking[playerid] = 0;
+    PlayerWorkType[playerid] = WORK_NONE;
+    PlayerWorkPoint[playerid] = -1;
+    PlayerLastWorkTick[playerid] = 0;
+
+    PlayerLastX[playerid] = SPAWN_X;
+    PlayerLastY[playerid] = SPAWN_Y;
+    PlayerLastZ[playerid] = SPAWN_Z;
+    PlayerLastA[playerid] = SPAWN_A;
+
+    ResetPlayerMoney(playerid);
+    return 1;
+}
+
+stock ShowRegisterDialog(playerid)
+{
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_REGISTER,
+        DIALOG_STYLE_PASSWORD,
+        "LSIF Register",
+        "Akun belum terdaftar.\nMasukkan password baru minimal 4 karakter:",
+        "Register",
+        "Keluar"
+    );
+    return 1;
+}
+
+stock ShowLoginDialog(playerid)
+{
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_LOGIN,
+        DIALOG_STYLE_PASSWORD,
+        "LSIF Login",
+        "Akun ditemukan.\nMasukkan password akun kamu:",
+        "Login",
+        "Keluar"
+    );
+    return 1;
+}
+
+stock CheckPlayerAccount(playerid)
+{
+    new username[MAX_PLAYER_NAME];
+    new query[256];
+
+    GetPlayerAccountName(playerid, username, sizeof(username));
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "SELECT id FROM players WHERE username = '%e' LIMIT 1",
+        username
+    );
+
+    mysql_tquery(g_SQL, query, "OnAccountCheck", "i", playerid);
+    return 1;
+}
+
+stock SavePlayerData(playerid)
+{
+    if (!PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0)
+    {
+        return 0;
+    }
+
+    new Float:x, Float:y, Float:z, Float:a;
+    new query[512];
+
+    GetPlayerPos(playerid, x, y, z);
+    GetPlayerFacingAngle(playerid, a);
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "UPDATE players SET money=%d, xp=%d, level=%d, admin_level=%d, current_job=%d, pos_x=%f, pos_y=%f, pos_z=%f, pos_a=%f WHERE id=%d LIMIT 1",
+        PlayerMoney[playerid],
+        PlayerXP[playerid],
+        PlayerLevel[playerid],
+        PlayerAdmin[playerid],
+        PlayerJob[playerid],
+        x,
+        y,
+        z,
+        a,
+        PlayerDBID[playerid]
+    );
+
+    mysql_tquery(g_SQL, query);
+    return 1;
+}
+
+stock ApplyLoadedPlayerData(playerid)
+{
+    ResetPlayerMoney(playerid);
+    GivePlayerMoney(playerid, PlayerMoney[playerid]);
+    SetPlayerScore(playerid, PlayerLevel[playerid]);
+
+    SendClientMessage(playerid, COLOR_GREEN, "Login berhasil. Data akun berhasil dimuat.");
+    SendClientMessage(playerid, COLOR_WHITE, "Gunakan /stats untuk melihat data akun kamu.");
+
+    SpawnPlayer(playerid);
+    return 1;
+}
 
 stock IsNumericString(const str[])
 {
@@ -391,8 +540,23 @@ main()
 
 public OnGameModeInit()
 {
-    SetGameModeText("LSIF Dev v0.3.1 Courier");
+    SetGameModeText("LSIF Dev v0.4 Account");
 
+    g_SQL = mysql_connect(
+                MYSQL_HOST,
+                MYSQL_USER,
+                MYSQL_PASSWORD,
+                MYSQL_DATABASE
+            );
+
+    if (mysql_errno(g_SQL) != 0)
+    {
+        print("[MYSQL] Gagal connect ke database.");
+    }
+    else
+    {
+        print("[MYSQL] Berhasil connect ke database lsif_db.");
+    }
     AddPlayerClass(
         0,
         SPAWN_X,
@@ -406,63 +570,55 @@ public OnGameModeInit()
 
     for (new i = 0; i < MAX_PLAYERS; i++)
     {
+        PlayerDBID[i] = 0;
+        PlayerLoggedIn[i] = 0;
+
         PlayerMoney[i] = 500;
         PlayerXP[i] = 0;
         PlayerLevel[i] = 1;
         PlayerAdmin[i] = 0;
         PlayerVehicle[i] = INVALID_VEHICLE_ID;
 
-        //Jobs
         PlayerJob[i] = JOB_NONE;
         PlayerWorking[i] = 0;
         PlayerWorkType[i] = WORK_NONE;
         PlayerWorkPoint[i] = -1;
         PlayerLastWorkTick[i] = 0;
-    }
 
-    print("[LSIF] Gamemode v0.3.1 Courier berhasil dijalankan.");
+        PlayerLastX[i] = SPAWN_X;
+        PlayerLastY[i] = SPAWN_Y;
+        PlayerLastZ[i] = SPAWN_Z;
+        PlayerLastA[i] = SPAWN_A;
+    }
+    print("[LSIF] Gamemode v0.4 Courier berhasil dijalankan.");
     return 1;
 }
 
 public OnGameModeExit()
 {
+    mysql_close(g_SQL);
+
+    print("[MYSQL] Koneksi database ditutup.");
     print("[LSIF] Gamemode dimatikan.");
     return 1;
 }
 
 public OnPlayerConnect(playerid)
 {
-    PlayerMoney[playerid] = 500;
-    PlayerXP[playerid] = 0;
-    PlayerLevel[playerid] = 1;
-
-    ResetPlayerMoney(playerid);
-    GivePlayerMoney(playerid, PlayerMoney[playerid]);
-
-    // Untuk development awal, semua player dibuat owner sementara.
-    // Nanti kalau database sudah ada, ini akan diganti dari data akun.
-    PlayerAdmin[playerid] = 5;
-
-    PlayerVehicle[playerid] = INVALID_VEHICLE_ID;
-
-    //Jobs
-    PlayerJob[playerid] = JOB_NONE;
-    PlayerWorking[playerid] = 0;
-    PlayerWorkType[playerid] = WORK_NONE;
-    PlayerWorkPoint[playerid] = -1;
-    PlayerLastWorkTick[playerid] = 0;
-
+    ResetPlayerAccountData(playerid);
 
     SendClientMessage(playerid, COLOR_GREEN, "Selamat datang di LSIF - Los Santos Indonesia Freeroam.");
-    SendClientMessage(playerid, COLOR_WHITE, "Server development awal berhasil dijalankan.");
-    SendClientMessage(playerid, COLOR_YELLOW, "Gunakan /help untuk melihat command.");
+    SendClientMessage(playerid, COLOR_WHITE, "Mengecek akun kamu di database...");
 
+    CheckPlayerAccount(playerid);
 
     return 1;
 }
 
 public OnPlayerDisconnect(playerid, reason)
 {
+    SavePlayerData(playerid);
+
     if (PlayerVehicle[playerid] != INVALID_VEHICLE_ID)
     {
         DestroyVehicle(PlayerVehicle[playerid]);
@@ -471,11 +627,24 @@ public OnPlayerDisconnect(playerid, reason)
 
     DisablePlayerCheckpoint(playerid);
 
-    //JOBS
     PlayerJob[playerid] = JOB_NONE;
     PlayerWorking[playerid] = 0;
     PlayerWorkType[playerid] = WORK_NONE;
     PlayerWorkPoint[playerid] = -1;
+
+    PlayerLoggedIn[playerid] = 0;
+    PlayerDBID[playerid] = 0;
+
+    return 1;
+}
+
+public OnPlayerRequestSpawn(playerid)
+{
+    if (!PlayerLoggedIn[playerid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus login/register terlebih dahulu.");
+        return 0;
+    }
 
     return 1;
 }
@@ -493,16 +662,206 @@ public OnPlayerRequestClass(playerid, classid)
 
 public OnPlayerSpawn(playerid)
 {
+    if (!PlayerLoggedIn[playerid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum login.");
+        return 1;
+    }
     SetPlayerInterior(playerid, 0);
     SetPlayerVirtualWorld(playerid, 0);
 
-    SetPlayerPos(playerid, SPAWN_X, SPAWN_Y, SPAWN_Z);
-    SetPlayerFacingAngle(playerid, SPAWN_A);
+    SetPlayerPos(playerid, PlayerLastX[playerid], PlayerLastY[playerid], PlayerLastZ[playerid]);
+    SetPlayerFacingAngle(playerid, PlayerLastA[playerid]);
 
     ResetPlayerWeapons(playerid);
 
     SendClientMessage(playerid, COLOR_CYAN, "Kamu berhasil spawn di Los Santos.");
     SendClientMessage(playerid, COLOR_WHITE, "Coba command: /help, /stats, /veh 411, /kill.");
+
+    return 1;
+}
+
+public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
+{
+    if (dialogid == DIALOG_REGISTER)
+    {
+        if (!response)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu keluar dari proses register.");
+            Kick(playerid);
+            return 1;
+        }
+
+        if (strlen(inputtext) < 4)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Password minimal 4 karakter.");
+            ShowRegisterDialog(playerid);
+            return 1;
+        }
+
+        new username[MAX_PLAYER_NAME];
+        new ip[45];
+        new query[512];
+
+        GetPlayerAccountName(playerid, username, sizeof(username));
+        GetPlayerIp(playerid, ip, sizeof(ip));
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "INSERT INTO players (username, password_hash, money, xp, level, admin_level, current_job, pos_x, pos_y, pos_z, pos_a, last_ip, last_login) VALUES ('%e', SHA2('%e', 256), 500, 0, 1, 0, 0, %f, %f, %f, %f, '%e', NOW())",
+            username,
+            inputtext,
+            SPAWN_X,
+            SPAWN_Y,
+            SPAWN_Z,
+            SPAWN_A,
+            ip
+        );
+
+        mysql_tquery(g_SQL, query, "OnAccountRegister", "i", playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_LOGIN)
+    {
+        if (!response)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu keluar dari proses login.");
+            Kick(playerid);
+            return 1;
+        }
+
+        if (strlen(inputtext) < 1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Password tidak boleh kosong.");
+            ShowLoginDialog(playerid);
+            return 1;
+        }
+
+        new username[MAX_PLAYER_NAME];
+        new query[512];
+
+        GetPlayerAccountName(playerid, username, sizeof(username));
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "SELECT id, money, xp, level, admin_level, skin, current_job, pos_x, pos_y, pos_z, pos_a FROM players WHERE username='%e' AND password_hash=SHA2('%e', 256) LIMIT 1",
+            username,
+            inputtext
+        );
+
+        mysql_tquery(g_SQL, query, "OnAccountLogin", "i", playerid);
+        return 1;
+    }
+
+    return 0;
+}
+
+public OnAccountCheck(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+
+    if (rows > 0)
+    {
+        ShowLoginDialog(playerid);
+    }
+    else
+    {
+        ShowRegisterDialog(playerid);
+    }
+
+    return 1;
+}
+
+public OnAccountRegister(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    PlayerDBID[playerid] = cache_insert_id();
+    PlayerLoggedIn[playerid] = 1;
+
+    PlayerMoney[playerid] = 500;
+    PlayerXP[playerid] = 0;
+    PlayerLevel[playerid] = 1;
+    PlayerAdmin[playerid] = 0;
+    PlayerJob[playerid] = JOB_NONE;
+
+    PlayerLastX[playerid] = SPAWN_X;
+    PlayerLastY[playerid] = SPAWN_Y;
+    PlayerLastZ[playerid] = SPAWN_Z;
+    PlayerLastA[playerid] = SPAWN_A;
+
+    ResetPlayerMoney(playerid);
+    GivePlayerMoney(playerid, PlayerMoney[playerid]);
+    SetPlayerScore(playerid, PlayerLevel[playerid]);
+
+    SendClientMessage(playerid, COLOR_GREEN, "Register berhasil. Akun kamu sudah dibuat.");
+    SendClientMessage(playerid, COLOR_WHITE, "Selamat datang di LSIF.");
+
+    SpawnPlayer(playerid);
+    return 1;
+}
+
+public OnAccountLogin(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+
+    if (rows == 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Password salah.");
+        ShowLoginDialog(playerid);
+        return 1;
+    }
+
+    cache_get_value_name_int(0, "id", PlayerDBID[playerid]);
+    cache_get_value_name_int(0, "money", PlayerMoney[playerid]);
+    cache_get_value_name_int(0, "xp", PlayerXP[playerid]);
+    cache_get_value_name_int(0, "level", PlayerLevel[playerid]);
+    cache_get_value_name_int(0, "admin_level", PlayerAdmin[playerid]);
+    // cache_get_value_name_int(0, "skin", PlayerLevel[playerid]);
+    cache_get_value_name_int(0, "current_job", PlayerJob[playerid]);
+
+    cache_get_value_name_float(0, "pos_x", PlayerLastX[playerid]);
+    cache_get_value_name_float(0, "pos_y", PlayerLastY[playerid]);
+    cache_get_value_name_float(0, "pos_z", PlayerLastZ[playerid]);
+    cache_get_value_name_float(0, "pos_a", PlayerLastA[playerid]);
+
+    PlayerLoggedIn[playerid] = 1;
+
+    ApplyLoadedPlayerData(playerid);
+
+    new ip[45];
+    new query[256];
+
+    GetPlayerIp(playerid, ip, sizeof(ip));
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "UPDATE players SET last_ip='%e', last_login=NOW() WHERE id=%d LIMIT 1",
+        ip,
+        PlayerDBID[playerid]
+    );
+
+    mysql_tquery(g_SQL, query);
 
     return 1;
 }
@@ -520,6 +879,11 @@ public OnPlayerEnterCheckpoint(playerid)
 
 public OnPlayerCommandText(playerid, cmdtext[])
 {
+    if (!PlayerLoggedIn[playerid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus login/register terlebih dahulu.");
+        return 1;
+    }
     if (!strcmp(cmdtext, "/help", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF HELP ==========");

@@ -16,6 +16,8 @@
 #define DIALOG_REGISTER 1000
 #define DIALOG_LOGIN    1001
 
+#define AUTOSAVE_INTERVAL 300000 // 5 menit dalam milidetik
+
 #define SPAWN_X         1958.3783
 #define SPAWN_Y         1343.1572
 #define SPAWN_Z         15.3746
@@ -42,6 +44,7 @@
 #define VEHICLE_RUMPO 440
 
 new MySQL:g_SQL;
+new g_AutosaveTimer;
 
 new PlayerDBID[MAX_PLAYERS];
 new PlayerLoggedIn[MAX_PLAYERS];
@@ -112,6 +115,27 @@ new CourierXP[MAX_COURIER_POINTS] =
 forward OnAccountCheck(playerid);
 forward OnAccountRegister(playerid);
 forward OnAccountLogin(playerid);
+forward AutoSavePlayers();
+
+stock SaveAllPlayers()
+{
+    new savedCount = 0;
+
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (IsPlayerConnected(i) && PlayerLoggedIn[i])
+        {
+            SavePlayerData(i);
+            savedCount++;
+        }
+    }
+
+    new msg[128];
+    format(msg, sizeof(msg), "[AUTOSAVE] %d player data disimpan.", savedCount);
+    print(msg);
+
+    return savedCount;
+}
 
 stock GetPlayerAccountName(playerid, output[], size)
 {
@@ -566,9 +590,15 @@ main()
     print("========================================");
 }
 
+public AutoSavePlayers()
+{
+    SaveAllPlayers();
+    return 1;
+}
+
 public OnGameModeInit()
 {
-    SetGameModeText("LSIF Dev v0.4 Account");
+    SetGameModeText("LSIF Dev v0.4C Data Safety");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -618,12 +648,24 @@ public OnGameModeInit()
         PlayerLastZ[i] = SPAWN_Z;
         PlayerLastA[i] = SPAWN_A;
     }
-    print("[LSIF] Gamemode v0.4 Courier berhasil dijalankan.");
+    g_AutosaveTimer = SetTimer("AutoSavePlayers", AUTOSAVE_INTERVAL, true);
+
+    print("[LSIF] Autosave timer aktif setiap 5 menit.");
+    print("[LSIF] Gamemode v0.4C Data Safety berhasil dijalankan.");
     return 1;
 }
 
 public OnGameModeExit()
 {
+    print("[LSIF] Menyimpan semua data player sebelum gamemode exit...");
+    SaveAllPlayers();
+
+    if (g_AutosaveTimer)
+    {
+        KillTimer(g_AutosaveTimer);
+        g_AutosaveTimer = 0;
+    }
+
     mysql_close(g_SQL);
 
     print("[MYSQL] Koneksi database ditutup.");
@@ -942,6 +984,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/leavejob - Keluar dari job");
         SendClientMessage(playerid, COLOR_WHITE, "/work - Mulai pekerjaan aktif");
         SendClientMessage(playerid, COLOR_WHITE, "/cancelwork - Batalkan pekerjaan aktif");
+        SendClientMessage(playerid, COLOR_WHITE, "/account - Melihat informasi akun");
+        SendClientMessage(playerid, COLOR_WHITE, "/save - Simpan data akun manual");
 
         return 1;
     }
@@ -1313,6 +1357,52 @@ public OnPlayerCommandText(playerid, cmdtext[])
         }
 
         SendClientMessage(playerid, COLOR_WHITE, "Kamu belum memiliki job. Gunakan /jobs.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/save", true))
+    {
+        if (!PlayerLoggedIn[playerid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu harus login terlebih dahulu.");
+            return 1;
+        }
+
+        SavePlayerData(playerid);
+        SendClientMessage(playerid, COLOR_GREEN, "Data akun kamu berhasil disimpan.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/account", true))
+    {
+        if (!PlayerLoggedIn[playerid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu harus login terlebih dahulu.");
+            return 1;
+        }
+
+        new name[MAX_PLAYER_NAME];
+        new msg[144];
+
+        GetPlayerName(playerid, name, sizeof(name));
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== ACCOUNT INFO ==========");
+
+        format(msg, sizeof(msg), "Username: %s", name);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Database ID: %d", PlayerDBID[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Logged In: %s", PlayerLoggedIn[playerid] ? ("Yes") : ("No"));
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Admin Level: %d", PlayerAdmin[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Money: $%d | XP: %d | Level: %d", PlayerMoney[playerid], PlayerXP[playerid], PlayerLevel[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
         return 1;
     }
 

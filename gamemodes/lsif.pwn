@@ -116,6 +116,7 @@ forward OnAccountCheck(playerid);
 forward OnAccountRegister(playerid);
 forward OnAccountLogin(playerid);
 forward AutoSavePlayers();
+forward OnPlayerDataSaved(playerid, notify);
 
 stock SaveAllPlayers()
 {
@@ -216,10 +217,14 @@ stock CheckPlayerAccount(playerid)
     return 1;
 }
 
-stock SavePlayerData(playerid)
+stock SavePlayerData(playerid, notify = 0)
 {
     if (!PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0)
     {
+        if (notify)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Data gagal disimpan. Kamu belum login.");
+        }
         return 0;
     }
 
@@ -246,7 +251,7 @@ stock SavePlayerData(playerid)
         PlayerDBID[playerid]
     );
 
-    mysql_tquery(g_SQL, query);
+    mysql_tquery(g_SQL, query, "OnPlayerDataSaved", "ii", playerid, notify);
     return 1;
 }
 
@@ -956,6 +961,25 @@ public OnPlayerEnterCheckpoint(playerid)
     return 1;
 }
 
+public OnPlayerDataSaved(playerid, notify)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    if (notify)
+    {
+        new affectedRows = cache_affected_rows();
+        new msg[144];
+
+        format(msg, sizeof(msg), "Data akun berhasil disimpan. Affected rows: %d", affectedRows);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+    }
+
+    return 1;
+}
+
 public OnPlayerCommandText(playerid, cmdtext[])
 {
     if (!PlayerLoggedIn[playerid])
@@ -985,7 +1009,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/work - Mulai pekerjaan aktif");
         SendClientMessage(playerid, COLOR_WHITE, "/cancelwork - Batalkan pekerjaan aktif");
         SendClientMessage(playerid, COLOR_WHITE, "/account - Melihat informasi akun");
-        SendClientMessage(playerid, COLOR_WHITE, "/save - Simpan data akun manual");
+        SendClientMessage(playerid, COLOR_WHITE, "/savedata - Simpan data akun manual");
 
         return 1;
     }
@@ -1360,7 +1384,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
-    if (!strcmp(cmdtext, "/save", true))
+    if (!strcmp(cmdtext, "/savedata", true))
     {
         if (!PlayerLoggedIn[playerid])
         {
@@ -1368,8 +1392,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
             return 1;
         }
 
-        SavePlayerData(playerid);
-        SendClientMessage(playerid, COLOR_GREEN, "Data akun kamu berhasil disimpan.");
+        SavePlayerData(playerid, 1);
         return 1;
     }
 

@@ -1233,6 +1233,8 @@
 		<!-- constants -->
 		<member name="C:EOS" value="0">
 			<referrer name="strcopy"/>
+			<referrer name="IsNumericString"/>
+			<referrer name="GetTwoParams"/>
 		</member>
 		<member name="C:__PawnBuild" value="11">
 		</member>
@@ -1269,17 +1271,53 @@
 		</member>
 
 		<!-- variables -->
+		<member name="F:CourierPointX">
+			<tagname value="Float"/>
+			<referrer name="StartCourierWork"/>
+		</member>
+		<member name="F:CourierPointY">
+			<tagname value="Float"/>
+			<referrer name="StartCourierWork"/>
+		</member>
+		<member name="F:CourierPointZ">
+			<tagname value="Float"/>
+			<referrer name="StartCourierWork"/>
+		</member>
+		<member name="F:CourierReward">
+			<referrer name="StartCourierWork"/>
+			<referrer name="CompleteCourierWork"/>
+		</member>
+		<member name="F:CourierXP">
+			<referrer name="StartCourierWork"/>
+			<referrer name="CompleteCourierWork"/>
+		</member>
 		<member name="F:PlayerAdmin">
 			<referrer name="OnGameModeInit"/>
 			<referrer name="OnPlayerConnect"/>
 			<referrer name="OnPlayerCommandText"/>
 		</member>
+		<member name="F:PlayerJob">
+			<referrer name="StartCourierWork"/>
+			<referrer name="OnGameModeInit"/>
+			<referrer name="OnPlayerConnect"/>
+			<referrer name="OnPlayerDisconnect"/>
+			<referrer name="OnPlayerCommandText"/>
+		</member>
+		<member name="F:PlayerLastWorkTick">
+			<referrer name="GetCourierCooldownLeft"/>
+			<referrer name="CompleteCourierWork"/>
+			<referrer name="OnGameModeInit"/>
+			<referrer name="OnPlayerConnect"/>
+		</member>
 		<member name="F:PlayerLevel">
+			<referrer name="CheckPlayerLevelUp"/>
 			<referrer name="OnGameModeInit"/>
 			<referrer name="OnPlayerConnect"/>
 			<referrer name="OnPlayerCommandText"/>
 		</member>
 		<member name="F:PlayerMoney">
+			<referrer name="GivePlayerCash"/>
+			<referrer name="TakePlayerCash"/>
 			<referrer name="OnGameModeInit"/>
 			<referrer name="OnPlayerConnect"/>
 			<referrer name="OnPlayerCommandText"/>
@@ -1290,7 +1328,36 @@
 			<referrer name="OnPlayerDisconnect"/>
 			<referrer name="OnPlayerCommandText"/>
 		</member>
+		<member name="F:PlayerWorkPoint">
+			<referrer name="StartCourierWork"/>
+			<referrer name="CompleteCourierWork"/>
+			<referrer name="CancelPlayerWork"/>
+			<referrer name="OnGameModeInit"/>
+			<referrer name="OnPlayerConnect"/>
+			<referrer name="OnPlayerDisconnect"/>
+		</member>
+		<member name="F:PlayerWorkType">
+			<referrer name="StartCourierWork"/>
+			<referrer name="CompleteCourierWork"/>
+			<referrer name="CancelPlayerWork"/>
+			<referrer name="OnGameModeInit"/>
+			<referrer name="OnPlayerConnect"/>
+			<referrer name="OnPlayerDisconnect"/>
+			<referrer name="OnPlayerEnterCheckpoint"/>
+		</member>
+		<member name="F:PlayerWorking">
+			<referrer name="StartCourierWork"/>
+			<referrer name="CompleteCourierWork"/>
+			<referrer name="CancelPlayerWork"/>
+			<referrer name="OnGameModeInit"/>
+			<referrer name="OnPlayerConnect"/>
+			<referrer name="OnPlayerDisconnect"/>
+			<referrer name="OnPlayerEnterCheckpoint"/>
+			<referrer name="OnPlayerCommandText"/>
+		</member>
 		<member name="F:PlayerXP">
+			<referrer name="CheckPlayerLevelUp"/>
+			<referrer name="GivePlayerXPEx"/>
 			<referrer name="OnGameModeInit"/>
 			<referrer name="OnPlayerConnect"/>
 			<referrer name="OnPlayerCommandText"/>
@@ -2103,6 +2170,46 @@
 			</param>
 			<library>omp_class</library>  <summary>Adds a class to class selection.  Classes are used so players may spawn with a skin of their  choice.</summary>                        <returns>  <ul>  <li>The <b>ID of the class</b> which was just added.</li>  <li><b><c>319</c></b> if the class limit (<b><c>320</c></b>) was reached.  The highest possible  class ID is <b><c>319</c></b>.</li>  </ul>  </returns>  <remarks>  The maximum class ID is <b><c>319</c></b> (starting from <b><c>0</c></b>, so a total of <b><c>320</c></b>  classes).  When this limit is reached, any more classes that are added will replace ID <b><c>319</c></b>.  </remarks>  <seealso name="AddPlayerClassEx" />  <seealso name="SetSpawnInfo" />  <seealso name="SetPlayerSkin" /> 
 		</member>
+		<member name="M:CancelPlayerWork" syntax="CancelPlayerWork(playerid)">
+			<stacksize value="5"/>
+			<referrer name="OnPlayerCommandText"/>
+			<dependency name="DisablePlayerCheckpoint"/>
+			<dependency name="PlayerWorkPoint"/>
+			<dependency name="PlayerWorkType"/>
+			<dependency name="PlayerWorking"/>
+			<dependency name="SendClientMessage"/>
+			<param name="playerid">
+			</param>
+		</member>
+		<member name="M:CheckPlayerLevelUp" syntax="CheckPlayerLevelUp(playerid)">
+			<stacksize value="151"/>
+			<referrer name="GivePlayerXPEx"/>
+			<dependency name="GetRequiredXP"/>
+			<dependency name="PlayerLevel"/>
+			<dependency name="PlayerXP"/>
+			<dependency name="SendClientMessage"/>
+			<dependency name="format"/>
+			<param name="playerid">
+			</param>
+		</member>
+		<member name="M:CompleteCourierWork" syntax="CompleteCourierWork(playerid)">
+			<stacksize value="154"/>
+			<referrer name="OnPlayerEnterCheckpoint"/>
+			<dependency name="CourierReward"/>
+			<dependency name="CourierXP"/>
+			<dependency name="DisablePlayerCheckpoint"/>
+			<dependency name="GetTickCount"/>
+			<dependency name="GivePlayerCash"/>
+			<dependency name="GivePlayerXPEx"/>
+			<dependency name="PlayerLastWorkTick"/>
+			<dependency name="PlayerWorkPoint"/>
+			<dependency name="PlayerWorkType"/>
+			<dependency name="PlayerWorking"/>
+			<dependency name="SendClientMessage"/>
+			<dependency name="format"/>
+			<param name="playerid">
+			</param>
+		</member>
 		<member name="M:CreateVehicle" syntax="CreateVehicle(modelid, spawnX, spawnY, spawnZ, angle, colour1, colour2, respawnDelay, addSiren)">
 			<attribute name="native"/>
 			<referrer name="OnPlayerCommandText"/>
@@ -2150,6 +2257,17 @@
 			</param>
 			<library>omp_vehicle</library>  <summary>Destroy a vehicle.  It will disappear instantly.</summary>    <seealso name="CreateVehicle" />  <seealso name="RemovePlayerFromVehicle" />  <seealso name="SetVehicleToRespawn" />  <returns>  <b><c>1</c></b>: The function executed successfully.<br />  <b><c>0</c></b>: The function failed to execute.  The vehicle does not exist.  </returns> 
 		</member>
+		<member name="M:DisablePlayerCheckpoint" syntax="DisablePlayerCheckpoint(playerid)">
+			<tagname value="bool"/>
+			<attribute name="native"/>
+			<referrer name="CompleteCourierWork"/>
+			<referrer name="CancelPlayerWork"/>
+			<referrer name="OnPlayerDisconnect"/>
+			<param name="playerid">
+				The ID of the player whose checkpoint to disable
+			</param>
+			<library>omp_checkpoint</library>  <summary>Disables (hides/destroys) a player's set checkpoint.  Players can only have a single checkpoint  set at a time.  Checkpoints don't need to be disabled before setting another one.</summary>    <seealso name="SetPlayerCheckpoint" />  <seealso name="IsPlayerInCheckpoint" />  <seealso name="SetPlayerRaceCheckpoint" />  <seealso name="DisablePlayerRaceCheckpoint" />  <seealso name="IsPlayerInRaceCheckpoint" />  <seealso name="OnPlayerEnterCheckpoint" />  <seealso name="OnPlayerLeaveCheckpoint" />  <seealso name="OnPlayerEnterRaceCheckpoint" />  <seealso name="OnPlayerLeaveRaceCheckpoint" />  <returns>  <b><c>1</c></b>: The function executed successfully.  Success is also returned if the player doesn't  have a checkpoint shown already.<br />  <b><c>0</c></b>: The function failed to execute.  This means the player is not connected.  </returns> 
+		</member>
 		<member name="M:EnableTirePopping" syntax="EnableTirePopping(enable)">
 			<stacksize value="1"/>
 			<param name="enable">
@@ -2161,6 +2279,27 @@
 		<member name="M:GetActorPoolSize" syntax="GetActorPoolSize()">
 			<stacksize value="1"/>
 			<library>omp_core</library>  <summary>Gets the highest actorid created on the server.</summary>  <seealso name="CreateActor" />  <seealso name="IsValidActor" />  <seealso name="SetActorHealth" />  <returns>The highest actorid created on the server or <b><c>0</c></b> if there are no created actors.</returns> 
+		</member>
+		<member name="M:GetCourierCooldownLeft" syntax="GetCourierCooldownLeft(playerid)">
+			<stacksize value="4"/>
+			<referrer name="StartCourierWork"/>
+			<referrer name="OnPlayerCommandText"/>
+			<dependency name="GetTickCount"/>
+			<dependency name="PlayerLastWorkTick"/>
+			<param name="playerid">
+			</param>
+		</member>
+		<member name="M:GetJobName" syntax="GetJobName(jobid, output[], size)">
+			<stacksize value="5"/>
+			<referrer name="OnPlayerCommandText"/>
+			<dependency name="format"/>
+			<param name="jobid">
+			</param>
+			<param name="output">
+				<paraminfo> [] </paraminfo>
+			</param>
+			<param name="size">
+			</param>
 		</member>
 		<member name="M:GetPlayerFacingAngle" syntax="GetPlayerFacingAngle(playerid, &amp;angle)">
 			<tagname value="bool"/>
@@ -2210,6 +2349,7 @@
 		</member>
 		<member name="M:GetPlayerVehicleID" syntax="GetPlayerVehicleID(playerid)">
 			<attribute name="native"/>
+			<referrer name="IsPlayerInCourierVehicle"/>
 			<referrer name="OnPlayerCommandText"/>
 			<param name="playerid">
 				The ID of the player in the vehicle that you want to get the ID of
@@ -2224,9 +2364,85 @@
 			</param>
 			<library>omp_player</library>  <summary>Retrieves the current virtual world the player is in.</summary>    <seealso name="SetPlayerVirtualWorld" />  <seealso name="GetVehicleVirtualWorld" />  <seealso name="GetPlayerInterior" />  <returns>The ID of the virtual world the player is currently in.</returns> 
 		</member>
+		<member name="M:GetRequiredXP" syntax="GetRequiredXP(level)">
+			<stacksize value="1"/>
+			<referrer name="CheckPlayerLevelUp"/>
+			<param name="level">
+			</param>
+		</member>
+		<member name="M:GetTickCount" syntax="GetTickCount()">
+			<attribute name="native"/>
+			<referrer name="GetCourierCooldownLeft"/>
+			<referrer name="CompleteCourierWork"/>
+			<library>omp_core</library>  <summary>Returns the uptime of the actual server (not the open.mp server) in milliseconds.</summary>  <seealso name="tickcount" />  <remarks>GetTickCount will cause problems on servers with uptime of over 24 days as GetTickCount  will eventually warp past the integer size constraints.  However using  <a href="https://gist.github.com/ziggi/5d7d8dc42f54531feba7ae924c608e73">this</a>  function fixes the problem.</remarks>  <remarks>One common use for GetTickCount is for benchmarking.  It can be used to calculate how much  time some code takes to execute.</remarks>  <returns>Uptime of the actual server (not the open.mp server).</returns> 
+		</member>
+		<member name="M:GetTwoParams" syntax="GetTwoParams(input[], param1[], param1Size, param2[], param2Size)">
+			<stacksize value="3"/>
+			<referrer name="OnPlayerCommandText"/>
+			<dependency name="EOS"/>
+			<param name="input">
+				<paraminfo> [] </paraminfo>
+			</param>
+			<param name="param1">
+				<paraminfo> [] </paraminfo>
+			</param>
+			<param name="param1Size">
+			</param>
+			<param name="param2">
+				<paraminfo> [] </paraminfo>
+			</param>
+			<param name="param2Size">
+			</param>
+		</member>
+		<member name="M:GetVehicleModel" syntax="GetVehicleModel(vehicleid)">
+			<attribute name="native"/>
+			<referrer name="IsPlayerInCourierVehicle"/>
+			<param name="vehicleid">
+				The ID of the vehicle to get the model of
+			</param>
+			<library>omp_vehicle</library>  <summary>Gets the <a href="https://www.open.mp/docs/scripting/resources/vehicleid">model ID</a> of a  vehicle.</summary>    <seealso name="GetPlayerVehicleid" />  <seealso name="GetVehiclePos" />  <seealso name="GetVehicleZAngle" />  <seealso name="GetPlayerVehicleSeat" />  <returns>The vehicle's <a href="https://www.open.mp/docs/scripting/resources/vehicleid">model ID</a>,  or <b><c>0</c></b>  if the vehicle doesn't exist.</returns> 
+		</member>
 		<member name="M:GetVehiclePoolSize" syntax="GetVehiclePoolSize()">
 			<stacksize value="1"/>
 			<library>omp_core</library>  <summary>Gets the highest vehicleid currently in use on the server.</summary>  <seealso name="GetPlayerPoolSize" />  <returns>The highest vehicleid currently in use on the server or <b><c>0</c></b> if there are no  created vehicles.</returns> 
+		</member>
+		<member name="M:GivePlayerCash" syntax="GivePlayerCash(playerid, amount)">
+			<stacksize value="4"/>
+			<referrer name="CompleteCourierWork"/>
+			<referrer name="OnPlayerCommandText"/>
+			<dependency name="GivePlayerMoney"/>
+			<dependency name="PlayerMoney"/>
+			<param name="playerid">
+			</param>
+			<param name="amount">
+			</param>
+		</member>
+		<member name="M:GivePlayerMoney" syntax="GivePlayerMoney(playerid, money)">
+			<tagname value="bool"/>
+			<attribute name="native"/>
+			<referrer name="GivePlayerCash"/>
+			<referrer name="TakePlayerCash"/>
+			<referrer name="OnPlayerConnect"/>
+			<param name="playerid">
+				The ID of the player to give money to or take money from
+			</param>
+			<param name="money">
+				The amount of money to give the player.  Use a minus value to take money
+			</param>
+			<library>omp_player</library>  <summary>Give money to or take money from a player.</summary>      <seealso name="ResetPlayerMoney" />  <seealso name="GetPlayerMoney" />  <returns>  <b><c>1</c></b>: The function executed successfully.<br />  <b><c>0</c></b>: The function failed to execute. This means the player is not connected.  </returns> 
+		</member>
+		<member name="M:GivePlayerXPEx" syntax="GivePlayerXPEx(playerid, amount)">
+			<stacksize value="150"/>
+			<referrer name="CompleteCourierWork"/>
+			<referrer name="OnPlayerCommandText"/>
+			<dependency name="CheckPlayerLevelUp"/>
+			<dependency name="PlayerXP"/>
+			<dependency name="SendClientMessage"/>
+			<dependency name="format"/>
+			<param name="playerid">
+			</param>
+			<param name="amount">
+			</param>
 		</member>
 		<member name="M:HasObjectCameraCollision" syntax="HasObjectCameraCollision(objectid)">
 			<tagname value="bool"/>
@@ -2245,6 +2461,20 @@
 			<param name="objectid">
 			</param>
 			<library>omp_object</library>  <summary></summary> 
+		</member>
+		<member name="M:IsCourierVehicleModel" syntax="IsCourierVehicleModel(modelid)">
+			<stacksize value="1"/>
+			<referrer name="IsPlayerInCourierVehicle"/>
+			<param name="modelid">
+			</param>
+		</member>
+		<member name="M:IsNumericString" syntax="IsNumericString(str[])">
+			<stacksize value="2"/>
+			<referrer name="OnPlayerCommandText"/>
+			<dependency name="EOS"/>
+			<param name="str">
+				<paraminfo> [] </paraminfo>
+			</param>
 		</member>
 		<member name="M:IsObjectNoCameraCol" syntax="IsObjectNoCameraCol(objectid)">
 			<tagname value="bool"/>
@@ -2266,11 +2496,22 @@
 		<member name="M:IsPlayerInAnyVehicle" syntax="IsPlayerInAnyVehicle(playerid)">
 			<tagname value="bool"/>
 			<attribute name="native"/>
+			<referrer name="IsPlayerInCourierVehicle"/>
 			<referrer name="OnPlayerCommandText"/>
 			<param name="playerid">
 				The ID of the player to check
 			</param>
 			<library>omp_player</library>  <summary>Check if a player is inside any vehicle (as a driver or passenger).</summary>    <seealso name="IsPlayerInVehicle" />  <seealso name="GetPlayerVehicleSeat" />  <returns><b><c>1</c></b> if the player is in a vehicle, <b><c>0</c></b> if not.</returns> 
+		</member>
+		<member name="M:IsPlayerInCourierVehicle" syntax="IsPlayerInCourierVehicle(playerid)">
+			<stacksize value="6"/>
+			<referrer name="StartCourierWork"/>
+			<dependency name="GetPlayerVehicleID"/>
+			<dependency name="GetVehicleModel"/>
+			<dependency name="IsCourierVehicleModel"/>
+			<dependency name="IsPlayerInAnyVehicle"/>
+			<param name="playerid">
+			</param>
 		</member>
 		<member name="M:IsPlayerObjectNoCameraCol" syntax="IsPlayerObjectNoCameraCol(playerid, objectid)">
 			<tagname value="bool"/>
@@ -2370,9 +2611,14 @@
 			<stacksize value="13"/>
 			<dependency name="AddPlayerClass"/>
 			<dependency name="PlayerAdmin"/>
+			<dependency name="PlayerJob"/>
+			<dependency name="PlayerLastWorkTick"/>
 			<dependency name="PlayerLevel"/>
 			<dependency name="PlayerMoney"/>
 			<dependency name="PlayerVehicle"/>
+			<dependency name="PlayerWorkPoint"/>
+			<dependency name="PlayerWorkType"/>
+			<dependency name="PlayerWorking"/>
 			<dependency name="PlayerXP"/>
 			<dependency name="SetGameModeText"/>
 			<dependency name="__print"/>
@@ -2664,21 +2910,30 @@
 		</member>
 		<member name="M:OnPlayerCommandText" syntax="OnPlayerCommandText(playerid, cmdtext[])">
 			<attribute name="public"/>
-			<stacksize value="155"/>
+			<stacksize value="185"/>
 			<dependency name="operator+(Float:,Float:)"/>
+			<dependency name="CancelPlayerWork"/>
 			<dependency name="CreateVehicle"/>
 			<dependency name="DestroyVehicle"/>
+			<dependency name="GetCourierCooldownLeft"/>
+			<dependency name="GetJobName"/>
 			<dependency name="GetPlayerFacingAngle"/>
 			<dependency name="GetPlayerInterior"/>
 			<dependency name="GetPlayerPos"/>
 			<dependency name="GetPlayerVehicleID"/>
 			<dependency name="GetPlayerVirtualWorld"/>
+			<dependency name="GetTwoParams"/>
+			<dependency name="GivePlayerCash"/>
+			<dependency name="GivePlayerXPEx"/>
+			<dependency name="IsNumericString"/>
 			<dependency name="IsPlayerConnected"/>
 			<dependency name="IsPlayerInAnyVehicle"/>
 			<dependency name="PlayerAdmin"/>
+			<dependency name="PlayerJob"/>
 			<dependency name="PlayerLevel"/>
 			<dependency name="PlayerMoney"/>
 			<dependency name="PlayerVehicle"/>
+			<dependency name="PlayerWorking"/>
 			<dependency name="PlayerXP"/>
 			<dependency name="PutPlayerInVehicle"/>
 			<dependency name="RepairVehicle"/>
@@ -2689,6 +2944,8 @@
 			<dependency name="SetPlayerPos"/>
 			<dependency name="SetPlayerVirtualWorld"/>
 			<dependency name="SetVehicleHealth"/>
+			<dependency name="StartCourierWork"/>
+			<dependency name="TakePlayerCash"/>
 			<dependency name="format"/>
 			<dependency name="strcmp"/>
 			<dependency name="strfind"/>
@@ -2706,11 +2963,18 @@
 		<member name="M:OnPlayerConnect" syntax="OnPlayerConnect(playerid)">
 			<attribute name="public"/>
 			<stacksize value="5"/>
+			<dependency name="GivePlayerMoney"/>
 			<dependency name="PlayerAdmin"/>
+			<dependency name="PlayerJob"/>
+			<dependency name="PlayerLastWorkTick"/>
 			<dependency name="PlayerLevel"/>
 			<dependency name="PlayerMoney"/>
 			<dependency name="PlayerVehicle"/>
+			<dependency name="PlayerWorkPoint"/>
+			<dependency name="PlayerWorkType"/>
+			<dependency name="PlayerWorking"/>
 			<dependency name="PlayerXP"/>
+			<dependency name="ResetPlayerMoney"/>
 			<dependency name="SendClientMessage"/>
 			<param name="playerid">
 				The ID of the player that connected
@@ -2735,7 +2999,12 @@
 			<attribute name="public"/>
 			<stacksize value="3"/>
 			<dependency name="DestroyVehicle"/>
+			<dependency name="DisablePlayerCheckpoint"/>
+			<dependency name="PlayerJob"/>
 			<dependency name="PlayerVehicle"/>
+			<dependency name="PlayerWorkPoint"/>
+			<dependency name="PlayerWorkType"/>
+			<dependency name="PlayerWorking"/>
 			<param name="playerid">
 				The ID of the player that disconnected
 			</param>
@@ -2833,7 +3102,11 @@
 			<summary>This callback is called when a player finishes editing an object (<a href="#EditObject">EditObject</a>/<a  href="#EditPlayerObject">EditPlayerObject</a>).</summary>                <param name="rotationX">The X rotation for the object that was edited</param>  <param name="rotationY">The Y rotation for the object that was edited</param>  <param name="rotationZ">The Z rotation for the object that was edited</param>  <seealso name="EditObject" />  <seealso name="CreateObject" />  <seealso name="DestroyObject" />  <seealso name="MoveObject" />  <remarks>When using <b><c>EDIT_RESPONSE_UPDATE</c></b> be aware that this callback will not be called  when releasing an edit in progress resulting in the last update of <b><c>EDIT_RESPONSE_UPDATE</c></b>  being out of sync of the objects current position.</remarks>  <returns>  <b><c>1</c></b> - Will prevent other scripts from receiving this callback.<br />  <b><c>0</c></b> - Indicates that this callback will be passed to the next script.<br />  It is always called first in filterscripts.  </returns> 
 		</member>
 		<member name="M:OnPlayerEnterCheckpoint" syntax="OnPlayerEnterCheckpoint(playerid)">
-			<stacksize value="1"/>
+			<attribute name="public"/>
+			<stacksize value="4"/>
+			<dependency name="CompleteCourierWork"/>
+			<dependency name="PlayerWorkType"/>
+			<dependency name="PlayerWorking"/>
 			<param name="playerid">
 				The player who entered the checkpoint
 			</param>
@@ -3463,6 +3736,15 @@
 			</param>
 			<library>omp_vehicle</library>  <summary>Fully repairs a vehicle, including visual damage (bumps, dents, scratches, popped tires  etc.).</summary>    <seealso name="SetVehicleHealth" />  <seealso name="GetVehicleHealth" />  <returns>  <b><c>1</c></b>: The function executed successfully.<br />  <b><c>0</c></b>: The function failed to execute.  This means the vehicle specified does not exist.  </returns> 
 		</member>
+		<member name="M:ResetPlayerMoney" syntax="ResetPlayerMoney(playerid)">
+			<tagname value="bool"/>
+			<attribute name="native"/>
+			<referrer name="OnPlayerConnect"/>
+			<param name="playerid">
+				The ID of the player to reset the money of
+			</param>
+			<library>omp_player</library>  <summary>Reset a player's money to $0.</summary>    <seealso name="GetPlayerMoney" />  <seealso name="GivePlayerMoney" />  <returns>  <b><c>1</c></b>: The function executed successfully.<br />  <b><c>0</c></b>: The function failed to execute. This means the player is not connected.  </returns> 
+		</member>
 		<member name="M:ResetPlayerWeapons" syntax="ResetPlayerWeapons(playerid)">
 			<tagname value="bool"/>
 			<attribute name="native"/>
@@ -3475,6 +3757,11 @@
 		<member name="M:SendClientMessage" syntax="SendClientMessage(playerid, colour, format[], ...)">
 			<tagname value="bool"/>
 			<attribute name="native"/>
+			<referrer name="CheckPlayerLevelUp"/>
+			<referrer name="GivePlayerXPEx"/>
+			<referrer name="StartCourierWork"/>
+			<referrer name="CompleteCourierWork"/>
+			<referrer name="CancelPlayerWork"/>
 			<referrer name="OnPlayerConnect"/>
 			<referrer name="OnPlayerSpawn"/>
 			<referrer name="OnPlayerCommandText"/>
@@ -3557,6 +3844,31 @@
 				The z coordinate to place the camera at
 			</param>
 			<library>omp_player</library>  <summary>Sets the camera to a specific position for a player.</summary>          <seealso name="SetPlayerCameraLookAt" />  <seealso name="SetCameraBehindPlayer" />  <remarks>You may also have to use <a href="#SetPlayerCameraLookAt">SetPlayerCameraLookAt</a> with  this function in order to work properly.</remarks>  <remarks>Use <a href="#SetCameraBehindPlayer">SetCameraBehindPlayer</a> to reset the camera to behind  the player.</remarks>  <remarks>Using the camera functions directly after enabling spectator mode doesn't work.</remarks>  <returns>  <b><c>1</c></b>: The function executed successfully.<br />  <b><c>0</c></b>: The function failed to execute.  The player specified doesn't exist.  </returns> 
+		</member>
+		<member name="M:SetPlayerCheckpoint" syntax="SetPlayerCheckpoint(playerid, centreX, centreY, centreZ, radius)">
+			<tagname value="bool"/>
+			<attribute name="native"/>
+			<referrer name="StartCourierWork"/>
+			<param name="playerid">
+				The ID of the player for whom to set a checkpoint
+			</param>
+			<param name="centreX">
+				<paraminfo>Float </paraminfo>
+				The x coordinate to set the checkpoint at
+			</param>
+			<param name="centreY">
+				<paraminfo>Float </paraminfo>
+				The y coordinate to set the checkpoint at
+			</param>
+			<param name="centreZ">
+				<paraminfo>Float </paraminfo>
+				The z coordinate to set the checkpoint at
+			</param>
+			<param name="radius">
+				<paraminfo>Float </paraminfo>
+				The radius of the checkpoint
+			</param>
+			<library>omp_checkpoint</library>  <summary>Sets a checkpoint (red cylinder) for a player.  Also shows a red blip on the radar.  When  players enter a checkpoint, <a href="#OnPlayerEnterCheckpoint">OnPlayerEnterCheckpoint</a> is called  and actions can be performed.</summary>            <remarks>  If a checkpoint is already set it will use the radius of that checkpoint instead of the new one.<br  />  Checkpoints created on server-created objects (<a href="#CreateObject">CreateObject</a>/  <a href="#CreatePlayerObject">CreatePlayerObject</a>)  will appear down on the 'real' ground, but will still function correctly.  A pickup can be used instead.  </remarks>  <remarks>Checkpoints are asynchronous, meaning only one can be shown at a time.  To 'stream' checkpoints  (only show them when players are close enough), use a checkpoint streamer.</remarks>  <returns>  <b><c>1</c></b>: The function executed successfully.<br />  <b><c>0</c></b>: The function failed to execute.  This means the player specified does not exist.  </returns> 
 		</member>
 		<member name="M:SetPlayerFacingAngle" syntax="SetPlayerFacingAngle(playerid, angle)">
 			<tagname value="bool"/>
@@ -3654,6 +3966,37 @@
 				The health, given as a float value
 			</param>
 			<library>omp_vehicle</library>  <summary>Set a vehicle's health.  When a vehicle's health decreases the engine will produce smoke,  and finally fire when it decreases to less than 250 (25%).</summary>      <seealso name="GetVehicleHealth" />  <seealso name="RepairVehicle" />  <seealso name="SetPlayerHealth" />  <seealso name="OnVehicleDeath" />  <remarks>Full vehicle health is <b><c>1000</c></b>, however higher values are possible and increase  the health of the vehicle.</remarks>  <remarks>  <b>Health:</b><br />  <ul>  <li>&gt; 650 - undamaged</li>  <li>650-550 - white Smoke</li>  <li>550-390 - grey Smoke</li>  <li>390-250 - black Smoke</li>  <li>&lt; 250 - on fire (will explode seconds later)</li>  </ul>  </remarks>  <returns>  <b><c>1</c></b>: The function executed successfully.<br />  <b><c>0</c></b>: The function failed to execute.  This means the vehicle does not exist.  </returns> 
+		</member>
+		<member name="M:StartCourierWork" syntax="StartCourierWork(playerid)">
+			<stacksize value="153"/>
+			<referrer name="OnPlayerCommandText"/>
+			<dependency name="CourierPointX"/>
+			<dependency name="CourierPointY"/>
+			<dependency name="CourierPointZ"/>
+			<dependency name="CourierReward"/>
+			<dependency name="CourierXP"/>
+			<dependency name="GetCourierCooldownLeft"/>
+			<dependency name="IsPlayerInCourierVehicle"/>
+			<dependency name="PlayerJob"/>
+			<dependency name="PlayerWorkPoint"/>
+			<dependency name="PlayerWorkType"/>
+			<dependency name="PlayerWorking"/>
+			<dependency name="SendClientMessage"/>
+			<dependency name="SetPlayerCheckpoint"/>
+			<dependency name="format"/>
+			<dependency name="random"/>
+			<param name="playerid">
+			</param>
+		</member>
+		<member name="M:TakePlayerCash" syntax="TakePlayerCash(playerid, amount)">
+			<stacksize value="4"/>
+			<referrer name="OnPlayerCommandText"/>
+			<dependency name="GivePlayerMoney"/>
+			<dependency name="PlayerMoney"/>
+			<param name="playerid">
+			</param>
+			<param name="amount">
+			</param>
 		</member>
 		<member name="M:_@BULLET_HIT_TYPE" syntax="_@BULLET_HIT_TYPE()">
 			<tagname value="t_BULLET_HIT_TYPE"/>
@@ -4118,6 +4461,11 @@
 		</member>
 		<member name="M:format" syntax="format(output[], len, format[], ...)">
 			<attribute name="native"/>
+			<referrer name="CheckPlayerLevelUp"/>
+			<referrer name="GivePlayerXPEx"/>
+			<referrer name="GetJobName"/>
+			<referrer name="StartCourierWork"/>
+			<referrer name="CompleteCourierWork"/>
 			<referrer name="OnPlayerCommandText"/>
 			<param name="output">
 				<paraminfo> [] </paraminfo>
@@ -4212,6 +4560,14 @@
 			<param name="__background">
 			</param>
 			<library>console</library>  <summary>Prints a string to the server console (not in-game chat) and logs (server_log.txt).</summary>  <param name="string">The string to print</param>  <param name="foreground">The string to print</param>  <param name="background">Colour codes for the foreground and the background of the text string;  see function <c>setattr</c> for a list of colours.  When left at <c>-1</c>, the default colours  are used.  Note that a terminal or a host application may not support colours.</param>  <seealso name="printf"/>  <return>This function always returns 0.</return> 
+		</member>
+		<member name="M:random" syntax="random(max)">
+			<attribute name="native"/>
+			<referrer name="StartCourierWork"/>
+			<param name="max">
+				The range of values (from <b><c>0</c></b> to <b><c>max-1</c></b>) that can be returned
+			</param>
+			<library>core</library>  <summary>Get a pseudo-random number.</summary>    <remarks>Using a value smaller than <b><c>1</c></b> gives weird values.</remarks>  <remarks>The standard random number generator of pawn is likely a linear congruential pseudo-random  number generator with a range and a period of 2^31.  Linear congruential pseudo-random number generators  suffer from serial correlation (especially in the low bits) and it is unsuitable for applications  that require high-quality random numbers.</remarks>  <returns>A random number ranging from <b><c>0</c></b> to <b><c>max-1</c></b>.</returns> 
 		</member>
 		<member name="M:setattr" syntax="setattr(foreground, background)">
 			<stacksize value="1"/>

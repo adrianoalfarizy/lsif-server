@@ -71,6 +71,7 @@ new Float:OwnedVehicleX[MAX_PLAYERS];
 new Float:OwnedVehicleY[MAX_PLAYERS];
 new Float:OwnedVehicleZ[MAX_PLAYERS];
 new Float:OwnedVehicleA[MAX_PLAYERS];
+new Text3D:OwnedVehicleLabel[MAX_PLAYERS];
 
 //job
 new PlayerJob[MAX_PLAYERS];
@@ -637,6 +638,7 @@ stock ResetOwnedVehicleData(playerid)
     OwnedVehicleModel[playerid] = 0;
     OwnedVehicleID[playerid] = INVALID_VEHICLE_ID;
     OwnedVehicleLocked[playerid] = 0;
+    OwnedVehicleLabel[playerid] = Text3D:INVALID_3DTEXT_ID;
 
     OwnedVehicleX[playerid] = SPAWN_X + 3.0;
     OwnedVehicleY[playerid] = SPAWN_Y;
@@ -704,6 +706,7 @@ stock SpawnOwnedVehicle(playerid)
 
     if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
     {
+        DestroyOwnedVehicleLabel(playerid);
         DestroyVehicle(OwnedVehicleID[playerid]);
         OwnedVehicleID[playerid] = INVALID_VEHICLE_ID;
     }
@@ -725,32 +728,8 @@ stock SpawnOwnedVehicle(playerid)
         return 0;
     }
 
-    if (OwnedVehicleLocked[playerid])
-    {
-        SetVehicleParamsEx(
-            OwnedVehicleID[playerid],
-            1, // engine ON
-            0, // lights OFF
-            0, // alarm OFF
-            1, // doors LOCKED
-            0, // bonnet CLOSED
-            0, // boot CLOSED
-            0  // objective OFF
-        );
-    }
-    else
-    {
-        SetVehicleParamsEx(
-            OwnedVehicleID[playerid],
-            1, // engine ON
-            0, // lights OFF
-            0, // alarm OFF
-            0, // doors UNLOCKED
-            0, // bonnet CLOSED
-            0, // boot CLOSED
-            0  // objective OFF
-        );
-    }
+    ApplyOwnedVehicleParams(playerid);
+    CreateOwnedVehicleLabel(playerid);
 
     new msg[144];
     format(msg, sizeof(msg), "Kendaraan pribadi model %d berhasil di-spawn.", OwnedVehicleModel[playerid]);
@@ -828,6 +807,104 @@ stock IsPlayerNearOwnedVehicle(playerid)
     return 0;
 }
 
+stock ApplyOwnedVehicleParams(playerid)
+{
+    if (OwnedVehicleID[playerid] == INVALID_VEHICLE_ID)
+    {
+        return 0;
+    }
+
+    SetVehicleParamsEx(
+        OwnedVehicleID[playerid],
+        1, // engine ON
+        0, // lights OFF
+        0, // alarm OFF
+        OwnedVehicleLocked[playerid] ? 1 : 0, // doors
+        0, // bonnet CLOSED
+        0, // boot CLOSED
+        0  // objective OFF
+    );
+
+    return 1;
+}
+
+stock GetOwnedVehicleOwner(vehicleid)
+{
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (IsPlayerConnected(i) && OwnedVehicleID[i] == vehicleid)
+        {
+            return i;
+        }
+    }
+
+    return INVALID_PLAYER_ID;
+}
+
+stock IsOwnedVehicle(vehicleid)
+{
+    return GetOwnedVehicleOwner(vehicleid) != INVALID_PLAYER_ID;
+}
+
+stock CreateOwnedVehicleLabel(playerid)
+{
+    if (OwnedVehicleID[playerid] == INVALID_VEHICLE_ID)
+    {
+        return 0;
+    }
+
+    if (OwnedVehicleLabel[playerid] != Text3D:INVALID_3DTEXT_ID)
+    {
+        Delete3DTextLabel(OwnedVehicleLabel[playerid]);
+        OwnedVehicleLabel[playerid] = Text3D:INVALID_3DTEXT_ID;
+    }
+
+    new ownerName[MAX_PLAYER_NAME];
+    new labelText[144];
+
+    GetPlayerName(playerid, ownerName, sizeof(ownerName));
+
+    format(
+        labelText,
+        sizeof(labelText),
+        "LSIF Vehicle\nOwner: %s\nModel: %d",
+        ownerName,
+        OwnedVehicleModel[playerid]
+    );
+
+    OwnedVehicleLabel[playerid] = Create3DTextLabel(
+                                      labelText,
+                                      COLOR_CYAN,
+                                      0.0,
+                                      0.0,
+                                      0.0,
+                                      20.0,
+                                      0,
+                                      true
+                                  );
+
+    Attach3DTextLabelToVehicle(
+        OwnedVehicleLabel[playerid],
+        OwnedVehicleID[playerid],
+        0.0,
+        0.0,
+        1.2
+    );
+
+    return 1;
+}
+
+stock DestroyOwnedVehicleLabel(playerid)
+{
+    if (OwnedVehicleLabel[playerid] != Text3D:INVALID_3DTEXT_ID)
+    {
+        Delete3DTextLabel(OwnedVehicleLabel[playerid]);
+        OwnedVehicleLabel[playerid] = Text3D:INVALID_3DTEXT_ID;
+    }
+
+    return 1;
+}
+
 main()
 {
     print("========================================");
@@ -844,7 +921,7 @@ public AutoSavePlayers()
 
 public OnGameModeInit()
 {
-    SetGameModeText("LSIF Dev v0.5A Vehicle");
+    SetGameModeText("LSIF Dev v0.5B Vehicle Access");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -898,7 +975,7 @@ public OnGameModeInit()
     g_AutosaveTimer = SetTimer("AutoSavePlayers", AUTOSAVE_INTERVAL, true);
 
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
-    print("[LSIF] Gamemode v0.5A Vehicle Ownership berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.5B Vehicle Access berhasil dijalankan.");
     return 1;
 }
 
@@ -939,11 +1016,11 @@ public OnPlayerDisconnect(playerid, reason)
 {
     SavePlayerData(playerid);
     SaveOwnedVehicle(playerid);
-
-    if (PlayerVehicle[playerid] != INVALID_VEHICLE_ID)
+    if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
     {
-        DestroyVehicle(PlayerVehicle[playerid]);
-        PlayerVehicle[playerid] = INVALID_VEHICLE_ID;
+        DestroyOwnedVehicleLabel(playerid);
+        DestroyVehicle(OwnedVehicleID[playerid]);
+        OwnedVehicleID[playerid] = INVALID_VEHICLE_ID;
     }
 
     DisablePlayerCheckpoint(playerid);
@@ -1329,6 +1406,7 @@ public OnOwnedVehicleSold(playerid, sellPrice)
 
     if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
     {
+        DestroyOwnedVehicleLabel(playerid);
         DestroyVehicle(OwnedVehicleID[playerid]);
     }
 
@@ -1339,6 +1417,49 @@ public OnOwnedVehicleSold(playerid, sellPrice)
     SendClientMessage(playerid, COLOR_GREEN, msg);
 
     SavePlayerData(playerid);
+
+    return 1;
+}
+
+public OnPlayerEnterVehicle(playerid, vehicleid, ispassenger)
+{
+    new ownerid = GetOwnedVehicleOwner(vehicleid);
+
+    if (ownerid == INVALID_PLAYER_ID)
+    {
+        return 1;
+    }
+
+    if (ownerid == playerid)
+    {
+        return 1;
+    }
+
+    if (OwnedVehicleLocked[ownerid])
+    {
+        ClearAnimations(playerid);
+        SendClientMessage(playerid, COLOR_RED, "Kendaraan ini terkunci dan bukan milikmu.");
+        return 0;
+    }
+
+    SendClientMessage(playerid, COLOR_YELLOW, "Kamu masuk kendaraan pribadi milik player lain.");
+    return 1;
+}
+
+public OnPlayerStateChange(playerid, PLAYER_STATE:newstate, PLAYER_STATE:oldstate)
+{
+    if (newstate == PLAYER_STATE_DRIVER || newstate == PLAYER_STATE_PASSENGER)
+    {
+        new vehicleid = GetPlayerVehicleID(playerid);
+        new ownerid = GetOwnedVehicleOwner(vehicleid);
+
+        if (ownerid != INVALID_PLAYER_ID && ownerid != playerid && OwnedVehicleLocked[ownerid])
+        {
+            RemovePlayerFromVehicle(playerid);
+            SendClientMessage(playerid, COLOR_RED, "Kendaraan ini terkunci.");
+            return 1;
+        }
+    }
 
     return 1;
 }
@@ -1378,6 +1499,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/park - Simpan posisi kendaraan pribadi");
         SendClientMessage(playerid, COLOR_WHITE, "/lock - Kunci/buka kendaraan pribadi");
         SendClientMessage(playerid, COLOR_WHITE, "/sellveh - Jual kendaraan pribadi");
+        SendClientMessage(playerid, COLOR_WHITE, "/vehinfo - Melihat informasi kendaraan pribadi");
 
         return 1;
     }
@@ -1928,31 +2050,13 @@ public OnPlayerCommandText(playerid, cmdtext[])
         if (OwnedVehicleLocked[playerid])
         {
             OwnedVehicleLocked[playerid] = 0;
-            SetVehicleParamsEx(
-                OwnedVehicleID[playerid],
-                1, // engine ON
-                0, // lights OFF
-                0, // alarm OFF
-                0, // doors UNLOCKED
-                0, // bonnet CLOSED
-                0, // boot CLOSED
-                0  // objective OFF
-            );
+            ApplyOwnedVehicleParams(playerid);
             SendClientMessage(playerid, COLOR_GREEN, "Kendaraan dibuka.");
         }
         else
         {
             OwnedVehicleLocked[playerid] = 1;
-            SetVehicleParamsEx(
-                OwnedVehicleID[playerid],
-                1, // engine ON
-                0, // lights OFF
-                0, // alarm OFF
-                1, // doors LOCKED
-                0, // bonnet CLOSED
-                0, // boot CLOSED
-                0  // objective OFF
-            );
+            ApplyOwnedVehicleParams(playerid);
             SendClientMessage(playerid, COLOR_YELLOW, "Kendaraan dikunci.");
         }
 
@@ -1982,6 +2086,36 @@ public OnPlayerCommandText(playerid, cmdtext[])
         );
 
         mysql_tquery(g_SQL, query, "OnOwnedVehicleSold", "ii", playerid, sellPrice);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/vehinfo", true))
+    {
+        if (OwnedVehicleDBID[playerid] <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum punya kendaraan pribadi.");
+            return 1;
+        }
+
+        new msg[144];
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== VEHICLE INFO ==========");
+
+        format(msg, sizeof(msg), "DB ID: %d", OwnedVehicleDBID[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Model ID: %d", OwnedVehicleModel[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Spawned Vehicle ID: %d", OwnedVehicleID[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Locked: %s", OwnedVehicleLocked[playerid] ? ("Yes") : ("No"));
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Position: %.2f, %.2f, %.2f", OwnedVehicleX[playerid], OwnedVehicleY[playerid], OwnedVehicleZ[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
         return 1;
     }
 

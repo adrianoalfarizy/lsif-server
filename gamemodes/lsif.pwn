@@ -43,6 +43,8 @@
 #define VEHICLE_PONY 413
 #define VEHICLE_RUMPO 440
 
+#define VEHICLE_OWNER_NONE 0
+
 new MySQL:g_SQL;
 new g_AutosaveTimer;
 
@@ -59,6 +61,16 @@ new PlayerXP[MAX_PLAYERS];
 new PlayerLevel[MAX_PLAYERS];
 new PlayerAdmin[MAX_PLAYERS];
 new PlayerVehicle[MAX_PLAYERS];
+
+new OwnedVehicleDBID[MAX_PLAYERS];
+new OwnedVehicleModel[MAX_PLAYERS];
+new OwnedVehicleID[MAX_PLAYERS];
+new OwnedVehicleLocked[MAX_PLAYERS];
+
+new Float:OwnedVehicleX[MAX_PLAYERS];
+new Float:OwnedVehicleY[MAX_PLAYERS];
+new Float:OwnedVehicleZ[MAX_PLAYERS];
+new Float:OwnedVehicleA[MAX_PLAYERS];
 
 //job
 new PlayerJob[MAX_PLAYERS];
@@ -117,6 +129,10 @@ forward OnAccountRegister(playerid);
 forward OnAccountLogin(playerid);
 forward AutoSavePlayers();
 forward OnPlayerDataSaved(playerid, notify);
+forward OnOwnedVehicleCheck(playerid);
+forward OnOwnedVehicleBought(playerid, modelid, price);
+forward OnOwnedVehicleSaved(playerid, notify);
+forward OnOwnedVehicleSold(playerid, sellPrice);
 
 stock SaveAllPlayers()
 {
@@ -154,6 +170,7 @@ stock ResetPlayerAccountData(playerid)
     PlayerLevel[playerid] = 1;
     PlayerAdmin[playerid] = 0;
     PlayerVehicle[playerid] = INVALID_VEHICLE_ID;
+    ResetOwnedVehicleData(playerid);
 
     PlayerJob[playerid] = JOB_NONE;
     PlayerWorking[playerid] = 0;
@@ -346,6 +363,33 @@ stock GetTwoParams(const input[], param1[], param1Size, param2[], param2Size)
     param2[p] = EOS;
 
     if (param1[0] == EOS || param2[0] == EOS)
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+stock GetOneParam(const input[], param1[], param1Size)
+{
+    new i = 0;
+    new p = 0;
+
+    while (input[i] == ' ')
+    {
+        i++;
+    }
+
+    while (input[i] != EOS && input[i] != ' ' && p < param1Size - 1)
+    {
+        param1[p] = input[i];
+        p++;
+        i++;
+    }
+
+    param1[p] = EOS;
+
+    if (param1[0] == EOS)
     {
         return 0;
     }
@@ -587,6 +631,185 @@ stock CancelPlayerWork(playerid)
     return 1;
 }
 
+stock ResetOwnedVehicleData(playerid)
+{
+    OwnedVehicleDBID[playerid] = 0;
+    OwnedVehicleModel[playerid] = 0;
+    OwnedVehicleID[playerid] = INVALID_VEHICLE_ID;
+    OwnedVehicleLocked[playerid] = 0;
+
+    OwnedVehicleX[playerid] = SPAWN_X + 3.0;
+    OwnedVehicleY[playerid] = SPAWN_Y;
+    OwnedVehicleZ[playerid] = SPAWN_Z;
+    OwnedVehicleA[playerid] = SPAWN_A;
+
+    return 1;
+}
+
+stock GetVehicleBasePrice(modelid)
+{
+    switch (modelid)
+    {
+        case 400: return 12000; // Landstalker
+        case 401: return 8000;  // Bravura
+        case 402: return 25000; // Buffalo
+        case 411: return 75000; // Infernus
+        case 413: return 12000; // Pony
+        case 414: return 18000; // Mule
+        case 415: return 60000; // Cheetah
+        case 440: return 14000; // Rumpo
+        case 451: return 65000; // Turismo
+        case 461: return 15000; // PCJ-600
+        case 462: return 5000;  // Faggio
+        case 482: return 15000; // Burrito
+        case 498: return 16000; // Boxville
+    }
+
+    if (modelid >= 400 && modelid <= 611)
+    {
+        return 10000;
+    }
+
+    return 0;
+}
+
+stock LoadOwnedVehicle(playerid)
+{
+    if (!PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0)
+    {
+        return 0;
+    }
+
+    new query[256];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "SELECT id, model_id, pos_x, pos_y, pos_z, pos_a, locked FROM player_vehicles WHERE owner_id=%d LIMIT 1",
+        PlayerDBID[playerid]
+    );
+
+    mysql_tquery(g_SQL, query, "OnOwnedVehicleCheck", "i", playerid);
+    return 1;
+}
+
+stock SpawnOwnedVehicle(playerid)
+{
+    if (OwnedVehicleDBID[playerid] <= 0 || OwnedVehicleModel[playerid] < 400 || OwnedVehicleModel[playerid] > 611)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum punya kendaraan pribadi.");
+        return 0;
+    }
+
+    if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
+    {
+        DestroyVehicle(OwnedVehicleID[playerid]);
+        OwnedVehicleID[playerid] = INVALID_VEHICLE_ID;
+    }
+
+    OwnedVehicleID[playerid] = CreateVehicle(
+                                   OwnedVehicleModel[playerid],
+                                   OwnedVehicleX[playerid],
+                                   OwnedVehicleY[playerid],
+                                   OwnedVehicleZ[playerid],
+                                   OwnedVehicleA[playerid],
+                                   1,
+                                   1,
+                                   -1
+                               );
+
+    if (OwnedVehicleID[playerid] == INVALID_VEHICLE_ID)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gagal spawn kendaraan pribadi.");
+        return 0;
+    }
+
+    if (OwnedVehicleLocked[playerid])
+    {
+        SetVehicleParamsEx(OwnedVehicleID[playerid], 0, 0, 0, 1, 0, 0, 0);
+    }
+    else
+    {
+        SetVehicleParamsEx(OwnedVehicleID[playerid], 0, 0, 0, 0, 0, 0, 0);
+    }
+
+    new msg[144];
+    format(msg, sizeof(msg), "Kendaraan pribadi model %d berhasil di-spawn.", OwnedVehicleModel[playerid]);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+
+    return 1;
+}
+
+stock SaveOwnedVehicle(playerid, notify = 0)
+{
+    if (!PlayerLoggedIn[playerid] || OwnedVehicleDBID[playerid] <= 0)
+    {
+        if (notify)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum punya kendaraan pribadi.");
+        }
+        return 0;
+    }
+
+    if (OwnedVehicleID[playerid] == INVALID_VEHICLE_ID)
+    {
+        if (notify)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kendaraan pribadi belum di-spawn.");
+        }
+        return 0;
+    }
+
+    new Float:x, Float:y, Float:z, Float:a;
+    new query[512];
+
+    GetVehiclePos(OwnedVehicleID[playerid], x, y, z);
+    GetVehicleZAngle(OwnedVehicleID[playerid], a);
+
+    OwnedVehicleX[playerid] = x;
+    OwnedVehicleY[playerid] = y;
+    OwnedVehicleZ[playerid] = z;
+    OwnedVehicleA[playerid] = a;
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "UPDATE player_vehicles SET pos_x=%f, pos_y=%f, pos_z=%f, pos_a=%f, locked=%d WHERE id=%d LIMIT 1",
+        x,
+        y,
+        z,
+        a,
+        OwnedVehicleLocked[playerid],
+        OwnedVehicleDBID[playerid]
+    );
+
+    mysql_tquery(g_SQL, query, "OnOwnedVehicleSaved", "ii", playerid, notify);
+    return 1;
+}
+
+stock IsPlayerNearOwnedVehicle(playerid)
+{
+    if (OwnedVehicleID[playerid] == INVALID_VEHICLE_ID)
+    {
+        return 0;
+    }
+
+    new Float:px, Float:py, Float:pz;
+    new Float:vx, Float:vy, Float:vz;
+
+    GetPlayerPos(playerid, px, py, pz);
+    GetVehiclePos(OwnedVehicleID[playerid], vx, vy, vz);
+
+    if (GetPlayerDistanceFromPoint(playerid, vx, vy, vz) <= 8.0)
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
 main()
 {
     print("========================================");
@@ -603,7 +826,7 @@ public AutoSavePlayers()
 
 public OnGameModeInit()
 {
-    SetGameModeText("LSIF Dev v0.4C Data Safety");
+    SetGameModeText("LSIF Dev v0.5A Vehicle");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -641,6 +864,7 @@ public OnGameModeInit()
         PlayerLevel[i] = 1;
         PlayerAdmin[i] = 0;
         PlayerVehicle[i] = INVALID_VEHICLE_ID;
+        ResetOwnedVehicleData(i);
 
         PlayerJob[i] = JOB_NONE;
         PlayerWorking[i] = 0;
@@ -656,7 +880,7 @@ public OnGameModeInit()
     g_AutosaveTimer = SetTimer("AutoSavePlayers", AUTOSAVE_INTERVAL, true);
 
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
-    print("[LSIF] Gamemode v0.4C Data Safety berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.5A Vehicle Ownership berhasil dijalankan.");
     return 1;
 }
 
@@ -696,6 +920,7 @@ public OnPlayerConnect(playerid)
 public OnPlayerDisconnect(playerid, reason)
 {
     SavePlayerData(playerid);
+    SaveOwnedVehicle(playerid);
 
     if (PlayerVehicle[playerid] != INVALID_VEHICLE_ID)
     {
@@ -712,6 +937,12 @@ public OnPlayerDisconnect(playerid, reason)
 
     PlayerLoggedIn[playerid] = 0;
     PlayerDBID[playerid] = 0;
+
+    if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
+    {
+        DestroyVehicle(OwnedVehicleID[playerid]);
+        OwnedVehicleID[playerid] = INVALID_VEHICLE_ID;
+    }
 
     return 1;
 }
@@ -886,6 +1117,7 @@ public OnAccountRegister(playerid)
     PlayerLastY[playerid] = SPAWN_Y;
     PlayerLastZ[playerid] = SPAWN_Z;
     PlayerLastA[playerid] = SPAWN_A;
+    ResetOwnedVehicleData(playerid);
 
     ResetPlayerMoney(playerid);
     GivePlayerMoney(playerid, PlayerMoney[playerid]);
@@ -930,6 +1162,7 @@ public OnAccountLogin(playerid)
     PlayerLoggedIn[playerid] = 1;
 
     ApplyLoadedPlayerData(playerid);
+    LoadOwnedVehicle(playerid);
 
     new ip[45];
     new query[256];
@@ -980,6 +1213,118 @@ public OnPlayerDataSaved(playerid, notify)
     return 1;
 }
 
+public OnOwnedVehicleCheck(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+
+    if (rows == 0)
+    {
+        ResetOwnedVehicleData(playerid);
+        return 1;
+    }
+
+    cache_get_value_name_int(0, "id", OwnedVehicleDBID[playerid]);
+    cache_get_value_name_int(0, "model_id", OwnedVehicleModel[playerid]);
+    cache_get_value_name_float(0, "pos_x", OwnedVehicleX[playerid]);
+    cache_get_value_name_float(0, "pos_y", OwnedVehicleY[playerid]);
+    cache_get_value_name_float(0, "pos_z", OwnedVehicleZ[playerid]);
+    cache_get_value_name_float(0, "pos_a", OwnedVehicleA[playerid]);
+    cache_get_value_name_int(0, "locked", OwnedVehicleLocked[playerid]);
+
+    SendClientMessage(playerid, COLOR_GREEN, "Data kendaraan pribadi berhasil dimuat. Gunakan /myveh untuk spawn.");
+    return 1;
+}
+
+public OnOwnedVehicleBought(playerid, modelid, price)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new insertId = cache_insert_id();
+
+    if (insertId <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gagal membeli kendaraan. Database insert gagal.");
+        return 1;
+    }
+
+    TakePlayerCash(playerid, price);
+
+    OwnedVehicleDBID[playerid] = insertId;
+    OwnedVehicleModel[playerid] = modelid;
+    OwnedVehicleLocked[playerid] = 0;
+
+    new Float:x, Float:y, Float:z, Float:a;
+
+    GetPlayerPos(playerid, x, y, z);
+    GetPlayerFacingAngle(playerid, a);
+
+    OwnedVehicleX[playerid] = x + 3.0;
+    OwnedVehicleY[playerid] = y;
+    OwnedVehicleZ[playerid] = z;
+    OwnedVehicleA[playerid] = a;
+
+    new msg[144];
+    format(msg, sizeof(msg), "Kamu berhasil membeli kendaraan model %d seharga $%d.", modelid, price);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    SendClientMessage(playerid, COLOR_WHITE, "Gunakan /myveh untuk spawn kendaraan pribadi.");
+
+    SavePlayerData(playerid);
+
+    return 1;
+}
+
+public OnOwnedVehicleSaved(playerid, notify)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    if (notify)
+    {
+        new affectedRows = cache_affected_rows();
+        new msg[144];
+
+        format(msg, sizeof(msg), "Kendaraan berhasil disimpan. Affected rows: %d", affectedRows);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+    }
+
+    return 1;
+}
+
+public OnOwnedVehicleSold(playerid, sellPrice)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    GivePlayerCash(playerid, sellPrice);
+
+    if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
+    {
+        DestroyVehicle(OwnedVehicleID[playerid]);
+    }
+
+    ResetOwnedVehicleData(playerid);
+
+    new msg[144];
+    format(msg, sizeof(msg), "Kendaraan berhasil dijual. Kamu menerima $%d.", sellPrice);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+
+    SavePlayerData(playerid);
+
+    return 1;
+}
+
 public OnPlayerCommandText(playerid, cmdtext[])
 {
     if (!PlayerLoggedIn[playerid])
@@ -1010,6 +1355,11 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/cancelwork - Batalkan pekerjaan aktif");
         SendClientMessage(playerid, COLOR_WHITE, "/account - Melihat informasi akun");
         SendClientMessage(playerid, COLOR_WHITE, "/savedata - Simpan data akun manual");
+        SendClientMessage(playerid, COLOR_WHITE, "/buyveh [modelid] - Beli kendaraan pribadi");
+        SendClientMessage(playerid, COLOR_WHITE, "/myveh - Spawn kendaraan pribadi");
+        SendClientMessage(playerid, COLOR_WHITE, "/park - Simpan posisi kendaraan pribadi");
+        SendClientMessage(playerid, COLOR_WHITE, "/lock - Kunci/buka kendaraan pribadi");
+        SendClientMessage(playerid, COLOR_WHITE, "/sellveh - Jual kendaraan pribadi");
 
         return 1;
     }
@@ -1043,6 +1393,16 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         format(msg, sizeof(msg), "Working: %s", PlayerWorking[playerid] ? ("Yes") : ("No"));
         SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        if (OwnedVehicleDBID[playerid] > 0)
+        {
+            format(msg, sizeof(msg), "Owned Vehicle: DBID %d | Model %d | Locked %d", OwnedVehicleDBID[playerid], OwnedVehicleModel[playerid], OwnedVehicleLocked[playerid]);
+            SendClientMessage(playerid, COLOR_WHITE, msg);
+        }
+        else
+        {
+            SendClientMessage(playerid, COLOR_WHITE, "Owned Vehicle: None");
+        }
 
         return 1;
     }
@@ -1426,6 +1786,166 @@ public OnPlayerCommandText(playerid, cmdtext[])
         format(msg, sizeof(msg), "Money: $%d | XP: %d | Level: %d", PlayerMoney[playerid], PlayerXP[playerid], PlayerLevel[playerid]);
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
+        if (OwnedVehicleDBID[playerid] > 0)
+        {
+            format(msg, sizeof(msg), "Owned Vehicle: DBID %d | Model %d | Locked %d", OwnedVehicleDBID[playerid], OwnedVehicleModel[playerid], OwnedVehicleLocked[playerid]);
+            SendClientMessage(playerid, COLOR_WHITE, msg);
+        }
+        else
+        {
+            SendClientMessage(playerid, COLOR_WHITE, "Owned Vehicle: None");
+        }
+
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/buyveh ", true) == 0)
+    {
+        new modelStr[16];
+
+        if (!GetOneParam(cmdtext[8], modelStr, sizeof(modelStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /buyveh [modelid]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /buyveh 411");
+            return 1;
+        }
+
+        if (!IsNumericString(modelStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Model ID harus angka.");
+            return 1;
+        }
+
+        new modelid = strval(modelStr);
+
+        if (modelid < 400 || modelid > 611)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Model kendaraan tidak valid. Gunakan ID 400 sampai 611.");
+            return 1;
+        }
+
+        if (OwnedVehicleDBID[playerid] > 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu sudah punya kendaraan pribadi. Gunakan /sellveh dulu.");
+            return 1;
+        }
+
+        new price = GetVehicleBasePrice(modelid);
+
+        if (price <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kendaraan ini belum bisa dibeli.");
+            return 1;
+        }
+
+        if (PlayerMoney[playerid] < price)
+        {
+            new msg[144];
+            format(msg, sizeof(msg), "Uang tidak cukup. Harga kendaraan ini $%d.", price);
+            SendClientMessage(playerid, COLOR_RED, msg);
+            return 1;
+        }
+
+        new Float:x, Float:y, Float:z, Float:a;
+        new query[512];
+
+        GetPlayerPos(playerid, x, y, z);
+        GetPlayerFacingAngle(playerid, a);
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "INSERT INTO player_vehicles (owner_id, model_id, color1, color2, pos_x, pos_y, pos_z, pos_a, locked) VALUES (%d, %d, 1, 1, %f, %f, %f, %f, 0)",
+            PlayerDBID[playerid],
+            modelid,
+            x + 3.0,
+            y,
+            z,
+            a
+        );
+
+        mysql_tquery(g_SQL, query, "OnOwnedVehicleBought", "iii", playerid, modelid, price);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/myveh", true))
+    {
+        SpawnOwnedVehicle(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/park", true))
+    {
+        if (OwnedVehicleID[playerid] == INVALID_VEHICLE_ID)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kendaraan pribadi belum di-spawn.");
+            return 1;
+        }
+
+        if (!IsPlayerInAnyVehicle(playerid) || GetPlayerVehicleID(playerid) != OwnedVehicleID[playerid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu harus berada di kendaraan pribadi untuk park.");
+            return 1;
+        }
+
+        SaveOwnedVehicle(playerid, 1);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/lock", true))
+    {
+        if (OwnedVehicleID[playerid] == INVALID_VEHICLE_ID)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kendaraan pribadi belum di-spawn.");
+            return 1;
+        }
+
+        if (!IsPlayerNearOwnedVehicle(playerid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu harus dekat dengan kendaraan pribadi.");
+            return 1;
+        }
+
+        if (OwnedVehicleLocked[playerid])
+        {
+            OwnedVehicleLocked[playerid] = 0;
+            SetVehicleParamsEx(OwnedVehicleID[playerid], 0, 0, 0, 0, 0, 0, 0);
+            SendClientMessage(playerid, COLOR_GREEN, "Kendaraan dibuka.");
+        }
+        else
+        {
+            OwnedVehicleLocked[playerid] = 1;
+            SetVehicleParamsEx(OwnedVehicleID[playerid], 0, 0, 0, 1, 0, 0, 0);
+            SendClientMessage(playerid, COLOR_YELLOW, "Kendaraan dikunci.");
+        }
+
+        SaveOwnedVehicle(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/sellveh", true))
+    {
+        if (OwnedVehicleDBID[playerid] <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum punya kendaraan pribadi.");
+            return 1;
+        }
+
+        new basePrice = GetVehicleBasePrice(OwnedVehicleModel[playerid]);
+        new sellPrice = basePrice / 2;
+        new query[256];
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "DELETE FROM player_vehicles WHERE id=%d AND owner_id=%d LIMIT 1",
+            OwnedVehicleDBID[playerid],
+            PlayerDBID[playerid]
+        );
+
+        mysql_tquery(g_SQL, query, "OnOwnedVehicleSold", "ii", playerid, sellPrice);
         return 1;
     }
 

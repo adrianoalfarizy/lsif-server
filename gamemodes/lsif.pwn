@@ -727,11 +727,29 @@ stock SpawnOwnedVehicle(playerid)
 
     if (OwnedVehicleLocked[playerid])
     {
-        SetVehicleParamsEx(OwnedVehicleID[playerid], 0, 0, 0, 1, 0, 0, 0);
+        SetVehicleParamsEx(
+            OwnedVehicleID[playerid],
+            1, // engine ON
+            0, // lights OFF
+            0, // alarm OFF
+            1, // doors LOCKED
+            0, // bonnet CLOSED
+            0, // boot CLOSED
+            0  // objective OFF
+        );
     }
     else
     {
-        SetVehicleParamsEx(OwnedVehicleID[playerid], 0, 0, 0, 0, 0, 0, 0);
+        SetVehicleParamsEx(
+            OwnedVehicleID[playerid],
+            1, // engine ON
+            0, // lights OFF
+            0, // alarm OFF
+            0, // doors UNLOCKED
+            0, // bonnet CLOSED
+            0, // boot CLOSED
+            0  // objective OFF
+        );
     }
 
     new msg[144];
@@ -1910,13 +1928,31 @@ public OnPlayerCommandText(playerid, cmdtext[])
         if (OwnedVehicleLocked[playerid])
         {
             OwnedVehicleLocked[playerid] = 0;
-            SetVehicleParamsEx(OwnedVehicleID[playerid], 0, 0, 0, 0, 0, 0, 0);
+            SetVehicleParamsEx(
+                OwnedVehicleID[playerid],
+                1, // engine ON
+                0, // lights OFF
+                0, // alarm OFF
+                0, // doors UNLOCKED
+                0, // bonnet CLOSED
+                0, // boot CLOSED
+                0  // objective OFF
+            );
             SendClientMessage(playerid, COLOR_GREEN, "Kendaraan dibuka.");
         }
         else
         {
             OwnedVehicleLocked[playerid] = 1;
-            SetVehicleParamsEx(OwnedVehicleID[playerid], 0, 0, 0, 1, 0, 0, 0);
+            SetVehicleParamsEx(
+                OwnedVehicleID[playerid],
+                1, // engine ON
+                0, // lights OFF
+                0, // alarm OFF
+                1, // doors LOCKED
+                0, // bonnet CLOSED
+                0, // boot CLOSED
+                0  // objective OFF
+            );
             SendClientMessage(playerid, COLOR_YELLOW, "Kendaraan dikunci.");
         }
 

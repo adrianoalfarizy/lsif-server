@@ -21,6 +21,8 @@
 #define SPAWN_Z         15.3746
 #define SPAWN_A         269.1425
 
+#define DEFAULT_SKIN 0
+
 #define MAX_PAY_AMOUNT  50000
 
 #define JOB_NONE        0
@@ -233,7 +235,33 @@ stock ApplyLoadedPlayerData(playerid)
     SendClientMessage(playerid, COLOR_GREEN, "Login berhasil. Data akun berhasil dimuat.");
     SendClientMessage(playerid, COLOR_WHITE, "Gunakan /stats untuk melihat data akun kamu.");
 
+    SpawnLoggedPlayer(playerid);
+    return 1;
+}
+
+stock SpawnLoggedPlayer(playerid)
+{
+    if (!PlayerLoggedIn[playerid])
+    {
+        return 0;
+    }
+
+    SetSpawnInfo(
+        playerid,
+        NO_TEAM,
+        DEFAULT_SKIN,
+        PlayerLastX[playerid],
+        PlayerLastY[playerid],
+        PlayerLastZ[playerid],
+        PlayerLastA[playerid],
+        WEAPON:WEAPON_FIST, 0,
+        WEAPON:WEAPON_FIST, 0,
+        WEAPON:WEAPON_FIST, 0
+    );
+
+    TogglePlayerSpectating(playerid, false);
     SpawnPlayer(playerid);
+
     return 1;
 }
 
@@ -607,6 +635,9 @@ public OnPlayerConnect(playerid)
 {
     ResetPlayerAccountData(playerid);
 
+    // Sembunyikan class selection/pilih skin sebelum login.
+    TogglePlayerSpectating(playerid, true);
+
     SendClientMessage(playerid, COLOR_GREEN, "Selamat datang di LSIF - Los Santos Indonesia Freeroam.");
     SendClientMessage(playerid, COLOR_WHITE, "Mengecek akun kamu di database...");
 
@@ -651,6 +682,12 @@ public OnPlayerRequestSpawn(playerid)
 
 public OnPlayerRequestClass(playerid, classid)
 {
+    if (!PlayerLoggedIn[playerid])
+    {
+        TogglePlayerSpectating(playerid, true);
+        return 0;
+    }
+
     SetPlayerPos(playerid, SPAWN_X, SPAWN_Y, SPAWN_Z);
     SetPlayerFacingAngle(playerid, SPAWN_A);
 
@@ -810,7 +847,7 @@ public OnAccountRegister(playerid)
     SendClientMessage(playerid, COLOR_GREEN, "Register berhasil. Akun kamu sudah dibuat.");
     SendClientMessage(playerid, COLOR_WHITE, "Selamat datang di LSIF.");
 
-    SpawnPlayer(playerid);
+    SpawnLoggedPlayer(playerid);
     return 1;
 }
 

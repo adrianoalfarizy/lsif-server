@@ -142,6 +142,10 @@ forward OnOwnedVehicleBought(playerid, modelid, price);
 forward OnOwnedVehicleSaved(playerid, notify);
 forward OnOwnedVehicleSold(playerid, sellPrice);
 forward DelayedKick(playerid);
+forward OnPlayerBanCheck(playerid);
+forward OnPlayerBanned(playerid, targetid);
+forward OnPlayerUnbanned(playerid);
+forward OnPlayerBanInfo(playerid);
 
 stock SaveAllPlayers()
 {
@@ -399,6 +403,62 @@ stock GetOneParam(const input[], param1[], param1Size)
     param1[p] = EOS;
 
     if (param1[0] == EOS)
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+stock GetThreeParams(const input[], param1[], param1Size, param2[], param2Size, param3[], param3Size)
+{
+    new i = 0;
+    new p = 0;
+
+    while (input[i] == ' ')
+    {
+        i++;
+    }
+
+    while (input[i] != EOS && input[i] != ' ' && p < param1Size - 1)
+    {
+        param1[p] = input[i];
+        p++;
+        i++;
+    }
+    param1[p] = EOS;
+
+    while (input[i] == ' ')
+    {
+        i++;
+    }
+
+    p = 0;
+
+    while (input[i] != EOS && input[i] != ' ' && p < param2Size - 1)
+    {
+        param2[p] = input[i];
+        p++;
+        i++;
+    }
+    param2[p] = EOS;
+
+    while (input[i] == ' ')
+    {
+        i++;
+    }
+
+    p = 0;
+
+    while (input[i] != EOS && p < param3Size - 1)
+    {
+        param3[p] = input[i];
+        p++;
+        i++;
+    }
+    param3[p] = EOS;
+
+    if (param1[0] == EOS || param2[0] == EOS || param3[0] == EOS)
     {
         return 0;
     }
@@ -978,6 +1038,28 @@ stock LogAdminAction(playerid, targetid, const action[], const detail[])
     return 1;
 }
 
+stock CheckPlayerBan(playerid)
+{
+    new username[MAX_PLAYER_NAME];
+    new ip[45];
+    new query[512];
+
+    GetPlayerName(playerid, username, sizeof(username));
+    GetPlayerIp(playerid, ip, sizeof(ip));
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "SELECT id, reason, admin_name, duration_minutes, expires_at FROM bans WHERE active=1 AND (player_name='%e' OR ip_address='%e') AND (expires_at IS NULL OR expires_at > NOW()) ORDER BY id DESC LIMIT 1",
+        username,
+        ip
+    );
+
+    mysql_tquery(g_SQL, query, "OnPlayerBanCheck", "i", playerid);
+    return 1;
+}
+
 main()
 {
     print("========================================");
@@ -994,7 +1076,7 @@ public AutoSavePlayers()
 
 public OnGameModeInit()
 {
-    SetGameModeText("LSIF Dev v0.6A Admin");
+    SetGameModeText("LSIF Dev v0.6B Ban");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -1048,7 +1130,7 @@ public OnGameModeInit()
     g_AutosaveTimer = SetTimer("AutoSavePlayers", AUTOSAVE_INTERVAL, true);
 
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
-    print("[LSIF] Gamemode v0.6A Admin System berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.6B Ban System berhasil dijalankan.");
     return 1;
 }
 
@@ -1078,9 +1160,12 @@ public OnPlayerConnect(playerid)
     TogglePlayerSpectating(playerid, true);
 
     SendClientMessage(playerid, COLOR_GREEN, "Selamat datang di LSIF - Los Santos Indonesia Freeroam.");
-    SendClientMessage(playerid, COLOR_WHITE, "Mengecek akun kamu di database...");
+    SendClientMessage(playerid, COLOR_WHITE, "Mengecek status akun kamu di database...");
 
-    CheckPlayerAccount(playerid);
+    CheckPlayerBan(playerid);
+    // SendClientMessage(playerid, COLOR_WHITE, "Mengecek akun kamu di database...");
+
+    // CheckPlayerAccount(playerid);
 
     return 1;
 }
@@ -1543,6 +1628,167 @@ public DelayedKick(playerid)
     {
         Kick(playerid);
     }
+
+    return 1;
+}
+
+public OnPlayerBanCheck(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+
+    if (rows > 0)
+    {
+        new reason[128];
+        new adminName[24];
+        new expiresAt[32];
+        new durationMinutes;
+        new msg[144];
+
+        cache_get_value_name(0, "reason", reason, sizeof(reason));
+        cache_get_value_name(0, "admin_name", adminName, sizeof(adminName));
+        cache_get_value_name_int(0, "duration_minutes", durationMinutes);
+        cache_get_value_name(0, "expires_at", expiresAt, sizeof(expiresAt));
+
+        SendClientMessage(playerid, COLOR_RED, "Akun/IP kamu sedang dibanned dari server LSIF.");
+
+        format(msg, sizeof(msg), "Admin: %s", adminName);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Reason: %s", reason);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        if (durationMinutes == 0)
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Durasi: Permanent");
+        }
+        else
+        {
+            format(msg, sizeof(msg), "Durasi: %d menit | Expired: %s", durationMinutes, expiresAt);
+            SendClientMessage(playerid, COLOR_YELLOW, msg);
+        }
+
+        SetTimerEx("DelayedKick", 1000, false, "i", playerid);
+        return 1;
+    }
+
+    CheckPlayerAccount(playerid);
+    return 1;
+}
+
+public OnPlayerBanned(playerid, targetid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new insertId = cache_insert_id();
+
+    if (insertId <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Ban gagal. Database insert gagal.");
+        return 1;
+    }
+
+    SendClientMessage(playerid, COLOR_GREEN, "Ban berhasil disimpan ke database.");
+
+    if (IsPlayerConnected(targetid))
+    {
+        SendClientMessage(targetid, COLOR_RED, "Kamu telah dibanned dari server LSIF.");
+        SetTimerEx("DelayedKick", 1000, false, "i", targetid);
+    }
+
+    return 1;
+}
+
+public OnPlayerUnbanned(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new affectedRows = cache_affected_rows();
+    new msg[144];
+
+    format(msg, sizeof(msg), "Unban selesai. Affected rows: %d", affectedRows);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+
+    if (affectedRows == 0)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Tidak ada ban aktif untuk username tersebut.");
+    }
+
+    return 1;
+}
+
+public OnPlayerBanInfo(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+
+    if (rows == 0)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Tidak ada data ban untuk username tersebut.");
+        return 1;
+    }
+
+    new playerName[24];
+    new ip[45];
+    new adminName[24];
+    new reason[128];
+    new expiresAt[32];
+    new createdAt[32];
+    new durationMinutes;
+    new active;
+    new banId;
+    new msg[144];
+
+    cache_get_value_name_int(0, "id", banId);
+    cache_get_value_name(0, "player_name", playerName, sizeof(playerName));
+    cache_get_value_name(0, "ip_address", ip, sizeof(ip));
+    cache_get_value_name(0, "admin_name", adminName, sizeof(adminName));
+    cache_get_value_name(0, "reason", reason, sizeof(reason));
+    cache_get_value_name_int(0, "duration_minutes", durationMinutes);
+    cache_get_value_name(0, "expires_at", expiresAt, sizeof(expiresAt));
+    cache_get_value_name_int(0, "active", active);
+    cache_get_value_name(0, "created_at", createdAt, sizeof(createdAt));
+
+    SendClientMessage(playerid, COLOR_YELLOW, "========== BAN INFO ==========");
+
+    format(msg, sizeof(msg), "Ban ID: %d | Username: %s", banId, playerName);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+
+    format(msg, sizeof(msg), "IP: %s | Active: %d", ip, active);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+
+    format(msg, sizeof(msg), "Admin: %s", adminName);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+
+    format(msg, sizeof(msg), "Reason: %s", reason);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+
+    if (durationMinutes == 0)
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "Duration: Permanent");
+    }
+    else
+    {
+        format(msg, sizeof(msg), "Duration: %d minutes | Expires: %s", durationMinutes, expiresAt);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+    }
+
+    format(msg, sizeof(msg), "Created: %s", createdAt);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
 
     return 1;
 }
@@ -2254,6 +2500,9 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/setmoney [id] [amount] - Set uang player");
         SendClientMessage(playerid, COLOR_WHITE, "/setlevel [id] [level] - Set level player");
         SendClientMessage(playerid, COLOR_WHITE, "/makeadmin [id] [level] - Set admin level, Owner only");
+        SendClientMessage(playerid, COLOR_WHITE, "/ban [id] [menit] [reason] - Ban player");
+        SendClientMessage(playerid, COLOR_WHITE, "/unban [username] - Unban username");
+        SendClientMessage(playerid, COLOR_WHITE, "/baninfo [username] - Cek info ban");
         return 1;
     }
 
@@ -2484,6 +2733,180 @@ public OnPlayerCommandText(playerid, cmdtext[])
         format(msg, sizeof(msg), "makeadmin level=%d", level);
         LogAdminAction(playerid, targetid, "MAKEADMIN", msg);
 
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/ban ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_SENIOR))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Minimal Senior Admin untuk menggunakan command ini.");
+            return 1;
+        }
+
+        new targetStr[16];
+        new minutesStr[16];
+        new reason[128];
+
+        if (!GetThreeParams(cmdtext[5], targetStr, sizeof(targetStr), minutesStr, sizeof(minutesStr), reason, sizeof(reason)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /ban [playerid] [menit] [reason]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh sementara: /ban 1 60 cheating");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh permanen: /ban 1 0 severe_cheating");
+            return 1;
+        }
+
+        if (!IsNumericString(targetStr) || !IsNumericString(minutesStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Player ID dan menit harus angka.");
+            return 1;
+        }
+
+        new targetid = strval(targetStr);
+        new minutes = strval(minutesStr);
+
+        if (!IsPlayerConnected(targetid) || !PlayerLoggedIn[targetid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Target tidak online/login.");
+            return 1;
+        }
+
+        if (targetid == playerid)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu tidak bisa ban diri sendiri.");
+            return 1;
+        }
+
+        if (PlayerAdmin[targetid] >= PlayerAdmin[playerid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu tidak bisa ban admin dengan level sama/lebih tinggi.");
+            return 1;
+        }
+
+        if (minutes < 0 || minutes > 525600)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Durasi tidak valid. Gunakan 0 untuk permanent, atau maksimal 525600 menit.");
+            return 1;
+        }
+
+        new adminName[MAX_PLAYER_NAME];
+        new targetName[MAX_PLAYER_NAME];
+        new targetIp[45];
+        new query[768];
+
+        GetPlayerName(playerid, adminName, sizeof(adminName));
+        GetPlayerName(targetid, targetName, sizeof(targetName));
+        GetPlayerIp(targetid, targetIp, sizeof(targetIp));
+
+        if (minutes == 0)
+        {
+            mysql_format(
+                g_SQL,
+                query,
+                sizeof(query),
+                "INSERT INTO bans (player_id, player_name, ip_address, admin_id, admin_name, reason, duration_minutes, expires_at, active) VALUES (%d, '%e', '%e', %d, '%e', '%e', 0, NULL, 1)",
+                PlayerDBID[targetid],
+                targetName,
+                targetIp,
+                PlayerDBID[playerid],
+                adminName,
+                reason
+            );
+        }
+        else
+        {
+            mysql_format(
+                g_SQL,
+                query,
+                sizeof(query),
+                "INSERT INTO bans (player_id, player_name, ip_address, admin_id, admin_name, reason, duration_minutes, expires_at, active) VALUES (%d, '%e', '%e', %d, '%e', '%e', %d, DATE_ADD(NOW(), INTERVAL %d MINUTE), 1)",
+                PlayerDBID[targetid],
+                targetName,
+                targetIp,
+                PlayerDBID[playerid],
+                adminName,
+                reason,
+                minutes,
+                minutes
+            );
+        }
+
+        mysql_tquery(g_SQL, query, "OnPlayerBanned", "ii", playerid, targetid);
+
+        new detail[160];
+        format(detail, sizeof(detail), "ban minutes=%d reason=%s", minutes, reason);
+        LogAdminAction(playerid, targetid, "BAN", detail);
+
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/unban ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_SENIOR))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Minimal Senior Admin untuk menggunakan command ini.");
+            return 1;
+        }
+
+        new targetName[24];
+
+        if (!GetOneParam(cmdtext[7], targetName, sizeof(targetName)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /unban [username]");
+            return 1;
+        }
+
+        new adminName[MAX_PLAYER_NAME];
+        new query[512];
+
+        GetPlayerName(playerid, adminName, sizeof(adminName));
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "UPDATE bans SET active=0, unbanned_by_id=%d, unbanned_by_name='%e', unbanned_at=NOW(), unban_reason='manual_unban' WHERE player_name='%e' AND active=1",
+            PlayerDBID[playerid],
+            adminName,
+            targetName
+        );
+
+        mysql_tquery(g_SQL, query, "OnPlayerUnbanned", "i", playerid);
+
+        new detail[128];
+        format(detail, sizeof(detail), "unban username=%s", targetName);
+        LogAdminAction(playerid, INVALID_PLAYER_ID, "UNBAN", detail);
+
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/baninfo ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_HELPER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+            return 1;
+        }
+
+        new targetName[24];
+
+        if (!GetOneParam(cmdtext[9], targetName, sizeof(targetName)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /baninfo [username]");
+            return 1;
+        }
+
+        new query[512];
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "SELECT id, player_name, ip_address, admin_name, reason, duration_minutes, expires_at, active, created_at FROM bans WHERE player_name='%e' ORDER BY id DESC LIMIT 1",
+            targetName
+        );
+
+        mysql_tquery(g_SQL, query, "OnPlayerBanInfo", "i", playerid);
         return 1;
     }
 

@@ -57,3 +57,32 @@ CREATE TABLE IF NOT EXISTS admin_logs (
     detail TEXT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS bans (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+
+    player_id INT NULL,
+    player_name VARCHAR(24) NOT NULL,
+    ip_address VARCHAR(45) NULL,
+
+    admin_id INT NULL,
+    admin_name VARCHAR(24) NOT NULL,
+
+    reason VARCHAR(128) NOT NULL,
+    duration_minutes INT NOT NULL DEFAULT 0,
+    expires_at DATETIME NULL,
+
+    active TINYINT NOT NULL DEFAULT 1,
+
+    unbanned_by_id INT NULL,
+    unbanned_by_name VARCHAR(24) NULL,
+    unbanned_at DATETIME NULL,
+    unban_reason VARCHAR(128) NULL,
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_player_name (player_name),
+    INDEX idx_ip_address (ip_address),
+    INDEX idx_active (active),
+    INDEX idx_expires_at (expires_at)
+);

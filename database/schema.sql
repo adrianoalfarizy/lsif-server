@@ -111,3 +111,20 @@ CREATE TABLE IF NOT EXISTS reports (
     INDEX idx_target_id (target_id),
     INDEX idx_created_at (created_at)
 );
+
+CREATE TABLE IF NOT EXISTS race_records (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+
+    player_id INT NOT NULL,
+    race_code VARCHAR(32) NOT NULL,
+
+    best_time_ms INT NOT NULL,
+    total_finishes INT NOT NULL DEFAULT 1,
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+
+    UNIQUE KEY unique_player_race (player_id, race_code),
+    INDEX idx_race_code (race_code),
+    INDEX idx_best_time_ms (best_time_ms)
+);

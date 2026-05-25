@@ -52,6 +52,14 @@
 #define ADMIN_SENIOR    4
 #define ADMIN_OWNER     5
 
+#define RACE_NONE       0
+#define RACE_LS_INTRO   1
+
+#define MAX_LS_RACE_POINTS 6
+
+#define RACE_LS_REWARD  1200
+#define RACE_LS_XP      75
+
 new MySQL:g_SQL;
 new g_AutosaveTimer;
 
@@ -132,6 +140,40 @@ new CourierXP[MAX_COURIER_POINTS] =
     30
 };
 
+new PlayerRace[MAX_PLAYERS];
+new PlayerRaceCheckpoint[MAX_PLAYERS];
+new PlayerRaceStartTick[MAX_PLAYERS];
+
+new Float:RaceLSX[MAX_LS_RACE_POINTS] =
+{
+    1528.3741,
+    1690.6326,
+    1812.7244,
+    1965.9974,
+    2105.4453,
+    2265.5576
+};
+
+new Float:RaceLSY[MAX_LS_RACE_POINTS] =
+{
+    -1678.0245,
+        -1610.3588,
+        -1504.9277,
+        -1433.2037,
+        -1344.9448,
+        -1210.4338
+    };
+
+new Float:RaceLSZ[MAX_LS_RACE_POINTS] =
+{
+    13.3828,
+    13.5469,
+    13.3906,
+    13.5469,
+    23.9844,
+    24.0000
+};
+
 forward OnAccountCheck(playerid);
 forward OnAccountRegister(playerid);
 forward OnAccountLogin(playerid);
@@ -149,6 +191,8 @@ forward OnPlayerBanInfo(playerid);
 forward OnReportCreated(playerid, targetid);
 forward OnReportsList(playerid);
 forward OnReportClosed(playerid, reportid);
+forward OnRaceRecordSaved(playerid, timeMs);
+forward OnRaceTop(playerid);
 
 stock SaveAllPlayers()
 {
@@ -187,6 +231,7 @@ stock ResetPlayerAccountData(playerid)
     PlayerAdmin[playerid] = 0;
     PlayerVehicle[playerid] = INVALID_VEHICLE_ID;
     ResetOwnedVehicleData(playerid);
+    ResetPlayerRaceData(playerid);
 
     PlayerJob[playerid] = JOB_NONE;
     PlayerWorking[playerid] = 0;
@@ -1117,6 +1162,205 @@ stock SendMessageToAdmins(color, const message[])
     return 1;
 }
 
+stock FormatRaceTime(timeMs, output[], size)
+{
+    new seconds = timeMs / 1000;
+    new milliseconds = timeMs % 1000;
+    new minutes = seconds / 60;
+
+    seconds = seconds % 60;
+
+    format(output, size, "%02d:%02d.%03d", minutes, seconds, milliseconds);
+    return 1;
+}
+
+stock ResetPlayerRaceData(playerid)
+{
+    PlayerRace[playerid] = RACE_NONE;
+    PlayerRaceCheckpoint[playerid] = 0;
+    PlayerRaceStartTick[playerid] = 0;
+    return 1;
+}
+
+stock GetRaceName(raceid, output[], size)
+{
+    if (raceid == RACE_LS_INTRO)
+    {
+        format(output, size, "Los Santos Intro");
+        return 1;
+    }
+
+    format(output, size, "None");
+    return 1;
+}
+
+stock ShowRaceCheckpoint(playerid)
+{
+    if (PlayerRace[playerid] != RACE_LS_INTRO)
+    {
+        return 0;
+    }
+
+    new cp = PlayerRaceCheckpoint[playerid];
+
+    if (cp < 0 || cp >= MAX_LS_RACE_POINTS)
+    {
+        return 0;
+    }
+
+    SetPlayerCheckpoint(
+        playerid,
+        RaceLSX[cp],
+        RaceLSY[cp],
+        RaceLSZ[cp],
+        6.0
+    );
+
+    new msg[144];
+
+    if (cp == MAX_LS_RACE_POINTS - 1)
+    {
+        format(msg, sizeof(msg), "Race: checkpoint finish! CP %d/%d", cp + 1, MAX_LS_RACE_POINTS);
+    }
+    else
+    {
+        format(msg, sizeof(msg), "Race: menuju checkpoint %d/%d.", cp + 1, MAX_LS_RACE_POINTS);
+    }
+
+    SendClientMessage(playerid, COLOR_CYAN, msg);
+    return 1;
+}
+
+stock StartLSIntroRace(playerid)
+{
+    if (PlayerRace[playerid] != RACE_NONE)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu sedang mengikuti race. Gunakan /leaverace untuk keluar.");
+        return 0;
+    }
+
+    if (PlayerWorking[playerid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu sedang bekerja. Batalkan dulu dengan /cancelwork.");
+        return 0;
+    }
+
+    if (!IsPlayerInAnyVehicle(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada di kendaraan untuk ikut race.");
+        SendClientMessage(playerid, COLOR_WHITE, "Untuk test cepat: /veh 411 lalu /joinrace ls.");
+        return 0;
+    }
+
+    new vehicleid = GetPlayerVehicleID(playerid);
+
+    SetVehiclePos(vehicleid, RaceLSX[0], RaceLSY[0], RaceLSZ[0]);
+    SetVehicleZAngle(vehicleid, 90.0);
+    PutPlayerInVehicle(playerid, vehicleid, 0);
+
+    PlayerRace[playerid] = RACE_LS_INTRO;
+    PlayerRaceCheckpoint[playerid] = 1;
+    PlayerRaceStartTick[playerid] = GetTickCount();
+
+    SendClientMessage(playerid, COLOR_GREEN, "Race Los Santos Intro dimulai!");
+    SendClientMessage(playerid, COLOR_WHITE, "Ikuti checkpoint sampai finish. Gunakan /leaverace untuk keluar.");
+
+    ShowRaceCheckpoint(playerid);
+    return 1;
+}
+
+stock CancelPlayerRace(playerid)
+{
+    if (PlayerRace[playerid] == RACE_NONE)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak sedang mengikuti race.");
+        return 0;
+    }
+
+    DisablePlayerCheckpoint(playerid);
+    ResetPlayerRaceData(playerid);
+
+    SendClientMessage(playerid, COLOR_YELLOW, "Kamu keluar dari race.");
+    return 1;
+}
+
+stock SaveRaceRecord(playerid, const raceCode[], timeMs)
+{
+    if (!PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0)
+    {
+        return 0;
+    }
+
+    new query[512];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO race_records (player_id, race_code, best_time_ms, total_finishes) VALUES (%d, '%e', %d, 1) ON DUPLICATE KEY UPDATE best_time_ms=IF(%d < best_time_ms, %d, best_time_ms), total_finishes=total_finishes+1, updated_at=NOW()",
+        PlayerDBID[playerid],
+        raceCode,
+        timeMs,
+        timeMs,
+        timeMs
+    );
+
+    mysql_tquery(g_SQL, query, "OnRaceRecordSaved", "ii", playerid, timeMs);
+    return 1;
+}
+
+stock CompletePlayerRace(playerid)
+{
+    if (PlayerRace[playerid] != RACE_LS_INTRO)
+    {
+        return 0;
+    }
+
+    new timeMs = GetTickCount() - PlayerRaceStartTick[playerid];
+    new timeText[32];
+    new msg[144];
+
+    FormatRaceTime(timeMs, timeText, sizeof(timeText));
+
+    DisablePlayerCheckpoint(playerid);
+
+    GivePlayerCash(playerid, RACE_LS_REWARD);
+    GivePlayerXPEx(playerid, RACE_LS_XP);
+
+    format(msg, sizeof(msg), "Race selesai! Waktu kamu: %s. Reward: $%d dan %d XP.", timeText, RACE_LS_REWARD, RACE_LS_XP);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+
+    SaveRaceRecord(playerid, "ls_intro", timeMs);
+
+    ResetPlayerRaceData(playerid);
+    SavePlayerData(playerid);
+
+    return 1;
+}
+
+stock HandleRaceCheckpoint(playerid)
+{
+    if (PlayerRace[playerid] == RACE_NONE)
+    {
+        return 0;
+    }
+
+    if (PlayerRace[playerid] == RACE_LS_INTRO)
+    {
+        if (PlayerRaceCheckpoint[playerid] >= MAX_LS_RACE_POINTS - 1)
+        {
+            CompletePlayerRace(playerid);
+            return 1;
+        }
+
+        PlayerRaceCheckpoint[playerid]++;
+        ShowRaceCheckpoint(playerid);
+        return 1;
+    }
+
+    return 0;
+}
+
 main()
 {
     print("========================================");
@@ -1133,7 +1377,7 @@ public AutoSavePlayers()
 
 public OnGameModeInit()
 {
-    SetGameModeText("LSIF Dev v0.6C Report");
+    SetGameModeText("LSIF Dev v0.7A Race");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -1172,6 +1416,7 @@ public OnGameModeInit()
         PlayerAdmin[i] = 0;
         PlayerVehicle[i] = INVALID_VEHICLE_ID;
         ResetOwnedVehicleData(i);
+        ResetPlayerRaceData(i);
 
         PlayerJob[i] = JOB_NONE;
         PlayerWorking[i] = 0;
@@ -1187,7 +1432,7 @@ public OnGameModeInit()
     g_AutosaveTimer = SetTimer("AutoSavePlayers", AUTOSAVE_INTERVAL, true);
 
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
-    print("[LSIF] Gamemode v0.6C Report System berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.7A Race System berhasil dijalankan.");
     return 1;
 }
 
@@ -1252,6 +1497,12 @@ public OnPlayerDisconnect(playerid, reason)
     {
         DestroyVehicle(OwnedVehicleID[playerid]);
         OwnedVehicleID[playerid] = INVALID_VEHICLE_ID;
+    }
+
+    if (PlayerRace[playerid] != RACE_NONE)
+    {
+        DisablePlayerCheckpoint(playerid);
+        ResetPlayerRaceData(playerid);
     }
 
     return 1;
@@ -1495,6 +1746,12 @@ public OnAccountLogin(playerid)
 
 public OnPlayerEnterCheckpoint(playerid)
 {
+    if (PlayerRace[playerid] != RACE_NONE)
+    {
+        HandleRaceCheckpoint(playerid);
+        return 1;
+    }
+
     if (PlayerWorking[playerid] && PlayerWorkType[playerid] == WORK_COURIER)
     {
         CompleteCourierWork(playerid);
@@ -1954,7 +2211,61 @@ public OnReportClosed(playerid, reportid)
     return 1;
 }
 
+public OnRaceRecordSaved(playerid, timeMs)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
 
+    new timeText[32];
+    new msg[144];
+
+    FormatRaceTime(timeMs, timeText, sizeof(timeText));
+
+    format(msg, sizeof(msg), "Race record tersimpan. Waktu: %s. Cek /racetop.", timeText);
+    SendClientMessage(playerid, COLOR_CYAN, msg);
+
+    return 1;
+}
+
+public OnRaceTop(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+
+    SendClientMessage(playerid, COLOR_YELLOW, "========== RACE TOP: LS INTRO ==========");
+
+    if (rows == 0)
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "Belum ada record race.");
+        return 1;
+    }
+
+    new username[24];
+    new bestTime;
+    new finishes;
+    new timeText[32];
+    new msg[144];
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name(i, "username", username, sizeof(username));
+        cache_get_value_name_int(i, "best_time_ms", bestTime);
+        cache_get_value_name_int(i, "total_finishes", finishes);
+
+        FormatRaceTime(bestTime, timeText, sizeof(timeText));
+
+        format(msg, sizeof(msg), "%d. %s - %s | Finish: %d", i + 1, username, timeText, finishes);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+    }
+
+    return 1;
+}
 
 public OnPlayerCommandText(playerid, cmdtext[])
 {
@@ -1998,6 +2309,10 @@ public OnPlayerCommandText(playerid, cmdtext[])
             SendClientMessage(playerid, COLOR_ORANGE, "Admin: gunakan /ahelp untuk command admin.");
         }
         SendClientMessage(playerid, COLOR_WHITE, "/report [id] [reason] - Laporkan player ke admin");
+        SendClientMessage(playerid, COLOR_WHITE, "/races - Melihat daftar race");
+        SendClientMessage(playerid, COLOR_WHITE, "/joinrace ls - Ikut race Los Santos Intro");
+        SendClientMessage(playerid, COLOR_WHITE, "/leaverace - Keluar dari race aktif");
+        SendClientMessage(playerid, COLOR_WHITE, "/racetop - Leaderboard race");
 
         return 1;
     }
@@ -3199,6 +3514,57 @@ public OnPlayerCommandText(playerid, cmdtext[])
         format(detail, sizeof(detail), "closereport id=%d note=%s", reportid, note);
         LogAdminAction(playerid, INVALID_PLAYER_ID, "CLOSE_REPORT", detail);
 
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/races", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "========== RACES ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "ls - Los Santos Intro Time Trial");
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan: /joinrace ls");
+        SendClientMessage(playerid, COLOR_WHITE, "Leaderboard: /racetop");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/joinrace ", true) == 0)
+    {
+        new raceCode[32];
+
+        if (!GetOneParam(cmdtext[10], raceCode, sizeof(raceCode)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /joinrace [race_code]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /joinrace ls");
+            return 1;
+        }
+
+        if (!strcmp(raceCode, "ls", true))
+        {
+            StartLSIntroRace(playerid);
+            return 1;
+        }
+
+        SendClientMessage(playerid, COLOR_RED, "Race tidak ditemukan. Gunakan /races.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/leaverace", true))
+    {
+        CancelPlayerRace(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/racetop", true))
+    {
+        new query[512];
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "SELECT p.username, r.best_time_ms, r.total_finishes FROM race_records r JOIN players p ON p.id = r.player_id WHERE r.race_code='ls_intro' ORDER BY r.best_time_ms ASC LIMIT 5"
+        );
+
+        mysql_tquery(g_SQL, query, "OnRaceTop", "i", playerid);
         return 1;
     }
 

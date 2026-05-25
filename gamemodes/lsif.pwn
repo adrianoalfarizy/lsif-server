@@ -30,10 +30,12 @@
 #define JOB_NONE        0
 #define JOB_COURIER     1
 #define JOB_TAXI        2
+#define JOB_TRUCKER     3
 
 #define WORK_NONE       0
 #define WORK_COURIER    1
 #define WORK_TAXI       2
+#define WORK_TRUCKER    3
 
 #define MAX_COURIER_POINTS 5
 #define MAX_TAXI_ROUTES 5
@@ -58,6 +60,31 @@
 #define VEHICLE_CABBIE  438
 
 #define COURIER_COOLDOWN_SECONDS 30
+
+#define MAX_TRUCKER_ROUTES 5
+
+#define TRUCKER_STAGE_NONE      0
+#define TRUCKER_STAGE_PICKUP    1
+#define TRUCKER_STAGE_DROPOFF   2
+
+#define TRUCKER_COOLDOWN_SECONDS 45
+
+#define TRUCKER_BASE_FARE          800
+#define TRUCKER_FARE_PER_UNIT      3
+#define TRUCKER_MIN_REWARD         1200
+#define TRUCKER_MAX_REWARD         6000
+
+#define TRUCKER_BASE_XP            45
+#define TRUCKER_XP_PER_100_UNITS   8
+#define TRUCKER_MIN_XP             60
+#define TRUCKER_MAX_XP             250
+
+#define VEHICLE_LINERUNNER 403
+#define VEHICLE_TANKER     514
+#define VEHICLE_ROADTRAIN  515
+#define VEHICLE_DFT30      578
+#define VEHICLE_FLATBED    455
+#define VEHICLE_YANKEE     456
 
 #define VEHICLE_BURRITO 482
 #define VEHICLE_BOXVILLE 498
@@ -122,6 +149,63 @@ new PlayerWorkPoint[MAX_PLAYERS];
 new PlayerLastWorkTick[MAX_PLAYERS];
 new PlayerTaxiStage[MAX_PLAYERS];
 new PlayerTaxiRoute[MAX_PLAYERS];
+
+new PlayerTruckerStage[MAX_PLAYERS];
+new PlayerTruckerRoute[MAX_PLAYERS];
+
+new Float:TruckerPickupX[MAX_TRUCKER_ROUTES] =
+{
+    2460.3918,
+    2202.9321,
+    2786.4487,
+    1041.2736,
+    1651.7496
+};
+
+new Float:TruckerPickupY[MAX_TRUCKER_ROUTES] =
+{
+    -2114.8193,
+        -2663.3110,
+        -2417.9055,
+        -299.5216,
+        -1839.6616
+    };
+
+new Float:TruckerPickupZ[MAX_TRUCKER_ROUTES] =
+{
+    13.5469,
+    13.5469,
+    13.6328,
+    73.9922,
+    13.5469
+};
+
+new Float:TruckerDropoffX[MAX_TRUCKER_ROUTES] =
+{
+    1012.0282,
+    -77.9614,
+    1715.9419,
+    2435.4377,
+    2852.1299
+};
+
+new Float:TruckerDropoffY[MAX_TRUCKER_ROUTES] =
+{
+    -1350.7133,
+        -1136.9480,
+        -1951.1108,
+        -2088.8242,
+        -1523.7355
+    };
+
+new Float:TruckerDropoffZ[MAX_TRUCKER_ROUTES] =
+{
+    13.3438,
+    1.0781,
+    13.5669,
+    13.5469,
+    11.0938
+};
 
 new Float:TaxiPickupX[MAX_TAXI_ROUTES] =
 {
@@ -335,6 +419,98 @@ stock GetTaxiDynamicXP(route)
     return ClampInt(xp, TAXI_MIN_XP, TAXI_MAX_XP);
 }
 
+stock IsTruckerVehicleModel(modelid)
+{
+    if (modelid == VEHICLE_LINERUNNER) return 1;
+    if (modelid == VEHICLE_TANKER) return 1;
+    if (modelid == VEHICLE_ROADTRAIN) return 1;
+    if (modelid == VEHICLE_DFT30) return 1;
+    if (modelid == VEHICLE_FLATBED) return 1;
+    if (modelid == VEHICLE_YANKEE) return 1;
+
+    return 0;
+}
+
+stock IsPlayerInTruckerVehicle(playerid)
+{
+    if (!IsPlayerInAnyVehicle(playerid))
+    {
+        return 0;
+    }
+
+    if (GetPlayerState(playerid) != PLAYER_STATE_DRIVER)
+    {
+        return 0;
+    }
+
+    new vehicleid = GetPlayerVehicleID(playerid);
+    new modelid = GetVehicleModel(vehicleid);
+
+    return IsTruckerVehicleModel(modelid);
+}
+
+stock GetTruckerCooldownLeft(playerid)
+{
+    new lastTick = PlayerLastWorkTick[playerid];
+
+    if (lastTick == 0)
+    {
+        return 0;
+    }
+
+    new currentTick = GetTickCount();
+    new elapsed = (currentTick - lastTick) / 1000;
+
+    if (elapsed >= TRUCKER_COOLDOWN_SECONDS)
+    {
+        return 0;
+    }
+
+    return TRUCKER_COOLDOWN_SECONDS - elapsed;
+}
+
+stock ResetTruckerWorkData(playerid)
+{
+    PlayerTruckerStage[playerid] = TRUCKER_STAGE_NONE;
+    PlayerTruckerRoute[playerid] = -1;
+    return 1;
+}
+
+stock Float:GetTruckerRouteDistance(route)
+{
+    if (route < 0 || route >= MAX_TRUCKER_ROUTES)
+    {
+        return 0.0;
+    }
+
+    return GetDistanceBetweenPoints3D(
+               TruckerPickupX[route],
+               TruckerPickupY[route],
+               TruckerPickupZ[route],
+               TruckerDropoffX[route],
+               TruckerDropoffY[route],
+               TruckerDropoffZ[route]
+           );
+}
+
+stock GetTruckerDynamicReward(route)
+{
+    new Float:distance = GetTruckerRouteDistance(route);
+
+    new reward = TRUCKER_BASE_FARE + floatround(distance * TRUCKER_FARE_PER_UNIT);
+
+    return ClampInt(reward, TRUCKER_MIN_REWARD, TRUCKER_MAX_REWARD);
+}
+
+stock GetTruckerDynamicXP(route)
+{
+    new Float:distance = GetTruckerRouteDistance(route);
+
+    new xp = TRUCKER_BASE_XP + floatround((distance / 100.0) * TRUCKER_XP_PER_100_UNITS);
+
+    return ClampInt(xp, TRUCKER_MIN_XP, TRUCKER_MAX_XP);
+}
+
 forward OnAccountCheck(playerid);
 forward OnAccountRegister(playerid);
 forward OnAccountLogin(playerid);
@@ -400,6 +576,7 @@ stock ResetPlayerAccountData(playerid)
     PlayerWorkPoint[playerid] = -1;
     PlayerLastWorkTick[playerid] = 0;
     ResetTaxiWorkData(playerid);
+    ResetTruckerWorkData(playerid);
 
     PlayerLastX[playerid] = SPAWN_X;
     PlayerLastY[playerid] = SPAWN_Y;
@@ -802,6 +979,12 @@ stock GetJobName(jobid, output[], size)
         return 1;
     }
 
+    if (jobid == JOB_TRUCKER)
+    {
+        format(output, size, "Trucker");
+        return 1;
+    }
+
     format(output, size, "None");
     return 1;
 }
@@ -1116,6 +1299,161 @@ stock CompleteTaxiWork(playerid)
     return 1;
 }
 
+stock StartTruckerWork(playerid)
+{
+    if (PlayerJob[playerid] != JOB_TRUCKER)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum bekerja sebagai trucker. Gunakan /joinjob trucker.");
+        return 0;
+    }
+
+    if (PlayerWorking[playerid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu sedang menjalankan pekerjaan. Gunakan /cancelwork untuk membatalkan.");
+        return 0;
+    }
+
+    new cooldownLeft = GetTruckerCooldownLeft(playerid);
+
+    if (cooldownLeft > 0)
+    {
+        new cooldownMsg[144];
+        format(cooldownMsg, sizeof(cooldownMsg), "Tunggu %d detik sebelum mengambil muatan berikutnya.", cooldownLeft);
+        SendClientMessage(playerid, COLOR_YELLOW, cooldownMsg);
+        return 0;
+    }
+
+    if (!IsPlayerInTruckerVehicle(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus menjadi driver kendaraan truck untuk mulai kerja trucker.");
+        SendClientMessage(playerid, COLOR_WHITE, "Kendaraan valid: Linerunner, Tanker, Roadtrain, DFT-30, Flatbed, Yankee.");
+        SendClientMessage(playerid, COLOR_WHITE, "Test cepat: /veh 515 atau /veh 403.");
+        return 0;
+    }
+
+    new route = random(MAX_TRUCKER_ROUTES);
+
+    PlayerWorking[playerid] = 1;
+    PlayerWorkType[playerid] = WORK_TRUCKER;
+    PlayerWorkPoint[playerid] = route;
+
+    PlayerTruckerStage[playerid] = TRUCKER_STAGE_PICKUP;
+    PlayerTruckerRoute[playerid] = route;
+
+    SetPlayerCheckpoint(
+        playerid,
+        TruckerPickupX[route],
+        TruckerPickupY[route],
+        TruckerPickupZ[route],
+        6.0
+    );
+
+    new msg[144];
+    new reward = GetTruckerDynamicReward(route);
+    new xp = GetTruckerDynamicXP(route);
+    new Float:distance = GetTruckerRouteDistance(route);
+
+    format(msg, sizeof(msg), "Trucker: ambil cargo di checkpoint. Estimasi jarak: %.1f unit.", distance);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+
+    format(msg, sizeof(msg), "Estimasi reward: $%d dan %d XP.", reward, xp);
+    SendClientMessage(playerid, COLOR_CYAN, msg);
+
+    SendClientMessage(playerid, COLOR_WHITE, "Tetap gunakan truck sampai delivery selesai.");
+    return 1;
+}
+
+stock HandleTruckerCheckpoint(playerid)
+{
+    if (!PlayerWorking[playerid] || PlayerWorkType[playerid] != WORK_TRUCKER)
+    {
+        return 0;
+    }
+
+    new route = PlayerTruckerRoute[playerid];
+
+    if (route < 0 || route >= MAX_TRUCKER_ROUTES)
+    {
+        CancelPlayerWork(playerid);
+        SendClientMessage(playerid, COLOR_RED, "Trucker route error. Pekerjaan dibatalkan.");
+        return 1;
+    }
+
+    if (!IsPlayerInTruckerVehicle(playerid))
+    {
+        CancelPlayerWork(playerid);
+        SendClientMessage(playerid, COLOR_RED, "Trucker job dibatalkan karena kamu tidak berada sebagai driver truck.");
+        return 1;
+    }
+
+    if (PlayerTruckerStage[playerid] == TRUCKER_STAGE_PICKUP)
+    {
+        PlayerTruckerStage[playerid] = TRUCKER_STAGE_DROPOFF;
+
+        SetPlayerCheckpoint(
+            playerid,
+            TruckerDropoffX[route],
+            TruckerDropoffY[route],
+            TruckerDropoffZ[route],
+            7.0
+        );
+
+        SendClientMessage(playerid, COLOR_GREEN, "Cargo berhasil dimuat. Antar ke checkpoint tujuan.");
+        return 1;
+    }
+
+    if (PlayerTruckerStage[playerid] == TRUCKER_STAGE_DROPOFF)
+    {
+        CompleteTruckerWork(playerid);
+        return 1;
+    }
+
+    return 1;
+}
+
+stock CompleteTruckerWork(playerid)
+{
+    if (!PlayerWorking[playerid] || PlayerWorkType[playerid] != WORK_TRUCKER)
+    {
+        return 0;
+    }
+
+    new route = PlayerTruckerRoute[playerid];
+
+    if (route < 0 || route >= MAX_TRUCKER_ROUTES)
+    {
+        route = 0;
+    }
+
+    new reward = GetTruckerDynamicReward(route);
+    new xp = GetTruckerDynamicXP(route);
+    new Float:distance = GetTruckerRouteDistance(route);
+    new msg[144];
+
+    GivePlayerCash(playerid, reward);
+    GivePlayerXPEx(playerid, xp);
+
+    DisablePlayerCheckpoint(playerid);
+
+    PlayerWorking[playerid] = 0;
+    PlayerWorkType[playerid] = WORK_NONE;
+    PlayerWorkPoint[playerid] = -1;
+    PlayerLastWorkTick[playerid] = GetTickCount();
+
+    ResetTruckerWorkData(playerid);
+
+    format(msg, sizeof(msg), "Cargo berhasil dikirim. Jarak trip: %.1f unit.", distance);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+
+    format(msg, sizeof(msg), "Kamu mendapat $%d dan %d XP.", reward, xp);
+    SendClientMessage(playerid, COLOR_CYAN, msg);
+
+    SendClientMessage(playerid, COLOR_WHITE, "Gunakan /work lagi setelah cooldown untuk mengambil muatan berikutnya.");
+
+    SavePlayerData(playerid);
+    return 1;
+}
+
 stock CancelPlayerWork(playerid)
 {
     if (!PlayerWorking[playerid])
@@ -1131,6 +1469,7 @@ stock CancelPlayerWork(playerid)
     PlayerWorkPoint[playerid] = -1;
 
     ResetTaxiWorkData(playerid);
+    ResetTruckerWorkData(playerid);
 
     SendClientMessage(playerid, COLOR_YELLOW, "Pekerjaan aktif dibatalkan.");
     return 1;
@@ -1855,7 +2194,7 @@ public AutoSavePlayers()
 
 public OnGameModeInit()
 {
-    SetGameModeText("LSIF Dev v0.8B Taxi Fare");
+    SetGameModeText("LSIF Dev v0.9A Trucker");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -1897,6 +2236,7 @@ public OnGameModeInit()
         ResetPlayerRaceData(i);
         PlayerLastRaceTick[i] = 0;
         ResetTaxiWorkData(i);
+        ResetTruckerWorkData(i);
 
         PlayerJob[i] = JOB_NONE;
         PlayerWorking[i] = 0;
@@ -1912,7 +2252,7 @@ public OnGameModeInit()
     g_AutosaveTimer = SetTimer("AutoSavePlayers", AUTOSAVE_INTERVAL, true);
 
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
-    print("[LSIF] Gamemode v0.8B Taxi Fare Scaling berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.9A Trucker Job berhasil dijalankan.");
     return 1;
 }
 
@@ -1972,6 +2312,9 @@ public OnPlayerDisconnect(playerid, reason)
 
     PlayerLoggedIn[playerid] = 0;
     PlayerDBID[playerid] = 0;
+
+    ResetTaxiWorkData(playerid);
+    ResetTruckerWorkData(playerid);
 
     if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
     {
@@ -2229,6 +2572,12 @@ public OnPlayerEnterCheckpoint(playerid)
     if (PlayerRace[playerid] != RACE_NONE)
     {
         HandleRaceCheckpoint(playerid);
+        return 1;
+    }
+
+    if (PlayerWorking[playerid] && PlayerWorkType[playerid] == WORK_TRUCKER)
+    {
+        HandleTruckerCheckpoint(playerid);
         return 1;
     }
 
@@ -2788,8 +3137,10 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/jobs - Melihat daftar job");
         SendClientMessage(playerid, COLOR_WHITE, "/joinjob courier - Ambil job courier");
         SendClientMessage(playerid, COLOR_WHITE, "/joinjob taxi - Ambil job taxi");
+        SendClientMessage(playerid, COLOR_WHITE, "/joinjob trucker - Ambil job trucker");
         SendClientMessage(playerid, COLOR_WHITE, "/jobinfo - Melihat informasi job aktif");
         SendClientMessage(playerid, COLOR_WHITE, "/taxifare - Melihat formula reward taxi");
+        SendClientMessage(playerid, COLOR_WHITE, "/truckerfare - Melihat formula reward trucker");
         SendClientMessage(playerid, COLOR_WHITE, "/leavejob - Keluar dari job");
         SendClientMessage(playerid, COLOR_WHITE, "/work - Mulai pekerjaan aktif");
         SendClientMessage(playerid, COLOR_WHITE, "/cancelwork - Batalkan pekerjaan aktif");
@@ -2812,6 +3163,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/raceinfo - Melihat status race aktif/cooldown");
         SendClientMessage(playerid, COLOR_WHITE, "/leaverace - Keluar dari race aktif");
         SendClientMessage(playerid, COLOR_WHITE, "/racetop - Leaderboard race");
+
 
         return 1;
     }
@@ -3090,7 +3442,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_YELLOW, "========== JOBS ==========");
         SendClientMessage(playerid, COLOR_WHITE, "courier - Antar paket ke beberapa lokasi di Los Santos.");
         SendClientMessage(playerid, COLOR_WHITE, "taxi - Antar penumpang dari pickup ke tujuan.");
-        SendClientMessage(playerid, COLOR_WHITE, "Gunakan: /joinjob courier atau /joinjob taxi");
+        SendClientMessage(playerid, COLOR_WHITE, "trucker - Ambil cargo dan kirim ke lokasi industri.");
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan: /joinjob courier, /joinjob taxi, atau /joinjob trucker");
         return 1;
     }
 
@@ -3130,9 +3483,27 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/joinjob trucker", true))
+    {
+        if (PlayerWorking[playerid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Selesaikan atau batalkan pekerjaan aktif dulu.");
+            return 1;
+        }
+
+        PlayerJob[playerid] = JOB_TRUCKER;
+
+        SendClientMessage(playerid, COLOR_GREEN, "Kamu sekarang bekerja sebagai Trucker.");
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan /work saat berada di kendaraan truck.");
+        SendClientMessage(playerid, COLOR_WHITE, "Test cepat: /veh 515 atau /veh 403.");
+
+        SavePlayerData(playerid);
+        return 1;
+    }
+
     if (strfind(cmdtext, "/joinjob", true) == 0)
     {
-        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /joinjob courier atau /joinjob taxi");
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /joinjob courier, /joinjob taxi, atau /joinjob trucker");
         return 1;
     }
 
@@ -3172,6 +3543,12 @@ public OnPlayerCommandText(playerid, cmdtext[])
         if (PlayerJob[playerid] == JOB_TAXI)
         {
             StartTaxiWork(playerid);
+            return 1;
+        }
+
+        if (PlayerJob[playerid] == JOB_TRUCKER)
+        {
+            StartTruckerWork(playerid);
             return 1;
         }
 
@@ -3257,6 +3634,52 @@ public OnPlayerCommandText(playerid, cmdtext[])
                 else if (PlayerTaxiStage[playerid] == TAXI_STAGE_DROPOFF)
                 {
                     SendClientMessage(playerid, COLOR_CYAN, "Status: mengantar penumpang ke tujuan.");
+                }
+            }
+
+            return 1;
+        }
+
+        if (PlayerJob[playerid] == JOB_TRUCKER)
+        {
+            SendClientMessage(playerid, COLOR_WHITE, "Tugas: ambil cargo dan kirim ke checkpoint tujuan.");
+            SendClientMessage(playerid, COLOR_WHITE, "Kendaraan valid: Linerunner, Tanker, Roadtrain, DFT-30, Flatbed, Yankee.");
+            SendClientMessage(playerid, COLOR_WHITE, "Test cepat: /veh 515 atau /veh 403 lalu /work.");
+            SendClientMessage(playerid, COLOR_WHITE, "Reward trucker dihitung berdasarkan jarak pickup ke dropoff.");
+
+            new cooldownLeft = GetTruckerCooldownLeft(playerid);
+
+            if (cooldownLeft > 0)
+            {
+                format(msg, sizeof(msg), "Cooldown: %d detik.", cooldownLeft);
+                SendClientMessage(playerid, COLOR_YELLOW, msg);
+            }
+            else
+            {
+                SendClientMessage(playerid, COLOR_GREEN, "Cooldown: siap bekerja.");
+            }
+
+            if (PlayerWorking[playerid] && PlayerWorkType[playerid] == WORK_TRUCKER)
+            {
+                new route = PlayerTruckerRoute[playerid];
+
+                if (PlayerTruckerStage[playerid] == TRUCKER_STAGE_PICKUP)
+                {
+                    SendClientMessage(playerid, COLOR_CYAN, "Status: menuju lokasi pickup cargo.");
+                }
+                else if (PlayerTruckerStage[playerid] == TRUCKER_STAGE_DROPOFF)
+                {
+                    SendClientMessage(playerid, COLOR_CYAN, "Status: mengantar cargo ke tujuan.");
+                }
+
+                if (route >= 0 && route < MAX_TRUCKER_ROUTES)
+                {
+                    new reward = GetTruckerDynamicReward(route);
+                    new xp = GetTruckerDynamicXP(route);
+                    new Float:distance = GetTruckerRouteDistance(route);
+
+                    format(msg, sizeof(msg), "Trip distance: %.1f unit | Reward: $%d | XP: %d", distance, reward, xp);
+                    SendClientMessage(playerid, COLOR_CYAN, msg);
                 }
             }
 
@@ -4204,6 +4627,28 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         SendClientMessage(playerid, COLOR_CYAN, "Semakin jauh trip taxi, semakin besar reward.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/truckerfare", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "========== TRUCKER FARE INFO ==========");
+
+        new msg[144];
+
+        format(msg, sizeof(msg), "Base fare: $%d", TRUCKER_BASE_FARE);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Fare per unit: $%d", TRUCKER_FARE_PER_UNIT);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Reward range: $%d - $%d", TRUCKER_MIN_REWARD, TRUCKER_MAX_REWARD);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "XP range: %d - %d", TRUCKER_MIN_XP, TRUCKER_MAX_XP);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        SendClientMessage(playerid, COLOR_CYAN, "Semakin jauh pengiriman cargo, semakin besar reward.");
         return 1;
     }
 

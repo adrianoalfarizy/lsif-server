@@ -111,10 +111,18 @@
 
 #define RACE_COOLDOWN_SECONDS 120
 
+#define ANTICHEAT_INTERVAL 10000 // 10 detik
+#define MONEY_MISMATCH_TOLERANCE 0
+
 
 
 new MySQL:g_SQL;
 new g_AutosaveTimer;
+
+new g_AntiCheatTimer;
+
+new PlayerMoneyMismatchCount[MAX_PLAYERS];
+new PlayerLastACWarningTick[MAX_PLAYERS];
 
 new PlayerDBID[MAX_PLAYERS];
 new PlayerLoggedIn[MAX_PLAYERS];
@@ -535,6 +543,7 @@ forward OnRaceTop(playerid);
 forward OnJobStatsLoaded(playerid);
 forward OnJobTopLoaded(playerid);
 forward OnJobProgressSaved(playerid);
+forward AntiCheatCheck();
 
 stock SaveAllPlayers()
 {
@@ -554,6 +563,34 @@ stock SaveAllPlayers()
     print(msg);
 
     return savedCount;
+}
+
+stock SyncPlayerMoneyHUD(playerid)
+{
+    SyncPlayerMoneyHUD(playerid);
+    return 1;
+}
+
+stock ReportSuspiciousActivity(playerid, const reason[])
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 0;
+    }
+
+    new name[MAX_PLAYER_NAME];
+    new msg[144];
+
+    GetPlayerName(playerid, name, sizeof(name));
+
+    format(msg, sizeof(msg), "[AC] %s[%d]: %s", name, playerid, reason);
+    print(msg);
+
+    SendMessageToAdmins(COLOR_ORANGE, msg);
+
+    LogAdminAction(INVALID_PLAYER_ID, playerid, "ANTICHEAT", reason);
+
+    return 1;
 }
 
 stock GetPlayerAccountName(playerid, output[], size)
@@ -588,7 +625,10 @@ stock ResetPlayerAccountData(playerid)
     PlayerLastZ[playerid] = SPAWN_Z;
     PlayerLastA[playerid] = SPAWN_A;
 
-    ResetPlayerMoney(playerid);
+    PlayerMoneyMismatchCount[playerid] = 0;
+    PlayerLastACWarningTick[playerid] = 0;
+
+    SyncPlayerMoneyHUD(playerid);
     return 1;
 }
 
@@ -679,8 +719,7 @@ stock SavePlayerData(playerid, notify = 0)
 
 stock ApplyLoadedPlayerData(playerid)
 {
-    ResetPlayerMoney(playerid);
-    GivePlayerMoney(playerid, PlayerMoney[playerid]);
+    SyncPlayerMoneyHUD(playerid);
     SetPlayerScore(playerid, PlayerLevel[playerid]);
 
     SendClientMessage(playerid, COLOR_GREEN, "Login berhasil. Data akun berhasil dimuat.");
@@ -907,7 +946,7 @@ stock GivePlayerCash(playerid, amount)
     }
 
     PlayerMoney[playerid] += amount;
-    GivePlayerMoney(playerid, amount);
+    SyncPlayerMoneyHUD(playerid);
 
     return 1;
 }
@@ -925,7 +964,7 @@ stock TakePlayerCash(playerid, amount)
     }
 
     PlayerMoney[playerid] -= amount;
-    GivePlayerMoney(playerid, -amount);
+    SyncPlayerMoneyHUD(playerid);
 
     return 1;
 }
@@ -1791,17 +1830,30 @@ stock LogAdminAction(playerid, targetid, const action[], const detail[])
 {
     new adminName[MAX_PLAYER_NAME];
     new targetName[MAX_PLAYER_NAME];
+    new adminDbId = 0;
+    new targetDbId = 0;
     new query[512];
 
-    GetPlayerName(playerid, adminName, sizeof(adminName));
+    if (playerid != INVALID_PLAYER_ID && IsPlayerConnected(playerid))
+    {
+        GetPlayerName(playerid, adminName, sizeof(adminName));
+        adminDbId = PlayerDBID[playerid];
+    }
+    else
+    {
+        format(adminName, sizeof(adminName), "SYSTEM");
+        adminDbId = 0;
+    }
 
     if (targetid != INVALID_PLAYER_ID && IsPlayerConnected(targetid))
     {
         GetPlayerName(targetid, targetName, sizeof(targetName));
+        targetDbId = PlayerDBID[targetid];
     }
     else
     {
         format(targetName, sizeof(targetName), "-");
+        targetDbId = 0;
     }
 
     mysql_format(
@@ -1809,9 +1861,9 @@ stock LogAdminAction(playerid, targetid, const action[], const detail[])
         query,
         sizeof(query),
         "INSERT INTO admin_logs (admin_id, admin_name, target_id, target_name, action, detail) VALUES (%d, '%e', %d, '%e', '%e', '%e')",
-        PlayerDBID[playerid],
+        adminDbId,
         adminName,
-        targetid,
+        targetDbId,
         targetName,
         action,
         detail
@@ -2266,7 +2318,7 @@ public AutoSavePlayers()
 
 public OnGameModeInit()
 {
-    SetGameModeText("LSIF Dev v0.9B Job Stats");
+    SetGameModeText("LSIF Dev v0.10A AntiCheat");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -2320,11 +2372,16 @@ public OnGameModeInit()
         PlayerLastY[i] = SPAWN_Y;
         PlayerLastZ[i] = SPAWN_Z;
         PlayerLastA[i] = SPAWN_A;
+
+        PlayerMoneyMismatchCount[i] = 0;
+        PlayerLastACWarningTick[i] = 0;
     }
     g_AutosaveTimer = SetTimer("AutoSavePlayers", AUTOSAVE_INTERVAL, true);
+    g_AntiCheatTimer = SetTimer("AntiCheatCheck", ANTICHEAT_INTERVAL, true);
 
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
-    print("[LSIF] Gamemode v0.9B Job Statistics berhasil dijalankan.");
+    print("[LSIF] Anti-cheat timer aktif setiap 10 detik.");
+    print("[LSIF] Gamemode v0.10A Basic Anti-Cheat berhasil dijalankan.");
     return 1;
 }
 
@@ -2337,6 +2394,12 @@ public OnGameModeExit()
     {
         KillTimer(g_AutosaveTimer);
         g_AutosaveTimer = 0;
+    }
+
+    if (g_AntiCheatTimer)
+    {
+        KillTimer(g_AntiCheatTimer);
+        g_AntiCheatTimer = 0;
     }
 
     mysql_close(g_SQL);
@@ -2575,8 +2638,7 @@ public OnAccountRegister(playerid)
     PlayerLastA[playerid] = SPAWN_A;
     ResetOwnedVehicleData(playerid);
 
-    ResetPlayerMoney(playerid);
-    GivePlayerMoney(playerid, PlayerMoney[playerid]);
+    SyncPlayerMoneyHUD(playerid);
     SetPlayerScore(playerid, PlayerLevel[playerid]);
 
     SendClientMessage(playerid, COLOR_GREEN, "Register berhasil. Akun kamu sudah dibuat.");
@@ -3278,6 +3340,87 @@ public OnJobTopLoaded(playerid)
         );
 
         SendClientMessage(playerid, COLOR_WHITE, msg);
+    }
+
+    return 1;
+}
+
+public AntiCheatCheck()
+{
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!IsPlayerConnected(i))
+        {
+            continue;
+        }
+
+        if (!PlayerLoggedIn[i])
+        {
+            continue;
+        }
+
+        new hudMoney = GetPlayerMoney(i);
+
+        if (hudMoney != PlayerMoney[i])
+        {
+            PlayerMoneyMismatchCount[i]++;
+
+            new reason[144];
+            format(
+                reason,
+                sizeof(reason),
+                "Money mismatch detected. HUD=$%d Server=$%d Count=%d",
+                hudMoney,
+                PlayerMoney[i],
+                PlayerMoneyMismatchCount[i]
+            );
+
+            ReportSuspiciousActivity(i, reason);
+
+            SyncPlayerMoneyHUD(i);
+
+            if (PlayerMoneyMismatchCount[i] >= 3)
+            {
+                SendClientMessage(i, COLOR_RED, "Anti-cheat: money mismatch terdeteksi. Uang kamu disinkronkan ulang.");
+                PlayerMoneyMismatchCount[i] = 0;
+            }
+        }
+
+        if (PlayerRace[i] != RACE_NONE)
+        {
+            if (!IsPlayerValidRaceDriver(i))
+            {
+                CancelPlayerRace(i);
+                ReportSuspiciousActivity(i, "Race cancelled by anti-cheat: invalid vehicle/driver state.");
+            }
+        }
+
+        if (PlayerWorking[i] && PlayerWorkType[i] == WORK_TAXI)
+        {
+            if (!IsPlayerInTaxiVehicle(i))
+            {
+                CancelPlayerWork(i);
+                ReportSuspiciousActivity(i, "Taxi job cancelled by anti-cheat: invalid taxi vehicle.");
+            }
+        }
+
+        if (PlayerWorking[i] && PlayerWorkType[i] == WORK_TRUCKER)
+        {
+            if (!IsPlayerInTruckerVehicle(i))
+            {
+                CancelPlayerWork(i);
+                ReportSuspiciousActivity(i, "Trucker job cancelled by anti-cheat: invalid truck vehicle.");
+            }
+        }
+
+        if (PlayerWorking[i] && PlayerWorkType[i] == WORK_COURIER)
+        {
+            if (!IsPlayerInCourierVehicle(i))
+            {
+                CancelPlayerWork(i);
+                ReportSuspiciousActivity(i, "Courier job cancelled by anti-cheat: invalid courier vehicle.");
+            }
+        }
     }
 
     return 1;
@@ -4150,6 +4293,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/baninfo [username] - Cek info ban");
         SendClientMessage(playerid, COLOR_WHITE, "/reports - Lihat 5 report terbuka terakhir");
         SendClientMessage(playerid, COLOR_WHITE, "/closereport [id] [note] - Tutup report");
+        SendClientMessage(playerid, COLOR_WHITE, "/acinfo - Melihat informasi basic anti-cheat");
         return 1;
     }
 
@@ -4877,6 +5021,27 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /jobtop [courier/taxi/trucker]");
         SendClientMessage(playerid, COLOR_WHITE, "Contoh: /jobtop courier");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/acinfo", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_HELPER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+            return 1;
+        }
+
+        new msg[144];
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== ANTICHEAT INFO ==========");
+
+        format(msg, sizeof(msg), "Interval: %d ms", ANTICHEAT_INTERVAL);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        SendClientMessage(playerid, COLOR_WHITE, "Checks: money HUD sync, race vehicle state, job vehicle state.");
+        SendClientMessage(playerid, COLOR_WHITE, "Logs: suspicious activity masuk admin_logs sebagai SYSTEM.");
+
         return 1;
     }
 

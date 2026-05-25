@@ -146,6 +146,9 @@ forward OnPlayerBanCheck(playerid);
 forward OnPlayerBanned(playerid, targetid);
 forward OnPlayerUnbanned(playerid);
 forward OnPlayerBanInfo(playerid);
+forward OnReportCreated(playerid, targetid);
+forward OnReportsList(playerid);
+forward OnReportClosed(playerid, reportid);
 
 stock SaveAllPlayers()
 {
@@ -459,6 +462,47 @@ stock GetThreeParams(const input[], param1[], param1Size, param2[], param2Size, 
     param3[p] = EOS;
 
     if (param1[0] == EOS || param2[0] == EOS || param3[0] == EOS)
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+stock GetFirstParamAndRest(const input[], param1[], param1Size, rest[], restSize)
+{
+    new i = 0;
+    new p = 0;
+
+    while (input[i] == ' ')
+    {
+        i++;
+    }
+
+    while (input[i] != EOS && input[i] != ' ' && p < param1Size - 1)
+    {
+        param1[p] = input[i];
+        p++;
+        i++;
+    }
+    param1[p] = EOS;
+
+    while (input[i] == ' ')
+    {
+        i++;
+    }
+
+    p = 0;
+
+    while (input[i] != EOS && p < restSize - 1)
+    {
+        rest[p] = input[i];
+        p++;
+        i++;
+    }
+    rest[p] = EOS;
+
+    if (param1[0] == EOS || rest[0] == EOS)
     {
         return 0;
     }
@@ -1060,6 +1104,19 @@ stock CheckPlayerBan(playerid)
     return 1;
 }
 
+stock SendMessageToAdmins(color, const message[])
+{
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (IsPlayerConnected(i) && PlayerLoggedIn[i] && PlayerAdmin[i] >= ADMIN_HELPER)
+        {
+            SendClientMessage(i, color, message);
+        }
+    }
+
+    return 1;
+}
+
 main()
 {
     print("========================================");
@@ -1076,7 +1133,7 @@ public AutoSavePlayers()
 
 public OnGameModeInit()
 {
-    SetGameModeText("LSIF Dev v0.6B Ban");
+    SetGameModeText("LSIF Dev v0.6C Report");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -1130,7 +1187,7 @@ public OnGameModeInit()
     g_AutosaveTimer = SetTimer("AutoSavePlayers", AUTOSAVE_INTERVAL, true);
 
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
-    print("[LSIF] Gamemode v0.6B Ban System berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.6C Report System berhasil dijalankan.");
     return 1;
 }
 
@@ -1793,6 +1850,112 @@ public OnPlayerBanInfo(playerid)
     return 1;
 }
 
+public OnReportCreated(playerid, targetid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new reportId = cache_insert_id();
+
+    if (reportId <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Report gagal dibuat. Database insert gagal.");
+        return 1;
+    }
+
+    SendClientMessage(playerid, COLOR_GREEN, "Report berhasil dikirim ke admin online.");
+
+    new reporterName[MAX_PLAYER_NAME];
+    new targetName[MAX_PLAYER_NAME];
+    new msg[144];
+
+    GetPlayerName(playerid, reporterName, sizeof(reporterName));
+
+    if (IsPlayerConnected(targetid))
+    {
+        GetPlayerName(targetid, targetName, sizeof(targetName));
+    }
+    else
+    {
+        format(targetName, sizeof(targetName), "Unknown");
+    }
+
+    format(msg, sizeof(msg), "[REPORT #%d] %s melaporkan %s. Gunakan /reports.", reportId, reporterName, targetName);
+    SendMessageToAdmins(COLOR_ORANGE, msg);
+
+    return 1;
+}
+
+public OnReportsList(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+
+    SendClientMessage(playerid, COLOR_YELLOW, "========== OPEN REPORTS ==========");
+
+    if (rows == 0)
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "Tidak ada report terbuka.");
+        return 1;
+    }
+
+    new reportId;
+    new reporterName[24];
+    new targetName[24];
+    new reason[128];
+    new createdAt[32];
+    new msg[144];
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name_int(i, "id", reportId);
+        cache_get_value_name(i, "reporter_name", reporterName, sizeof(reporterName));
+        cache_get_value_name(i, "target_name", targetName, sizeof(targetName));
+        cache_get_value_name(i, "reason", reason, sizeof(reason));
+        cache_get_value_name(i, "created_at", createdAt, sizeof(createdAt));
+
+        format(msg, sizeof(msg), "#%d | %s -> %s | %s", reportId, reporterName, targetName, reason);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Created: %s | Close: /closereport %d handled", createdAt, reportId);
+        SendClientMessage(playerid, COLOR_CYAN, msg);
+    }
+
+    return 1;
+}
+
+public OnReportClosed(playerid, reportid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new affectedRows = cache_affected_rows();
+    new msg[144];
+
+    if (affectedRows > 0)
+    {
+        format(msg, sizeof(msg), "Report #%d berhasil ditutup.", reportid);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+    }
+    else
+    {
+        format(msg, sizeof(msg), "Report #%d tidak ditemukan atau sudah tertutup.", reportid);
+        SendClientMessage(playerid, COLOR_YELLOW, msg);
+    }
+
+    return 1;
+}
+
+
+
 public OnPlayerCommandText(playerid, cmdtext[])
 {
     if (!PlayerLoggedIn[playerid])
@@ -1834,6 +1997,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         {
             SendClientMessage(playerid, COLOR_ORANGE, "Admin: gunakan /ahelp untuk command admin.");
         }
+        SendClientMessage(playerid, COLOR_WHITE, "/report [id] [reason] - Laporkan player ke admin");
 
         return 1;
     }
@@ -2503,6 +2667,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/ban [id] [menit] [reason] - Ban player");
         SendClientMessage(playerid, COLOR_WHITE, "/unban [username] - Unban username");
         SendClientMessage(playerid, COLOR_WHITE, "/baninfo [username] - Cek info ban");
+        SendClientMessage(playerid, COLOR_WHITE, "/reports - Lihat 5 report terbuka terakhir");
+        SendClientMessage(playerid, COLOR_WHITE, "/closereport [id] [note] - Tutup report");
         return 1;
     }
 
@@ -2907,6 +3073,132 @@ public OnPlayerCommandText(playerid, cmdtext[])
         );
 
         mysql_tquery(g_SQL, query, "OnPlayerBanInfo", "i", playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/report ", true) == 0)
+    {
+        new targetStr[16];
+        new reason[255];
+
+        if (!GetFirstParamAndRest(cmdtext[8], targetStr, sizeof(targetStr), reason, sizeof(reason)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /report [playerid] [reason]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /report 1 cheating teleport");
+            return 1;
+        }
+
+        if (!IsNumericString(targetStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Player ID harus angka.");
+            return 1;
+        }
+
+        new targetid = strval(targetStr);
+
+        if (!IsPlayerConnected(targetid) || !PlayerLoggedIn[targetid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Target tidak online/login.");
+            return 1;
+        }
+
+        if (targetid == playerid)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu tidak bisa report diri sendiri.");
+            return 1;
+        }
+
+        new reporterName[MAX_PLAYER_NAME];
+        new targetName[MAX_PLAYER_NAME];
+        new query[768];
+
+        GetPlayerName(playerid, reporterName, sizeof(reporterName));
+        GetPlayerName(targetid, targetName, sizeof(targetName));
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "INSERT INTO reports (reporter_id, reporter_name, target_id, target_name, reason, status) VALUES (%d, '%e', %d, '%e', '%e', 'open')",
+            PlayerDBID[playerid],
+            reporterName,
+            PlayerDBID[targetid],
+            targetName,
+            reason
+        );
+
+        mysql_tquery(g_SQL, query, "OnReportCreated", "ii", playerid, targetid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/reports", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_HELPER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+            return 1;
+        }
+
+        new query[256];
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "SELECT id, reporter_name, target_name, reason, created_at FROM reports WHERE status='open' ORDER BY id DESC LIMIT 5"
+        );
+
+        mysql_tquery(g_SQL, query, "OnReportsList", "i", playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/closereport ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_HELPER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+            return 1;
+        }
+
+        new reportStr[16];
+        new note[255];
+
+        if (!GetFirstParamAndRest(cmdtext[13], reportStr, sizeof(reportStr), note, sizeof(note)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /closereport [report_id] [note]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /closereport 3 handled");
+            return 1;
+        }
+
+        if (!IsNumericString(reportStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Report ID harus angka.");
+            return 1;
+        }
+
+        new reportid = strval(reportStr);
+        new adminName[MAX_PLAYER_NAME];
+        new query[768];
+
+        GetPlayerName(playerid, adminName, sizeof(adminName));
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "UPDATE reports SET status='closed', handled_by_id=%d, handled_by_name='%e', close_note='%e', closed_at=NOW() WHERE id=%d AND status='open' LIMIT 1",
+            PlayerDBID[playerid],
+            adminName,
+            note,
+            reportid
+        );
+
+        mysql_tquery(g_SQL, query, "OnReportClosed", "ii", playerid, reportid);
+
+        new detail[160];
+        format(detail, sizeof(detail), "closereport id=%d note=%s", reportid, note);
+        LogAdminAction(playerid, INVALID_PLAYER_ID, "CLOSE_REPORT", detail);
+
         return 1;
     }
 

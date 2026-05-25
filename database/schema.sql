@@ -86,3 +86,28 @@ CREATE TABLE IF NOT EXISTS bans (
     INDEX idx_active (active),
     INDEX idx_expires_at (expires_at)
 );
+
+CREATE TABLE IF NOT EXISTS reports (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+
+    reporter_id INT NULL,
+    reporter_name VARCHAR(24) NOT NULL,
+
+    target_id INT NULL,
+    target_name VARCHAR(24) NOT NULL,
+
+    reason VARCHAR(255) NOT NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'open',
+
+    handled_by_id INT NULL,
+    handled_by_name VARCHAR(24) NULL,
+    close_note VARCHAR(255) NULL,
+    closed_at DATETIME NULL,
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_status (status),
+    INDEX idx_reporter_id (reporter_id),
+    INDEX idx_target_id (target_id),
+    INDEX idx_created_at (created_at)
+);

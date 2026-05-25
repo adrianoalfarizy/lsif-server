@@ -45,6 +45,13 @@
 
 #define VEHICLE_OWNER_NONE 0
 
+#define ADMIN_NONE      0
+#define ADMIN_HELPER    1
+#define ADMIN_MOD       2
+#define ADMIN_ADMIN     3
+#define ADMIN_SENIOR    4
+#define ADMIN_OWNER     5
+
 new MySQL:g_SQL;
 new g_AutosaveTimer;
 
@@ -134,6 +141,7 @@ forward OnOwnedVehicleCheck(playerid);
 forward OnOwnedVehicleBought(playerid, modelid, price);
 forward OnOwnedVehicleSaved(playerid, notify);
 forward OnOwnedVehicleSold(playerid, sellPrice);
+forward DelayedKick(playerid);
 
 stock SaveAllPlayers()
 {
@@ -905,6 +913,71 @@ stock DestroyOwnedVehicleLabel(playerid)
     return 1;
 }
 
+stock IsAdminLevel(playerid, level)
+{
+    if (!PlayerLoggedIn[playerid])
+    {
+        return 0;
+    }
+
+    if (PlayerAdmin[playerid] < level)
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+stock GetAdminRankName(level, output[], size)
+{
+    switch (level)
+    {
+        case ADMIN_HELPER: format(output, size, "Helper");
+        case ADMIN_MOD: format(output, size, "Moderator");
+        case ADMIN_ADMIN: format(output, size, "Admin");
+        case ADMIN_SENIOR: format(output, size, "Senior Admin");
+        case ADMIN_OWNER: format(output, size, "Owner");
+        default:
+            format(output, size, "Player");
+    }
+
+    return 1;
+}
+
+stock LogAdminAction(playerid, targetid, const action[], const detail[])
+{
+    new adminName[MAX_PLAYER_NAME];
+    new targetName[MAX_PLAYER_NAME];
+    new query[512];
+
+    GetPlayerName(playerid, adminName, sizeof(adminName));
+
+    if (targetid != INVALID_PLAYER_ID && IsPlayerConnected(targetid))
+    {
+        GetPlayerName(targetid, targetName, sizeof(targetName));
+    }
+    else
+    {
+        format(targetName, sizeof(targetName), "-");
+    }
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO admin_logs (admin_id, admin_name, target_id, target_name, action, detail) VALUES (%d, '%e', %d, '%e', '%e', '%e')",
+        PlayerDBID[playerid],
+        adminName,
+        targetid,
+        targetName,
+        action,
+        detail
+    );
+
+    mysql_tquery(g_SQL, query);
+    return 1;
+}
+
 main()
 {
     print("========================================");
@@ -921,7 +994,7 @@ public AutoSavePlayers()
 
 public OnGameModeInit()
 {
-    SetGameModeText("LSIF Dev v0.5B Vehicle Access");
+    SetGameModeText("LSIF Dev v0.6A Admin");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -975,7 +1048,7 @@ public OnGameModeInit()
     g_AutosaveTimer = SetTimer("AutoSavePlayers", AUTOSAVE_INTERVAL, true);
 
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
-    print("[LSIF] Gamemode v0.5B Vehicle Access berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.6A Admin System berhasil dijalankan.");
     return 1;
 }
 
@@ -1464,6 +1537,16 @@ public OnPlayerStateChange(playerid, PLAYER_STATE:newstate, PLAYER_STATE:oldstat
     return 1;
 }
 
+public DelayedKick(playerid)
+{
+    if (IsPlayerConnected(playerid))
+    {
+        Kick(playerid);
+    }
+
+    return 1;
+}
+
 public OnPlayerCommandText(playerid, cmdtext[])
 {
     if (!PlayerLoggedIn[playerid])
@@ -1500,6 +1583,11 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/lock - Kunci/buka kendaraan pribadi");
         SendClientMessage(playerid, COLOR_WHITE, "/sellveh - Jual kendaraan pribadi");
         SendClientMessage(playerid, COLOR_WHITE, "/vehinfo - Melihat informasi kendaraan pribadi");
+        SendClientMessage(playerid, COLOR_WHITE, "/admins - Melihat admin online");
+        if (PlayerAdmin[playerid] > 0)
+        {
+            SendClientMessage(playerid, COLOR_ORANGE, "Admin: gunakan /ahelp untuk command admin.");
+        }
 
         return 1;
     }
@@ -2115,6 +2203,286 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         format(msg, sizeof(msg), "Position: %.2f, %.2f, %.2f", OwnedVehicleX[playerid], OwnedVehicleY[playerid], OwnedVehicleZ[playerid]);
         SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/admins", true))
+    {
+        new found = 0;
+        new msg[144];
+        new rankName[32];
+        new name[MAX_PLAYER_NAME];
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== ONLINE ADMINS ==========");
+
+        for (new i = 0; i < MAX_PLAYERS; i++)
+        {
+            if (IsPlayerConnected(i) && PlayerLoggedIn[i] && PlayerAdmin[i] > 0)
+            {
+                GetPlayerName(i, name, sizeof(name));
+                GetAdminRankName(PlayerAdmin[i], rankName, sizeof(rankName));
+
+                format(msg, sizeof(msg), "%s [%d] - %s", name, i, rankName);
+                SendClientMessage(playerid, COLOR_WHITE, msg);
+
+                found++;
+            }
+        }
+
+        if (!found)
+        {
+            SendClientMessage(playerid, COLOR_WHITE, "Tidak ada admin online.");
+        }
+
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/ahelp", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_HELPER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+            return 1;
+        }
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== ADMIN HELP ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "/admins - Lihat admin online");
+        SendClientMessage(playerid, COLOR_WHITE, "/kick [id] [reason] - Kick player");
+        SendClientMessage(playerid, COLOR_WHITE, "/goto [id] - Teleport ke player");
+        SendClientMessage(playerid, COLOR_WHITE, "/gethere [id] - Tarik player");
+        SendClientMessage(playerid, COLOR_WHITE, "/setmoney [id] [amount] - Set uang player");
+        SendClientMessage(playerid, COLOR_WHITE, "/setlevel [id] [level] - Set level player");
+        SendClientMessage(playerid, COLOR_WHITE, "/makeadmin [id] [level] - Set admin level, Owner only");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/kick ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_MOD))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Minimal Moderator untuk menggunakan command ini.");
+            return 1;
+        }
+
+        new targetStr[16];
+        new reason[64];
+
+        if (!GetTwoParams(cmdtext[6], targetStr, sizeof(targetStr), reason, sizeof(reason)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /kick [playerid] [reason]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /kick 1 rules");
+            return 1;
+        }
+
+        if (!IsNumericString(targetStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Player ID harus angka.");
+            return 1;
+        }
+
+        new targetid = strval(targetStr);
+
+        if (!IsPlayerConnected(targetid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Target tidak online.");
+            return 1;
+        }
+
+        if (targetid == playerid)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu tidak bisa kick diri sendiri.");
+            return 1;
+        }
+
+        if (PlayerAdmin[targetid] >= PlayerAdmin[playerid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu tidak bisa kick admin dengan level sama/lebih tinggi.");
+            return 1;
+        }
+
+        new adminName[MAX_PLAYER_NAME];
+        new targetName[MAX_PLAYER_NAME];
+        new msg[144];
+
+        GetPlayerName(playerid, adminName, sizeof(adminName));
+        GetPlayerName(targetid, targetName, sizeof(targetName));
+
+        format(msg, sizeof(msg), "Admin %s menendang %s. Reason: %s", adminName, targetName, reason);
+        SendClientMessageToAll(COLOR_ORANGE, msg);
+
+        LogAdminAction(playerid, targetid, "KICK", reason);
+
+        SetTimerEx("DelayedKick", 500, false, "i", targetid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/setmoney ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_ADMIN))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Minimal Admin untuk menggunakan command ini.");
+            return 1;
+        }
+
+        new targetStr[16];
+        new amountStr[16];
+
+        if (!GetTwoParams(cmdtext[10], targetStr, sizeof(targetStr), amountStr, sizeof(amountStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setmoney [playerid] [amount]");
+            return 1;
+        }
+
+        if (!IsNumericString(targetStr) || !IsNumericString(amountStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Player ID dan amount harus angka.");
+            return 1;
+        }
+
+        new targetid = strval(targetStr);
+        new amount = strval(amountStr);
+
+        if (!IsPlayerConnected(targetid) || !PlayerLoggedIn[targetid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Target tidak online/login.");
+            return 1;
+        }
+
+        if (amount < 0 || amount > 100000000)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Amount tidak valid.");
+            return 1;
+        }
+
+        PlayerMoney[targetid] = amount;
+        ResetPlayerMoney(targetid);
+        GivePlayerMoney(targetid, PlayerMoney[targetid]);
+
+        SavePlayerData(targetid);
+
+        new msg[144];
+        format(msg, sizeof(msg), "Uang player ID %d diset menjadi $%d.", targetid, amount);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+
+        format(msg, sizeof(msg), "Admin mengubah uang kamu menjadi $%d.", amount);
+        SendClientMessage(targetid, COLOR_YELLOW, msg);
+
+        format(msg, sizeof(msg), "setmoney amount=%d", amount);
+        LogAdminAction(playerid, targetid, "SETMONEY", msg);
+
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/setlevel ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_ADMIN))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Minimal Admin untuk menggunakan command ini.");
+            return 1;
+        }
+
+        new targetStr[16];
+        new levelStr[16];
+
+        if (!GetTwoParams(cmdtext[10], targetStr, sizeof(targetStr), levelStr, sizeof(levelStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setlevel [playerid] [level]");
+            return 1;
+        }
+
+        if (!IsNumericString(targetStr) || !IsNumericString(levelStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Player ID dan level harus angka.");
+            return 1;
+        }
+
+        new targetid = strval(targetStr);
+        new level = strval(levelStr);
+
+        if (!IsPlayerConnected(targetid) || !PlayerLoggedIn[targetid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Target tidak online/login.");
+            return 1;
+        }
+
+        if (level < 1 || level > 1000)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Level tidak valid.");
+            return 1;
+        }
+
+        PlayerLevel[targetid] = level;
+        SetPlayerScore(targetid, PlayerLevel[targetid]);
+        SavePlayerData(targetid);
+
+        new msg[144];
+        format(msg, sizeof(msg), "Level player ID %d diset menjadi %d.", targetid, level);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+
+        format(msg, sizeof(msg), "Admin mengubah level kamu menjadi %d.", level);
+        SendClientMessage(targetid, COLOR_YELLOW, msg);
+
+        format(msg, sizeof(msg), "setlevel level=%d", level);
+        LogAdminAction(playerid, targetid, "SETLEVEL", msg);
+
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/makeadmin ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa menggunakan command ini.");
+            return 1;
+        }
+
+        new targetStr[16];
+        new levelStr[16];
+
+        if (!GetTwoParams(cmdtext[11], targetStr, sizeof(targetStr), levelStr, sizeof(levelStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /makeadmin [playerid] [level 0-5]");
+            return 1;
+        }
+
+        if (!IsNumericString(targetStr) || !IsNumericString(levelStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Player ID dan level harus angka.");
+            return 1;
+        }
+
+        new targetid = strval(targetStr);
+        new level = strval(levelStr);
+
+        if (!IsPlayerConnected(targetid) || !PlayerLoggedIn[targetid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Target tidak online/login.");
+            return 1;
+        }
+
+        if (level < 0 || level > ADMIN_OWNER)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Level admin harus 0 sampai 5.");
+            return 1;
+        }
+
+        PlayerAdmin[targetid] = level;
+        SavePlayerData(targetid);
+
+        new rankName[32];
+        new msg[144];
+
+        GetAdminRankName(level, rankName, sizeof(rankName));
+
+        format(msg, sizeof(msg), "Admin level player ID %d diubah menjadi %d (%s).", targetid, level, rankName);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+
+        format(msg, sizeof(msg), "Admin level kamu diubah menjadi %d (%s).", level, rankName);
+        SendClientMessage(targetid, COLOR_YELLOW, msg);
+
+        format(msg, sizeof(msg), "makeadmin level=%d", level);
+        LogAdminAction(playerid, targetid, "MAKEADMIN", msg);
 
         return 1;
     }

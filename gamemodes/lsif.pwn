@@ -29,11 +29,23 @@
 
 #define JOB_NONE        0
 #define JOB_COURIER     1
+#define JOB_TAXI        2
 
 #define WORK_NONE       0
 #define WORK_COURIER    1
+#define WORK_TAXI       2
 
 #define MAX_COURIER_POINTS 5
+#define MAX_TAXI_ROUTES 5
+
+#define TAXI_STAGE_NONE     0
+#define TAXI_STAGE_PICKUP   1
+#define TAXI_STAGE_DROPOFF  2
+
+#define TAXI_COOLDOWN_SECONDS 30
+
+#define VEHICLE_TAXI    420
+#define VEHICLE_CABBIE  438
 
 #define COURIER_COOLDOWN_SECONDS 30
 
@@ -61,6 +73,8 @@
 #define RACE_LS_XP      75
 
 #define RACE_COOLDOWN_SECONDS 120
+
+
 
 new MySQL:g_SQL;
 new g_AutosaveTimer;
@@ -96,6 +110,80 @@ new PlayerWorking[MAX_PLAYERS];
 new PlayerWorkType[MAX_PLAYERS];
 new PlayerWorkPoint[MAX_PLAYERS];
 new PlayerLastWorkTick[MAX_PLAYERS];
+new PlayerTaxiStage[MAX_PLAYERS];
+new PlayerTaxiRoute[MAX_PLAYERS];
+
+new Float:TaxiPickupX[MAX_TAXI_ROUTES] =
+{
+    1481.1278,
+    1832.3447,
+    2114.5803,
+    1175.8121,
+    2234.9126
+};
+
+new Float:TaxiPickupY[MAX_TAXI_ROUTES] =
+{
+    -1771.2051,
+        -1842.8834,
+        -1788.4382,
+        -1323.5415,
+        -1159.2144
+    };
+
+new Float:TaxiPickupZ[MAX_TAXI_ROUTES] =
+{
+    18.7958,
+    13.5781,
+    13.5547,
+    15.3984,
+    25.8906
+};
+
+new Float:TaxiDropoffX[MAX_TAXI_ROUTES] =
+{
+    2072.5527,
+    1361.9814,
+    2488.3027,
+    1552.7406,
+    1022.8163
+};
+
+new Float:TaxiDropoffY[MAX_TAXI_ROUTES] =
+{
+    -1831.2913,
+        -1285.3228,
+        -1666.9521,
+        -1675.6229,
+        -1123.4095
+    };
+
+new Float:TaxiDropoffZ[MAX_TAXI_ROUTES] =
+{
+    13.5469,
+    13.5469,
+    13.3438,
+    16.1953,
+    23.8281
+};
+
+new TaxiReward[MAX_TAXI_ROUTES] =
+{
+    500,
+    700,
+    650,
+    800,
+    900
+};
+
+new TaxiXP[MAX_TAXI_ROUTES] =
+{
+    35,
+    45,
+    40,
+    50,
+    55
+};
 
 new Float:CourierPointX[MAX_COURIER_POINTS] =
 {
@@ -242,6 +330,7 @@ stock ResetPlayerAccountData(playerid)
     PlayerWorkType[playerid] = WORK_NONE;
     PlayerWorkPoint[playerid] = -1;
     PlayerLastWorkTick[playerid] = 0;
+    ResetTaxiWorkData(playerid);
 
     PlayerLastX[playerid] = SPAWN_X;
     PlayerLastY[playerid] = SPAWN_Y;
@@ -638,6 +727,12 @@ stock GetJobName(jobid, output[], size)
         return 1;
     }
 
+    if (jobid == JOB_TAXI)
+    {
+        format(output, size, "Taxi Driver");
+        return 1;
+    }
+
     format(output, size, "None");
     return 1;
 }
@@ -775,6 +870,149 @@ stock CompleteCourierWork(playerid)
     return 1;
 }
 
+stock StartTaxiWork(playerid)
+{
+    if (PlayerJob[playerid] != JOB_TAXI)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum bekerja sebagai taxi driver. Gunakan /joinjob taxi.");
+        return 0;
+    }
+
+    if (PlayerWorking[playerid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu sedang menjalankan pekerjaan. Gunakan /cancelwork untuk membatalkan.");
+        return 0;
+    }
+
+    new cooldownLeft = GetTaxiCooldownLeft(playerid);
+
+    if (cooldownLeft > 0)
+    {
+        new cooldownMsg[144];
+        format(cooldownMsg, sizeof(cooldownMsg), "Tunggu %d detik sebelum mengambil order taxi berikutnya.", cooldownLeft);
+        SendClientMessage(playerid, COLOR_YELLOW, cooldownMsg);
+        return 0;
+    }
+
+    if (!IsPlayerInTaxiVehicle(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus menjadi driver kendaraan Taxi/Cabbie untuk mulai kerja taxi.");
+        SendClientMessage(playerid, COLOR_WHITE, "Untuk test cepat gunakan: /veh 420 atau /veh 438.");
+        return 0;
+    }
+
+    new route = random(MAX_TAXI_ROUTES);
+
+    PlayerWorking[playerid] = 1;
+    PlayerWorkType[playerid] = WORK_TAXI;
+    PlayerWorkPoint[playerid] = route;
+
+    PlayerTaxiStage[playerid] = TAXI_STAGE_PICKUP;
+    PlayerTaxiRoute[playerid] = route;
+
+    SetPlayerCheckpoint(
+        playerid,
+        TaxiPickupX[route],
+        TaxiPickupY[route],
+        TaxiPickupZ[route],
+        4.0
+    );
+
+    new msg[144];
+    format(msg, sizeof(msg), "Taxi: jemput penumpang di checkpoint. Estimasi reward: $%d dan %d XP.", TaxiReward[route], TaxiXP[route]);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    SendClientMessage(playerid, COLOR_WHITE, "Tetap gunakan kendaraan taxi sampai order selesai.");
+
+    return 1;
+}
+
+stock HandleTaxiCheckpoint(playerid)
+{
+    if (!PlayerWorking[playerid] || PlayerWorkType[playerid] != WORK_TAXI)
+    {
+        return 0;
+    }
+
+    new route = PlayerTaxiRoute[playerid];
+
+    if (route < 0 || route >= MAX_TAXI_ROUTES)
+    {
+        CancelPlayerWork(playerid);
+        SendClientMessage(playerid, COLOR_RED, "Taxi order error. Pekerjaan dibatalkan.");
+        return 1;
+    }
+
+    if (!IsPlayerInTaxiVehicle(playerid))
+    {
+        CancelPlayerWork(playerid);
+        SendClientMessage(playerid, COLOR_RED, "Taxi order dibatalkan karena kamu tidak berada sebagai driver Taxi/Cabbie.");
+        return 1;
+    }
+
+    if (PlayerTaxiStage[playerid] == TAXI_STAGE_PICKUP)
+    {
+        PlayerTaxiStage[playerid] = TAXI_STAGE_DROPOFF;
+
+        SetPlayerCheckpoint(
+            playerid,
+            TaxiDropoffX[route],
+            TaxiDropoffY[route],
+            TaxiDropoffZ[route],
+            4.0
+        );
+
+        SendClientMessage(playerid, COLOR_GREEN, "Penumpang naik. Antar ke checkpoint tujuan.");
+        return 1;
+    }
+
+    if (PlayerTaxiStage[playerid] == TAXI_STAGE_DROPOFF)
+    {
+        CompleteTaxiWork(playerid);
+        return 1;
+    }
+
+    return 1;
+}
+
+stock CompleteTaxiWork(playerid)
+{
+    if (!PlayerWorking[playerid] || PlayerWorkType[playerid] != WORK_TAXI)
+    {
+        return 0;
+    }
+
+    new route = PlayerTaxiRoute[playerid];
+
+    if (route < 0 || route >= MAX_TAXI_ROUTES)
+    {
+        route = 0;
+    }
+
+    new reward = TaxiReward[route];
+    new xp = TaxiXP[route];
+
+    GivePlayerCash(playerid, reward);
+    GivePlayerXPEx(playerid, xp);
+
+    DisablePlayerCheckpoint(playerid);
+
+    PlayerWorking[playerid] = 0;
+    PlayerWorkType[playerid] = WORK_NONE;
+    PlayerWorkPoint[playerid] = -1;
+    PlayerLastWorkTick[playerid] = GetTickCount();
+
+    ResetTaxiWorkData(playerid);
+
+    new msg[144];
+    format(msg, sizeof(msg), "Taxi order selesai. Kamu mendapat $%d dan %d XP.", reward, xp);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    SendClientMessage(playerid, COLOR_WHITE, "Gunakan /work lagi setelah cooldown untuk mengambil order taxi berikutnya.");
+
+    SavePlayerData(playerid);
+
+    return 1;
+}
+
 stock CancelPlayerWork(playerid)
 {
     if (!PlayerWorking[playerid])
@@ -788,6 +1026,8 @@ stock CancelPlayerWork(playerid)
     PlayerWorking[playerid] = 0;
     PlayerWorkType[playerid] = WORK_NONE;
     PlayerWorkPoint[playerid] = -1;
+
+    ResetTaxiWorkData(playerid);
 
     SendClientMessage(playerid, COLOR_YELLOW, "Pekerjaan aktif dibatalkan.");
     return 1;
@@ -1443,6 +1683,59 @@ stock IsPlayerValidRaceDriver(playerid)
     return 1;
 }
 
+stock IsTaxiVehicleModel(modelid)
+{
+    if (modelid == VEHICLE_TAXI) return 1;
+    if (modelid == VEHICLE_CABBIE) return 1;
+
+    return 0;
+}
+
+stock IsPlayerInTaxiVehicle(playerid)
+{
+    if (!IsPlayerInAnyVehicle(playerid))
+    {
+        return 0;
+    }
+
+    if (GetPlayerState(playerid) != PLAYER_STATE_DRIVER)
+    {
+        return 0;
+    }
+
+    new vehicleid = GetPlayerVehicleID(playerid);
+    new modelid = GetVehicleModel(vehicleid);
+
+    return IsTaxiVehicleModel(modelid);
+}
+
+stock GetTaxiCooldownLeft(playerid)
+{
+    new lastTick = PlayerLastWorkTick[playerid];
+
+    if (lastTick == 0)
+    {
+        return 0;
+    }
+
+    new currentTick = GetTickCount();
+    new elapsed = (currentTick - lastTick) / 1000;
+
+    if (elapsed >= TAXI_COOLDOWN_SECONDS)
+    {
+        return 0;
+    }
+
+    return TAXI_COOLDOWN_SECONDS - elapsed;
+}
+
+stock ResetTaxiWorkData(playerid)
+{
+    PlayerTaxiStage[playerid] = TAXI_STAGE_NONE;
+    PlayerTaxiRoute[playerid] = -1;
+    return 1;
+}
+
 main()
 {
     print("========================================");
@@ -1459,7 +1752,7 @@ public AutoSavePlayers()
 
 public OnGameModeInit()
 {
-    SetGameModeText("LSIF Dev v0.7B Race Polish");
+    SetGameModeText("LSIF Dev v0.8A Taxi");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -1500,6 +1793,7 @@ public OnGameModeInit()
         ResetOwnedVehicleData(i);
         ResetPlayerRaceData(i);
         PlayerLastRaceTick[i] = 0;
+        ResetTaxiWorkData(i);
 
         PlayerJob[i] = JOB_NONE;
         PlayerWorking[i] = 0;
@@ -1515,7 +1809,7 @@ public OnGameModeInit()
     g_AutosaveTimer = SetTimer("AutoSavePlayers", AUTOSAVE_INTERVAL, true);
 
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
-    print("[LSIF] Gamemode v0.7B Race Polish berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.8A Taxi Job berhasil dijalankan.");
     return 1;
 }
 
@@ -1832,6 +2126,12 @@ public OnPlayerEnterCheckpoint(playerid)
     if (PlayerRace[playerid] != RACE_NONE)
     {
         HandleRaceCheckpoint(playerid);
+        return 1;
+    }
+
+    if (PlayerWorking[playerid] && PlayerWorkType[playerid] == WORK_TAXI)
+    {
+        HandleTaxiCheckpoint(playerid);
         return 1;
     }
 
@@ -2384,6 +2684,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_ORANGE, "Admin dev: /goto [id], /gethere [id]");
         SendClientMessage(playerid, COLOR_WHITE, "/jobs - Melihat daftar job");
         SendClientMessage(playerid, COLOR_WHITE, "/joinjob courier - Ambil job courier");
+        SendClientMessage(playerid, COLOR_WHITE, "/joinjob taxi - Ambil job taxi");
         SendClientMessage(playerid, COLOR_WHITE, "/jobinfo - Melihat informasi job aktif");
         SendClientMessage(playerid, COLOR_WHITE, "/leavejob - Keluar dari job");
         SendClientMessage(playerid, COLOR_WHITE, "/work - Mulai pekerjaan aktif");
@@ -2684,7 +2985,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== JOBS ==========");
         SendClientMessage(playerid, COLOR_WHITE, "courier - Antar paket ke beberapa lokasi di Los Santos.");
-        SendClientMessage(playerid, COLOR_WHITE, "Gunakan: /joinjob courier");
+        SendClientMessage(playerid, COLOR_WHITE, "taxi - Antar penumpang dari pickup ke tujuan.");
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan: /joinjob courier atau /joinjob taxi");
         return 1;
     }
 
@@ -2705,9 +3007,28 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/joinjob taxi", true))
+    {
+        if (PlayerWorking[playerid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Selesaikan atau batalkan pekerjaan aktif dulu.");
+            return 1;
+        }
+
+        PlayerJob[playerid] = JOB_TAXI;
+
+        SendClientMessage(playerid, COLOR_GREEN, "Kamu sekarang bekerja sebagai Taxi Driver.");
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan /work saat berada di Taxi/Cabbie.");
+        SendClientMessage(playerid, COLOR_WHITE, "Test cepat: /veh 420 atau /veh 438.");
+
+        SavePlayerData(playerid);
+
+        return 1;
+    }
+
     if (strfind(cmdtext, "/joinjob", true) == 0)
     {
-        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /joinjob courier");
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /joinjob courier atau /joinjob taxi");
         return 1;
     }
 
@@ -2741,6 +3062,12 @@ public OnPlayerCommandText(playerid, cmdtext[])
         if (PlayerJob[playerid] == JOB_COURIER)
         {
             StartCourierWork(playerid);
+            return 1;
+        }
+
+        if (PlayerJob[playerid] == JOB_TAXI)
+        {
+            StartTaxiWork(playerid);
             return 1;
         }
 
@@ -2782,6 +3109,39 @@ public OnPlayerCommandText(playerid, cmdtext[])
             else
             {
                 SendClientMessage(playerid, COLOR_GREEN, "Cooldown: siap bekerja.");
+            }
+
+            return 1;
+        }
+
+        if (PlayerJob[playerid] == JOB_TAXI)
+        {
+            SendClientMessage(playerid, COLOR_WHITE, "Tugas: jemput penumpang dan antar ke checkpoint tujuan.");
+            SendClientMessage(playerid, COLOR_WHITE, "Kendaraan valid: Taxi atau Cabbie.");
+            SendClientMessage(playerid, COLOR_WHITE, "Test cepat: /veh 420 atau /veh 438 lalu /work.");
+
+            new cooldownLeft = GetTaxiCooldownLeft(playerid);
+
+            if (cooldownLeft > 0)
+            {
+                format(msg, sizeof(msg), "Cooldown: %d detik.", cooldownLeft);
+                SendClientMessage(playerid, COLOR_YELLOW, msg);
+            }
+            else
+            {
+                SendClientMessage(playerid, COLOR_GREEN, "Cooldown: siap bekerja.");
+            }
+
+            if (PlayerWorking[playerid] && PlayerWorkType[playerid] == WORK_TAXI)
+            {
+                if (PlayerTaxiStage[playerid] == TAXI_STAGE_PICKUP)
+                {
+                    SendClientMessage(playerid, COLOR_CYAN, "Status: menuju lokasi pickup.");
+                }
+                else if (PlayerTaxiStage[playerid] == TAXI_STAGE_DROPOFF)
+                {
+                    SendClientMessage(playerid, COLOR_CYAN, "Status: mengantar penumpang ke tujuan.");
+                }
             }
 
             return 1;

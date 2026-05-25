@@ -1,5 +1,6 @@
 #include <open.mp>
 #include <a_mysql>
+#pragma dynamic 131072
 
 #define COLOR_WHITE     0xFFFFFFFF
 #define COLOR_GREEN     0x00FF00FF
@@ -111,7 +112,7 @@
 
 #define RACE_COOLDOWN_SECONDS 120
 
-#define ANTICHEAT_INTERVAL 10000 // 10 detik
+#define ANTICHEAT_INTERVAL 30000 // 30 detik
 #define MONEY_MISMATCH_TOLERANCE 0
 
 
@@ -577,6 +578,16 @@ stock ReportSuspiciousActivity(playerid, const reason[])
     {
         return 0;
     }
+
+    new nowTick = GetTickCount();
+
+    // Batasi log anti-cheat per player maksimal 1x per 30 detik.
+    if (PlayerLastACWarningTick[playerid] != 0 && nowTick - PlayerLastACWarningTick[playerid] < 30000)
+    {
+        return 1;
+    }
+
+    PlayerLastACWarningTick[playerid] = nowTick;
 
     new name[MAX_PLAYER_NAME];
     new msg[144];

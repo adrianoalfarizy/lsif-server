@@ -568,7 +568,8 @@ stock SaveAllPlayers()
 
 stock SyncPlayerMoneyHUD(playerid)
 {
-    SyncPlayerMoneyHUD(playerid);
+    ResetPlayerMoney(playerid);
+    GivePlayerMoney(playerid, PlayerMoney[playerid]);
     return 1;
 }
 
@@ -4407,8 +4408,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         }
 
         PlayerMoney[targetid] = amount;
-        ResetPlayerMoney(targetid);
-        GivePlayerMoney(targetid, PlayerMoney[targetid]);
+        SyncPlayerMoneyHUD(targetid);
 
         SavePlayerData(targetid);
 

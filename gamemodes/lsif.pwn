@@ -360,6 +360,8 @@ new Float:RaceLSZ[MAX_LS_RACE_POINTS] =
     24.0000
 };
 
+new PlayerLastJobTopQuery[MAX_PLAYERS][32];
+
 stock Float:GetDistanceBetweenPoints3D(Float:x1, Float:y1, Float:z1, Float:x2, Float:y2, Float:z2)
 {
     new Float:dx = x1 - x2;
@@ -530,6 +532,9 @@ forward OnReportsList(playerid);
 forward OnReportClosed(playerid, reportid);
 forward OnRaceRecordSaved(playerid, timeMs);
 forward OnRaceTop(playerid);
+forward OnJobStatsLoaded(playerid);
+forward OnJobTopLoaded(playerid);
+forward OnJobProgressSaved(playerid);
 
 stock SaveAllPlayers()
 {
@@ -1106,6 +1111,7 @@ stock CompleteCourierWork(playerid)
 
     GivePlayerCash(playerid, reward);
     GivePlayerXPEx(playerid, xp);
+    AddJobProgress(playerid, "courier", reward, xp);
 
     DisablePlayerCheckpoint(playerid);
 
@@ -1265,6 +1271,7 @@ stock CompleteTaxiWork(playerid)
 
     GivePlayerCash(playerid, reward);
     GivePlayerXPEx(playerid, xp);
+    AddJobProgress(playerid, "taxi", reward, xp);
 
     DisablePlayerCheckpoint(playerid);
 
@@ -1432,6 +1439,7 @@ stock CompleteTruckerWork(playerid)
 
     GivePlayerCash(playerid, reward);
     GivePlayerXPEx(playerid, xp);
+    AddJobProgress(playerid, "trucker", reward, xp);
 
     DisablePlayerCheckpoint(playerid);
 
@@ -2178,6 +2186,70 @@ stock ResetTaxiWorkData(playerid)
     return 1;
 }
 
+stock GetJobCode(jobid, output[], size)
+{
+    if (jobid == JOB_COURIER)
+    {
+        format(output, size, "courier");
+        return 1;
+    }
+
+    if (jobid == JOB_TAXI)
+    {
+        format(output, size, "taxi");
+        return 1;
+    }
+
+    if (jobid == JOB_TRUCKER)
+    {
+        format(output, size, "trucker");
+        return 1;
+    }
+
+    format(output, size, "none");
+    return 1;
+}
+
+stock IsValidJobCode(const jobCode[])
+{
+    if (!strcmp(jobCode, "courier", true)) return 1;
+    if (!strcmp(jobCode, "taxi", true)) return 1;
+    if (!strcmp(jobCode, "trucker", true)) return 1;
+
+    return 0;
+}
+
+stock AddJobProgress(playerid, const jobCode[], earned, xp)
+{
+    if (!PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0)
+    {
+        return 0;
+    }
+
+    if (!IsValidJobCode(jobCode))
+    {
+        return 0;
+    }
+
+    new query[512];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO job_stats (player_id, job_code, total_completed, total_earned, total_xp) VALUES (%d, '%e', 1, %d, %d) ON DUPLICATE KEY UPDATE total_completed=total_completed+1, total_earned=total_earned+%d, total_xp=total_xp+%d, updated_at=NOW()",
+        PlayerDBID[playerid],
+        jobCode,
+        earned,
+        xp,
+        earned,
+        xp
+    );
+
+    mysql_tquery(g_SQL, query, "OnJobProgressSaved", "i", playerid);
+    return 1;
+}
+
 main()
 {
     print("========================================");
@@ -2194,7 +2266,7 @@ public AutoSavePlayers()
 
 public OnGameModeInit()
 {
-    SetGameModeText("LSIF Dev v0.9A Trucker");
+    SetGameModeText("LSIF Dev v0.9B Job Stats");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -2252,7 +2324,7 @@ public OnGameModeInit()
     g_AutosaveTimer = SetTimer("AutoSavePlayers", AUTOSAVE_INTERVAL, true);
 
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
-    print("[LSIF] Gamemode v0.9A Trucker Job berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.9B Job Statistics berhasil dijalankan.");
     return 1;
 }
 
@@ -3112,6 +3184,105 @@ public OnRaceTop(playerid)
     return 1;
 }
 
+public OnJobProgressSaved(playerid)
+{
+    return 1;
+}
+
+public OnJobStatsLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+
+    SendClientMessage(playerid, COLOR_YELLOW, "========== JOB STATS ==========");
+
+    if (rows == 0)
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "Belum ada statistik job.");
+        SendClientMessage(playerid, COLOR_CYAN, "Selesaikan courier/taxi/trucker job untuk mulai mengisi statistik.");
+        return 1;
+    }
+
+    new jobCode[32];
+    new completed;
+    new earned;
+    new xp;
+    new msg[144];
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name(i, "job_code", jobCode, sizeof(jobCode));
+        cache_get_value_name_int(i, "total_completed", completed);
+        cache_get_value_name_int(i, "total_earned", earned);
+        cache_get_value_name_int(i, "total_xp", xp);
+
+        format(
+            msg,
+            sizeof(msg),
+            "%s | Completed: %d | Earned: $%d | XP: %d",
+            jobCode,
+            completed,
+            earned,
+            xp
+        );
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+    }
+
+    return 1;
+}
+
+public OnJobTopLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+    new msg[144];
+
+    format(msg, sizeof(msg), "========== JOB TOP: %s ==========", PlayerLastJobTopQuery[playerid]);
+    SendClientMessage(playerid, COLOR_YELLOW, msg);
+
+    if (rows == 0)
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "Belum ada data leaderboard untuk job ini.");
+        return 1;
+    }
+
+    new username[24];
+    new completed;
+    new earned;
+    new xp;
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name(i, "username", username, sizeof(username));
+        cache_get_value_name_int(i, "total_completed", completed);
+        cache_get_value_name_int(i, "total_earned", earned);
+        cache_get_value_name_int(i, "total_xp", xp);
+
+        format(
+            msg,
+            sizeof(msg),
+            "%d. %s | Completed: %d | Earned: $%d | XP: %d",
+            i + 1,
+            username,
+            completed,
+            earned,
+            xp
+        );
+
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+    }
+
+    return 1;
+}
+
 public OnPlayerCommandText(playerid, cmdtext[])
 {
     if (!PlayerLoggedIn[playerid])
@@ -3139,6 +3310,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/joinjob taxi - Ambil job taxi");
         SendClientMessage(playerid, COLOR_WHITE, "/joinjob trucker - Ambil job trucker");
         SendClientMessage(playerid, COLOR_WHITE, "/jobinfo - Melihat informasi job aktif");
+        SendClientMessage(playerid, COLOR_WHITE, "/jobstats - Melihat statistik job kamu");
+        SendClientMessage(playerid, COLOR_WHITE, "/jobtop [job] - Leaderboard job");
         SendClientMessage(playerid, COLOR_WHITE, "/taxifare - Melihat formula reward taxi");
         SendClientMessage(playerid, COLOR_WHITE, "/truckerfare - Melihat formula reward trucker");
         SendClientMessage(playerid, COLOR_WHITE, "/leavejob - Keluar dari job");
@@ -4649,6 +4822,61 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         SendClientMessage(playerid, COLOR_CYAN, "Semakin jauh pengiriman cargo, semakin besar reward.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/jobstats", true))
+    {
+        new query[512];
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "SELECT job_code, total_completed, total_earned, total_xp FROM job_stats WHERE player_id=%d ORDER BY total_earned DESC",
+            PlayerDBID[playerid]
+        );
+
+        mysql_tquery(g_SQL, query, "OnJobStatsLoaded", "i", playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/jobtop ", true) == 0)
+    {
+        new jobCode[32];
+
+        if (!GetOneParam(cmdtext[8], jobCode, sizeof(jobCode)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /jobtop [courier/taxi/trucker]");
+            return 1;
+        }
+
+        if (!IsValidJobCode(jobCode))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Job tidak valid. Pilih: courier, taxi, atau trucker.");
+            return 1;
+        }
+
+        format(PlayerLastJobTopQuery[playerid], 32, "%s", jobCode);
+
+        new query[512];
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "SELECT p.username, js.total_completed, js.total_earned, js.total_xp FROM job_stats js JOIN players p ON p.id = js.player_id WHERE js.job_code='%e' ORDER BY js.total_earned DESC LIMIT 5",
+            jobCode
+        );
+
+        mysql_tquery(g_SQL, query, "OnJobTopLoaded", "i", playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/jobtop", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /jobtop [courier/taxi/trucker]");
+        SendClientMessage(playerid, COLOR_WHITE, "Contoh: /jobtop courier");
         return 1;
     }
 

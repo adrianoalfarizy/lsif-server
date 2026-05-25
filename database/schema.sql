@@ -128,3 +128,22 @@ CREATE TABLE IF NOT EXISTS race_records (
     INDEX idx_race_code (race_code),
     INDEX idx_best_time_ms (best_time_ms)
 );
+
+CREATE TABLE IF NOT EXISTS job_stats (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+
+    player_id INT NOT NULL,
+    job_code VARCHAR(32) NOT NULL,
+
+    total_completed INT NOT NULL DEFAULT 0,
+    total_earned INT NOT NULL DEFAULT 0,
+    total_xp INT NOT NULL DEFAULT 0,
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+
+    UNIQUE KEY unique_player_job (player_id, job_code),
+    INDEX idx_job_code (job_code),
+    INDEX idx_total_earned (total_earned),
+    INDEX idx_total_completed (total_completed)
+);

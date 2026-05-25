@@ -60,6 +60,8 @@
 #define RACE_LS_REWARD  1200
 #define RACE_LS_XP      75
 
+#define RACE_COOLDOWN_SECONDS 120
+
 new MySQL:g_SQL;
 new g_AutosaveTimer;
 
@@ -143,6 +145,8 @@ new CourierXP[MAX_COURIER_POINTS] =
 new PlayerRace[MAX_PLAYERS];
 new PlayerRaceCheckpoint[MAX_PLAYERS];
 new PlayerRaceStartTick[MAX_PLAYERS];
+new PlayerRaceVehicle[MAX_PLAYERS];
+new PlayerLastRaceTick[MAX_PLAYERS];
 
 new Float:RaceLSX[MAX_LS_RACE_POINTS] =
 {
@@ -1179,6 +1183,7 @@ stock ResetPlayerRaceData(playerid)
     PlayerRace[playerid] = RACE_NONE;
     PlayerRaceCheckpoint[playerid] = 0;
     PlayerRaceStartTick[playerid] = 0;
+    PlayerRaceVehicle[playerid] = INVALID_VEHICLE_ID;
     return 1;
 }
 
@@ -1245,10 +1250,26 @@ stock StartLSIntroRace(playerid)
         return 0;
     }
 
+    new cooldownLeft = GetRaceCooldownLeft(playerid);
+
+    if (cooldownLeft > 0)
+    {
+        new cooldownMsg[144];
+        format(cooldownMsg, sizeof(cooldownMsg), "Tunggu %d detik sebelum ikut race lagi.", cooldownLeft);
+        SendClientMessage(playerid, COLOR_YELLOW, cooldownMsg);
+        return 0;
+    }
+
     if (!IsPlayerInAnyVehicle(playerid))
     {
         SendClientMessage(playerid, COLOR_RED, "Kamu harus berada di kendaraan untuk ikut race.");
         SendClientMessage(playerid, COLOR_WHITE, "Untuk test cepat: /veh 411 lalu /joinrace ls.");
+        return 0;
+    }
+
+    if (GetPlayerState(playerid) != PLAYER_STATE_DRIVER)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus menjadi driver, bukan passenger.");
         return 0;
     }
 
@@ -1261,9 +1282,11 @@ stock StartLSIntroRace(playerid)
     PlayerRace[playerid] = RACE_LS_INTRO;
     PlayerRaceCheckpoint[playerid] = 1;
     PlayerRaceStartTick[playerid] = GetTickCount();
+    PlayerRaceVehicle[playerid] = vehicleid;
 
     SendClientMessage(playerid, COLOR_GREEN, "Race Los Santos Intro dimulai!");
-    SendClientMessage(playerid, COLOR_WHITE, "Ikuti checkpoint sampai finish. Gunakan /leaverace untuk keluar.");
+    SendClientMessage(playerid, COLOR_WHITE, "Ikuti checkpoint sampai finish. Jangan keluar kendaraan.");
+    SendClientMessage(playerid, COLOR_WHITE, "Gunakan /leaverace untuk keluar dari race.");
 
     ShowRaceCheckpoint(playerid);
     return 1;
@@ -1332,6 +1355,8 @@ stock CompletePlayerRace(playerid)
 
     SaveRaceRecord(playerid, "ls_intro", timeMs);
 
+    PlayerLastRaceTick[playerid] = GetTickCount();
+
     ResetPlayerRaceData(playerid);
     SavePlayerData(playerid);
 
@@ -1343,6 +1368,13 @@ stock HandleRaceCheckpoint(playerid)
     if (PlayerRace[playerid] == RACE_NONE)
     {
         return 0;
+    }
+
+    if (!IsPlayerValidRaceDriver(playerid))
+    {
+        CancelPlayerRace(playerid);
+        SendClientMessage(playerid, COLOR_RED, "Race dibatalkan karena kamu tidak berada di kendaraan race sebagai driver.");
+        return 1;
     }
 
     if (PlayerRace[playerid] == RACE_LS_INTRO)
@@ -1361,6 +1393,56 @@ stock HandleRaceCheckpoint(playerid)
     return 0;
 }
 
+stock GetRaceCooldownLeft(playerid)
+{
+    new lastTick = PlayerLastRaceTick[playerid];
+
+    if (lastTick == 0)
+    {
+        return 0;
+    }
+
+    new currentTick = GetTickCount();
+    new elapsed = (currentTick - lastTick) / 1000;
+
+    if (elapsed >= RACE_COOLDOWN_SECONDS)
+    {
+        return 0;
+    }
+
+    return RACE_COOLDOWN_SECONDS - elapsed;
+}
+
+stock IsPlayerValidRaceDriver(playerid)
+{
+    if (PlayerRace[playerid] == RACE_NONE)
+    {
+        return 0;
+    }
+
+    if (PlayerRaceVehicle[playerid] == INVALID_VEHICLE_ID)
+    {
+        return 0;
+    }
+
+    if (!IsPlayerInAnyVehicle(playerid))
+    {
+        return 0;
+    }
+
+    if (GetPlayerVehicleID(playerid) != PlayerRaceVehicle[playerid])
+    {
+        return 0;
+    }
+
+    if (GetPlayerState(playerid) != PLAYER_STATE_DRIVER)
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
 main()
 {
     print("========================================");
@@ -1377,7 +1459,7 @@ public AutoSavePlayers()
 
 public OnGameModeInit()
 {
-    SetGameModeText("LSIF Dev v0.7A Race");
+    SetGameModeText("LSIF Dev v0.7B Race Polish");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -1417,6 +1499,7 @@ public OnGameModeInit()
         PlayerVehicle[i] = INVALID_VEHICLE_ID;
         ResetOwnedVehicleData(i);
         ResetPlayerRaceData(i);
+        PlayerLastRaceTick[i] = 0;
 
         PlayerJob[i] = JOB_NONE;
         PlayerWorking[i] = 0;
@@ -1432,7 +1515,7 @@ public OnGameModeInit()
     g_AutosaveTimer = SetTimer("AutoSavePlayers", AUTOSAVE_INTERVAL, true);
 
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
-    print("[LSIF] Gamemode v0.7A Race System berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.7B Race Polish berhasil dijalankan.");
     return 1;
 }
 
@@ -1933,6 +2016,16 @@ public OnPlayerStateChange(playerid, PLAYER_STATE:newstate, PLAYER_STATE:oldstat
         }
     }
 
+    if (PlayerRace[playerid] != RACE_NONE)
+    {
+        if ((oldstate == PLAYER_STATE_DRIVER || oldstate == PLAYER_STATE_PASSENGER) && newstate == PLAYER_STATE_ONFOOT)
+        {
+            CancelPlayerRace(playerid);
+            SendClientMessage(playerid, COLOR_RED, "Race dibatalkan karena kamu keluar dari kendaraan.");
+            return 1;
+        }
+    }
+
     return 1;
 }
 
@@ -2311,6 +2404,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/report [id] [reason] - Laporkan player ke admin");
         SendClientMessage(playerid, COLOR_WHITE, "/races - Melihat daftar race");
         SendClientMessage(playerid, COLOR_WHITE, "/joinrace ls - Ikut race Los Santos Intro");
+        SendClientMessage(playerid, COLOR_WHITE, "/raceinfo - Melihat status race aktif/cooldown");
         SendClientMessage(playerid, COLOR_WHITE, "/leaverace - Keluar dari race aktif");
         SendClientMessage(playerid, COLOR_WHITE, "/racetop - Leaderboard race");
 
@@ -3565,6 +3659,53 @@ public OnPlayerCommandText(playerid, cmdtext[])
         );
 
         mysql_tquery(g_SQL, query, "OnRaceTop", "i", playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/raceinfo", true))
+    {
+        new msg[144];
+        new raceName[32];
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== RACE INFO ==========");
+
+        GetRaceName(PlayerRace[playerid], raceName, sizeof(raceName));
+
+        format(msg, sizeof(msg), "Race aktif: %s", raceName);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        if (PlayerRace[playerid] != RACE_NONE)
+        {
+            format(msg, sizeof(msg), "Checkpoint: %d/%d", PlayerRaceCheckpoint[playerid] + 1, MAX_LS_RACE_POINTS);
+            SendClientMessage(playerid, COLOR_WHITE, msg);
+
+            new timeMs = GetTickCount() - PlayerRaceStartTick[playerid];
+            new timeText[32];
+
+            FormatRaceTime(timeMs, timeText, sizeof(timeText));
+
+            format(msg, sizeof(msg), "Waktu berjalan: %s", timeText);
+            SendClientMessage(playerid, COLOR_WHITE, msg);
+
+            format(msg, sizeof(msg), "Race Vehicle ID: %d", PlayerRaceVehicle[playerid]);
+            SendClientMessage(playerid, COLOR_WHITE, msg);
+
+            return 1;
+        }
+
+        new cooldownLeft = GetRaceCooldownLeft(playerid);
+
+        if (cooldownLeft > 0)
+        {
+            format(msg, sizeof(msg), "Cooldown: %d detik.", cooldownLeft);
+            SendClientMessage(playerid, COLOR_YELLOW, msg);
+        }
+        else
+        {
+            SendClientMessage(playerid, COLOR_GREEN, "Cooldown: siap ikut race.");
+        }
+
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan /races untuk melihat race tersedia.");
         return 1;
     }
 

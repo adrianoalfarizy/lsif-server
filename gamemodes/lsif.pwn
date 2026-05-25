@@ -44,6 +44,16 @@
 
 #define TAXI_COOLDOWN_SECONDS 30
 
+#define TAXI_BASE_FARE          250
+#define TAXI_FARE_PER_UNIT      2
+#define TAXI_MIN_REWARD         400
+#define TAXI_MAX_REWARD         2500
+
+#define TAXI_BASE_XP            20
+#define TAXI_XP_PER_100_UNITS   5
+#define TAXI_MIN_XP             25
+#define TAXI_MAX_XP             120
+
 #define VEHICLE_TAXI    420
 #define VEHICLE_CABBIE  438
 
@@ -167,23 +177,23 @@ new Float:TaxiDropoffZ[MAX_TAXI_ROUTES] =
     23.8281
 };
 
-new TaxiReward[MAX_TAXI_ROUTES] =
-{
-    500,
-    700,
-    650,
-    800,
-    900
-};
+// new TaxiReward[MAX_TAXI_ROUTES] =
+// {
+//     500,
+//     700,
+//     650,
+//     800,
+//     900
+// };
 
-new TaxiXP[MAX_TAXI_ROUTES] =
-{
-    35,
-    45,
-    40,
-    50,
-    55
-};
+// new TaxiXP[MAX_TAXI_ROUTES] =
+// {
+//     35,
+//     45,
+//     40,
+//     50,
+//     55
+// };
 
 new Float:CourierPointX[MAX_COURIER_POINTS] =
 {
@@ -265,6 +275,65 @@ new Float:RaceLSZ[MAX_LS_RACE_POINTS] =
     23.9844,
     24.0000
 };
+
+stock Float:GetDistanceBetweenPoints3D(Float:x1, Float:y1, Float:z1, Float:x2, Float:y2, Float:z2)
+{
+    new Float:dx = x1 - x2;
+    new Float:dy = y1 - y2;
+    new Float:dz = z1 - z2;
+
+    return floatsqroot((dx * dx) + (dy * dy) + (dz * dz));
+}
+
+stock ClampInt(value, minValue, maxValue)
+{
+    if (value < minValue)
+    {
+        return minValue;
+    }
+
+    if (value > maxValue)
+    {
+        return maxValue;
+    }
+
+    return value;
+}
+
+stock Float:GetTaxiRouteDistance(route)
+{
+    if (route < 0 || route >= MAX_TAXI_ROUTES)
+    {
+        return 0.0;
+    }
+
+    return GetDistanceBetweenPoints3D(
+               TaxiPickupX[route],
+               TaxiPickupY[route],
+               TaxiPickupZ[route],
+               TaxiDropoffX[route],
+               TaxiDropoffY[route],
+               TaxiDropoffZ[route]
+           );
+}
+
+stock GetTaxiDynamicReward(route)
+{
+    new Float:distance = GetTaxiRouteDistance(route);
+
+    new reward = TAXI_BASE_FARE + floatround(distance * TAXI_FARE_PER_UNIT);
+
+    return ClampInt(reward, TAXI_MIN_REWARD, TAXI_MAX_REWARD);
+}
+
+stock GetTaxiDynamicXP(route)
+{
+    new Float:distance = GetTaxiRouteDistance(route);
+
+    new xp = TAXI_BASE_XP + floatround((distance / 100.0) * TAXI_XP_PER_100_UNITS);
+
+    return ClampInt(xp, TAXI_MIN_XP, TAXI_MAX_XP);
+}
 
 forward OnAccountCheck(playerid);
 forward OnAccountRegister(playerid);
@@ -919,8 +988,27 @@ stock StartTaxiWork(playerid)
     );
 
     new msg[144];
-    format(msg, sizeof(msg), "Taxi: jemput penumpang di checkpoint. Estimasi reward: $%d dan %d XP.", TaxiReward[route], TaxiXP[route]);
+    new reward = GetTaxiDynamicReward(route);
+    new xp = GetTaxiDynamicXP(route);
+    new Float:distance = GetTaxiRouteDistance(route);
+
+    format(
+        msg,
+        sizeof(msg),
+        "Taxi: jemput penumpang. Estimasi jarak: %.1f unit.",
+        distance
+    );
     SendClientMessage(playerid, COLOR_GREEN, msg);
+
+    format(
+        msg,
+        sizeof(msg),
+        "Estimasi reward: $%d dan %d XP.",
+        reward,
+        xp
+    );
+    SendClientMessage(playerid, COLOR_CYAN, msg);
+
     SendClientMessage(playerid, COLOR_WHITE, "Tetap gunakan kendaraan taxi sampai order selesai.");
 
     return 1;
@@ -988,8 +1076,9 @@ stock CompleteTaxiWork(playerid)
         route = 0;
     }
 
-    new reward = TaxiReward[route];
-    new xp = TaxiXP[route];
+    new reward = GetTaxiDynamicReward(route);
+    new xp = GetTaxiDynamicXP(route);
+    new Float:distance = GetTaxiRouteDistance(route);
 
     GivePlayerCash(playerid, reward);
     GivePlayerXPEx(playerid, xp);
@@ -1004,8 +1093,22 @@ stock CompleteTaxiWork(playerid)
     ResetTaxiWorkData(playerid);
 
     new msg[144];
-    format(msg, sizeof(msg), "Taxi order selesai. Kamu mendapat $%d dan %d XP.", reward, xp);
+    format(
+        msg,
+        sizeof(msg),
+        "Taxi order selesai. Jarak trip: %.1f unit.",
+        distance
+    );
     SendClientMessage(playerid, COLOR_GREEN, msg);
+
+    format(
+        msg,
+        sizeof(msg),
+        "Kamu mendapat $%d dan %d XP.",
+        reward,
+        xp
+    );
+    SendClientMessage(playerid, COLOR_CYAN, msg);
     SendClientMessage(playerid, COLOR_WHITE, "Gunakan /work lagi setelah cooldown untuk mengambil order taxi berikutnya.");
 
     SavePlayerData(playerid);
@@ -1752,7 +1855,7 @@ public AutoSavePlayers()
 
 public OnGameModeInit()
 {
-    SetGameModeText("LSIF Dev v0.8A Taxi");
+    SetGameModeText("LSIF Dev v0.8B Taxi Fare");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -1809,7 +1912,7 @@ public OnGameModeInit()
     g_AutosaveTimer = SetTimer("AutoSavePlayers", AUTOSAVE_INTERVAL, true);
 
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
-    print("[LSIF] Gamemode v0.8A Taxi Job berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.8B Taxi Fare Scaling berhasil dijalankan.");
     return 1;
 }
 
@@ -2686,6 +2789,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/joinjob courier - Ambil job courier");
         SendClientMessage(playerid, COLOR_WHITE, "/joinjob taxi - Ambil job taxi");
         SendClientMessage(playerid, COLOR_WHITE, "/jobinfo - Melihat informasi job aktif");
+        SendClientMessage(playerid, COLOR_WHITE, "/taxifare - Melihat formula reward taxi");
         SendClientMessage(playerid, COLOR_WHITE, "/leavejob - Keluar dari job");
         SendClientMessage(playerid, COLOR_WHITE, "/work - Mulai pekerjaan aktif");
         SendClientMessage(playerid, COLOR_WHITE, "/cancelwork - Batalkan pekerjaan aktif");
@@ -3098,6 +3202,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
             SendClientMessage(playerid, COLOR_WHITE, "Tugas: antarkan paket ke checkpoint tujuan.");
             SendClientMessage(playerid, COLOR_WHITE, "Kendaraan valid: Burrito, Boxville, Mule, Pony, Rumpo.");
             SendClientMessage(playerid, COLOR_WHITE, "Test cepat: /veh 482 lalu /work.");
+            SendClientMessage(playerid, COLOR_WHITE, "Reward taxi dihitung berdasarkan jarak pickup ke dropoff.");
 
             new cooldownLeft = GetCourierCooldownLeft(playerid);
 
@@ -3134,6 +3239,17 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
             if (PlayerWorking[playerid] && PlayerWorkType[playerid] == WORK_TAXI)
             {
+                new route = PlayerTaxiRoute[playerid];
+
+                if (route >= 0 && route < MAX_TAXI_ROUTES)
+                {
+                    new reward = GetTaxiDynamicReward(route);
+                    new xp = GetTaxiDynamicXP(route);
+                    new Float:distance = GetTaxiRouteDistance(route);
+
+                    format(msg, sizeof(msg), "Trip distance: %.1f unit | Reward: $%d | XP: %d", distance, reward, xp);
+                    SendClientMessage(playerid, COLOR_CYAN, msg);
+                }
                 if (PlayerTaxiStage[playerid] == TAXI_STAGE_PICKUP)
                 {
                     SendClientMessage(playerid, COLOR_CYAN, "Status: menuju lokasi pickup.");
@@ -4066,6 +4182,28 @@ public OnPlayerCommandText(playerid, cmdtext[])
         }
 
         SendClientMessage(playerid, COLOR_WHITE, "Gunakan /races untuk melihat race tersedia.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/taxifare", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "========== TAXI FARE INFO ==========");
+
+        new msg[144];
+
+        format(msg, sizeof(msg), "Base fare: $%d", TAXI_BASE_FARE);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Fare per unit: $%d", TAXI_FARE_PER_UNIT);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Reward range: $%d - $%d", TAXI_MIN_REWARD, TAXI_MAX_REWARD);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "XP range: %d - %d", TAXI_MIN_XP, TAXI_MAX_XP);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        SendClientMessage(playerid, COLOR_CYAN, "Semakin jauh trip taxi, semakin besar reward.");
         return 1;
     }
 

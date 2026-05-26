@@ -132,6 +132,13 @@
 #define HOUSE_INT_Z 1014.7422
 #define HOUSE_INT_A 180.0000
 
+#define ORG_CREATE_PRICE 100000
+
+#define ORG_RANK_NONE   0
+#define ORG_RANK_MEMBER 1
+#define ORG_RANK_ADMIN  3
+#define ORG_RANK_OWNER  5
+
 new MySQL:g_SQL;
 new g_AutosaveTimer;
 
@@ -482,6 +489,11 @@ new HouseName[MAX_HOUSES][64] =
     "Richman Small Villa"
 };
 
+new PlayerOrgID[MAX_PLAYERS];
+new PlayerOrgRank[MAX_PLAYERS];
+new PlayerOrgInvite[MAX_PLAYERS];
+new PlayerOrgName[MAX_PLAYERS][64];
+
 stock Float:GetDistanceBetweenPoints3D(Float:x1, Float:y1, Float:z1, Float:x2, Float:y2, Float:z2)
 {
     new Float:dx = x1 - x2;
@@ -660,6 +672,11 @@ forward OnDatabasePing(playerid);
 forward OnPlayerHouseLoaded(playerid);
 forward OnPlayerHouseBought(playerid, houseIndex, price);
 forward OnPlayerHouseSold(playerid, sellPrice);
+forward OnPlayerOrgLoaded(playerid);
+forward OnOrgCreated(playerid);
+forward OnOrgInviteAccepted(playerid);
+forward OnOrgMembersLoaded(playerid);
+forward OnOrgListLoaded(playerid);
 
 stock SaveAllPlayers()
 {
@@ -741,6 +758,7 @@ stock ResetPlayerAccountData(playerid)
     ResetPlayerRaceData(playerid);
     PlayerFindingBank[playerid] = 0;
     ResetPlayerHouseData(playerid);
+    ResetPlayerOrgData(playerid);
 
     PlayerJob[playerid] = JOB_NONE;
     PlayerWorking[playerid] = 0;
@@ -2881,6 +2899,73 @@ stock KickPlayerFromHouse(playerid)
     return 1;
 }
 
+stock ResetPlayerOrgData(playerid)
+{
+    PlayerOrgID[playerid] = 0;
+    PlayerOrgRank[playerid] = ORG_RANK_NONE;
+    PlayerOrgInvite[playerid] = INVALID_PLAYER_ID;
+    format(PlayerOrgName[playerid], 64, "None");
+    return 1;
+}
+
+stock GetOrgRankName(rank, output[], size)
+{
+    if (rank >= ORG_RANK_OWNER)
+    {
+        format(output, size, "Owner");
+        return 1;
+    }
+
+    if (rank >= ORG_RANK_ADMIN)
+    {
+        format(output, size, "Admin");
+        return 1;
+    }
+
+    if (rank >= ORG_RANK_MEMBER)
+    {
+        format(output, size, "Member");
+        return 1;
+    }
+
+    format(output, size, "None");
+    return 1;
+}
+
+stock LoadPlayerOrganization(playerid)
+{
+    if (!PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0)
+    {
+        return 0;
+    }
+
+    new query[512];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "SELECT om.org_id, om.rank_level, o.name FROM organization_members om JOIN organizations o ON o.id = om.org_id WHERE om.player_id=%d LIMIT 1",
+        PlayerDBID[playerid]
+    );
+
+    mysql_tquery(g_SQL, query, "OnPlayerOrgLoaded", "i", playerid);
+    return 1;
+}
+
+stock SendMessageToOrg(orgid, color, const message[])
+{
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (IsPlayerConnected(i) && PlayerLoggedIn[i] && PlayerOrgID[i] == orgid)
+        {
+            SendClientMessage(i, color, message);
+        }
+    }
+
+    return 1;
+}
+
 main()
 {
     print("========================================");
@@ -2899,7 +2984,7 @@ public OnGameModeInit()
 {
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
-    SetGameModeText("LSIF Dev v0.12C House Visitors");
+    SetGameModeText("LSIF Dev v0.13A Organization");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -2944,6 +3029,7 @@ public OnGameModeInit()
         ResetTaxiWorkData(i);
         ResetTruckerWorkData(i);
         ResetPlayerHouseData(i);
+        ResetPlayerOrgData(i);
 
         PlayerJob[i] = JOB_NONE;
         PlayerWorking[i] = 0;
@@ -2965,7 +3051,7 @@ public OnGameModeInit()
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
     print("[LSIF] Anti-cheat timer aktif setiap 10 detik.");
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
-    print("[LSIF] Gamemode v0.12C House Visitors berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.13A Organization Basic berhasil dijalankan.");
     return 1;
 }
 
@@ -3032,6 +3118,7 @@ public OnPlayerDisconnect(playerid, reason)
     PlayerLoggedIn[playerid] = 0;
     PlayerDBID[playerid] = 0;
     PlayerFindingBank[playerid] = 0;
+    ResetPlayerOrgData(playerid);
 
     ResetTaxiWorkData(playerid);
     ResetTruckerWorkData(playerid);
@@ -3308,6 +3395,7 @@ public OnAccountLogin(playerid)
     ApplyLoadedPlayerData(playerid);
     LoadOwnedVehicle(playerid);
     LoadPlayerHouse(playerid);
+    LoadPlayerOrganization(playerid);
 
     new ip[45];
     new query[256];
@@ -4183,6 +4271,184 @@ public OnPlayerHouseSold(playerid, sellPrice)
     return 1;
 }
 
+public OnPlayerOrgLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+
+    if (rows == 0)
+    {
+        ResetPlayerOrgData(playerid);
+        return 1;
+    }
+
+    cache_get_value_name_int(0, "org_id", PlayerOrgID[playerid]);
+    cache_get_value_name_int(0, "rank_level", PlayerOrgRank[playerid]);
+    cache_get_value_name(0, "name", PlayerOrgName[playerid], 64);
+
+    new msg[144];
+    format(msg, sizeof(msg), "Organisasi dimuat: %s.", PlayerOrgName[playerid]);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+
+    return 1;
+}
+
+public OnOrgListLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+
+    SendClientMessage(playerid, COLOR_YELLOW, "========== ORGANIZATIONS ==========");
+
+    if (rows == 0)
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "Belum ada organisasi.");
+        return 1;
+    }
+
+    new orgid;
+    new name[64];
+    new ownerName[24];
+    new bankMoney;
+    new msg[144];
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name_int(i, "id", orgid);
+        cache_get_value_name(i, "name", name, sizeof(name));
+        cache_get_value_name(i, "owner_name", ownerName, sizeof(ownerName));
+        cache_get_value_name_int(i, "bank_money", bankMoney);
+
+        format(msg, sizeof(msg), "#%d %s | Owner: %s | Bank: $%d", orgid, name, ownerName, bankMoney);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+    }
+
+    return 1;
+}
+
+public OnOrgCreated(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new orgid = cache_insert_id();
+
+    if (orgid <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gagal membuat organisasi. Nama mungkin sudah dipakai.");
+        return 1;
+    }
+
+    TakePlayerCash(playerid, ORG_CREATE_PRICE);
+
+    new playerName[MAX_PLAYER_NAME];
+    new query[512];
+
+    GetPlayerName(playerid, playerName, sizeof(playerName));
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO organization_members (org_id, player_id, player_name, rank_level) VALUES (%d, %d, '%e', %d)",
+        orgid,
+        PlayerDBID[playerid],
+        playerName,
+        ORG_RANK_OWNER
+    );
+
+    mysql_tquery(g_SQL, query);
+
+    PlayerOrgID[playerid] = orgid;
+    PlayerOrgRank[playerid] = ORG_RANK_OWNER;
+
+    SendClientMessage(playerid, COLOR_GREEN, "Organisasi berhasil dibuat. Kamu menjadi Owner.");
+    SendClientMessage(playerid, COLOR_WHITE, "Gunakan /org untuk melihat info organisasi.");
+
+    SavePlayerData(playerid);
+    return 1;
+}
+
+public OnOrgInviteAccepted(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new inviterid = PlayerOrgInvite[playerid];
+
+    if (inviterid == INVALID_PLAYER_ID || !IsPlayerConnected(inviterid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Invite gagal karena inviter tidak online.");
+        PlayerOrgInvite[playerid] = INVALID_PLAYER_ID;
+        return 1;
+    }
+
+    PlayerOrgID[playerid] = PlayerOrgID[inviterid];
+    PlayerOrgRank[playerid] = ORG_RANK_MEMBER;
+    format(PlayerOrgName[playerid], 64, "%s", PlayerOrgName[inviterid]);
+    PlayerOrgInvite[playerid] = INVALID_PLAYER_ID;
+
+    SendClientMessage(playerid, COLOR_GREEN, "Kamu berhasil bergabung ke organisasi.");
+
+    new msg[144];
+    new playerName[MAX_PLAYER_NAME];
+
+    GetPlayerName(playerid, playerName, sizeof(playerName));
+
+    format(msg, sizeof(msg), "[ORG] %s bergabung ke organisasi.", playerName);
+    SendMessageToOrg(PlayerOrgID[playerid], COLOR_CYAN, msg);
+
+    return 1;
+}
+
+public OnOrgMembersLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+
+    SendClientMessage(playerid, COLOR_YELLOW, "========== ORG MEMBERS ==========");
+
+    if (rows == 0)
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "Tidak ada member.");
+        return 1;
+    }
+
+    new memberName[24];
+    new rank;
+    new rankName[32];
+    new msg[144];
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name(i, "player_name", memberName, sizeof(memberName));
+        cache_get_value_name_int(i, "rank_level", rank);
+
+        GetOrgRankName(rank, rankName, sizeof(rankName));
+
+        format(msg, sizeof(msg), "%s - %s (%d)", memberName, rankName, rank);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+    }
+
+    return 1;
+}
+
 public OnPlayerCommandText(playerid, cmdtext[])
 {
     if (!PlayerLoggedIn[playerid])
@@ -4259,6 +4525,14 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/invitehouse [id] - Undang player ke rumah");
         SendClientMessage(playerid, COLOR_WHITE, "/kickhouse [id] - Keluarkan visitor dari rumah");
         SendClientMessage(playerid, COLOR_WHITE, "/housevisitors - Lihat visitor rumah");
+        SendClientMessage(playerid, COLOR_WHITE, "/orgs - Melihat daftar organisasi");
+        SendClientMessage(playerid, COLOR_WHITE, "/createorg [nama] - Membuat organisasi");
+        SendClientMessage(playerid, COLOR_WHITE, "/org - Info organisasi kamu");
+        SendClientMessage(playerid, COLOR_WHITE, "/inviteorg [id] - Invite player ke organisasi");
+        SendClientMessage(playerid, COLOR_WHITE, "/acceptorg - Terima invite organisasi");
+        SendClientMessage(playerid, COLOR_WHITE, "/leaveorg - Keluar dari organisasi");
+        SendClientMessage(playerid, COLOR_WHITE, "/orgmembers - Lihat member organisasi");
+        SendClientMessage(playerid, COLOR_WHITE, "/orgchat [msg] atau /oc [msg] - Chat organisasi");
 
 
         return 1;
@@ -4860,6 +5134,19 @@ public OnPlayerCommandText(playerid, cmdtext[])
         else
         {
             SendClientMessage(playerid, COLOR_WHITE, "House: None");
+        }
+
+        if (PlayerOrgID[playerid] > 0)
+        {
+            new rankName[32];
+            GetOrgRankName(PlayerOrgRank[playerid], rankName, sizeof(rankName));
+
+            format(msg, sizeof(msg), "Organization: %s | Rank: %s", PlayerOrgName[playerid], rankName);
+            SendClientMessage(playerid, COLOR_WHITE, msg);
+        }
+        else
+        {
+            SendClientMessage(playerid, COLOR_WHITE, "Organization: None");
         }
 
         return 1;
@@ -6871,6 +7158,282 @@ public OnPlayerCommandText(playerid, cmdtext[])
             SendClientMessage(playerid, COLOR_WHITE, "Tidak ada visitor di rumahmu.");
         }
 
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/orgs", true))
+    {
+        mysql_tquery(
+            g_SQL,
+            "SELECT id, name, owner_name, bank_money FROM organizations ORDER BY id ASC LIMIT 10",
+            "OnOrgListLoaded",
+            "i",
+            playerid
+        );
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/createorg ", true) == 0)
+    {
+        if (PlayerOrgID[playerid] > 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu sudah tergabung dalam organisasi.");
+            return 1;
+        }
+
+        new orgName[64];
+
+        format(orgName, sizeof(orgName), "%s", cmdtext[11]);
+
+        if (strlen(orgName) < 3)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Nama organisasi minimal 3 karakter.");
+            return 1;
+        }
+
+        if (PlayerMoney[playerid] < ORG_CREATE_PRICE)
+        {
+            new msg[144];
+            format(msg, sizeof(msg), "Cash tidak cukup. Biaya membuat organisasi: $%d.", ORG_CREATE_PRICE);
+            SendClientMessage(playerid, COLOR_RED, msg);
+            return 1;
+        }
+
+        new playerName[MAX_PLAYER_NAME];
+        new query[768];
+
+        GetPlayerName(playerid, playerName, sizeof(playerName));
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "INSERT INTO organizations (name, owner_id, owner_name, bank_money) VALUES ('%e', %d, '%e', 0)",
+            orgName,
+            PlayerDBID[playerid],
+            playerName
+        );
+
+        mysql_tquery(g_SQL, query, "OnOrgCreated", "i", playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/org", true))
+    {
+        if (PlayerOrgID[playerid] <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum tergabung dalam organisasi.");
+            SendClientMessage(playerid, COLOR_WHITE, "Gunakan /orgs atau /createorg [nama].");
+            return 1;
+        }
+
+        new rankName[32];
+        new msg[144];
+
+        GetOrgRankName(PlayerOrgRank[playerid], rankName, sizeof(rankName));
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== ORGANIZATION ==========");
+
+        format(msg, sizeof(msg), "Name: %s", PlayerOrgName[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Org ID: %d | Rank: %d (%s)", PlayerOrgID[playerid], PlayerOrgRank[playerid], rankName);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        SendClientMessage(playerid, COLOR_CYAN, "Command: /orgmembers, /inviteorg [id], /orgchat [msg], /leaveorg.");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/inviteorg ", true) == 0)
+    {
+        if (PlayerOrgID[playerid] <= 0 || PlayerOrgRank[playerid] < ORG_RANK_ADMIN)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Minimal admin organisasi untuk invite.");
+            return 1;
+        }
+
+        new targetStr[16];
+
+        if (!GetOneParam(cmdtext[11], targetStr, sizeof(targetStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /inviteorg [playerid]");
+            return 1;
+        }
+
+        if (!IsNumericString(targetStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Player ID harus angka.");
+            return 1;
+        }
+
+        new targetid = strval(targetStr);
+
+        if (!IsPlayerConnected(targetid) || !PlayerLoggedIn[targetid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Target tidak online/login.");
+            return 1;
+        }
+
+        if (PlayerOrgID[targetid] > 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Target sudah tergabung dalam organisasi.");
+            return 1;
+        }
+
+        PlayerOrgInvite[targetid] = playerid;
+
+        new msg[144];
+        new inviterName[MAX_PLAYER_NAME];
+
+        GetPlayerName(playerid, inviterName, sizeof(inviterName));
+
+        format(msg, sizeof(msg), "Kamu mengundang player ID %d ke organisasi %s.", targetid, PlayerOrgName[playerid]);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+
+        format(msg, sizeof(msg), "%s mengundang kamu ke organisasi %s. Gunakan /acceptorg.", inviterName, PlayerOrgName[playerid]);
+        SendClientMessage(targetid, COLOR_GREEN, msg);
+
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/acceptorg", true))
+    {
+        if (PlayerOrgID[playerid] > 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu sudah tergabung dalam organisasi.");
+            return 1;
+        }
+
+        new inviterid = PlayerOrgInvite[playerid];
+
+        if (inviterid == INVALID_PLAYER_ID || !IsPlayerConnected(inviterid) || PlayerOrgID[inviterid] <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Tidak ada invite organisasi aktif.");
+            PlayerOrgInvite[playerid] = INVALID_PLAYER_ID;
+            return 1;
+        }
+
+        new playerName[MAX_PLAYER_NAME];
+        new query[512];
+
+        GetPlayerName(playerid, playerName, sizeof(playerName));
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "INSERT INTO organization_members (org_id, player_id, player_name, rank_level) VALUES (%d, %d, '%e', %d)",
+            PlayerOrgID[inviterid],
+            PlayerDBID[playerid],
+            playerName,
+            ORG_RANK_MEMBER
+        );
+
+        mysql_tquery(g_SQL, query, "OnOrgInviteAccepted", "i", playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/leaveorg", true))
+    {
+        if (PlayerOrgID[playerid] <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum tergabung dalam organisasi.");
+            return 1;
+        }
+
+        if (PlayerOrgRank[playerid] >= ORG_RANK_OWNER)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Owner tidak bisa leave. Nanti kita buat /disbandorg di v0.13B.");
+            return 1;
+        }
+
+        new query[256];
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "DELETE FROM organization_members WHERE player_id=%d LIMIT 1",
+            PlayerDBID[playerid]
+        );
+
+        mysql_tquery(g_SQL, query);
+
+        ResetPlayerOrgData(playerid);
+
+        SendClientMessage(playerid, COLOR_YELLOW, "Kamu keluar dari organisasi.");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/orgchat ", true) == 0)
+    {
+        if (PlayerOrgID[playerid] <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum tergabung dalam organisasi.");
+            return 1;
+        }
+
+        new message[128];
+        format(message, sizeof(message), "%s", cmdtext[9]);
+
+        if (strlen(message) < 1)
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /orgchat [message]");
+            return 1;
+        }
+
+        new playerName[MAX_PLAYER_NAME];
+        new msg[160];
+
+        GetPlayerName(playerid, playerName, sizeof(playerName));
+
+        format(msg, sizeof(msg), "[ORG] %s: %s", playerName, message);
+        SendMessageToOrg(PlayerOrgID[playerid], COLOR_CYAN, msg);
+
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/oc ", true) == 0)
+    {
+        if (PlayerOrgID[playerid] <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum tergabung dalam organisasi.");
+            return 1;
+        }
+
+        new message[128];
+        format(message, sizeof(message), "%s", cmdtext[4]);
+
+        new playerName[MAX_PLAYER_NAME];
+        new msg[160];
+
+        GetPlayerName(playerid, playerName, sizeof(playerName));
+
+        format(msg, sizeof(msg), "[ORG] %s: %s", playerName, message);
+        SendMessageToOrg(PlayerOrgID[playerid], COLOR_CYAN, msg);
+
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/orgmembers", true))
+    {
+        if (PlayerOrgID[playerid] <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum tergabung dalam organisasi.");
+            return 1;
+        }
+
+        new query[512];
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "SELECT player_name, rank_level FROM organization_members WHERE org_id=%d ORDER BY rank_level DESC, player_name ASC LIMIT 20",
+            PlayerOrgID[playerid]
+        );
+
+        mysql_tquery(g_SQL, query, "OnOrgMembersLoaded", "i", playerid);
         return 1;
     }
 

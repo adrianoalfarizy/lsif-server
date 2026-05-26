@@ -174,3 +174,31 @@ CREATE TABLE IF NOT EXISTS player_houses (
     INDEX idx_owner_id (owner_id),
     INDEX idx_house_index (house_index)
 );
+
+ALTER TABLE player_houses
+ADD COLUMN locked TINYINT NOT NULL DEFAULT 1
+AFTER price;
+
+CREATE TABLE IF NOT EXISTS organizations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(64) NOT NULL UNIQUE,
+    owner_id INT NOT NULL,
+    owner_name VARCHAR(24) NOT NULL,
+    bank_money INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+
+    INDEX idx_owner_id (owner_id)
+);
+
+CREATE TABLE IF NOT EXISTS organization_members (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    org_id INT NOT NULL,
+    player_id INT NOT NULL UNIQUE,
+    player_name VARCHAR(24) NOT NULL,
+    rank_level TINYINT NOT NULL DEFAULT 1,
+    joined_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_org_id (org_id),
+    INDEX idx_player_id (player_id)
+);

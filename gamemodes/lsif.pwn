@@ -124,6 +124,14 @@
 #define HOUSE_ACCESS_RADIUS 5.0
 #define HOUSE_SELL_PERCENT 70
 
+#define HOUSE_INTERIOR_ID 3
+#define HOUSE_VW_OFFSET 10000
+
+#define HOUSE_INT_X 2496.0498
+#define HOUSE_INT_Y -1695.2382
+#define HOUSE_INT_Z 1014.7422
+#define HOUSE_INT_A 180.0000
+
 new MySQL:g_SQL;
 new g_AutosaveTimer;
 
@@ -421,7 +429,9 @@ new BankPointName[MAX_BANK_POINTS][32] =
 
 new PlayerHouseDBID[MAX_PLAYERS];
 new PlayerHouseIndex[MAX_PLAYERS];
+new PlayerHouseLocked[MAX_PLAYERS];
 new PlayerSpawnHouse[MAX_PLAYERS];
+new PlayerInsideHouse[MAX_PLAYERS];
 new PlayerFindingHouse[MAX_PLAYERS];
 new PlayerFindingHouseIndex[MAX_PLAYERS];
 
@@ -811,8 +821,20 @@ stock SavePlayerData(playerid, notify = 0)
     new Float:x, Float:y, Float:z, Float:a;
     new query[512];
 
-    GetPlayerPos(playerid, x, y, z);
-    GetPlayerFacingAngle(playerid, a);
+    if (PlayerInsideHouse[playerid] && PlayerHouseIndex[playerid] != -1)
+    {
+        new houseIndex = PlayerHouseIndex[playerid];
+
+        x = HouseX[houseIndex];
+        y = HouseY[houseIndex];
+        z = HouseZ[houseIndex];
+        a = 0.0;
+    }
+    else
+    {
+        GetPlayerPos(playerid, x, y, z);
+        GetPlayerFacingAngle(playerid, a);
+    }
 
     mysql_format(
         g_SQL,
@@ -2600,7 +2622,9 @@ stock ResetPlayerHouseData(playerid)
 {
     PlayerHouseDBID[playerid] = 0;
     PlayerHouseIndex[playerid] = -1;
+    PlayerHouseLocked[playerid] = 1;
     PlayerSpawnHouse[playerid] = 0;
+    PlayerInsideHouse[playerid] = 0;
     PlayerFindingHouse[playerid] = 0;
     PlayerFindingHouseIndex[playerid] = -1;
     return 1;
@@ -2644,7 +2668,7 @@ stock LoadPlayerHouse(playerid)
         g_SQL,
         query,
         sizeof(query),
-        "SELECT id, house_index FROM player_houses WHERE owner_id=%d LIMIT 1",
+        "SELECT id, house_index, locked FROM player_houses WHERE owner_id=%d LIMIT 1",
         PlayerDBID[playerid]
     );
 
@@ -2671,6 +2695,102 @@ stock GetNearestHouse(playerid)
     return nearest;
 }
 
+stock GetPlayerHouseVirtualWorld(playerid)
+{
+    if (PlayerDBID[playerid] <= 0)
+    {
+        return HOUSE_VW_OFFSET + playerid;
+    }
+
+    return HOUSE_VW_OFFSET + PlayerDBID[playerid];
+}
+
+stock EnterPlayerHouse(playerid)
+{
+    if (PlayerHouseDBID[playerid] <= 0 || PlayerHouseIndex[playerid] == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum punya rumah.");
+        return 0;
+    }
+
+    if (PlayerWorking[playerid] || PlayerRace[playerid] != RACE_NONE)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Tidak bisa masuk rumah saat job/race aktif.");
+        return 0;
+    }
+
+    new houseIndex = PlayerHouseIndex[playerid];
+
+    if (!IsPlayerNearHouse(playerid, houseIndex))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat rumahmu untuk masuk.");
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan /gohome atau /findhouse [id].");
+        return 0;
+    }
+
+    PlayerInsideHouse[playerid] = 1;
+
+    SetPlayerInterior(playerid, HOUSE_INTERIOR_ID);
+    SetPlayerVirtualWorld(playerid, GetPlayerHouseVirtualWorld(playerid));
+    SetPlayerPos(playerid, HOUSE_INT_X, HOUSE_INT_Y, HOUSE_INT_Z);
+    SetPlayerFacingAngle(playerid, HOUSE_INT_A);
+
+    SendClientMessage(playerid, COLOR_GREEN, "Kamu masuk ke dalam rumah.");
+    SendClientMessage(playerid, COLOR_WHITE, "Gunakan /exithouse untuk keluar.");
+
+    return 1;
+}
+
+stock ExitPlayerHouse(playerid)
+{
+    if (!PlayerInsideHouse[playerid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak sedang berada di dalam rumah.");
+        return 0;
+    }
+
+    if (PlayerHouseIndex[playerid] == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Data rumah tidak valid.");
+        return 0;
+    }
+
+    new houseIndex = PlayerHouseIndex[playerid];
+
+    PlayerInsideHouse[playerid] = 0;
+
+    SetPlayerInterior(playerid, 0);
+    SetPlayerVirtualWorld(playerid, 0);
+    SetPlayerPos(playerid, HouseX[houseIndex], HouseY[houseIndex], HouseZ[houseIndex]);
+    SetPlayerFacingAngle(playerid, 0.0);
+
+    SendClientMessage(playerid, COLOR_GREEN, "Kamu keluar dari rumah.");
+    return 1;
+}
+
+stock SavePlayerHouseLock(playerid)
+{
+    if (PlayerHouseDBID[playerid] <= 0)
+    {
+        return 0;
+    }
+
+    new query[256];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "UPDATE player_houses SET locked=%d WHERE id=%d AND owner_id=%d LIMIT 1",
+        PlayerHouseLocked[playerid],
+        PlayerHouseDBID[playerid],
+        PlayerDBID[playerid]
+    );
+
+    mysql_tquery(g_SQL, query);
+    return 1;
+}
+
 main()
 {
     print("========================================");
@@ -2688,7 +2808,7 @@ public AutoSavePlayers()
 public OnGameModeInit()
 {
     g_ServerStartTick = GetTickCount();
-    SetGameModeText("LSIF Dev v0.12A House");
+    SetGameModeText("LSIF Dev v0.12B House Interior");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -2753,7 +2873,7 @@ public OnGameModeInit()
 
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
     print("[LSIF] Anti-cheat timer aktif setiap 10 detik.");
-    print("[LSIF] Gamemode v0.12A Basic House System berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.12B House Interior berhasil dijalankan.");
     return 1;
 }
 
@@ -2823,6 +2943,10 @@ public OnPlayerDisconnect(playerid, reason)
 
     ResetTaxiWorkData(playerid);
     ResetTruckerWorkData(playerid);
+    if (PlayerInsideHouse[playerid])
+    {
+        PlayerInsideHouse[playerid] = 0;
+    }
     ResetPlayerHouseData(playerid);
 
     if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
@@ -3884,6 +4008,7 @@ public OnPlayerHouseLoaded(playerid)
 
     cache_get_value_name_int(0, "id", PlayerHouseDBID[playerid]);
     cache_get_value_name_int(0, "house_index", PlayerHouseIndex[playerid]);
+    cache_get_value_name_int(0, "locked", PlayerHouseLocked[playerid]);
 
     SendClientMessage(playerid, COLOR_GREEN, "Data rumah berhasil dimuat. Gunakan /myhouse.");
     return 1;
@@ -3908,6 +4033,7 @@ public OnPlayerHouseBought(playerid, houseIndex, price)
 
     PlayerHouseDBID[playerid] = insertId;
     PlayerHouseIndex[playerid] = houseIndex;
+    PlayerHouseLocked[playerid] = 1;
 
     new msg[144];
 
@@ -3932,6 +4058,8 @@ public OnPlayerHouseSold(playerid, sellPrice)
 
     PlayerHouseDBID[playerid] = 0;
     PlayerHouseIndex[playerid] = -1;
+    PlayerHouseLocked[playerid] = 1;
+    PlayerInsideHouse[playerid] = 0;
     PlayerSpawnHouse[playerid] = 0;
 
     new msg[144];
@@ -4008,6 +4136,10 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/cancelhouse - Hapus checkpoint rumah");
         SendClientMessage(playerid, COLOR_WHITE, "/buyhouse [id] - Beli rumah");
         SendClientMessage(playerid, COLOR_WHITE, "/myhouse - Info rumah pribadi");
+        SendClientMessage(playerid, COLOR_WHITE, "/enterhouse - Masuk ke rumah pribadi");
+        SendClientMessage(playerid, COLOR_WHITE, "/exithouse - Keluar dari rumah");
+        SendClientMessage(playerid, COLOR_WHITE, "/lockhouse - Kunci/buka rumah");
+        SendClientMessage(playerid, COLOR_WHITE, "/houseinfo - Debug/info rumah pribadi");
         SendClientMessage(playerid, COLOR_WHITE, "/gohome - Teleport ke rumah");
         SendClientMessage(playerid, COLOR_WHITE, "/setspawn [house/default] - Atur spawn");
         SendClientMessage(playerid, COLOR_WHITE, "/sellhouse - Jual rumah");
@@ -4598,7 +4730,15 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         if (PlayerHouseDBID[playerid] > 0 && PlayerHouseIndex[playerid] != -1)
         {
-            format(msg, sizeof(msg), "House: %s | SpawnHouse: %d", HouseName[PlayerHouseIndex[playerid]], PlayerSpawnHouse[playerid]);
+            format(
+                msg,
+                sizeof(msg),
+                "House: %s | SpawnHouse: %d | Locked: %d | Inside: %d",
+                HouseName[PlayerHouseIndex[playerid]],
+                PlayerSpawnHouse[playerid],
+                PlayerHouseLocked[playerid],
+                PlayerInsideHouse[playerid]
+            );
             SendClientMessage(playerid, COLOR_WHITE, msg);
         }
         else
@@ -6198,7 +6338,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
             g_SQL,
             query,
             sizeof(query),
-            "INSERT INTO player_houses (owner_id, house_index, house_name, price, pos_x, pos_y, pos_z) VALUES (%d, %d, '%e', %d, %f, %f, %f)",
+            "INSERT INTO player_houses (owner_id, house_index, house_name, price, locked, pos_x, pos_y, pos_z) VALUES (%d, %d, '%e', %d, 1, %f, %f, %f)",
             PlayerDBID[playerid],
             houseIndex,
             HouseName[houseIndex],
@@ -6234,10 +6374,13 @@ public OnPlayerCommandText(playerid, cmdtext[])
         format(msg, sizeof(msg), "Spawn at house: %s", PlayerSpawnHouse[playerid] ? ("Yes") : ("No"));
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
+        format(msg, sizeof(msg), "Locked: %s | Inside: %s", PlayerHouseLocked[playerid] ? ("Yes") : ("No"), PlayerInsideHouse[playerid] ? ("Yes") : ("No"));
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
         format(msg, sizeof(msg), "Location: %.2f, %.2f, %.2f", HouseX[houseIndex], HouseY[houseIndex], HouseZ[houseIndex]);
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
-        SendClientMessage(playerid, COLOR_CYAN, "Command: /gohome, /setspawn house, /setspawn default, /sellhouse.");
+        SendClientMessage(playerid, COLOR_CYAN, "Command: /enterhouse, /exithouse, /lockhouse, /gohome, /setspawn house, /sellhouse.");
         return 1;
     }
 
@@ -6256,6 +6399,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
         }
 
         new houseIndex = PlayerHouseIndex[playerid];
+
+        PlayerInsideHouse[playerid] = 0;
 
         SetPlayerInterior(playerid, 0);
         SetPlayerVirtualWorld(playerid, 0);
@@ -6312,6 +6457,11 @@ public OnPlayerCommandText(playerid, cmdtext[])
             return 1;
         }
 
+        if (PlayerInsideHouse[playerid])
+        {
+            ExitPlayerHouse(playerid);
+        }
+
         new houseIndex = PlayerHouseIndex[playerid];
         new sellPrice = (HousePrice[houseIndex] * HOUSE_SELL_PERCENT) / 100;
         new query[256];
@@ -6326,6 +6476,79 @@ public OnPlayerCommandText(playerid, cmdtext[])
         );
 
         mysql_tquery(g_SQL, query, "OnPlayerHouseSold", "ii", playerid, sellPrice);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/enterhouse", true))
+    {
+        EnterPlayerHouse(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/exithouse", true))
+    {
+        ExitPlayerHouse(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/lockhouse", true))
+    {
+        if (PlayerHouseDBID[playerid] <= 0 || PlayerHouseIndex[playerid] == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum punya rumah.");
+            return 1;
+        }
+
+        if (!PlayerInsideHouse[playerid] && !IsPlayerNearHouse(playerid, PlayerHouseIndex[playerid]))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu harus berada di rumah atau dekat rumah untuk mengunci/membuka rumah.");
+            return 1;
+        }
+
+        if (PlayerHouseLocked[playerid])
+        {
+            PlayerHouseLocked[playerid] = 0;
+            SendClientMessage(playerid, COLOR_GREEN, "Rumah dibuka.");
+        }
+        else
+        {
+            PlayerHouseLocked[playerid] = 1;
+            SendClientMessage(playerid, COLOR_YELLOW, "Rumah dikunci.");
+        }
+
+        SavePlayerHouseLock(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/houseinfo", true))
+    {
+        if (PlayerHouseDBID[playerid] <= 0 || PlayerHouseIndex[playerid] == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum punya rumah.");
+            return 1;
+        }
+
+        new houseIndex = PlayerHouseIndex[playerid];
+        new msg[144];
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== HOUSE INFO ==========");
+
+        format(msg, sizeof(msg), "House: %s", HouseName[houseIndex]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "DBID: %d | Index: %d", PlayerHouseDBID[playerid], houseIndex + 1);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Locked: %s", PlayerHouseLocked[playerid] ? ("Yes") : ("No"));
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Inside House: %s", PlayerInsideHouse[playerid] ? ("Yes") : ("No"));
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Virtual World: %d", GetPlayerHouseVirtualWorld(playerid));
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        SendClientMessage(playerid, COLOR_CYAN, "Command: /enterhouse, /exithouse, /lockhouse, /gohome, /sellhouse.");
         return 1;
     }
 

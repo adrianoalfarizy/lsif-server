@@ -493,6 +493,7 @@ new PlayerOrgID[MAX_PLAYERS];
 new PlayerOrgRank[MAX_PLAYERS];
 new PlayerOrgInvite[MAX_PLAYERS];
 new PlayerOrgName[MAX_PLAYERS][64];
+new PlayerPendingOrgName[MAX_PLAYERS][64];
 
 stock Float:GetDistanceBetweenPoints3D(Float:x1, Float:y1, Float:z1, Float:x2, Float:y2, Float:z2)
 {
@@ -2905,6 +2906,7 @@ stock ResetPlayerOrgData(playerid)
     PlayerOrgRank[playerid] = ORG_RANK_NONE;
     PlayerOrgInvite[playerid] = INVALID_PLAYER_ID;
     format(PlayerOrgName[playerid], 64, "None");
+    format(PlayerPendingOrgName[playerid], 64, "None");
     return 1;
 }
 
@@ -4372,10 +4374,13 @@ public OnOrgCreated(playerid)
     PlayerOrgID[playerid] = orgid;
     PlayerOrgRank[playerid] = ORG_RANK_OWNER;
 
+    format(PlayerOrgName[playerid], 64, "%s", PlayerPendingOrgName[playerid]);
+
     SendClientMessage(playerid, COLOR_GREEN, "Organisasi berhasil dibuat. Kamu menjadi Owner.");
     SendClientMessage(playerid, COLOR_WHITE, "Gunakan /org untuk melihat info organisasi.");
 
     SavePlayerData(playerid);
+    LoadPlayerOrganization(playerid);
     return 1;
 }
 
@@ -7203,6 +7208,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
         new query[768];
 
         GetPlayerName(playerid, playerName, sizeof(playerName));
+
+        format(PlayerPendingOrgName[playerid], 64, "%s", orgName);
 
         mysql_format(
             g_SQL,

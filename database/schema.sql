@@ -151,3 +151,26 @@ CREATE TABLE IF NOT EXISTS job_stats (
 ALTER TABLE players
 ADD COLUMN bank_money INT NOT NULL DEFAULT 0
 AFTER money;
+
+ALTER TABLE players
+ADD COLUMN spawn_house TINYINT NOT NULL DEFAULT 0
+AFTER current_job;
+
+CREATE TABLE IF NOT EXISTS player_houses (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+
+    owner_id INT NOT NULL UNIQUE,
+    house_index INT NOT NULL,
+    house_name VARCHAR(64) NOT NULL,
+    price INT NOT NULL,
+
+    pos_x FLOAT NOT NULL,
+    pos_y FLOAT NOT NULL,
+    pos_z FLOAT NOT NULL,
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+
+    INDEX idx_owner_id (owner_id),
+    INDEX idx_house_index (house_index)
+);

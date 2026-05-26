@@ -120,7 +120,9 @@
 #define MAX_BANK_POINTS 5
 #define BANK_ACCESS_RADIUS 7.0
 
-
+#define MAX_HOUSES 5
+#define HOUSE_ACCESS_RADIUS 5.0
+#define HOUSE_SELL_PERCENT 70
 
 new MySQL:g_SQL;
 new g_AutosaveTimer;
@@ -417,6 +419,57 @@ new BankPointName[MAX_BANK_POINTS][32] =
     "Santa Maria ATM"
 };
 
+new PlayerHouseDBID[MAX_PLAYERS];
+new PlayerHouseIndex[MAX_PLAYERS];
+new PlayerSpawnHouse[MAX_PLAYERS];
+new PlayerFindingHouse[MAX_PLAYERS];
+new PlayerFindingHouseIndex[MAX_PLAYERS];
+
+new Float:HouseX[MAX_HOUSES] =
+{
+    2243.9121,
+    2362.7712,
+    1412.1656,
+    1095.4482,
+    827.9244
+};
+
+new Float:HouseY[MAX_HOUSES] =
+{
+    -1638.2314,
+        -1643.1138,
+        -920.2480,
+        -647.5122,
+        -858.1049
+    };
+
+new Float:HouseZ[MAX_HOUSES] =
+{
+    15.9074,
+    13.5234,
+    35.0781,
+    113.6484,
+    70.3308
+};
+
+new HousePrice[MAX_HOUSES] =
+{
+    50000,
+    75000,
+    120000,
+    180000,
+    250000
+};
+
+new HouseName[MAX_HOUSES][64] =
+{
+    "Ganton Starter House",
+    "Idlewood Family House",
+    "Market Hill House",
+    "Mulholland View House",
+    "Richman Small Villa"
+};
+
 stock Float:GetDistanceBetweenPoints3D(Float:x1, Float:y1, Float:z1, Float:x2, Float:y2, Float:z2)
 {
     new Float:dx = x1 - x2;
@@ -592,6 +645,9 @@ forward OnJobTopLoaded(playerid);
 forward OnJobProgressSaved(playerid);
 forward AntiCheatCheck();
 forward OnDatabasePing(playerid);
+forward OnPlayerHouseLoaded(playerid);
+forward OnPlayerHouseBought(playerid, houseIndex, price);
+forward OnPlayerHouseSold(playerid, sellPrice);
 
 stock SaveAllPlayers()
 {
@@ -672,6 +728,7 @@ stock ResetPlayerAccountData(playerid)
     ResetOwnedVehicleData(playerid);
     ResetPlayerRaceData(playerid);
     PlayerFindingBank[playerid] = 0;
+    ResetPlayerHouseData(playerid);
 
     PlayerJob[playerid] = JOB_NONE;
     PlayerWorking[playerid] = 0;
@@ -761,13 +818,14 @@ stock SavePlayerData(playerid, notify = 0)
         g_SQL,
         query,
         sizeof(query),
-        "UPDATE players SET money=%d, bank_money=%d, xp=%d, level=%d, admin_level=%d, current_job=%d, pos_x=%f, pos_y=%f, pos_z=%f, pos_a=%f WHERE id=%d LIMIT 1",
+        "UPDATE players SET money=%d, bank_money=%d, xp=%d, level=%d, admin_level=%d, current_job=%d, spawn_house=%d, pos_x=%f, pos_y=%f, pos_z=%f, pos_a=%f WHERE id=%d LIMIT 1",
         PlayerMoney[playerid],
         PlayerBankMoney[playerid],
         PlayerXP[playerid],
         PlayerLevel[playerid],
         PlayerAdmin[playerid],
         PlayerJob[playerid],
+        PlayerSpawnHouse[playerid],
         x,
         y,
         z,
@@ -2538,6 +2596,81 @@ stock GetNearestBankDistance(playerid)
                       ));
 }
 
+stock ResetPlayerHouseData(playerid)
+{
+    PlayerHouseDBID[playerid] = 0;
+    PlayerHouseIndex[playerid] = -1;
+    PlayerSpawnHouse[playerid] = 0;
+    PlayerFindingHouse[playerid] = 0;
+    PlayerFindingHouseIndex[playerid] = -1;
+    return 1;
+}
+
+stock IsValidHouseIndex(houseIndex)
+{
+    if (houseIndex < 0 || houseIndex >= MAX_HOUSES)
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+stock IsPlayerNearHouse(playerid, houseIndex)
+{
+    if (!IsValidHouseIndex(houseIndex))
+    {
+        return 0;
+    }
+
+    if (GetPlayerDistanceFromPoint(playerid, HouseX[houseIndex], HouseY[houseIndex], HouseZ[houseIndex]) <= HOUSE_ACCESS_RADIUS)
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
+stock LoadPlayerHouse(playerid)
+{
+    if (!PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0)
+    {
+        return 0;
+    }
+
+    new query[256];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "SELECT id, house_index FROM player_houses WHERE owner_id=%d LIMIT 1",
+        PlayerDBID[playerid]
+    );
+
+    mysql_tquery(g_SQL, query, "OnPlayerHouseLoaded", "i", playerid);
+    return 1;
+}
+
+stock GetNearestHouse(playerid)
+{
+    new nearest = -1;
+    new Float:nearestDistance = 999999.0;
+
+    for (new i = 0; i < MAX_HOUSES; i++)
+    {
+        new Float:distance = GetPlayerDistanceFromPoint(playerid, HouseX[i], HouseY[i], HouseZ[i]);
+
+        if (distance < nearestDistance)
+        {
+            nearestDistance = distance;
+            nearest = i;
+        }
+    }
+
+    return nearest;
+}
+
 main()
 {
     print("========================================");
@@ -2555,7 +2688,7 @@ public AutoSavePlayers()
 public OnGameModeInit()
 {
     g_ServerStartTick = GetTickCount();
-    SetGameModeText("LSIF Dev v0.11B Bank ATM");
+    SetGameModeText("LSIF Dev v0.12A House");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -2599,6 +2732,7 @@ public OnGameModeInit()
         PlayerLastRaceTick[i] = 0;
         ResetTaxiWorkData(i);
         ResetTruckerWorkData(i);
+        ResetPlayerHouseData(i);
 
         PlayerJob[i] = JOB_NONE;
         PlayerWorking[i] = 0;
@@ -2619,7 +2753,7 @@ public OnGameModeInit()
 
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
     print("[LSIF] Anti-cheat timer aktif setiap 10 detik.");
-    print("[LSIF] Gamemode v0.11B Bank ATM Location berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.12A Basic House System berhasil dijalankan.");
     return 1;
 }
 
@@ -2689,6 +2823,7 @@ public OnPlayerDisconnect(playerid, reason)
 
     ResetTaxiWorkData(playerid);
     ResetTruckerWorkData(playerid);
+    ResetPlayerHouseData(playerid);
 
     if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
     {
@@ -2743,8 +2878,18 @@ public OnPlayerSpawn(playerid)
     SetPlayerInterior(playerid, 0);
     SetPlayerVirtualWorld(playerid, 0);
 
-    SetPlayerPos(playerid, PlayerLastX[playerid], PlayerLastY[playerid], PlayerLastZ[playerid]);
-    SetPlayerFacingAngle(playerid, PlayerLastA[playerid]);
+    if (PlayerSpawnHouse[playerid] && PlayerHouseIndex[playerid] != -1)
+    {
+        new houseIndex = PlayerHouseIndex[playerid];
+
+        SetPlayerPos(playerid, HouseX[houseIndex], HouseY[houseIndex], HouseZ[houseIndex]);
+        SetPlayerFacingAngle(playerid, 0.0);
+    }
+    else
+    {
+        SetPlayerPos(playerid, PlayerLastX[playerid], PlayerLastY[playerid], PlayerLastZ[playerid]);
+        SetPlayerFacingAngle(playerid, PlayerLastA[playerid]);
+    }
 
     ResetPlayerWeapons(playerid);
 
@@ -2822,7 +2967,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             g_SQL,
             query,
             sizeof(query),
-            "SELECT id, money, bank_money, xp, level, admin_level, skin, current_job, pos_x, pos_y, pos_z, pos_a FROM players WHERE username='%e' AND password_hash=SHA2('%e', 256) LIMIT 1",
+            "SELECT id, money, bank_money, xp, level, admin_level, skin, current_job, spawn_house, pos_x, pos_y, pos_z, pos_a FROM players WHERE username='%e' AND password_hash=SHA2('%e', 256) LIMIT 1",
             username,
             inputtext
         );
@@ -2871,6 +3016,9 @@ public OnAccountRegister(playerid)
     PlayerLevel[playerid] = 1;
     PlayerAdmin[playerid] = 0;
     PlayerJob[playerid] = JOB_NONE;
+    PlayerSpawnHouse[playerid] = 0;
+    PlayerSpawnHouse[playerid] = 0;
+    ResetPlayerHouseData(playerid);
 
     PlayerLastX[playerid] = SPAWN_X;
     PlayerLastY[playerid] = SPAWN_Y;
@@ -2912,6 +3060,7 @@ public OnAccountLogin(playerid)
     cache_get_value_name_int(0, "admin_level", PlayerAdmin[playerid]);
     // cache_get_value_name_int(0, "skin", PlayerLevel[playerid]);
     cache_get_value_name_int(0, "current_job", PlayerJob[playerid]);
+    cache_get_value_name_int(0, "spawn_house", PlayerSpawnHouse[playerid]);
 
     cache_get_value_name_float(0, "pos_x", PlayerLastX[playerid]);
     cache_get_value_name_float(0, "pos_y", PlayerLastY[playerid]);
@@ -2922,6 +3071,7 @@ public OnAccountLogin(playerid)
 
     ApplyLoadedPlayerData(playerid);
     LoadOwnedVehicle(playerid);
+    LoadPlayerHouse(playerid);
 
     new ip[45];
     new query[256];
@@ -2959,6 +3109,21 @@ public OnPlayerEnterCheckpoint(playerid)
 
             SendClientMessage(playerid, COLOR_GREEN, "Kamu sudah sampai di bank/ATM.");
             SendClientMessage(playerid, COLOR_WHITE, "Gunakan /balance, /deposit [amount/all], atau /withdraw [amount/all].");
+            return 1;
+        }
+    }
+
+    if (PlayerFindingHouse[playerid])
+    {
+        new houseIndex = PlayerFindingHouseIndex[playerid];
+
+        if (IsValidHouseIndex(houseIndex) && IsPlayerNearHouse(playerid, houseIndex))
+        {
+            DisablePlayerCheckpoint(playerid);
+            PlayerFindingHouse[playerid] = 0;
+
+            SendClientMessage(playerid, COLOR_GREEN, "Kamu sudah sampai di lokasi rumah.");
+            SendClientMessage(playerid, COLOR_WHITE, "Gunakan /buyhouse [id] jika ingin membeli rumah ini.");
             return 1;
         }
     }
@@ -3701,6 +3866,83 @@ public OnDatabasePing(playerid)
     return 1;
 }
 
+public OnPlayerHouseLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+
+    if (rows == 0)
+    {
+        PlayerHouseDBID[playerid] = 0;
+        PlayerHouseIndex[playerid] = -1;
+        return 1;
+    }
+
+    cache_get_value_name_int(0, "id", PlayerHouseDBID[playerid]);
+    cache_get_value_name_int(0, "house_index", PlayerHouseIndex[playerid]);
+
+    SendClientMessage(playerid, COLOR_GREEN, "Data rumah berhasil dimuat. Gunakan /myhouse.");
+    return 1;
+}
+
+public OnPlayerHouseBought(playerid, houseIndex, price)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new insertId = cache_insert_id();
+
+    if (insertId <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gagal membeli rumah. Database insert gagal.");
+        return 1;
+    }
+
+    TakePlayerCash(playerid, price);
+
+    PlayerHouseDBID[playerid] = insertId;
+    PlayerHouseIndex[playerid] = houseIndex;
+
+    new msg[144];
+
+    format(msg, sizeof(msg), "Kamu berhasil membeli rumah: %s seharga $%d.", HouseName[houseIndex], price);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+
+    SendClientMessage(playerid, COLOR_WHITE, "Gunakan /myhouse untuk info rumah.");
+    SendClientMessage(playerid, COLOR_WHITE, "Gunakan /setspawn house jika ingin spawn di rumah.");
+
+    SavePlayerData(playerid);
+    return 1;
+}
+
+public OnPlayerHouseSold(playerid, sellPrice)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    GivePlayerCash(playerid, sellPrice);
+
+    PlayerHouseDBID[playerid] = 0;
+    PlayerHouseIndex[playerid] = -1;
+    PlayerSpawnHouse[playerid] = 0;
+
+    new msg[144];
+
+    format(msg, sizeof(msg), "Rumah berhasil dijual. Kamu menerima $%d.", sellPrice);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+
+    SavePlayerData(playerid);
+    return 1;
+}
+
 public OnPlayerCommandText(playerid, cmdtext[])
 {
     if (!PlayerLoggedIn[playerid])
@@ -3761,6 +4003,14 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/cancelbank - Hapus checkpoint bank");
         SendClientMessage(playerid, COLOR_WHITE, "/deposit [amount/all] - Simpan cash ke bank");
         SendClientMessage(playerid, COLOR_WHITE, "/withdraw [amount/all] - Ambil uang dari bank");
+        SendClientMessage(playerid, COLOR_WHITE, "/houses - Melihat daftar rumah");
+        SendClientMessage(playerid, COLOR_WHITE, "/findhouse [id] - Cari lokasi rumah");
+        SendClientMessage(playerid, COLOR_WHITE, "/cancelhouse - Hapus checkpoint rumah");
+        SendClientMessage(playerid, COLOR_WHITE, "/buyhouse [id] - Beli rumah");
+        SendClientMessage(playerid, COLOR_WHITE, "/myhouse - Info rumah pribadi");
+        SendClientMessage(playerid, COLOR_WHITE, "/gohome - Teleport ke rumah");
+        SendClientMessage(playerid, COLOR_WHITE, "/setspawn [house/default] - Atur spawn");
+        SendClientMessage(playerid, COLOR_WHITE, "/sellhouse - Jual rumah");
 
 
         return 1;
@@ -4344,6 +4594,16 @@ public OnPlayerCommandText(playerid, cmdtext[])
         else
         {
             SendClientMessage(playerid, COLOR_WHITE, "Owned Vehicle: None");
+        }
+
+        if (PlayerHouseDBID[playerid] > 0 && PlayerHouseIndex[playerid] != -1)
+        {
+            format(msg, sizeof(msg), "House: %s | SpawnHouse: %d", HouseName[PlayerHouseIndex[playerid]], PlayerSpawnHouse[playerid]);
+            SendClientMessage(playerid, COLOR_WHITE, msg);
+        }
+        else
+        {
+            SendClientMessage(playerid, COLOR_WHITE, "House: None");
         }
 
         return 1;
@@ -5465,6 +5725,16 @@ public OnPlayerCommandText(playerid, cmdtext[])
         format(msg, sizeof(msg), "AC mismatch count: %d", PlayerMoneyMismatchCount[targetid]);
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
+        if (PlayerHouseDBID[playerid] > 0 && PlayerHouseIndex[playerid] != -1)
+        {
+            format(msg, sizeof(msg), "House: %s | SpawnHouse: %d", HouseName[PlayerHouseIndex[playerid]], PlayerSpawnHouse[playerid]);
+            SendClientMessage(playerid, COLOR_WHITE, msg);
+        }
+        else
+        {
+            SendClientMessage(playerid, COLOR_WHITE, "House: None");
+        }
+
         return 1;
     }
 
@@ -5791,6 +6061,271 @@ public OnPlayerCommandText(playerid, cmdtext[])
         PlayerFindingBank[playerid] = 0;
 
         SendClientMessage(playerid, COLOR_YELLOW, "Checkpoint bank/ATM dihapus.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/houses", true))
+    {
+        new msg[144];
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== AVAILABLE HOUSES ==========");
+
+        for (new i = 0; i < MAX_HOUSES; i++)
+        {
+            format(msg, sizeof(msg), "%d. %s | Price: $%d", i + 1, HouseName[i], HousePrice[i]);
+            SendClientMessage(playerid, COLOR_WHITE, msg);
+        }
+
+        SendClientMessage(playerid, COLOR_CYAN, "Gunakan /findhouse [id] untuk mencari rumah.");
+        SendClientMessage(playerid, COLOR_CYAN, "Gunakan /buyhouse [id] saat dekat rumah.");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/findhouse ", true) == 0)
+    {
+        new houseStr[16];
+
+        if (!GetOneParam(cmdtext[11], houseStr, sizeof(houseStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /findhouse [house_id]");
+            return 1;
+        }
+
+        if (!IsNumericString(houseStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "House ID harus angka.");
+            return 1;
+        }
+
+        new houseIndex = strval(houseStr) - 1;
+
+        if (!IsValidHouseIndex(houseIndex))
+        {
+            SendClientMessage(playerid, COLOR_RED, "House ID tidak valid.");
+            return 1;
+        }
+
+        if (PlayerWorking[playerid] || PlayerRace[playerid] != RACE_NONE)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Selesaikan job/race aktif dulu.");
+            return 1;
+        }
+
+        SetPlayerCheckpoint(playerid, HouseX[houseIndex], HouseY[houseIndex], HouseZ[houseIndex], HOUSE_ACCESS_RADIUS);
+
+        PlayerFindingHouse[playerid] = 1;
+        PlayerFindingHouseIndex[playerid] = houseIndex;
+
+        new msg[144];
+        format(msg, sizeof(msg), "Checkpoint diarahkan ke rumah: %s.", HouseName[houseIndex]);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan /cancelhouse untuk menghapus checkpoint.");
+
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/findhouse", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /findhouse [house_id]");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/cancelhouse", true))
+    {
+        if (!PlayerFindingHouse[playerid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu tidak sedang mencari rumah.");
+            return 1;
+        }
+
+        DisablePlayerCheckpoint(playerid);
+        PlayerFindingHouse[playerid] = 0;
+        PlayerFindingHouseIndex[playerid] = -1;
+
+        SendClientMessage(playerid, COLOR_YELLOW, "Checkpoint rumah dihapus.");
+        return 1;
+    }
+    if (strfind(cmdtext, "/buyhouse ", true) == 0)
+    {
+        new houseStr[16];
+
+        if (!GetOneParam(cmdtext[10], houseStr, sizeof(houseStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /buyhouse [house_id]");
+            return 1;
+        }
+
+        if (!IsNumericString(houseStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "House ID harus angka.");
+            return 1;
+        }
+
+        if (PlayerHouseDBID[playerid] > 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu sudah punya rumah. Gunakan /sellhouse dulu.");
+            return 1;
+        }
+
+        new houseIndex = strval(houseStr) - 1;
+
+        if (!IsValidHouseIndex(houseIndex))
+        {
+            SendClientMessage(playerid, COLOR_RED, "House ID tidak valid.");
+            return 1;
+        }
+
+        if (!IsPlayerNearHouse(playerid, houseIndex))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat rumah tersebut untuk membelinya.");
+            SendClientMessage(playerid, COLOR_WHITE, "Gunakan /findhouse [id].");
+            return 1;
+        }
+
+        new price = HousePrice[houseIndex];
+
+        if (PlayerMoney[playerid] < price)
+        {
+            new msg[144];
+            format(msg, sizeof(msg), "Cash tidak cukup. Harga rumah ini $%d.", price);
+            SendClientMessage(playerid, COLOR_RED, msg);
+            return 1;
+        }
+
+        new query[512];
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "INSERT INTO player_houses (owner_id, house_index, house_name, price, pos_x, pos_y, pos_z) VALUES (%d, %d, '%e', %d, %f, %f, %f)",
+            PlayerDBID[playerid],
+            houseIndex,
+            HouseName[houseIndex],
+            price,
+            HouseX[houseIndex],
+            HouseY[houseIndex],
+            HouseZ[houseIndex]
+        );
+
+        mysql_tquery(g_SQL, query, "OnPlayerHouseBought", "iii", playerid, houseIndex, price);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/myhouse", true))
+    {
+        if (PlayerHouseDBID[playerid] <= 0 || PlayerHouseIndex[playerid] == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum punya rumah.");
+            return 1;
+        }
+
+        new houseIndex = PlayerHouseIndex[playerid];
+        new msg[144];
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== MY HOUSE ==========");
+
+        format(msg, sizeof(msg), "House: %s", HouseName[houseIndex]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "DBID: %d | Price: $%d", PlayerHouseDBID[playerid], HousePrice[houseIndex]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Spawn at house: %s", PlayerSpawnHouse[playerid] ? ("Yes") : ("No"));
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Location: %.2f, %.2f, %.2f", HouseX[houseIndex], HouseY[houseIndex], HouseZ[houseIndex]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        SendClientMessage(playerid, COLOR_CYAN, "Command: /gohome, /setspawn house, /setspawn default, /sellhouse.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/gohome", true))
+    {
+        if (PlayerHouseDBID[playerid] <= 0 || PlayerHouseIndex[playerid] == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum punya rumah.");
+            return 1;
+        }
+
+        if (PlayerWorking[playerid] || PlayerRace[playerid] != RACE_NONE)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Tidak bisa /gohome saat job/race aktif.");
+            return 1;
+        }
+
+        new houseIndex = PlayerHouseIndex[playerid];
+
+        SetPlayerInterior(playerid, 0);
+        SetPlayerVirtualWorld(playerid, 0);
+        SetPlayerPos(playerid, HouseX[houseIndex], HouseY[houseIndex], HouseZ[houseIndex]);
+        SetPlayerFacingAngle(playerid, 0.0);
+
+        SendClientMessage(playerid, COLOR_GREEN, "Kamu teleport ke rumah.");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/setspawn ", true) == 0)
+    {
+        new spawnStr[32];
+
+        if (!GetOneParam(cmdtext[10], spawnStr, sizeof(spawnStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setspawn [house/default]");
+            return 1;
+        }
+
+        if (!strcmp(spawnStr, "house", true))
+        {
+            if (PlayerHouseDBID[playerid] <= 0 || PlayerHouseIndex[playerid] == -1)
+            {
+                SendClientMessage(playerid, COLOR_RED, "Kamu belum punya rumah.");
+                return 1;
+            }
+
+            PlayerSpawnHouse[playerid] = 1;
+            SavePlayerData(playerid);
+
+            SendClientMessage(playerid, COLOR_GREEN, "Spawn kamu diatur ke rumah.");
+            return 1;
+        }
+
+        if (!strcmp(spawnStr, "default", true))
+        {
+            PlayerSpawnHouse[playerid] = 0;
+            SavePlayerData(playerid);
+
+            SendClientMessage(playerid, COLOR_GREEN, "Spawn kamu dikembalikan ke posisi terakhir/default.");
+            return 1;
+        }
+
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setspawn [house/default]");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/sellhouse", true))
+    {
+        if (PlayerHouseDBID[playerid] <= 0 || PlayerHouseIndex[playerid] == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum punya rumah.");
+            return 1;
+        }
+
+        new houseIndex = PlayerHouseIndex[playerid];
+        new sellPrice = (HousePrice[houseIndex] * HOUSE_SELL_PERCENT) / 100;
+        new query[256];
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "DELETE FROM player_houses WHERE id=%d AND owner_id=%d LIMIT 1",
+            PlayerHouseDBID[playerid],
+            PlayerDBID[playerid]
+        );
+
+        mysql_tquery(g_SQL, query, "OnPlayerHouseSold", "ii", playerid, sellPrice);
         return 1;
     }
 

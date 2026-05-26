@@ -117,6 +117,9 @@
 
 #define MAX_BANK_TRANSACTION 10000000
 
+#define MAX_BANK_POINTS 5
+#define BANK_ACCESS_RADIUS 7.0
+
 
 
 new MySQL:g_SQL;
@@ -376,6 +379,44 @@ new Float:RaceLSZ[MAX_LS_RACE_POINTS] =
 
 new PlayerLastJobTopQuery[MAX_PLAYERS][32];
 
+new PlayerFindingBank[MAX_PLAYERS];
+
+new Float:BankPointX[MAX_BANK_POINTS] =
+{
+    1462.1489, // Pershing Square
+    1367.2457, // Market
+    1833.8134, // Idlewood
+    2421.5427, // East LS
+    1154.7312  // Santa Maria Beach
+};
+
+new Float:BankPointY[MAX_BANK_POINTS] =
+{
+    -1012.3848,
+        -1279.8615,
+        -1842.4136,
+        -1224.3597,
+        -1769.6847
+    };
+
+new Float:BankPointZ[MAX_BANK_POINTS] =
+{
+    26.8438,
+    13.5469,
+    13.5781,
+    25.3828,
+    16.5938
+};
+
+new BankPointName[MAX_BANK_POINTS][32] =
+{
+    "Pershing Square Bank",
+    "Market ATM",
+    "Idlewood ATM",
+    "East LS Bank",
+    "Santa Maria ATM"
+};
+
 stock Float:GetDistanceBetweenPoints3D(Float:x1, Float:y1, Float:z1, Float:x2, Float:y2, Float:z2)
 {
     new Float:dx = x1 - x2;
@@ -630,6 +671,7 @@ stock ResetPlayerAccountData(playerid)
     PlayerVehicle[playerid] = INVALID_VEHICLE_ID;
     ResetOwnedVehicleData(playerid);
     ResetPlayerRaceData(playerid);
+    PlayerFindingBank[playerid] = 0;
 
     PlayerJob[playerid] = JOB_NONE;
     PlayerWorking[playerid] = 0;
@@ -2442,6 +2484,60 @@ stock GetRaceDebugName(raceid, output[], size)
     return 1;
 }
 
+stock GetNearestBankPoint(playerid)
+{
+    new nearest = -1;
+    new Float:nearestDistance = 999999.0;
+
+    for (new i = 0; i < MAX_BANK_POINTS; i++)
+    {
+        new Float:distance = GetPlayerDistanceFromPoint(
+                playerid,
+                BankPointX[i],
+                BankPointY[i],
+                BankPointZ[i]
+                                               );
+
+        if (distance < nearestDistance)
+        {
+            nearestDistance = distance;
+            nearest = i;
+        }
+    }
+
+    return nearest;
+}
+
+stock IsPlayerNearBankPoint(playerid)
+{
+    for (new i = 0; i < MAX_BANK_POINTS; i++)
+    {
+        if (GetPlayerDistanceFromPoint(playerid, BankPointX[i], BankPointY[i], BankPointZ[i]) <= BANK_ACCESS_RADIUS)
+        {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+stock GetNearestBankDistance(playerid)
+{
+    new nearest = GetNearestBankPoint(playerid);
+
+    if (nearest == -1)
+    {
+        return 999999;
+    }
+
+    return floatround(GetPlayerDistanceFromPoint(
+                          playerid,
+                          BankPointX[nearest],
+                          BankPointY[nearest],
+                          BankPointZ[nearest]
+                      ));
+}
+
 main()
 {
     print("========================================");
@@ -2459,7 +2555,7 @@ public AutoSavePlayers()
 public OnGameModeInit()
 {
     g_ServerStartTick = GetTickCount();
-    SetGameModeText("LSIF Dev v0.11A Bank");
+    SetGameModeText("LSIF Dev v0.11B Bank ATM");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -2523,7 +2619,7 @@ public OnGameModeInit()
 
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
     print("[LSIF] Anti-cheat timer aktif setiap 10 detik.");
-    print("[LSIF] Gamemode v0.11A Bank System berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.11B Bank ATM Location berhasil dijalankan.");
     return 1;
 }
 
@@ -2589,6 +2685,7 @@ public OnPlayerDisconnect(playerid, reason)
 
     PlayerLoggedIn[playerid] = 0;
     PlayerDBID[playerid] = 0;
+    PlayerFindingBank[playerid] = 0;
 
     ResetTaxiWorkData(playerid);
     ResetTruckerWorkData(playerid);
@@ -2851,6 +2948,19 @@ public OnPlayerEnterCheckpoint(playerid)
     {
         HandleRaceCheckpoint(playerid);
         return 1;
+    }
+
+    if (PlayerFindingBank[playerid])
+    {
+        if (IsPlayerNearBankPoint(playerid))
+        {
+            DisablePlayerCheckpoint(playerid);
+            PlayerFindingBank[playerid] = 0;
+
+            SendClientMessage(playerid, COLOR_GREEN, "Kamu sudah sampai di bank/ATM.");
+            SendClientMessage(playerid, COLOR_WHITE, "Gunakan /balance, /deposit [amount/all], atau /withdraw [amount/all].");
+            return 1;
+        }
     }
 
     if (PlayerWorking[playerid] && PlayerWorkType[playerid] == WORK_TRUCKER)
@@ -3646,6 +3756,9 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/racetop - Leaderboard race");
         SendClientMessage(playerid, COLOR_WHITE, "/serverinfo - Melihat info server");
         SendClientMessage(playerid, COLOR_WHITE, "/balance atau /bank - Melihat saldo cash dan bank");
+        SendClientMessage(playerid, COLOR_WHITE, "/banks - Melihat daftar bank/ATM");
+        SendClientMessage(playerid, COLOR_WHITE, "/findbank - Cari bank/ATM terdekat");
+        SendClientMessage(playerid, COLOR_WHITE, "/cancelbank - Hapus checkpoint bank");
         SendClientMessage(playerid, COLOR_WHITE, "/deposit [amount/all] - Simpan cash ke bank");
         SendClientMessage(playerid, COLOR_WHITE, "/withdraw [amount/all] - Ambil uang dari bank");
 
@@ -5445,8 +5558,20 @@ public OnPlayerCommandText(playerid, cmdtext[])
         format(msg, sizeof(msg), "Bank: $%d", PlayerBankMoney[playerid]);
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
+
         format(msg, sizeof(msg), "Total: $%d", PlayerMoney[playerid] + PlayerBankMoney[playerid]);
         SendClientMessage(playerid, COLOR_GREEN, msg);
+
+        if (IsPlayerNearBankPoint(playerid))
+        {
+            SendClientMessage(playerid, COLOR_GREEN, "Status: kamu berada dekat bank/ATM.");
+        }
+        else
+        {
+            new distance = GetNearestBankDistance(playerid);
+            format(msg, sizeof(msg), "Status: tidak dekat bank/ATM. Terdekat sekitar %d unit.", distance);
+            SendClientMessage(playerid, COLOR_YELLOW, msg);
+        }
 
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /deposit [amount/all] atau /withdraw [amount/all].");
         return 1;
@@ -5479,6 +5604,17 @@ public OnPlayerCommandText(playerid, cmdtext[])
             }
 
             amount = strval(amountStr);
+        }
+
+        if (!IsPlayerNearBankPoint(playerid))
+        {
+            new distance = GetNearestBankDistance(playerid);
+            new msg[144];
+
+            format(msg, sizeof(msg), "Kamu harus berada dekat bank/ATM untuk deposit. Bank terdekat sekitar %d unit.", distance);
+            SendClientMessage(playerid, COLOR_RED, msg);
+            SendClientMessage(playerid, COLOR_WHITE, "Gunakan /findbank untuk mencari bank/ATM terdekat.");
+            return 1;
         }
 
         if (!IsValidBankAmount(amount))
@@ -5543,6 +5679,17 @@ public OnPlayerCommandText(playerid, cmdtext[])
             amount = strval(amountStr);
         }
 
+        if (!IsPlayerNearBankPoint(playerid))
+        {
+            new distance = GetNearestBankDistance(playerid);
+            new msg[144];
+
+            format(msg, sizeof(msg), "Kamu harus berada dekat bank/ATM untuk withdraw. Bank terdekat sekitar %d unit.", distance);
+            SendClientMessage(playerid, COLOR_RED, msg);
+            SendClientMessage(playerid, COLOR_WHITE, "Gunakan /findbank untuk mencari bank/ATM terdekat.");
+            return 1;
+        }
+
         if (!IsValidBankAmount(amount))
         {
             SendClientMessage(playerid, COLOR_RED, "Jumlah withdraw tidak valid.");
@@ -5573,6 +5720,77 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/withdraw", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /withdraw [amount/all]");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/banks", true))
+    {
+        new msg[144];
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== BANK / ATM LOCATIONS ==========");
+
+        for (new i = 0; i < MAX_BANK_POINTS; i++)
+        {
+            format(msg, sizeof(msg), "%d. %s", i + 1, BankPointName[i]);
+            SendClientMessage(playerid, COLOR_WHITE, msg);
+        }
+
+        SendClientMessage(playerid, COLOR_CYAN, "Gunakan /findbank untuk diarahkan ke bank/ATM terdekat.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/findbank", true))
+    {
+        if (PlayerWorking[playerid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu sedang bekerja. Selesaikan atau /cancelwork dulu.");
+            return 1;
+        }
+
+        if (PlayerRace[playerid] != RACE_NONE)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu sedang race. Selesaikan atau /leaverace dulu.");
+            return 1;
+        }
+
+        new nearest = GetNearestBankPoint(playerid);
+
+        if (nearest == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Bank/ATM tidak ditemukan.");
+            return 1;
+        }
+
+        SetPlayerCheckpoint(
+            playerid,
+            BankPointX[nearest],
+            BankPointY[nearest],
+            BankPointZ[nearest],
+            BANK_ACCESS_RADIUS
+        );
+
+        PlayerFindingBank[playerid] = 1;
+
+        new msg[144];
+        format(msg, sizeof(msg), "Checkpoint diarahkan ke: %s.", BankPointName[nearest]);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan /cancelbank untuk menghapus checkpoint bank.");
+
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/cancelbank", true))
+    {
+        if (!PlayerFindingBank[playerid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu tidak sedang mencari bank/ATM.");
+            return 1;
+        }
+
+        DisablePlayerCheckpoint(playerid);
+        PlayerFindingBank[playerid] = 0;
+
+        SendClientMessage(playerid, COLOR_YELLOW, "Checkpoint bank/ATM dihapus.");
         return 1;
     }
 

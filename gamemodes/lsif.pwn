@@ -2808,7 +2808,8 @@ public AutoSavePlayers()
 public OnGameModeInit()
 {
     g_ServerStartTick = GetTickCount();
-    SetGameModeText("LSIF Dev v0.12B House Interior");
+    DisableInteriorEnterExits();
+    SetGameModeText("LSIF Dev v0.12B.1 House Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -2873,7 +2874,8 @@ public OnGameModeInit()
 
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
     print("[LSIF] Anti-cheat timer aktif setiap 10 detik.");
-    print("[LSIF] Gamemode v0.12B House Interior berhasil dijalankan.");
+    print("[LSIF] Default GTA interior enter/exit markers disabled.");
+    print("[LSIF] Gamemode v0.12B.1 House Interior Fix berhasil dijalankan.");
     return 1;
 }
 

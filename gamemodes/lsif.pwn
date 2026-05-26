@@ -115,6 +115,8 @@
 #define ANTICHEAT_INTERVAL 10000 // 10 detik
 #define MONEY_MISMATCH_TOLERANCE 0
 
+#define MAX_BANK_TRANSACTION 10000000
+
 
 
 new MySQL:g_SQL;
@@ -136,6 +138,7 @@ new Float:PlayerLastZ[MAX_PLAYERS];
 new Float:PlayerLastA[MAX_PLAYERS];
 
 new PlayerMoney[MAX_PLAYERS];
+new PlayerBankMoney[MAX_PLAYERS];
 new PlayerXP[MAX_PLAYERS];
 new PlayerLevel[MAX_PLAYERS];
 new PlayerAdmin[MAX_PLAYERS];
@@ -620,6 +623,7 @@ stock ResetPlayerAccountData(playerid)
     PlayerLoggedIn[playerid] = 0;
 
     PlayerMoney[playerid] = 500;
+    PlayerBankMoney[playerid] = 0;
     PlayerXP[playerid] = 0;
     PlayerLevel[playerid] = 1;
     PlayerAdmin[playerid] = 0;
@@ -715,8 +719,9 @@ stock SavePlayerData(playerid, notify = 0)
         g_SQL,
         query,
         sizeof(query),
-        "UPDATE players SET money=%d, xp=%d, level=%d, admin_level=%d, current_job=%d, pos_x=%f, pos_y=%f, pos_z=%f, pos_a=%f WHERE id=%d LIMIT 1",
+        "UPDATE players SET money=%d, bank_money=%d, xp=%d, level=%d, admin_level=%d, current_job=%d, pos_x=%f, pos_y=%f, pos_z=%f, pos_a=%f WHERE id=%d LIMIT 1",
         PlayerMoney[playerid],
+        PlayerBankMoney[playerid],
         PlayerXP[playerid],
         PlayerLevel[playerid],
         PlayerAdmin[playerid],
@@ -980,6 +985,48 @@ stock TakePlayerCash(playerid, amount)
 
     PlayerMoney[playerid] -= amount;
     SyncPlayerMoneyHUD(playerid);
+
+    return 1;
+}
+
+stock GivePlayerBankMoney(playerid, amount)
+{
+    if (amount <= 0)
+    {
+        return 0;
+    }
+
+    PlayerBankMoney[playerid] += amount;
+    return 1;
+}
+
+stock TakePlayerBankMoney(playerid, amount)
+{
+    if (amount <= 0)
+    {
+        return 0;
+    }
+
+    if (PlayerBankMoney[playerid] < amount)
+    {
+        return 0;
+    }
+
+    PlayerBankMoney[playerid] -= amount;
+    return 1;
+}
+
+stock IsValidBankAmount(amount)
+{
+    if (amount <= 0)
+    {
+        return 0;
+    }
+
+    if (amount > MAX_BANK_TRANSACTION)
+    {
+        return 0;
+    }
 
     return 1;
 }
@@ -2412,7 +2459,7 @@ public AutoSavePlayers()
 public OnGameModeInit()
 {
     g_ServerStartTick = GetTickCount();
-    SetGameModeText("LSIF Dev v0.10B Stability");
+    SetGameModeText("LSIF Dev v0.11A Bank");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -2446,6 +2493,7 @@ public OnGameModeInit()
         PlayerLoggedIn[i] = 0;
 
         PlayerMoney[i] = 500;
+        PlayerBankMoney[i] = 0;
         PlayerXP[i] = 0;
         PlayerLevel[i] = 1;
         PlayerAdmin[i] = 0;
@@ -2475,7 +2523,7 @@ public OnGameModeInit()
 
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
     print("[LSIF] Anti-cheat timer aktif setiap 10 detik.");
-    print("[LSIF] Gamemode v0.10B Stability Tools berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.11A Bank System berhasil dijalankan.");
     return 1;
 }
 
@@ -2629,7 +2677,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 
         new username[MAX_PLAYER_NAME];
         new ip[45];
-        new query[512];
+        new query[768];
 
         GetPlayerAccountName(playerid, username, sizeof(username));
         GetPlayerIp(playerid, ip, sizeof(ip));
@@ -2638,7 +2686,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             g_SQL,
             query,
             sizeof(query),
-            "INSERT INTO players (username, password_hash, money, xp, level, admin_level, current_job, pos_x, pos_y, pos_z, pos_a, last_ip, last_login) VALUES ('%e', SHA2('%e', 256), 500, 0, 1, 0, 0, %f, %f, %f, %f, '%e', NOW())",
+            "INSERT INTO players (username, password_hash, money, bank_money, xp, level, admin_level, current_job, pos_x, pos_y, pos_z, pos_a, last_ip, last_login) VALUES ('%e', SHA2('%e', 256), 500, 0, 0, 1, 0, 0, %f, %f, %f, %f, '%e', NOW())",
             username,
             inputtext,
             SPAWN_X,
@@ -2677,7 +2725,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             g_SQL,
             query,
             sizeof(query),
-            "SELECT id, money, xp, level, admin_level, skin, current_job, pos_x, pos_y, pos_z, pos_a FROM players WHERE username='%e' AND password_hash=SHA2('%e', 256) LIMIT 1",
+            "SELECT id, money, bank_money, xp, level, admin_level, skin, current_job, pos_x, pos_y, pos_z, pos_a FROM players WHERE username='%e' AND password_hash=SHA2('%e', 256) LIMIT 1",
             username,
             inputtext
         );
@@ -2721,6 +2769,7 @@ public OnAccountRegister(playerid)
     PlayerLoggedIn[playerid] = 1;
 
     PlayerMoney[playerid] = 500;
+    PlayerBankMoney[playerid] = 0;
     PlayerXP[playerid] = 0;
     PlayerLevel[playerid] = 1;
     PlayerAdmin[playerid] = 0;
@@ -2760,6 +2809,7 @@ public OnAccountLogin(playerid)
 
     cache_get_value_name_int(0, "id", PlayerDBID[playerid]);
     cache_get_value_name_int(0, "money", PlayerMoney[playerid]);
+    cache_get_value_name_int(0, "bank_money", PlayerBankMoney[playerid]);
     cache_get_value_name_int(0, "xp", PlayerXP[playerid]);
     cache_get_value_name_int(0, "level", PlayerLevel[playerid]);
     cache_get_value_name_int(0, "admin_level", PlayerAdmin[playerid]);
@@ -3595,6 +3645,9 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/leaverace - Keluar dari race aktif");
         SendClientMessage(playerid, COLOR_WHITE, "/racetop - Leaderboard race");
         SendClientMessage(playerid, COLOR_WHITE, "/serverinfo - Melihat info server");
+        SendClientMessage(playerid, COLOR_WHITE, "/balance atau /bank - Melihat saldo cash dan bank");
+        SendClientMessage(playerid, COLOR_WHITE, "/deposit [amount/all] - Simpan cash ke bank");
+        SendClientMessage(playerid, COLOR_WHITE, "/withdraw [amount/all] - Ambil uang dari bank");
 
 
         return 1;
@@ -3610,6 +3663,9 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         format(msg, sizeof(msg), "Money: $%d", PlayerMoney[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Bank: $%d", PlayerBankMoney[playerid]);
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         format(msg, sizeof(msg), "XP: %d", PlayerXP[playerid]);
@@ -4161,7 +4217,10 @@ public OnPlayerCommandText(playerid, cmdtext[])
         format(msg, sizeof(msg), "Admin Level: %d", PlayerAdmin[playerid]);
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
-        format(msg, sizeof(msg), "Money: $%d | XP: %d | Level: %d", PlayerMoney[playerid], PlayerXP[playerid], PlayerLevel[playerid]);
+        format(msg, sizeof(msg), "Cash: $%d | Bank: $%d", PlayerMoney[playerid], PlayerBankMoney[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "XP: %d | Level: %d", PlayerXP[playerid], PlayerLevel[playerid]);
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         if (OwnedVehicleDBID[playerid] > 0)
@@ -5271,7 +5330,17 @@ public OnPlayerCommandText(playerid, cmdtext[])
         format(msg, sizeof(msg), "LoggedIn: %s | Admin: %d (%s)", PlayerLoggedIn[targetid] ? ("Yes") : ("No"), PlayerAdmin[targetid], rankName);
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
-        format(msg, sizeof(msg), "Money: $%d | HUD: $%d | XP: %d | Level: %d", PlayerMoney[targetid], GetPlayerMoney(targetid), PlayerXP[targetid], PlayerLevel[targetid]);
+        format(
+            msg,
+            sizeof(msg),
+            "Cash: $%d | Bank: $%d | HUD: $%d",
+            PlayerMoney[targetid],
+            PlayerBankMoney[targetid],
+            GetPlayerMoney(targetid)
+        );
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "XP: %d | Level: %d", PlayerXP[targetid], PlayerLevel[targetid]);
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         format(msg, sizeof(msg), "Job: %s | Working: %s | WorkType: %d", jobName, PlayerWorking[targetid] ? ("Yes") : ("No"), PlayerWorkType[targetid]);
@@ -5361,6 +5430,149 @@ public OnPlayerCommandText(playerid, cmdtext[])
         format(msg, sizeof(msg), "Race: %s (%d) | CP: %d | RaceVeh: %d", raceName, PlayerRace[playerid], PlayerRaceCheckpoint[playerid], PlayerRaceVehicle[playerid]);
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/balance", true) || !strcmp(cmdtext, "/bank", true))
+    {
+        new msg[144];
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== BANK ACCOUNT ==========");
+
+        format(msg, sizeof(msg), "Cash: $%d", PlayerMoney[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Bank: $%d", PlayerBankMoney[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Total: $%d", PlayerMoney[playerid] + PlayerBankMoney[playerid]);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+
+        SendClientMessage(playerid, COLOR_CYAN, "Gunakan /deposit [amount/all] atau /withdraw [amount/all].");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/deposit ", true) == 0)
+    {
+        new amountStr[32];
+
+        if (!GetOneParam(cmdtext[9], amountStr, sizeof(amountStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /deposit [amount/all]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /deposit 5000");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /deposit all");
+            return 1;
+        }
+
+        new amount;
+
+        if (!strcmp(amountStr, "all", true))
+        {
+            amount = PlayerMoney[playerid];
+        }
+        else
+        {
+            if (!IsNumericString(amountStr))
+            {
+                SendClientMessage(playerid, COLOR_RED, "Amount harus angka atau all.");
+                return 1;
+            }
+
+            amount = strval(amountStr);
+        }
+
+        if (!IsValidBankAmount(amount))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Jumlah deposit tidak valid.");
+            return 1;
+        }
+
+        if (PlayerMoney[playerid] < amount)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Cash kamu tidak cukup.");
+            return 1;
+        }
+
+        TakePlayerCash(playerid, amount);
+        GivePlayerBankMoney(playerid, amount);
+
+        SavePlayerData(playerid);
+
+        new msg[144];
+        format(msg, sizeof(msg), "Deposit berhasil: $%d masuk ke bank.", amount);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+
+        format(msg, sizeof(msg), "Cash: $%d | Bank: $%d", PlayerMoney[playerid], PlayerBankMoney[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/deposit", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /deposit [amount/all]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/withdraw ", true) == 0)
+    {
+        new amountStr[32];
+
+        if (!GetOneParam(cmdtext[10], amountStr, sizeof(amountStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /withdraw [amount/all]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /withdraw 5000");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /withdraw all");
+            return 1;
+        }
+
+        new amount;
+
+        if (!strcmp(amountStr, "all", true))
+        {
+            amount = PlayerBankMoney[playerid];
+        }
+        else
+        {
+            if (!IsNumericString(amountStr))
+            {
+                SendClientMessage(playerid, COLOR_RED, "Amount harus angka atau all.");
+                return 1;
+            }
+
+            amount = strval(amountStr);
+        }
+
+        if (!IsValidBankAmount(amount))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Jumlah withdraw tidak valid.");
+            return 1;
+        }
+
+        if (PlayerBankMoney[playerid] < amount)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Saldo bank kamu tidak cukup.");
+            return 1;
+        }
+
+        TakePlayerBankMoney(playerid, amount);
+        GivePlayerCash(playerid, amount);
+
+        SavePlayerData(playerid);
+
+        new msg[144];
+        format(msg, sizeof(msg), "Withdraw berhasil: $%d keluar dari bank.", amount);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+
+        format(msg, sizeof(msg), "Cash: $%d | Bank: $%d", PlayerMoney[playerid], PlayerBankMoney[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/withdraw", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /withdraw [amount/all]");
         return 1;
     }
 

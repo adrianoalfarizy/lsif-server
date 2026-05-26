@@ -147,3 +147,7 @@ CREATE TABLE IF NOT EXISTS job_stats (
     INDEX idx_total_earned (total_earned),
     INDEX idx_total_completed (total_completed)
 );
+
+ALTER TABLE players
+ADD COLUMN bank_money INT NOT NULL DEFAULT 0
+AFTER money;

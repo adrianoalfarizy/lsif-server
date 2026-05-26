@@ -133,6 +133,7 @@
 #define HOUSE_INT_A 180.0000
 
 #define ORG_CREATE_PRICE 100000
+#define MAX_ORG_BANK_TRANSACTION 10000000
 
 #define ORG_RANK_NONE   0
 #define ORG_RANK_MEMBER 1
@@ -494,6 +495,7 @@ new PlayerOrgRank[MAX_PLAYERS];
 new PlayerOrgInvite[MAX_PLAYERS];
 new PlayerOrgName[MAX_PLAYERS][64];
 new PlayerPendingOrgName[MAX_PLAYERS][64];
+new PlayerOrgBankMoney[MAX_PLAYERS];
 
 stock Float:GetDistanceBetweenPoints3D(Float:x1, Float:y1, Float:z1, Float:x2, Float:y2, Float:z2)
 {
@@ -2909,6 +2911,7 @@ stock ResetPlayerOrgData(playerid)
     PlayerOrgID[playerid] = 0;
     PlayerOrgRank[playerid] = ORG_RANK_NONE;
     PlayerOrgInvite[playerid] = INVALID_PLAYER_ID;
+    PlayerOrgBankMoney[playerid] = 0;
     format(PlayerOrgName[playerid], 64, "None");
     format(PlayerPendingOrgName[playerid], 64, "None");
     return 1;
@@ -2951,7 +2954,7 @@ stock LoadPlayerOrganization(playerid)
         g_SQL,
         query,
         sizeof(query),
-        "SELECT om.org_id, om.rank_level, o.name FROM organization_members om JOIN organizations o ON o.id = om.org_id WHERE om.player_id=%d LIMIT 1",
+        "SELECT om.org_id, om.rank_level, o.name, o.bank_money FROM organization_members om JOIN organizations o ON o.id = om.org_id WHERE om.player_id=%d LIMIT 1",
         PlayerDBID[playerid]
     );
 
@@ -3001,6 +3004,56 @@ stock IsOrgAdmin(playerid)
     return 0;
 }
 
+stock IsValidOrgBankAmount(amount)
+{
+    if (amount <= 0)
+    {
+        return 0;
+    }
+
+    if (amount > MAX_ORG_BANK_TRANSACTION)
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+stock SyncOrgBankMoney(orgid, newBankMoney)
+{
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (IsPlayerConnected(i) && PlayerLoggedIn[i] && PlayerOrgID[i] == orgid)
+        {
+            PlayerOrgBankMoney[i] = newBankMoney;
+        }
+    }
+
+    return 1;
+}
+
+stock SaveOrgBankMoney(orgid, bankMoney)
+{
+    if (orgid <= 0)
+    {
+        return 0;
+    }
+
+    new query[256];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "UPDATE organizations SET bank_money=%d WHERE id=%d LIMIT 1",
+        bankMoney,
+        orgid
+    );
+
+    mysql_tquery(g_SQL, query);
+    return 1;
+}
+
 main()
 {
     print("========================================");
@@ -3019,7 +3072,7 @@ public OnGameModeInit()
 {
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
-    SetGameModeText("LSIF Dev v0.13B Org Manage");
+    SetGameModeText("LSIF Dev v0.13C Org Bank");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -3086,7 +3139,7 @@ public OnGameModeInit()
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
     print("[LSIF] Anti-cheat timer aktif setiap 10 detik.");
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
-    print("[LSIF] Gamemode v0.13B Organization Management berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.13C Organization Bank berhasil dijalankan.");
     return 1;
 }
 
@@ -4324,6 +4377,7 @@ public OnPlayerOrgLoaded(playerid)
     cache_get_value_name_int(0, "org_id", PlayerOrgID[playerid]);
     cache_get_value_name_int(0, "rank_level", PlayerOrgRank[playerid]);
     cache_get_value_name(0, "name", PlayerOrgName[playerid], 64);
+    cache_get_value_name_int(0, "bank_money", PlayerOrgBankMoney[playerid]);
 
     new msg[144];
     format(msg, sizeof(msg), "Organisasi dimuat: %s.", PlayerOrgName[playerid]);
@@ -4408,6 +4462,7 @@ public OnOrgCreated(playerid)
     PlayerOrgRank[playerid] = ORG_RANK_OWNER;
 
     format(PlayerOrgName[playerid], 64, "%s", PlayerPendingOrgName[playerid]);
+    PlayerOrgBankMoney[playerid] = 0;
 
     SendClientMessage(playerid, COLOR_GREEN, "Organisasi berhasil dibuat. Kamu menjadi Owner.");
     SendClientMessage(playerid, COLOR_WHITE, "Gunakan /org untuk melihat info organisasi.");
@@ -4436,6 +4491,7 @@ public OnOrgInviteAccepted(playerid)
     PlayerOrgID[playerid] = PlayerOrgID[inviterid];
     PlayerOrgRank[playerid] = ORG_RANK_MEMBER;
     format(PlayerOrgName[playerid], 64, "%s", PlayerOrgName[inviterid]);
+    PlayerOrgBankMoney[playerid] = PlayerOrgBankMoney[inviterid];
     PlayerOrgInvite[playerid] = INVALID_PLAYER_ID;
 
     SendClientMessage(playerid, COLOR_GREEN, "Kamu berhasil bergabung ke organisasi.");
@@ -4714,6 +4770,9 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/setorgrank [id] [rank] - Ubah rank organisasi");
         SendClientMessage(playerid, COLOR_WHITE, "/kickorg [id] - Keluarkan member organisasi");
         SendClientMessage(playerid, COLOR_WHITE, "/disbandorg - Bubarkan organisasi");
+        SendClientMessage(playerid, COLOR_WHITE, "/orgbank - Melihat saldo bank organisasi");
+        SendClientMessage(playerid, COLOR_WHITE, "/orgdeposit [amount/all] - Deposit cash ke org bank");
+        SendClientMessage(playerid, COLOR_WHITE, "/orgwithdraw [amount] - Withdraw org bank, Admin+");
 
 
         return 1;
@@ -7425,7 +7484,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         if (PlayerOrgRank[playerid] >= ORG_RANK_ADMIN)
         {
-            SendClientMessage(playerid, COLOR_ORANGE, "Org Admin: /setorgrank [id] [rank], /kickorg [id]");
+            SendClientMessage(playerid, COLOR_ORANGE, "Org Admin: /setorgrank [id] [rank], /kickorg [id], /orgwithdraw [amount]");
         }
 
         if (PlayerOrgRank[playerid] >= ORG_RANK_OWNER)
@@ -7433,7 +7492,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
             SendClientMessage(playerid, COLOR_ORANGE, "Org Owner: /disbandorg");
         }
 
-        SendClientMessage(playerid, COLOR_CYAN, "Command: /orginfo, /orgmembers, /inviteorg [id], /orgchat [msg], /leaveorg.");
+        SendClientMessage(playerid, COLOR_CYAN, "Command: /orginfo, /orgmembers, /orgbank, /orgdeposit [amount/all], /orgchat [msg].");
         return 1;
     }
 
@@ -7823,6 +7882,177 @@ public OnPlayerCommandText(playerid, cmdtext[])
         );
         mysql_tquery(g_SQL, query, "OnOrgDisbanded", "ii", playerid, orgid);
 
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/orgbank", true))
+    {
+        if (PlayerOrgID[playerid] <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum tergabung dalam organisasi.");
+            return 1;
+        }
+
+        new rankName[32];
+        new msg[144];
+
+        GetOrgRankName(PlayerOrgRank[playerid], rankName, sizeof(rankName));
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== ORG BANK ==========");
+
+        format(msg, sizeof(msg), "Organization: %s", PlayerOrgName[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Your Rank: %s (%d)", rankName, PlayerOrgRank[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Org Bank: $%d", PlayerOrgBankMoney[playerid]);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+
+        SendClientMessage(playerid, COLOR_CYAN, "Command: /orgdeposit [amount/all]");
+
+        if (PlayerOrgRank[playerid] >= ORG_RANK_ADMIN)
+        {
+            SendClientMessage(playerid, COLOR_CYAN, "Admin+: /orgwithdraw [amount]");
+        }
+
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/orgdeposit ", true) == 0)
+    {
+        if (PlayerOrgID[playerid] <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum tergabung dalam organisasi.");
+            return 1;
+        }
+
+        new amountStr[32];
+
+        if (!GetOneParam(cmdtext[12], amountStr, sizeof(amountStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /orgdeposit [amount/all]");
+            return 1;
+        }
+
+        new amount;
+
+        if (!strcmp(amountStr, "all", true))
+        {
+            amount = PlayerMoney[playerid];
+        }
+        else
+        {
+            if (!IsNumericString(amountStr))
+            {
+                SendClientMessage(playerid, COLOR_RED, "Amount harus angka atau all.");
+                return 1;
+            }
+
+            amount = strval(amountStr);
+        }
+
+        if (!IsValidOrgBankAmount(amount))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Jumlah deposit organisasi tidak valid.");
+            return 1;
+        }
+
+        if (PlayerMoney[playerid] < amount)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Cash kamu tidak cukup.");
+            return 1;
+        }
+
+        TakePlayerCash(playerid, amount);
+
+        new newBank = PlayerOrgBankMoney[playerid] + amount;
+
+        SyncOrgBankMoney(PlayerOrgID[playerid], newBank);
+        SaveOrgBankMoney(PlayerOrgID[playerid], newBank);
+        SavePlayerData(playerid);
+
+        new playerName[MAX_PLAYER_NAME];
+        new msg[160];
+
+        GetPlayerName(playerid, playerName, sizeof(playerName));
+
+        format(msg, sizeof(msg), "[ORG BANK] %s deposit $%d. Org bank sekarang: $%d.", playerName, amount, newBank);
+        SendMessageToOrg(PlayerOrgID[playerid], COLOR_CYAN, msg);
+
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/orgdeposit", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /orgdeposit [amount/all]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/orgwithdraw ", true) == 0)
+    {
+        if (PlayerOrgID[playerid] <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum tergabung dalam organisasi.");
+            return 1;
+        }
+
+        if (PlayerOrgRank[playerid] < ORG_RANK_ADMIN)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Minimal Admin organisasi untuk withdraw.");
+            return 1;
+        }
+
+        new amountStr[32];
+
+        if (!GetOneParam(cmdtext[13], amountStr, sizeof(amountStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /orgwithdraw [amount]");
+            return 1;
+        }
+
+        if (!IsNumericString(amountStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Amount harus angka.");
+            return 1;
+        }
+
+        new amount = strval(amountStr);
+
+        if (!IsValidOrgBankAmount(amount))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Jumlah withdraw organisasi tidak valid.");
+            return 1;
+        }
+
+        if (PlayerOrgBankMoney[playerid] < amount)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Saldo bank organisasi tidak cukup.");
+            return 1;
+        }
+
+        new newBank = PlayerOrgBankMoney[playerid] - amount;
+
+        SyncOrgBankMoney(PlayerOrgID[playerid], newBank);
+        SaveOrgBankMoney(PlayerOrgID[playerid], newBank);
+
+        GivePlayerCash(playerid, amount);
+        SavePlayerData(playerid);
+
+        new playerName[MAX_PLAYER_NAME];
+        new msg[160];
+
+        GetPlayerName(playerid, playerName, sizeof(playerName));
+
+        format(msg, sizeof(msg), "[ORG BANK] %s withdraw $%d. Org bank sekarang: $%d.", playerName, amount, newBank);
+        SendMessageToOrg(PlayerOrgID[playerid], COLOR_ORANGE, msg);
+
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/orgwithdraw", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /orgwithdraw [amount]");
         return 1;
     }
 

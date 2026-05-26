@@ -5190,19 +5190,19 @@ public OnPlayerCommandText(playerid, cmdtext[])
         format(msg, sizeof(msg), "Anti-cheat interval: %d ms", ANTICHEAT_INTERVAL);
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
-        if (!strcmp(cmdtext, "/dbping", true))
-        {
-            if (!IsAdminLevel(playerid, ADMIN_HELPER))
-            {
-                SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
-                return 1;
-            }
+        return 1;
+    }
 
-            mysql_tquery(g_SQL, "SELECT 1 AS db_ok", "OnDatabasePing", "i", playerid);
-            SendClientMessage(playerid, COLOR_YELLOW, "Mengirim database ping...");
+    if (!strcmp(cmdtext, "/dbping", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_HELPER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
             return 1;
         }
 
+        mysql_tquery(g_SQL, "SELECT 1 AS db_ok", "OnDatabasePing", "i", playerid);
+        SendClientMessage(playerid, COLOR_YELLOW, "Mengirim database ping...");
         return 1;
     }
 

@@ -2821,6 +2821,12 @@ stock EnterHouseAsVisitor(playerid, ownerid)
     SetPlayerPos(playerid, HOUSE_INT_X, HOUSE_INT_Y, HOUSE_INT_Z);
     SetPlayerFacingAngle(playerid, HOUSE_INT_A);
 
+    if (playerid != ownerid && PlayerHouseInvite[playerid] == ownerid)
+    {
+        PlayerHouseInvite[playerid] = INVALID_PLAYER_ID;
+        SendClientMessage(playerid, COLOR_YELLOW, "House invite digunakan dan sekarang sudah expired.");
+    }
+
     if (playerid == ownerid)
     {
         SendClientMessage(playerid, COLOR_GREEN, "Kamu masuk ke dalam rumah.");

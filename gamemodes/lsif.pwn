@@ -122,6 +122,8 @@ new g_AutosaveTimer;
 
 new g_AntiCheatTimer;
 
+new g_ServerStartTick;
+
 new PlayerMoneyMismatchCount[MAX_PLAYERS];
 new PlayerLastACWarningTick[MAX_PLAYERS];
 
@@ -545,6 +547,7 @@ forward OnJobStatsLoaded(playerid);
 forward OnJobTopLoaded(playerid);
 forward OnJobProgressSaved(playerid);
 forward AntiCheatCheck();
+forward OnDatabasePing(playerid);
 
 stock SaveAllPlayers()
 {
@@ -2314,6 +2317,84 @@ stock AddJobProgress(playerid, const jobCode[], earned, xp)
     return 1;
 }
 
+stock FormatUptime(uptimeMs, output[], size)
+{
+    new totalSeconds = uptimeMs / 1000;
+    new days = totalSeconds / 86400;
+    new hours = (totalSeconds % 86400) / 3600;
+    new minutes = (totalSeconds % 3600) / 60;
+    new seconds = totalSeconds % 60;
+
+    format(output, size, "%d hari, %02d jam, %02d menit, %02d detik", days, hours, minutes, seconds);
+    return 1;
+}
+
+stock CountOnlinePlayers()
+{
+    new count = 0;
+
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (IsPlayerConnected(i))
+        {
+            count++;
+        }
+    }
+
+    return count;
+}
+
+stock CountLoggedPlayers()
+{
+    new count = 0;
+
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (IsPlayerConnected(i) && PlayerLoggedIn[i])
+        {
+            count++;
+        }
+    }
+
+    return count;
+}
+
+stock GetWorkName(workType, output[], size)
+{
+    if (workType == WORK_COURIER)
+    {
+        format(output, size, "Courier");
+        return 1;
+    }
+
+    if (workType == WORK_TAXI)
+    {
+        format(output, size, "Taxi");
+        return 1;
+    }
+
+    if (workType == WORK_TRUCKER)
+    {
+        format(output, size, "Trucker");
+        return 1;
+    }
+
+    format(output, size, "None");
+    return 1;
+}
+
+stock GetRaceDebugName(raceid, output[], size)
+{
+    if (raceid == RACE_LS_INTRO)
+    {
+        format(output, size, "LS Intro");
+        return 1;
+    }
+
+    format(output, size, "None");
+    return 1;
+}
+
 main()
 {
     print("========================================");
@@ -2330,7 +2411,8 @@ public AutoSavePlayers()
 
 public OnGameModeInit()
 {
-    SetGameModeText("LSIF Dev v0.10A AntiCheat");
+    g_ServerStartTick = GetTickCount();
+    SetGameModeText("LSIF Dev v0.10B Stability");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -2393,7 +2475,7 @@ public OnGameModeInit()
 
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
     print("[LSIF] Anti-cheat timer aktif setiap 10 detik.");
-    print("[LSIF] Gamemode v0.10A Basic Anti-Cheat berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.10B Stability Tools berhasil dijalankan.");
     return 1;
 }
 
@@ -3438,6 +3520,27 @@ public AntiCheatCheck()
     return 1;
 }
 
+public OnDatabasePing(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+
+    if (rows > 0)
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "Database OK. Query SELECT 1 berhasil.");
+    }
+    else
+    {
+        SendClientMessage(playerid, COLOR_RED, "Database ping gagal atau tidak mengembalikan row.");
+    }
+
+    return 1;
+}
+
 public OnPlayerCommandText(playerid, cmdtext[])
 {
     if (!PlayerLoggedIn[playerid])
@@ -3491,6 +3594,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/raceinfo - Melihat status race aktif/cooldown");
         SendClientMessage(playerid, COLOR_WHITE, "/leaverace - Keluar dari race aktif");
         SendClientMessage(playerid, COLOR_WHITE, "/racetop - Leaderboard race");
+        SendClientMessage(playerid, COLOR_WHITE, "/serverinfo - Melihat info server");
 
 
         return 1;
@@ -4306,6 +4410,12 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/reports - Lihat 5 report terbuka terakhir");
         SendClientMessage(playerid, COLOR_WHITE, "/closereport [id] [note] - Tutup report");
         SendClientMessage(playerid, COLOR_WHITE, "/acinfo - Melihat informasi basic anti-cheat");
+        SendClientMessage(playerid, COLOR_WHITE, "/serverinfo - Info server dan uptime");
+        SendClientMessage(playerid, COLOR_WHITE, "/dbping - Test koneksi database");
+        SendClientMessage(playerid, COLOR_WHITE, "/saveall - Simpan semua player, Owner only");
+        SendClientMessage(playerid, COLOR_WHITE, "/playerinfo [id] - Debug data player");
+        SendClientMessage(playerid, COLOR_WHITE, "/vehdebug - Debug kendaraan pribadi");
+        SendClientMessage(playerid, COLOR_WHITE, "/jobdebug - Debug job/race aktif");
         return 1;
     }
 
@@ -5052,6 +5162,204 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         SendClientMessage(playerid, COLOR_WHITE, "Checks: money HUD sync, race vehicle state, job vehicle state.");
         SendClientMessage(playerid, COLOR_WHITE, "Logs: suspicious activity masuk admin_logs sebagai SYSTEM.");
+
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/serverinfo", true))
+    {
+        new uptimeText[64];
+        new msg[144];
+
+        FormatUptime(GetTickCount() - g_ServerStartTick, uptimeText, sizeof(uptimeText));
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== SERVER INFO ==========");
+
+        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.10B Stability");
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Uptime: %s", uptimeText);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Players online: %d | Logged in: %d", CountOnlinePlayers(), CountLoggedPlayers());
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Autosave interval: %d ms", AUTOSAVE_INTERVAL);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Anti-cheat interval: %d ms", ANTICHEAT_INTERVAL);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        if (!strcmp(cmdtext, "/dbping", true))
+        {
+            if (!IsAdminLevel(playerid, ADMIN_HELPER))
+            {
+                SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+                return 1;
+            }
+
+            mysql_tquery(g_SQL, "SELECT 1 AS db_ok", "OnDatabasePing", "i", playerid);
+            SendClientMessage(playerid, COLOR_YELLOW, "Mengirim database ping...");
+            return 1;
+        }
+
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/saveall", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa menggunakan command ini.");
+            return 1;
+        }
+
+        new savedCount = SaveAllPlayers();
+
+        new msg[144];
+        format(msg, sizeof(msg), "SaveAll selesai. %d player data dikirim untuk disimpan.", savedCount);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+
+        LogAdminAction(playerid, INVALID_PLAYER_ID, "SAVEALL", "Manual save all players");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/playerinfo ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_HELPER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+            return 1;
+        }
+
+        new targetStr[16];
+
+        if (!GetOneParam(cmdtext[12], targetStr, sizeof(targetStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /playerinfo [playerid]");
+            return 1;
+        }
+
+        if (!IsNumericString(targetStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Player ID harus angka.");
+            return 1;
+        }
+
+        new targetid = strval(targetStr);
+
+        if (!IsPlayerConnected(targetid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Target tidak online.");
+            return 1;
+        }
+
+        new targetName[MAX_PLAYER_NAME];
+        new jobName[32];
+        new rankName[32];
+        new msg[144];
+
+        GetPlayerName(targetid, targetName, sizeof(targetName));
+        GetJobName(PlayerJob[targetid], jobName, sizeof(jobName));
+        GetAdminRankName(PlayerAdmin[targetid], rankName, sizeof(rankName));
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== PLAYER INFO ==========");
+
+        format(msg, sizeof(msg), "Name: %s | ID: %d | DBID: %d", targetName, targetid, PlayerDBID[targetid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "LoggedIn: %s | Admin: %d (%s)", PlayerLoggedIn[targetid] ? ("Yes") : ("No"), PlayerAdmin[targetid], rankName);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Money: $%d | HUD: $%d | XP: %d | Level: %d", PlayerMoney[targetid], GetPlayerMoney(targetid), PlayerXP[targetid], PlayerLevel[targetid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Job: %s | Working: %s | WorkType: %d", jobName, PlayerWorking[targetid] ? ("Yes") : ("No"), PlayerWorkType[targetid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Race: %d | Vehicle: %d | OwnedVehDBID: %d", PlayerRace[targetid], PlayerRaceVehicle[targetid], OwnedVehicleDBID[targetid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "AC mismatch count: %d", PlayerMoneyMismatchCount[targetid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/playerinfo", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /playerinfo [playerid]");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/vehdebug", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_HELPER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+            return 1;
+        }
+
+        new msg[144];
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== VEHICLE DEBUG ==========");
+
+        format(msg, sizeof(msg), "Owned DBID: %d | Model: %d | Spawned ID: %d", OwnedVehicleDBID[playerid], OwnedVehicleModel[playerid], OwnedVehicleID[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Locked: %d | Label: %d", OwnedVehicleLocked[playerid], _:OwnedVehicleLabel[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Pos: %.2f, %.2f, %.2f | A: %.2f", OwnedVehicleX[playerid], OwnedVehicleY[playerid], OwnedVehicleZ[playerid], OwnedVehicleA[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
+        {
+            new Float:x, Float:y, Float:z, Float:health;
+
+            GetVehiclePos(OwnedVehicleID[playerid], x, y, z);
+            GetVehicleHealth(OwnedVehicleID[playerid], health);
+
+            format(msg, sizeof(msg), "Current vehicle pos: %.2f, %.2f, %.2f | Health: %.1f", x, y, z, health);
+            SendClientMessage(playerid, COLOR_CYAN, msg);
+        }
+
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/jobdebug", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_HELPER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+            return 1;
+        }
+
+        new jobName[32];
+        new workName[32];
+        new raceName[32];
+        new msg[144];
+
+        GetJobName(PlayerJob[playerid], jobName, sizeof(jobName));
+        GetWorkName(PlayerWorkType[playerid], workName, sizeof(workName));
+        GetRaceDebugName(PlayerRace[playerid], raceName, sizeof(raceName));
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== JOB/RACE DEBUG ==========");
+
+        format(msg, sizeof(msg), "Job: %s (%d)", jobName, PlayerJob[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Working: %s | WorkType: %s (%d) | WorkPoint: %d", PlayerWorking[playerid] ? ("Yes") : ("No"), workName, PlayerWorkType[playerid], PlayerWorkPoint[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Taxi stage: %d | Taxi route: %d", PlayerTaxiStage[playerid], PlayerTaxiRoute[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Trucker stage: %d | Trucker route: %d", PlayerTruckerStage[playerid], PlayerTruckerRoute[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Race: %s (%d) | CP: %d | RaceVeh: %d", raceName, PlayerRace[playerid], PlayerRaceCheckpoint[playerid], PlayerRaceVehicle[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
 
         return 1;
     }

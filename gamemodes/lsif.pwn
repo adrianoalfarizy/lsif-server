@@ -432,6 +432,8 @@ new PlayerHouseIndex[MAX_PLAYERS];
 new PlayerHouseLocked[MAX_PLAYERS];
 new PlayerSpawnHouse[MAX_PLAYERS];
 new PlayerInsideHouse[MAX_PLAYERS];
+new PlayerInsideHouseOwner[MAX_PLAYERS];
+new PlayerHouseInvite[MAX_PLAYERS];
 new PlayerFindingHouse[MAX_PLAYERS];
 new PlayerFindingHouseIndex[MAX_PLAYERS];
 
@@ -2625,6 +2627,8 @@ stock ResetPlayerHouseData(playerid)
     PlayerHouseLocked[playerid] = 1;
     PlayerSpawnHouse[playerid] = 0;
     PlayerInsideHouse[playerid] = 0;
+    PlayerInsideHouseOwner[playerid] = INVALID_PLAYER_ID;
+    PlayerHouseInvite[playerid] = INVALID_PLAYER_ID;
     PlayerFindingHouse[playerid] = 0;
     PlayerFindingHouseIndex[playerid] = -1;
     return 1;
@@ -2707,38 +2711,7 @@ stock GetPlayerHouseVirtualWorld(playerid)
 
 stock EnterPlayerHouse(playerid)
 {
-    if (PlayerHouseDBID[playerid] <= 0 || PlayerHouseIndex[playerid] == -1)
-    {
-        SendClientMessage(playerid, COLOR_RED, "Kamu belum punya rumah.");
-        return 0;
-    }
-
-    if (PlayerWorking[playerid] || PlayerRace[playerid] != RACE_NONE)
-    {
-        SendClientMessage(playerid, COLOR_RED, "Tidak bisa masuk rumah saat job/race aktif.");
-        return 0;
-    }
-
-    new houseIndex = PlayerHouseIndex[playerid];
-
-    if (!IsPlayerNearHouse(playerid, houseIndex))
-    {
-        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat rumahmu untuk masuk.");
-        SendClientMessage(playerid, COLOR_WHITE, "Gunakan /gohome atau /findhouse [id].");
-        return 0;
-    }
-
-    PlayerInsideHouse[playerid] = 1;
-
-    SetPlayerInterior(playerid, HOUSE_INTERIOR_ID);
-    SetPlayerVirtualWorld(playerid, GetPlayerHouseVirtualWorld(playerid));
-    SetPlayerPos(playerid, HOUSE_INT_X, HOUSE_INT_Y, HOUSE_INT_Z);
-    SetPlayerFacingAngle(playerid, HOUSE_INT_A);
-
-    SendClientMessage(playerid, COLOR_GREEN, "Kamu masuk ke dalam rumah.");
-    SendClientMessage(playerid, COLOR_WHITE, "Gunakan /exithouse untuk keluar.");
-
-    return 1;
+    return EnterHouseAsVisitor(playerid, playerid);
 }
 
 stock ExitPlayerHouse(playerid)
@@ -2749,20 +2722,7 @@ stock ExitPlayerHouse(playerid)
         return 0;
     }
 
-    if (PlayerHouseIndex[playerid] == -1)
-    {
-        SendClientMessage(playerid, COLOR_RED, "Data rumah tidak valid.");
-        return 0;
-    }
-
-    new houseIndex = PlayerHouseIndex[playerid];
-
-    PlayerInsideHouse[playerid] = 0;
-
-    SetPlayerInterior(playerid, 0);
-    SetPlayerVirtualWorld(playerid, 0);
-    SetPlayerPos(playerid, HouseX[houseIndex], HouseY[houseIndex], HouseZ[houseIndex]);
-    SetPlayerFacingAngle(playerid, 0.0);
+    KickPlayerFromHouse(playerid);
 
     SendClientMessage(playerid, COLOR_GREEN, "Kamu keluar dari rumah.");
     return 1;
@@ -2791,6 +2751,130 @@ stock SavePlayerHouseLock(playerid)
     return 1;
 }
 
+stock IsPlayerHouseOwner(playerid)
+{
+    if (PlayerHouseDBID[playerid] > 0 && PlayerHouseIndex[playerid] != -1)
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
+stock CanVisitHouse(playerid, ownerid)
+{
+    if (!IsPlayerConnected(ownerid) || !PlayerLoggedIn[ownerid])
+    {
+        return 0;
+    }
+
+    if (!IsPlayerHouseOwner(ownerid))
+    {
+        return 0;
+    }
+
+    if (ownerid == playerid)
+    {
+        return 1;
+    }
+
+    if (!PlayerHouseLocked[ownerid])
+    {
+        return 1;
+    }
+
+    if (PlayerHouseInvite[playerid] == ownerid)
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
+stock EnterHouseAsVisitor(playerid, ownerid)
+{
+    if (!CanVisitHouse(playerid, ownerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak punya akses ke rumah ini.");
+        return 0;
+    }
+
+    if (PlayerWorking[playerid] || PlayerRace[playerid] != RACE_NONE)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Tidak bisa masuk rumah saat job/race aktif.");
+        return 0;
+    }
+
+    new houseIndex = PlayerHouseIndex[ownerid];
+
+    if (!IsPlayerNearHouse(playerid, houseIndex))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat rumah owner untuk masuk.");
+        return 0;
+    }
+
+    PlayerInsideHouse[playerid] = 1;
+    PlayerInsideHouseOwner[playerid] = ownerid;
+
+    SetPlayerInterior(playerid, HOUSE_INTERIOR_ID);
+    SetPlayerVirtualWorld(playerid, GetPlayerHouseVirtualWorld(ownerid));
+    SetPlayerPos(playerid, HOUSE_INT_X, HOUSE_INT_Y, HOUSE_INT_Z);
+    SetPlayerFacingAngle(playerid, HOUSE_INT_A);
+
+    if (playerid == ownerid)
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "Kamu masuk ke dalam rumah.");
+    }
+    else
+    {
+        new ownerName[MAX_PLAYER_NAME];
+        new msg[144];
+
+        GetPlayerName(ownerid, ownerName, sizeof(ownerName));
+
+        format(msg, sizeof(msg), "Kamu masuk ke rumah milik %s.", ownerName);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+    }
+
+    SendClientMessage(playerid, COLOR_WHITE, "Gunakan /exithouse untuk keluar.");
+
+    return 1;
+}
+
+stock KickPlayerFromHouse(playerid)
+{
+    if (!PlayerInsideHouse[playerid])
+    {
+        return 0;
+    }
+
+    new ownerid = PlayerInsideHouseOwner[playerid];
+
+    if (ownerid == INVALID_PLAYER_ID || !IsPlayerConnected(ownerid) || PlayerHouseIndex[ownerid] == -1)
+    {
+        PlayerInsideHouse[playerid] = 0;
+        PlayerInsideHouseOwner[playerid] = INVALID_PLAYER_ID;
+
+        SetPlayerInterior(playerid, 0);
+        SetPlayerVirtualWorld(playerid, 0);
+        SetPlayerPos(playerid, SPAWN_X, SPAWN_Y, SPAWN_Z);
+        SetPlayerFacingAngle(playerid, SPAWN_A);
+        return 1;
+    }
+
+    new houseIndex = PlayerHouseIndex[ownerid];
+
+    PlayerInsideHouse[playerid] = 0;
+    PlayerInsideHouseOwner[playerid] = INVALID_PLAYER_ID;
+
+    SetPlayerInterior(playerid, 0);
+    SetPlayerVirtualWorld(playerid, 0);
+    SetPlayerPos(playerid, HouseX[houseIndex], HouseY[houseIndex], HouseZ[houseIndex]);
+    SetPlayerFacingAngle(playerid, 0.0);
+
+    return 1;
+}
+
 main()
 {
     print("========================================");
@@ -2809,7 +2893,7 @@ public OnGameModeInit()
 {
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
-    SetGameModeText("LSIF Dev v0.12B.1 House Fix");
+    SetGameModeText("LSIF Dev v0.12C House Visitors");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -2875,7 +2959,7 @@ public OnGameModeInit()
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
     print("[LSIF] Anti-cheat timer aktif setiap 10 detik.");
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
-    print("[LSIF] Gamemode v0.12B.1 House Interior Fix berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.12C House Visitors berhasil dijalankan.");
     return 1;
 }
 
@@ -2949,6 +3033,26 @@ public OnPlayerDisconnect(playerid, reason)
     {
         PlayerInsideHouse[playerid] = 0;
     }
+
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!IsPlayerConnected(i))
+        {
+            continue;
+        }
+
+        if (PlayerHouseInvite[i] == playerid)
+        {
+            PlayerHouseInvite[i] = INVALID_PLAYER_ID;
+        }
+
+        if (PlayerInsideHouse[i] && PlayerInsideHouseOwner[i] == playerid)
+        {
+            KickPlayerFromHouse(i);
+            SendClientMessage(i, COLOR_YELLOW, "Owner rumah keluar dari server. Kamu dikeluarkan dari rumah.");
+        }
+    }
+
     ResetPlayerHouseData(playerid);
 
     if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
@@ -4145,6 +4249,10 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/gohome - Teleport ke rumah");
         SendClientMessage(playerid, COLOR_WHITE, "/setspawn [house/default] - Atur spawn");
         SendClientMessage(playerid, COLOR_WHITE, "/sellhouse - Jual rumah");
+        SendClientMessage(playerid, COLOR_WHITE, "/visithouse [id] - Masuk rumah player jika unlocked/diundang");
+        SendClientMessage(playerid, COLOR_WHITE, "/invitehouse [id] - Undang player ke rumah");
+        SendClientMessage(playerid, COLOR_WHITE, "/kickhouse [id] - Keluarkan visitor dari rumah");
+        SendClientMessage(playerid, COLOR_WHITE, "/housevisitors - Lihat visitor rumah");
 
 
         return 1;
@@ -6383,6 +6491,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         SendClientMessage(playerid, COLOR_CYAN, "Command: /enterhouse, /exithouse, /lockhouse, /gohome, /setspawn house, /sellhouse.");
+        SendClientMessage(playerid, COLOR_CYAN, "Visitor: /invitehouse [id], /kickhouse [id], /housevisitors.");
         return 1;
     }
 
@@ -6468,6 +6577,15 @@ public OnPlayerCommandText(playerid, cmdtext[])
         new sellPrice = (HousePrice[houseIndex] * HOUSE_SELL_PERCENT) / 100;
         new query[256];
 
+        for (new i = 0; i < MAX_PLAYERS; i++)
+        {
+            if (IsPlayerConnected(i) && PlayerInsideHouse[i] && PlayerInsideHouseOwner[i] == playerid && i != playerid)
+            {
+                KickPlayerFromHouse(i);
+                SendClientMessage(i, COLOR_YELLOW, "Rumah dijual oleh owner. Kamu dikeluarkan dari rumah.");
+            }
+        }
+
         mysql_format(
             g_SQL,
             query,
@@ -6547,10 +6665,206 @@ public OnPlayerCommandText(playerid, cmdtext[])
         format(msg, sizeof(msg), "Inside House: %s", PlayerInsideHouse[playerid] ? ("Yes") : ("No"));
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
+        new ownerid = PlayerInsideHouseOwner[playerid];
+
+        if (PlayerInsideHouse[playerid] && ownerid != INVALID_PLAYER_ID && IsPlayerConnected(ownerid))
+        {
+            new ownerName[MAX_PLAYER_NAME];
+            GetPlayerName(ownerid, ownerName, sizeof(ownerName));
+
+            format(msg, sizeof(msg), "Inside owner: %s [%d]", ownerName, ownerid);
+            SendClientMessage(playerid, COLOR_WHITE, msg);
+        }
+
         format(msg, sizeof(msg), "Virtual World: %d", GetPlayerHouseVirtualWorld(playerid));
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         SendClientMessage(playerid, COLOR_CYAN, "Command: /enterhouse, /exithouse, /lockhouse, /gohome, /sellhouse.");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/visithouse ", true) == 0)
+    {
+        new targetStr[16];
+
+        if (!GetOneParam(cmdtext[12], targetStr, sizeof(targetStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /visithouse [playerid]");
+            return 1;
+        }
+
+        if (!IsNumericString(targetStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Player ID harus angka.");
+            return 1;
+        }
+
+        new ownerid = strval(targetStr);
+
+        if (!IsPlayerConnected(ownerid) || !PlayerLoggedIn[ownerid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Owner tidak online/login.");
+            return 1;
+        }
+
+        if (!IsPlayerHouseOwner(ownerid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Player tersebut belum punya rumah.");
+            return 1;
+        }
+
+        EnterHouseAsVisitor(playerid, ownerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/visithouse", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /visithouse [playerid]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/invitehouse ", true) == 0)
+    {
+        if (!IsPlayerHouseOwner(playerid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum punya rumah.");
+            return 1;
+        }
+
+        new targetStr[16];
+
+        if (!GetOneParam(cmdtext[13], targetStr, sizeof(targetStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /invitehouse [playerid]");
+            return 1;
+        }
+
+        if (!IsNumericString(targetStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Player ID harus angka.");
+            return 1;
+        }
+
+        new targetid = strval(targetStr);
+
+        if (!IsPlayerConnected(targetid) || !PlayerLoggedIn[targetid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Target tidak online/login.");
+            return 1;
+        }
+
+        if (targetid == playerid)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu tidak perlu invite diri sendiri.");
+            return 1;
+        }
+
+        PlayerHouseInvite[targetid] = playerid;
+
+        new ownerName[MAX_PLAYER_NAME];
+        new targetName[MAX_PLAYER_NAME];
+        new msg[144];
+
+        GetPlayerName(playerid, ownerName, sizeof(ownerName));
+        GetPlayerName(targetid, targetName, sizeof(targetName));
+
+        format(msg, sizeof(msg), "Kamu mengundang %s ke rumahmu.", targetName);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+
+        format(msg, sizeof(msg), "%s mengundang kamu ke rumahnya. Gunakan /visithouse %d saat dekat rumahnya.", ownerName, playerid);
+        SendClientMessage(targetid, COLOR_GREEN, msg);
+
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/invitehouse", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /invitehouse [playerid]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/kickhouse ", true) == 0)
+    {
+        if (!IsPlayerHouseOwner(playerid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum punya rumah.");
+            return 1;
+        }
+
+        new targetStr[16];
+
+        if (!GetOneParam(cmdtext[11], targetStr, sizeof(targetStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /kickhouse [playerid]");
+            return 1;
+        }
+
+        if (!IsNumericString(targetStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Player ID harus angka.");
+            return 1;
+        }
+
+        new targetid = strval(targetStr);
+
+        if (!IsPlayerConnected(targetid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Target tidak online.");
+            return 1;
+        }
+
+        if (!PlayerInsideHouse[targetid] || PlayerInsideHouseOwner[targetid] != playerid)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Target tidak sedang berada di rumahmu.");
+            return 1;
+        }
+
+        KickPlayerFromHouse(targetid);
+
+        SendClientMessage(playerid, COLOR_GREEN, "Player berhasil dikeluarkan dari rumah.");
+        SendClientMessage(targetid, COLOR_YELLOW, "Kamu dikeluarkan dari rumah oleh owner.");
+
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/kickhouse", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /kickhouse [playerid]");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/housevisitors", true))
+    {
+        if (!IsPlayerHouseOwner(playerid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum punya rumah.");
+            return 1;
+        }
+
+        new found = 0;
+        new name[MAX_PLAYER_NAME];
+        new msg[144];
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== HOUSE VISITORS ==========");
+
+        for (new i = 0; i < MAX_PLAYERS; i++)
+        {
+            if (IsPlayerConnected(i) && PlayerInsideHouse[i] && PlayerInsideHouseOwner[i] == playerid && i != playerid)
+            {
+                GetPlayerName(i, name, sizeof(name));
+
+                format(msg, sizeof(msg), "%s [%d]", name, i);
+                SendClientMessage(playerid, COLOR_WHITE, msg);
+
+                found++;
+            }
+        }
+
+        if (!found)
+        {
+            SendClientMessage(playerid, COLOR_WHITE, "Tidak ada visitor di rumahmu.");
+        }
+
         return 1;
     }
 

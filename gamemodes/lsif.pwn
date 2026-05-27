@@ -898,6 +898,7 @@ forward OnFeedbackCreated(playerid);
 forward OnFeedbackListLoaded(playerid);
 forward OnFeedbackClosed(playerid, feedbackid);
 forward OnWhitelistCheckLoaded(playerid);
+forward ShowPostLoginRules(playerid);
 
 stock ShowBetaMOTD(playerid)
 {
@@ -955,6 +956,23 @@ stock SendBetaLoginMessages(playerid, isNewAccount)
     }
 
     SendClientMessage(playerid, COLOR_ORANGE, BETA_MOTD_TEXT);
+    SendClientMessage(playerid, COLOR_WHITE, "Rules akan muncul setelah spawn. Gunakan /serverrules jika dialog tidak muncul.");
+    SetTimerEx("ShowPostLoginRules", 1500, false, "i", playerid);
+    return 1;
+}
+
+public ShowPostLoginRules(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    if (!PlayerLoggedIn[playerid])
+    {
+        return 1;
+    }
+
     ShowServerRules(playerid);
     return 1;
 }
@@ -4021,7 +4039,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.16B Beta Polish");
+    SetGameModeText("LSIF Dev v0.16B.1 Beta Login");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,

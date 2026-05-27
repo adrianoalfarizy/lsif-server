@@ -160,10 +160,14 @@
 #define VEHICLE_REPAIR_COST 1500
 #define VEHICLE_REFUEL_COST_PER_POINT 20
 
+#define FUEL_TIMER_INTERVAL 60000 // 60 detik
+#define FUEL_CONSUME_AMOUNT 1
+
 new MySQL:g_SQL;
 new g_AutosaveTimer;
 
 new g_AntiCheatTimer;
+new g_FuelTimer;
 
 new g_ServerStartTick;
 
@@ -846,6 +850,7 @@ forward OnJobStatsLoaded(playerid);
 forward OnJobTopLoaded(playerid);
 forward OnJobProgressSaved(playerid);
 forward AntiCheatCheck();
+forward FuelSystemTick();
 forward OnDatabasePing(playerid);
 forward OnPlayerHouseLoaded(playerid);
 forward OnPlayerHouseBought(playerid, houseIndex, price);
@@ -3577,6 +3582,147 @@ stock SaveActiveVehicleMeta(playerid)
     return 1;
 }
 
+stock IsPlayerDrivingActiveOwnedVehicle(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 0;
+    }
+
+    if (!PlayerLoggedIn[playerid])
+    {
+        return 0;
+    }
+
+    if (OwnedVehicleID[playerid] == INVALID_VEHICLE_ID)
+    {
+        return 0;
+    }
+
+    if (OwnedVehicleSlot[playerid] == -1)
+    {
+        return 0;
+    }
+
+    if (!IsPlayerInAnyVehicle(playerid))
+    {
+        return 0;
+    }
+
+    if (GetPlayerState(playerid) != PLAYER_STATE_DRIVER)
+    {
+        return 0;
+    }
+
+    if (GetPlayerVehicleID(playerid) != OwnedVehicleID[playerid])
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+stock SyncActiveVehicleFuelToGarage(playerid)
+{
+    if (!IsValidGarageSlot(OwnedVehicleSlot[playerid]))
+    {
+        return 0;
+    }
+
+    PlayerGarageFuel[playerid][OwnedVehicleSlot[playerid]] = OwnedVehicleFuel[playerid];
+    return 1;
+}
+
+stock SaveActiveVehicleFuel(playerid)
+{
+    if (OwnedVehicleDBID[playerid] <= 0)
+    {
+        return 0;
+    }
+
+    new query[256];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "UPDATE player_vehicles SET fuel=%d WHERE id=%d AND owner_id=%d LIMIT 1",
+        OwnedVehicleFuel[playerid],
+        OwnedVehicleDBID[playerid],
+        PlayerDBID[playerid]
+    );
+
+    mysql_tquery(g_SQL, query);
+    return 1;
+}
+
+stock StopVehicleEngineDueFuel(playerid)
+{
+    if (OwnedVehicleID[playerid] == INVALID_VEHICLE_ID)
+    {
+        return 0;
+    }
+
+    new engine;
+    new lights;
+    new alarm;
+    new doors;
+    new bonnet;
+    new boot;
+    new objective;
+
+    GetVehicleParamsEx(OwnedVehicleID[playerid], engine, lights, alarm, doors, bonnet, boot, objective);
+    SetVehicleParamsEx(OwnedVehicleID[playerid], 0, lights, alarm, doors, bonnet, boot, objective);
+
+    SendClientMessage(playerid, COLOR_RED, "Fuel kendaraan habis. Mesin dimatikan.");
+    SendClientMessage(playerid, COLOR_WHITE, "Pergi ke dealership dan gunakan /refuelveh.");
+
+    return 1;
+}
+
+public FuelSystemTick()
+{
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!IsPlayerDrivingActiveOwnedVehicle(i))
+        {
+            continue;
+        }
+
+        if (OwnedVehicleFuel[i] <= 0)
+        {
+            OwnedVehicleFuel[i] = 0;
+            SyncActiveVehicleFuelToGarage(i);
+            StopVehicleEngineDueFuel(i);
+            continue;
+        }
+
+        OwnedVehicleFuel[i] -= FUEL_CONSUME_AMOUNT;
+
+        if (OwnedVehicleFuel[i] < 0)
+        {
+            OwnedVehicleFuel[i] = 0;
+        }
+
+        SyncActiveVehicleFuelToGarage(i);
+        SaveActiveVehicleFuel(i);
+
+        if (OwnedVehicleFuel[i] == 20 || OwnedVehicleFuel[i] == 10 || OwnedVehicleFuel[i] == 5)
+        {
+            new msg[144];
+            format(msg, sizeof(msg), "Fuel kendaraan rendah: %d/%d.", OwnedVehicleFuel[i], VEHICLE_MAX_FUEL);
+            SendClientMessage(i, COLOR_YELLOW, msg);
+        }
+
+        if (OwnedVehicleFuel[i] <= 0)
+        {
+            StopVehicleEngineDueFuel(i);
+        }
+    }
+
+    return 1;
+}
+
 main()
 {
     print("========================================");
@@ -3595,7 +3741,7 @@ public OnGameModeInit()
 {
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
-    SetGameModeText("LSIF Dev v0.15C Vehicle Polish");
+    SetGameModeText("LSIF Dev v0.15D Fuel System");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -3661,11 +3807,13 @@ public OnGameModeInit()
     }
     g_AutosaveTimer = SetTimer("AutoSavePlayers", AUTOSAVE_INTERVAL, true);
     g_AntiCheatTimer = SetTimer("AntiCheatCheck", ANTICHEAT_INTERVAL, true);
+    g_FuelTimer = SetTimer("FuelSystemTick", FUEL_TIMER_INTERVAL, true);
 
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
     print("[LSIF] Anti-cheat timer aktif setiap 10 detik.");
+    print("[LSIF] Fuel system timer aktif setiap 60 detik.");
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
-    print("[LSIF] Gamemode v0.15C Vehicle Polish berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.15D Fuel System berhasil dijalankan.");
     return 1;
 }
 
@@ -3684,6 +3832,12 @@ public OnGameModeExit()
     {
         KillTimer(g_AntiCheatTimer);
         g_AntiCheatTimer = 0;
+    }
+
+    if (g_FuelTimer)
+    {
+        KillTimer(g_FuelTimer);
+        g_FuelTimer = 0;
     }
 
     mysql_close(g_SQL);
@@ -4291,6 +4445,18 @@ public OnPlayerStateChange(playerid, PLAYER_STATE:newstate, PLAYER_STATE:oldstat
             RemovePlayerFromVehicle(playerid);
             SendClientMessage(playerid, COLOR_RED, "Kendaraan ini terkunci.");
             return 1;
+        }
+    }
+
+    if (newstate == PLAYER_STATE_DRIVER)
+    {
+        if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID && GetPlayerVehicleID(playerid) == OwnedVehicleID[playerid])
+        {
+            if (OwnedVehicleFuel[playerid] <= 0)
+            {
+                OwnedVehicleFuel[playerid] = 0;
+                StopVehicleEngineDueFuel(playerid);
+            }
         }
     }
 
@@ -5752,6 +5918,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/vehicleshop - Melihat daftar kendaraan");
         SendClientMessage(playerid, COLOR_WHITE, "/buyvehicle [id] - Beli kendaraan di dealership");
         SendClientMessage(playerid, COLOR_WHITE, "/vehstatus - Status kendaraan aktif");
+        SendClientMessage(playerid, COLOR_WHITE, "/fuelinfo - Melihat info fuel kendaraan aktif");
         SendClientMessage(playerid, COLOR_WHITE, "/renameveh [slot] [name] - Ganti nama kendaraan");
         SendClientMessage(playerid, COLOR_WHITE, "/repairveh - Repair kendaraan di dealership");
         SendClientMessage(playerid, COLOR_WHITE, "/refuelveh - Isi fuel kendaraan di dealership");
@@ -6721,6 +6888,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/reports - Lihat 5 report terbuka terakhir");
         SendClientMessage(playerid, COLOR_WHITE, "/closereport [id] [note] - Tutup report");
         SendClientMessage(playerid, COLOR_WHITE, "/acinfo - Melihat informasi basic anti-cheat");
+        SendClientMessage(playerid, COLOR_WHITE, "/setfuel [amount] - Set fuel kendaraan aktif, Owner only");
         SendClientMessage(playerid, COLOR_WHITE, "/serverinfo - Info server dan uptime");
         SendClientMessage(playerid, COLOR_WHITE, "/dbping - Test koneksi database");
         SendClientMessage(playerid, COLOR_WHITE, "/saveall - Simpan semua player, Owner only");
@@ -9728,6 +9896,94 @@ public OnPlayerCommandText(playerid, cmdtext[])
         format(msg, sizeof(msg), "Locked: %s", OwnedVehicleLocked[playerid] ? ("Yes") : ("No"));
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
+        format(msg, sizeof(msg), "Fuel consumption: %d fuel / %d detik", FUEL_CONSUME_AMOUNT, FUEL_TIMER_INTERVAL / 1000);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        return 1;
+    }
+
+
+    if (!strcmp(cmdtext, "/fuelinfo", true))
+    {
+        if (OwnedVehicleDBID[playerid] <= 0 || OwnedVehicleSlot[playerid] == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Tidak ada kendaraan aktif. Gunakan /garage dan /myveh [slot].");
+            return 1;
+        }
+
+        new msg[144];
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== FUEL INFO ==========");
+
+        format(msg, sizeof(msg), "Vehicle: %s | Slot: %d", OwnedVehicleName[playerid], OwnedVehicleSlot[playerid] + 1);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Fuel: %d/%d", OwnedVehicleFuel[playerid], VEHICLE_MAX_FUEL);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Consumption: %d fuel setiap %d detik saat dikendarai.", FUEL_CONSUME_AMOUNT, FUEL_TIMER_INTERVAL / 1000);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        SendClientMessage(playerid, COLOR_CYAN, "Refuel di dealership: /finddealer lalu /refuelveh.");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/setfuel ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa menggunakan command ini.");
+            return 1;
+        }
+
+        if (OwnedVehicleDBID[playerid] <= 0 || OwnedVehicleSlot[playerid] == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Tidak ada kendaraan aktif.");
+            return 1;
+        }
+
+        new fuelStr[16];
+
+        if (!GetOneParam(cmdtext[9], fuelStr, sizeof(fuelStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setfuel [0-100]");
+            return 1;
+        }
+
+        if (!IsNumericString(fuelStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Fuel harus angka.");
+            return 1;
+        }
+
+        new fuel = strval(fuelStr);
+
+        if (fuel < 0 || fuel > VEHICLE_MAX_FUEL)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Fuel harus 0 sampai 100.");
+            return 1;
+        }
+
+        OwnedVehicleFuel[playerid] = fuel;
+        SyncActiveVehicleFuelToGarage(playerid);
+        SaveActiveVehicleFuel(playerid);
+
+        new msg[144];
+        format(msg, sizeof(msg), "Fuel kendaraan aktif diset menjadi %d/%d.", OwnedVehicleFuel[playerid], VEHICLE_MAX_FUEL);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/setfuel", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa menggunakan command ini.");
+            return 1;
+        }
+
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setfuel [0-100]");
         return 1;
     }
 

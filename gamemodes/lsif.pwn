@@ -149,6 +149,11 @@
 #define BUSINESS_UPGRADE_BASE_COST 50000
 #define BUSINESS_UPGRADE_COST_MULTIPLIER 2
 
+#define MAX_DEALERSHIPS 3
+#define DEALERSHIP_ACCESS_RADIUS 8.0
+
+#define MAX_SHOP_VEHICLES 12
+
 new MySQL:g_SQL;
 new g_AutosaveTimer;
 
@@ -567,6 +572,84 @@ new BusinessName[MAX_BUSINESSES][64] =
     "Vinewood Electronics"
 };
 
+new PlayerFindingDealer[MAX_PLAYERS];
+
+new Float:DealershipX[MAX_DEALERSHIPS] =
+{
+    2131.9177,
+    562.6155,
+    -1954.2469
+};
+
+new Float:DealershipY[MAX_DEALERSHIPS] =
+{
+    -1150.1232,
+        -1291.7563,
+        300.2021
+    };
+
+new Float:DealershipZ[MAX_DEALERSHIPS] =
+{
+    24.2266,
+    17.2482,
+    35.4688
+};
+
+new DealershipName[MAX_DEALERSHIPS][64] =
+{
+    "LS Grotti Dealership",
+    "Market Budget Cars",
+    "San Fierro Import Dealer"
+};
+
+new ShopVehicleModel[MAX_SHOP_VEHICLES] =
+{
+    401, // Bravura
+    400, // Landstalker
+    462, // Faggio
+    461, // PCJ-600
+    482, // Burrito
+    413, // Pony
+    402, // Buffalo
+    415, // Cheetah
+    411, // Infernus
+    451, // Turismo
+    420, // Taxi
+    515  // Roadtrain
+};
+
+new ShopVehiclePrice[MAX_SHOP_VEHICLES] =
+{
+    8000,
+    12000,
+    5000,
+    15000,
+    15000,
+    12000,
+    25000,
+    60000,
+    75000,
+    65000,
+    18000,
+    90000
+};
+
+new ShopVehicleName[MAX_SHOP_VEHICLES][32] =
+{
+    "Bravura",
+    "Landstalker",
+    "Faggio",
+    "PCJ-600",
+    "Burrito",
+    "Pony",
+    "Buffalo",
+    "Cheetah",
+    "Infernus",
+    "Turismo",
+    "Taxi",
+    "Roadtrain"
+};
+
 stock Float:GetDistanceBetweenPoints3D(Float:x1, Float:y1, Float:z1, Float:x2, Float:y2, Float:z2)
 {
     new Float:dx = x1 - x2;
@@ -843,6 +926,7 @@ stock ResetPlayerAccountData(playerid)
     ResetPlayerHouseData(playerid);
     ResetPlayerOrgData(playerid);
     ResetPlayerBusinessData(playerid);
+    ResetPlayerDealerData(playerid);
 
     PlayerJob[playerid] = JOB_NONE;
     PlayerWorking[playerid] = 0;
@@ -3230,6 +3314,76 @@ stock IsBusinessOwner(playerid)
     return 0;
 }
 
+stock ResetPlayerDealerData(playerid)
+{
+    PlayerFindingDealer[playerid] = 0;
+    return 1;
+}
+
+stock GetNearestDealership(playerid)
+{
+    new nearest = -1;
+    new Float:nearestDistance = 999999.0;
+
+    for (new i = 0; i < MAX_DEALERSHIPS; i++)
+    {
+        new Float:distance = GetPlayerDistanceFromPoint(
+                playerid,
+                DealershipX[i],
+                DealershipY[i],
+                DealershipZ[i]
+                                               );
+
+        if (distance < nearestDistance)
+        {
+            nearestDistance = distance;
+            nearest = i;
+        }
+    }
+
+    return nearest;
+}
+
+stock IsPlayerNearDealership(playerid)
+{
+    for (new i = 0; i < MAX_DEALERSHIPS; i++)
+    {
+        if (GetPlayerDistanceFromPoint(playerid, DealershipX[i], DealershipY[i], DealershipZ[i]) <= DEALERSHIP_ACCESS_RADIUS)
+        {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+stock GetNearestDealershipDistance(playerid)
+{
+    new nearest = GetNearestDealership(playerid);
+
+    if (nearest == -1)
+    {
+        return 999999;
+    }
+
+    return floatround(GetPlayerDistanceFromPoint(
+                          playerid,
+                          DealershipX[nearest],
+                          DealershipY[nearest],
+                          DealershipZ[nearest]
+                      ));
+}
+
+stock IsValidShopVehicleIndex(index)
+{
+    if (index < 0 || index >= MAX_SHOP_VEHICLES)
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
 main()
 {
     print("========================================");
@@ -3248,7 +3402,7 @@ public OnGameModeInit()
 {
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
-    SetGameModeText("LSIF Dev v0.14B Business Upgrade");
+    SetGameModeText("LSIF Dev v0.15A Dealership");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -3295,6 +3449,7 @@ public OnGameModeInit()
         ResetPlayerHouseData(i);
         ResetPlayerOrgData(i);
         ResetPlayerBusinessData(i);
+        ResetPlayerDealerData(i);
 
         PlayerJob[i] = JOB_NONE;
         PlayerWorking[i] = 0;
@@ -3316,7 +3471,7 @@ public OnGameModeInit()
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
     print("[LSIF] Anti-cheat timer aktif setiap 10 detik.");
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
-    print("[LSIF] Gamemode v0.14B Business Upgrade berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.15A Dealership berhasil dijalankan.");
     return 1;
 }
 
@@ -3426,6 +3581,7 @@ public OnPlayerDisconnect(playerid, reason)
     }
 
     ResetPlayerBusinessData(playerid);
+    ResetPlayerDealerData(playerid);
 
 
     return 1;
@@ -3732,6 +3888,20 @@ public OnPlayerEnterCheckpoint(playerid)
 
             SendClientMessage(playerid, COLOR_GREEN, "Kamu sudah sampai di lokasi business.");
             SendClientMessage(playerid, COLOR_WHITE, "Gunakan /buybiz [id] jika ingin membeli business ini.");
+            return 1;
+        }
+    }
+
+    if (PlayerFindingDealer[playerid])
+    {
+        if (IsPlayerNearDealership(playerid))
+        {
+            DisablePlayerCheckpoint(playerid);
+            PlayerFindingDealer[playerid] = 0;
+
+            SendClientMessage(playerid, COLOR_GREEN, "Kamu sudah sampai di dealership.");
+            SendClientMessage(playerid, COLOR_WHITE, "Gunakan /vehicleshop untuk melihat kendaraan.");
+            SendClientMessage(playerid, COLOR_WHITE, "Gunakan /buyvehicle [id] untuk membeli kendaraan.");
             return 1;
         }
     }
@@ -5146,7 +5316,6 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/cancelwork - Batalkan pekerjaan aktif");
         SendClientMessage(playerid, COLOR_WHITE, "/account - Melihat informasi akun");
         SendClientMessage(playerid, COLOR_WHITE, "/savedata - Simpan data akun manual");
-        SendClientMessage(playerid, COLOR_WHITE, "/buyveh [modelid] - Beli kendaraan pribadi");
         SendClientMessage(playerid, COLOR_WHITE, "/myveh - Spawn kendaraan pribadi");
         SendClientMessage(playerid, COLOR_WHITE, "/park - Simpan posisi kendaraan pribadi");
         SendClientMessage(playerid, COLOR_WHITE, "/lock - Kunci/buka kendaraan pribadi");
@@ -5210,7 +5379,11 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/sellbiz - Jual business");
         SendClientMessage(playerid, COLOR_WHITE, "/upgradebiz - Upgrade level business");
         SendClientMessage(playerid, COLOR_WHITE, "/biztop - Leaderboard business income");
-
+        SendClientMessage(playerid, COLOR_WHITE, "/dealerships - Melihat daftar dealership");
+        SendClientMessage(playerid, COLOR_WHITE, "/finddealer - Cari dealership terdekat");
+        SendClientMessage(playerid, COLOR_WHITE, "/canceldealer - Hapus checkpoint dealership");
+        SendClientMessage(playerid, COLOR_WHITE, "/vehicleshop - Melihat daftar kendaraan");
+        SendClientMessage(playerid, COLOR_WHITE, "/buyvehicle [id] - Beli kendaraan di dealership");
 
         return 1;
     }
@@ -5849,6 +6022,12 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (strfind(cmdtext, "/buyveh ", true) == 0)
     {
         new modelStr[16];
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Command ini sekarang hanya untuk owner/dev.");
+            SendClientMessage(playerid, COLOR_WHITE, "Gunakan /vehicleshop dan /buyvehicle [id] di dealership.");
+            return 1;
+        }
 
         if (!GetOneParam(cmdtext[8], modelStr, sizeof(modelStr)))
         {
@@ -6023,6 +6202,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
         format(msg, sizeof(msg), "Position: %.2f, %.2f, %.2f", OwnedVehicleX[playerid], OwnedVehicleY[playerid], OwnedVehicleZ[playerid]);
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
+        SendClientMessage(playerid, COLOR_CYAN, "Beli kendaraan baru di dealership: /finddealer, /vehicleshop, /buyvehicle [id].");
+
         return 1;
     }
 
@@ -6085,6 +6266,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/playerinfo [id] - Debug data player");
         SendClientMessage(playerid, COLOR_WHITE, "/vehdebug - Debug kendaraan pribadi");
         SendClientMessage(playerid, COLOR_WHITE, "/jobdebug - Debug job/race aktif");
+        SendClientMessage(playerid, COLOR_WHITE, "/buyveh [modelid] - Beli kendaraan pribadi");
+
         return 1;
     }
 
@@ -8822,6 +9005,195 @@ public OnPlayerCommandText(playerid, cmdtext[])
             "i",
             playerid
         );
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/dealerships", true))
+    {
+        new msg[144];
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== DEALERSHIPS ==========");
+
+        for (new i = 0; i < MAX_DEALERSHIPS; i++)
+        {
+            format(msg, sizeof(msg), "%d. %s", i + 1, DealershipName[i]);
+            SendClientMessage(playerid, COLOR_WHITE, msg);
+        }
+
+        SendClientMessage(playerid, COLOR_CYAN, "Gunakan /finddealer untuk mencari dealership terdekat.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/finddealer", true))
+    {
+        if (PlayerWorking[playerid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu sedang bekerja. Selesaikan atau /cancelwork dulu.");
+            return 1;
+        }
+
+        if (PlayerRace[playerid] != RACE_NONE)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu sedang race. Selesaikan atau /leaverace dulu.");
+            return 1;
+        }
+
+        new nearest = GetNearestDealership(playerid);
+
+        if (nearest == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Dealership tidak ditemukan.");
+            return 1;
+        }
+
+        SetPlayerCheckpoint(
+            playerid,
+            DealershipX[nearest],
+            DealershipY[nearest],
+            DealershipZ[nearest],
+            DEALERSHIP_ACCESS_RADIUS
+        );
+
+        PlayerFindingDealer[playerid] = 1;
+
+        new msg[144];
+        format(msg, sizeof(msg), "Checkpoint diarahkan ke: %s.", DealershipName[nearest]);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan /canceldealer untuk menghapus checkpoint.");
+
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/canceldealer", true))
+    {
+        if (!PlayerFindingDealer[playerid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu tidak sedang mencari dealership.");
+            return 1;
+        }
+
+        DisablePlayerCheckpoint(playerid);
+        PlayerFindingDealer[playerid] = 0;
+
+        SendClientMessage(playerid, COLOR_YELLOW, "Checkpoint dealership dihapus.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/vehicleshop", true))
+    {
+        new msg[144];
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== VEHICLE SHOP ==========");
+
+        for (new i = 0; i < MAX_SHOP_VEHICLES; i++)
+        {
+            format(
+                msg,
+                sizeof(msg),
+                "%d. %s | Model: %d | Price: $%d",
+                i + 1,
+                ShopVehicleName[i],
+                ShopVehicleModel[i],
+                ShopVehiclePrice[i]
+            );
+            SendClientMessage(playerid, COLOR_WHITE, msg);
+        }
+
+        if (IsPlayerNearDealership(playerid))
+        {
+            SendClientMessage(playerid, COLOR_GREEN, "Status: kamu berada dekat dealership.");
+        }
+        else
+        {
+            new distance = GetNearestDealershipDistance(playerid);
+            format(msg, sizeof(msg), "Status: tidak dekat dealership. Terdekat sekitar %d unit.", distance);
+            SendClientMessage(playerid, COLOR_YELLOW, msg);
+            SendClientMessage(playerid, COLOR_WHITE, "Gunakan /finddealer untuk mencari dealership.");
+        }
+
+        if (strfind(cmdtext, "/buyvehicle ", true) == 0)
+        {
+            new vehicleStr[16];
+
+            if (!GetOneParam(cmdtext[12], vehicleStr, sizeof(vehicleStr)))
+            {
+                SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /buyvehicle [shop_id]");
+                SendClientMessage(playerid, COLOR_WHITE, "Contoh: /buyvehicle 1");
+                return 1;
+            }
+
+            if (!IsNumericString(vehicleStr))
+            {
+                SendClientMessage(playerid, COLOR_RED, "Vehicle shop ID harus angka.");
+                return 1;
+            }
+
+            if (!IsPlayerNearDealership(playerid))
+            {
+                new distance = GetNearestDealershipDistance(playerid);
+                new dealerMsg[144];
+
+                format(dealerMsg, sizeof(dealerMsg), "Kamu harus berada dekat dealership. Dealership terdekat sekitar %d unit.", distance);
+                SendClientMessage(playerid, COLOR_RED, dealerMsg);
+                SendClientMessage(playerid, COLOR_WHITE, "Gunakan /finddealer.");
+                return 1;
+            }
+
+            if (OwnedVehicleDBID[playerid] > 0)
+            {
+                SendClientMessage(playerid, COLOR_RED, "Kamu sudah punya kendaraan pribadi. Gunakan /sellveh dulu.");
+                return 1;
+            }
+
+            new shopIndex = strval(vehicleStr) - 1;
+
+            if (!IsValidShopVehicleIndex(shopIndex))
+            {
+                SendClientMessage(playerid, COLOR_RED, "Vehicle shop ID tidak valid.");
+                return 1;
+            }
+
+            new modelid = ShopVehicleModel[shopIndex];
+            new price = ShopVehiclePrice[shopIndex];
+
+            if (PlayerMoney[playerid] < price)
+            {
+                new priceMsg[144];
+                format(priceMsg, sizeof(priceMsg), "Cash tidak cukup. Harga %s adalah $%d.", ShopVehicleName[shopIndex], price);
+                SendClientMessage(playerid, COLOR_RED, priceMsg);
+                return 1;
+            }
+
+            new Float:x, Float:y, Float:z, Float:a;
+            new query[512];
+
+            GetPlayerPos(playerid, x, y, z);
+            GetPlayerFacingAngle(playerid, a);
+
+            mysql_format(
+                g_SQL,
+                query,
+                sizeof(query),
+                "INSERT INTO player_vehicles (owner_id, model_id, color1, color2, pos_x, pos_y, pos_z, pos_a, locked) VALUES (%d, %d, 1, 1, %f, %f, %f, %f, 0)",
+                PlayerDBID[playerid],
+                modelid,
+                x + 3.0,
+                y,
+                z,
+                a
+            );
+
+            mysql_tquery(g_SQL, query, "OnOwnedVehicleBought", "iii", playerid, modelid, price);
+            return 1;
+        }
+
+        if (!strcmp(cmdtext, "/buyvehicle", true))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /buyvehicle [shop_id]");
+            SendClientMessage(playerid, COLOR_WHITE, "Lihat daftar kendaraan: /vehicleshop");
+            return 1;
+        }
+
         return 1;
     }
 

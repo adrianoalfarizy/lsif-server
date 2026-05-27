@@ -9111,89 +9111,88 @@ public OnPlayerCommandText(playerid, cmdtext[])
             SendClientMessage(playerid, COLOR_WHITE, "Gunakan /finddealer untuk mencari dealership.");
         }
 
-        if (strfind(cmdtext, "/buyvehicle ", true) == 0)
-        {
-            new vehicleStr[16];
+        return 1;
+    }
 
-            if (!GetOneParam(cmdtext[12], vehicleStr, sizeof(vehicleStr)))
-            {
-                SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /buyvehicle [shop_id]");
-                SendClientMessage(playerid, COLOR_WHITE, "Contoh: /buyvehicle 1");
-                return 1;
-            }
+    if (!strcmp(cmdtext, "/buyvehicle", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /buyvehicle [shop_id]");
+        SendClientMessage(playerid, COLOR_WHITE, "Lihat daftar kendaraan: /vehicleshop");
+        return 1;
+    }
 
-            if (!IsNumericString(vehicleStr))
-            {
-                SendClientMessage(playerid, COLOR_RED, "Vehicle shop ID harus angka.");
-                return 1;
-            }
+    if (strfind(cmdtext, "/buyvehicle ", true) == 0)
+    {
+        new vehicleStr[16];
+        new msg[144];
 
-            if (!IsPlayerNearDealership(playerid))
-            {
-                new distance = GetNearestDealershipDistance(playerid);
-                new dealerMsg[144];
-
-                format(dealerMsg, sizeof(dealerMsg), "Kamu harus berada dekat dealership. Dealership terdekat sekitar %d unit.", distance);
-                SendClientMessage(playerid, COLOR_RED, dealerMsg);
-                SendClientMessage(playerid, COLOR_WHITE, "Gunakan /finddealer.");
-                return 1;
-            }
-
-            if (OwnedVehicleDBID[playerid] > 0)
-            {
-                SendClientMessage(playerid, COLOR_RED, "Kamu sudah punya kendaraan pribadi. Gunakan /sellveh dulu.");
-                return 1;
-            }
-
-            new shopIndex = strval(vehicleStr) - 1;
-
-            if (!IsValidShopVehicleIndex(shopIndex))
-            {
-                SendClientMessage(playerid, COLOR_RED, "Vehicle shop ID tidak valid.");
-                return 1;
-            }
-
-            new modelid = ShopVehicleModel[shopIndex];
-            new price = ShopVehiclePrice[shopIndex];
-
-            if (PlayerMoney[playerid] < price)
-            {
-                new priceMsg[144];
-                format(priceMsg, sizeof(priceMsg), "Cash tidak cukup. Harga %s adalah $%d.", ShopVehicleName[shopIndex], price);
-                SendClientMessage(playerid, COLOR_RED, priceMsg);
-                return 1;
-            }
-
-            new Float:x, Float:y, Float:z, Float:a;
-            new query[512];
-
-            GetPlayerPos(playerid, x, y, z);
-            GetPlayerFacingAngle(playerid, a);
-
-            mysql_format(
-                g_SQL,
-                query,
-                sizeof(query),
-                "INSERT INTO player_vehicles (owner_id, model_id, color1, color2, pos_x, pos_y, pos_z, pos_a, locked) VALUES (%d, %d, 1, 1, %f, %f, %f, %f, 0)",
-                PlayerDBID[playerid],
-                modelid,
-                x + 3.0,
-                y,
-                z,
-                a
-            );
-
-            mysql_tquery(g_SQL, query, "OnOwnedVehicleBought", "iii", playerid, modelid, price);
-            return 1;
-        }
-
-        if (!strcmp(cmdtext, "/buyvehicle", true))
+        if (!GetOneParam(cmdtext[12], vehicleStr, sizeof(vehicleStr)))
         {
             SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /buyvehicle [shop_id]");
-            SendClientMessage(playerid, COLOR_WHITE, "Lihat daftar kendaraan: /vehicleshop");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /buyvehicle 1");
             return 1;
         }
 
+        if (!IsNumericString(vehicleStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Vehicle shop ID harus angka.");
+            return 1;
+        }
+
+        if (!IsPlayerNearDealership(playerid))
+        {
+            new distance = GetNearestDealershipDistance(playerid);
+
+            format(msg, sizeof(msg), "Kamu harus berada dekat dealership. Dealership terdekat sekitar %d unit.", distance);
+            SendClientMessage(playerid, COLOR_RED, msg);
+            SendClientMessage(playerid, COLOR_WHITE, "Gunakan /finddealer.");
+            return 1;
+        }
+
+        if (OwnedVehicleDBID[playerid] > 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu sudah punya kendaraan pribadi. Gunakan /sellveh dulu.");
+            return 1;
+        }
+
+        new shopIndex = strval(vehicleStr) - 1;
+
+        if (!IsValidShopVehicleIndex(shopIndex))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Vehicle shop ID tidak valid.");
+            return 1;
+        }
+
+        new modelid = ShopVehicleModel[shopIndex];
+        new price = ShopVehiclePrice[shopIndex];
+
+        if (PlayerMoney[playerid] < price)
+        {
+            format(msg, sizeof(msg), "Cash tidak cukup. Harga %s adalah $%d.", ShopVehicleName[shopIndex], price);
+            SendClientMessage(playerid, COLOR_RED, msg);
+            return 1;
+        }
+
+        new Float:x, Float:y, Float:z, Float:a;
+        new query[512];
+
+        GetPlayerPos(playerid, x, y, z);
+        GetPlayerFacingAngle(playerid, a);
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "INSERT INTO player_vehicles (owner_id, model_id, color1, color2, pos_x, pos_y, pos_z, pos_a, locked) VALUES (%d, %d, 1, 1, %f, %f, %f, %f, 0)",
+            PlayerDBID[playerid],
+            modelid,
+            x + 3.0,
+            y,
+            z,
+            a
+        );
+
+        mysql_tquery(g_SQL, query, "OnOwnedVehicleBought", "iii", playerid, modelid, price);
         return 1;
     }
 

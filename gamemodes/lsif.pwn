@@ -2138,9 +2138,16 @@ stock ApplyOwnedVehicleParams(playerid)
         return 0;
     }
 
+    new engineState = 1;
+
+    if (OwnedVehicleFuel[playerid] <= 0)
+    {
+        engineState = 0;
+    }
+
     SetVehicleParamsEx(
         OwnedVehicleID[playerid],
-        1, // engine ON
+        engineState, // engine ON only if fuel available
         0, // lights OFF
         0, // alarm OFF
         OwnedVehicleLocked[playerid] ? 1 : 0, // doors
@@ -3673,6 +3680,7 @@ stock StopVehicleEngineDueFuel(playerid)
 
     GetVehicleParamsEx(OwnedVehicleID[playerid], engine, lights, alarm, doors, bonnet, boot, objective);
     SetVehicleParamsEx(OwnedVehicleID[playerid], 0, lights, alarm, doors, bonnet, boot, objective);
+    SetVehicleVelocity(OwnedVehicleID[playerid], 0.0, 0.0, 0.0);
 
     SendClientMessage(playerid, COLOR_RED, "Fuel kendaraan habis. Mesin dimatikan.");
     SendClientMessage(playerid, COLOR_WHITE, "Pergi ke dealership dan gunakan /refuelveh.");
@@ -3741,7 +3749,8 @@ public OnGameModeInit()
 {
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
-    SetGameModeText("LSIF Dev v0.15D Fuel System");
+    ManualVehicleEngineAndLights();
+    SetGameModeText("LSIF Dev v0.15D.1 Fuel Hotfix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -3812,8 +3821,9 @@ public OnGameModeInit()
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
     print("[LSIF] Anti-cheat timer aktif setiap 10 detik.");
     print("[LSIF] Fuel system timer aktif setiap 60 detik.");
+    print("[LSIF] Manual vehicle engine mode aktif.");
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
-    print("[LSIF] Gamemode v0.15D Fuel System berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.15D.1 Fuel Hotfix berhasil dijalankan.");
     return 1;
 }
 
@@ -9968,6 +9978,15 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SyncActiveVehicleFuelToGarage(playerid);
         SaveActiveVehicleFuel(playerid);
 
+        if (fuel <= 0 && OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
+        {
+            StopVehicleEngineDueFuel(playerid);
+        }
+        else if (fuel > 0 && OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
+        {
+            ApplyOwnedVehicleParams(playerid);
+        }
+
         new msg[144];
         format(msg, sizeof(msg), "Fuel kendaraan aktif diset menjadi %d/%d.", OwnedVehicleFuel[playerid], VEHICLE_MAX_FUEL);
         SendClientMessage(playerid, COLOR_GREEN, msg);
@@ -10143,6 +10162,11 @@ public OnPlayerCommandText(playerid, cmdtext[])
         if (IsValidGarageSlot(OwnedVehicleSlot[playerid]))
         {
             PlayerGarageFuel[playerid][OwnedVehicleSlot[playerid]] = VEHICLE_MAX_FUEL;
+        }
+
+        if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
+        {
+            ApplyOwnedVehicleParams(playerid);
         }
 
         SaveActiveVehicleMeta(playerid);

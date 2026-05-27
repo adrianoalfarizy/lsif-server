@@ -16,8 +16,18 @@
 
 #define DIALOG_REGISTER 1000
 #define DIALOG_LOGIN    1001
+#define DIALOG_BETA_RULES 1002
+#define DIALOG_BETA_MOTD 1003
+
 
 #define AUTOSAVE_INTERVAL 300000 // 5 menit dalam milidetik
+
+#define CLOSED_BETA_ENABLED 1
+#define CLOSED_BETA_ALLOW_EMPTY 1 // 1 = kalau whitelist kosong, server tetap bisa dimasuki untuk bootstrap admin
+
+#define BETA_MOTD_TITLE "LSIF Closed Beta"
+#define BETA_MOTD_TEXT "Selamat datang di LSIF Closed Beta. Fitur masih dalam tahap testing. Laporkan bug dengan /report."
+
 
 #define SPAWN_X         1958.3783
 #define SPAWN_Y         1343.1572
@@ -173,6 +183,7 @@ new g_ServerStartTick;
 
 new PlayerMoneyMismatchCount[MAX_PLAYERS];
 new PlayerLastACWarningTick[MAX_PLAYERS];
+new PlayerLastWhitelistQuery[MAX_PLAYERS][24];
 
 new PlayerDBID[MAX_PLAYERS];
 new PlayerLoggedIn[MAX_PLAYERS];
@@ -873,6 +884,69 @@ forward OnBusinessTopLoaded(playerid);
 forward OnGarageLoaded(playerid);
 forward OnGarageVehicleBought(playerid, slotIndex, modelid, price);
 forward OnGarageVehicleSold(playerid, slotIndex, sellPrice);
+forward OnBetaWhitelistCheck(playerid);
+forward OnWhitelistAdded(playerid);
+forward OnWhitelistRemoved(playerid);
+forward OnWhitelistListLoaded(playerid);
+forward OnWhitelistCheckLoaded(playerid);
+
+stock ShowBetaMOTD(playerid)
+{
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_BETA_MOTD,
+        DIALOG_STYLE_MSGBOX,
+        BETA_MOTD_TITLE,
+        BETA_MOTD_TEXT,
+        "OK",
+        ""
+    );
+    return 1;
+}
+
+stock ShowServerRules(playerid)
+{
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_BETA_RULES,
+        DIALOG_STYLE_MSGBOX,
+        "LSIF Server Rules",
+        "1. Dilarang cheat, exploit, atau abuse bug.\n2. Dilarang DM sembarangan saat testing.\n3. Laporkan bug lewat /report.\n4. Jangan spam command/chat.\n5. Hormati admin dan tester lain.\n\nDengan bermain di closed beta, kamu setuju mengikuti aturan ini.",
+        "Saya Mengerti",
+        ""
+    );
+    return 1;
+}
+
+stock SendBetaGuide(playerid)
+{
+    SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CLOSED BETA GUIDE ==========");
+    SendClientMessage(playerid, COLOR_WHITE, "Mulai: /jobs, /races, /dealerships, /houses, /businesses.");
+    SendClientMessage(playerid, COLOR_WHITE, "Uang: kerja courier/taxi/trucker, race, business income.");
+    SendClientMessage(playerid, COLOR_WHITE, "Kendaraan: /finddealer -> /vehicleshop -> /buyvehicle [id].");
+    SendClientMessage(playerid, COLOR_WHITE, "Bank: /findbank -> /deposit atau /withdraw.");
+    SendClientMessage(playerid, COLOR_WHITE, "Bug/report: /report [id] [reason]. Admin online: /admins.");
+    SendClientMessage(playerid, COLOR_CYAN, "Baca aturan kapan saja dengan /serverrules dan info beta dengan /motd.");
+    return 1;
+}
+
+stock SendBetaLoginMessages(playerid, isNewAccount)
+{
+    if (isNewAccount)
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "Akun baru terdaftar untuk LSIF Closed Beta.");
+        SendBetaGuide(playerid);
+    }
+    else
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "Selamat datang kembali di LSIF Closed Beta.");
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan /betahelp untuk starter guide dan /serverrules untuk aturan server.");
+    }
+
+    SendClientMessage(playerid, COLOR_ORANGE, BETA_MOTD_TEXT);
+    ShowServerRules(playerid);
+    return 1;
+}
 
 stock SaveAllPlayers()
 {
@@ -975,6 +1049,7 @@ stock ResetPlayerAccountData(playerid)
 
     PlayerMoneyMismatchCount[playerid] = 0;
     PlayerLastACWarningTick[playerid] = 0;
+    format(PlayerLastWhitelistQuery[playerid], 24, "-");
 
     SyncPlayerMoneyHUD(playerid);
     return 1;
@@ -1024,6 +1099,31 @@ stock CheckPlayerAccount(playerid)
     );
 
     mysql_tquery(g_SQL, query, "OnAccountCheck", "i", playerid);
+    return 1;
+}
+
+stock CheckBetaWhitelist(playerid)
+{
+    if (!CLOSED_BETA_ENABLED)
+    {
+        CheckPlayerAccount(playerid);
+        return 1;
+    }
+
+    new username[MAX_PLAYER_NAME];
+    new query[512];
+
+    GetPlayerAccountName(playerid, username, sizeof(username));
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "SELECT (SELECT COUNT(*) FROM beta_whitelist WHERE active=1) AS total_active, (SELECT COUNT(*) FROM beta_whitelist WHERE active=1 AND username='%e') AS allowed",
+        username
+    );
+
+    mysql_tquery(g_SQL, query, "OnBetaWhitelistCheck", "i", playerid);
     return 1;
 }
 
@@ -3750,7 +3850,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.15D.1 Fuel Hotfix");
+    SetGameModeText("LSIF Dev v0.16A Closed Beta");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -3813,6 +3913,7 @@ public OnGameModeInit()
 
         PlayerMoneyMismatchCount[i] = 0;
         PlayerLastACWarningTick[i] = 0;
+        format(PlayerLastWhitelistQuery[i], 24, "-");
     }
     g_AutosaveTimer = SetTimer("AutoSavePlayers", AUTOSAVE_INTERVAL, true);
     g_AntiCheatTimer = SetTimer("AntiCheatCheck", ANTICHEAT_INTERVAL, true);
@@ -3821,9 +3922,10 @@ public OnGameModeInit()
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
     print("[LSIF] Anti-cheat timer aktif setiap 10 detik.");
     print("[LSIF] Fuel system timer aktif setiap 60 detik.");
+    print("[LSIF] Closed beta whitelist system aktif.");
     print("[LSIF] Manual vehicle engine mode aktif.");
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
-    print("[LSIF] Gamemode v0.15D.1 Fuel Hotfix berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.16A Closed Beta Preparation berhasil dijalankan.");
     return 1;
 }
 
@@ -4007,6 +4109,11 @@ public OnPlayerSpawn(playerid)
 
 public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 {
+    if (dialogid == DIALOG_BETA_RULES || dialogid == DIALOG_BETA_MOTD)
+    {
+        return 1;
+    }
+
     if (dialogid == DIALOG_REGISTER)
     {
         if (!response)
@@ -4139,6 +4246,7 @@ public OnAccountRegister(playerid)
     SendClientMessage(playerid, COLOR_WHITE, "Selamat datang di LSIF.");
 
     SpawnLoggedPlayer(playerid);
+    SendBetaLoginMessages(playerid, 1);
     return 1;
 }
 
@@ -4196,6 +4304,8 @@ public OnAccountLogin(playerid)
     );
 
     mysql_tquery(g_SQL, query);
+
+    SendBetaLoginMessages(playerid, 0);
 
     return 1;
 }
@@ -4493,6 +4603,51 @@ public DelayedKick(playerid)
     return 1;
 }
 
+public OnBetaWhitelistCheck(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+
+    if (rows == 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Whitelist check gagal. Coba reconnect.");
+        SetTimerEx("DelayedKick", 1000, false, "i", playerid);
+        return 1;
+    }
+
+    new totalActive;
+    new allowed;
+    new username[MAX_PLAYER_NAME];
+
+    cache_get_value_name_int(0, "total_active", totalActive);
+    cache_get_value_name_int(0, "allowed", allowed);
+    GetPlayerAccountName(playerid, username, sizeof(username));
+
+    if (totalActive == 0 && CLOSED_BETA_ALLOW_EMPTY)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Closed beta whitelist masih kosong. Bootstrap mode aktif.");
+        CheckPlayerAccount(playerid);
+        return 1;
+    }
+
+    if (allowed > 0)
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "Whitelist closed beta valid. Melanjutkan login/register...");
+        CheckPlayerAccount(playerid);
+        return 1;
+    }
+
+    SendClientMessage(playerid, COLOR_RED, "Kamu belum masuk whitelist LSIF Closed Beta.");
+    SendClientMessage(playerid, COLOR_WHITE, "Hubungi admin untuk ditambahkan ke whitelist.");
+    print("[BETA] Player ditolak whitelist.");
+    SetTimerEx("DelayedKick", 1500, false, "i", playerid);
+    return 1;
+}
+
 public OnPlayerBanCheck(playerid)
 {
     if (!IsPlayerConnected(playerid))
@@ -4537,7 +4692,7 @@ public OnPlayerBanCheck(playerid)
         return 1;
     }
 
-    CheckPlayerAccount(playerid);
+    CheckBetaWhitelist(playerid);
     return 1;
 }
 
@@ -5822,6 +5977,110 @@ public OnGarageVehicleSold(playerid, slotIndex, sellPrice)
     return 1;
 }
 
+public OnWhitelistAdded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    SendClientMessage(playerid, COLOR_GREEN, "Whitelist beta berhasil ditambahkan/diaktifkan.");
+    return 1;
+}
+
+public OnWhitelistRemoved(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new affectedRows = cache_affected_rows();
+    new msg[144];
+
+    if (affectedRows > 0)
+    {
+        format(msg, sizeof(msg), "Whitelist %s berhasil dinonaktifkan.", PlayerLastWhitelistQuery[playerid]);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+    }
+    else
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Username tidak ditemukan di whitelist atau sudah nonaktif.");
+    }
+
+    return 1;
+}
+
+public OnWhitelistListLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+    new username[24];
+    new addedBy[24];
+    new createdAt[32];
+    new msg[144];
+
+    SendClientMessage(playerid, COLOR_YELLOW, "========== BETA WHITELIST ==========");
+
+    if (rows == 0)
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "Whitelist aktif kosong.");
+        return 1;
+    }
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name(i, "username", username, sizeof(username));
+        cache_get_value_name(i, "added_by", addedBy, sizeof(addedBy));
+        cache_get_value_name(i, "created_at", createdAt, sizeof(createdAt));
+
+        format(msg, sizeof(msg), "%d. %s | Added by: %s | %s", i + 1, username, addedBy, createdAt);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+    }
+
+    return 1;
+}
+
+public OnWhitelistCheckLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+    new msg[144];
+
+    if (rows == 0)
+    {
+        format(msg, sizeof(msg), "%s tidak ditemukan di whitelist.", PlayerLastWhitelistQuery[playerid]);
+        SendClientMessage(playerid, COLOR_YELLOW, msg);
+        return 1;
+    }
+
+    new username[24];
+    new addedBy[24];
+    new createdAt[32];
+    new active;
+
+    cache_get_value_name(0, "username", username, sizeof(username));
+    cache_get_value_name_int(0, "active", active);
+    cache_get_value_name(0, "added_by", addedBy, sizeof(addedBy));
+    cache_get_value_name(0, "created_at", createdAt, sizeof(createdAt));
+
+    format(msg, sizeof(msg), "Whitelist: %s | Active: %d | Added by: %s", username, active, addedBy);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+
+    format(msg, sizeof(msg), "Created: %s", createdAt);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+
+    return 1;
+}
+
 public OnPlayerCommandText(playerid, cmdtext[])
 {
     if (!PlayerLoggedIn[playerid])
@@ -5932,7 +6191,62 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/renameveh [slot] [name] - Ganti nama kendaraan");
         SendClientMessage(playerid, COLOR_WHITE, "/repairveh - Repair kendaraan di dealership");
         SendClientMessage(playerid, COLOR_WHITE, "/refuelveh - Isi fuel kendaraan di dealership");
+        SendClientMessage(playerid, COLOR_WHITE, "/motd - Melihat pengumuman closed beta");
+        SendClientMessage(playerid, COLOR_WHITE, "/serverrules - Membaca aturan server");
+        SendClientMessage(playerid, COLOR_WHITE, "/betahelp - Starter guide closed beta");
 
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/motd", true))
+    {
+        ShowBetaMOTD(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/serverrules", true))
+    {
+        ShowServerRules(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/betahelp", true))
+    {
+        SendBetaGuide(playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/abroadcast ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_ADMIN))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Minimal Admin untuk menggunakan broadcast.");
+            return 1;
+        }
+
+        new message[128];
+        format(message, sizeof(message), "%s", cmdtext[12]);
+
+        if (strlen(message) < 1)
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /abroadcast [message]");
+            return 1;
+        }
+
+        new adminName[MAX_PLAYER_NAME];
+        new msg[160];
+
+        GetPlayerName(playerid, adminName, sizeof(adminName));
+        format(msg, sizeof(msg), "[ADMIN BROADCAST] %s: %s", adminName, message);
+        SendClientMessageToAll(COLOR_ORANGE, msg);
+
+        LogAdminAction(playerid, INVALID_PLAYER_ID, "ABROADCAST", message);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/abroadcast", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /abroadcast [message]");
         return 1;
     }
 
@@ -6906,6 +7220,11 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/vehdebug - Debug kendaraan pribadi");
         SendClientMessage(playerid, COLOR_WHITE, "/jobdebug - Debug job/race aktif");
         SendClientMessage(playerid, COLOR_WHITE, "/buyveh [modelid] - Beli kendaraan pribadi");
+        SendClientMessage(playerid, COLOR_WHITE, "/abroadcast [message] - Broadcast admin ke semua player");
+        SendClientMessage(playerid, COLOR_WHITE, "/wladd [username] - Tambah whitelist beta, Owner only");
+        SendClientMessage(playerid, COLOR_WHITE, "/wlremove [username] - Nonaktifkan whitelist beta, Owner only");
+        SendClientMessage(playerid, COLOR_WHITE, "/wlcheck [username] - Cek whitelist beta");
+        SendClientMessage(playerid, COLOR_WHITE, "/whitelist - Lihat 10 whitelist aktif");
 
         return 1;
     }
@@ -10176,6 +10495,120 @@ public OnPlayerCommandText(playerid, cmdtext[])
         format(msg, sizeof(msg), "Refuel berhasil. Biaya: $%d. Fuel sekarang: %d/%d.", cost, OwnedVehicleFuel[playerid], VEHICLE_MAX_FUEL);
         SendClientMessage(playerid, COLOR_GREEN, msg);
 
+        return 1;
+    }
+
+
+    if (strfind(cmdtext, "/wladd ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa menambah whitelist beta.");
+            return 1;
+        }
+
+        new targetName[24];
+
+        if (!GetOneParam(cmdtext[7], targetName, sizeof(targetName)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /wladd [username]");
+            return 1;
+        }
+
+        new adminName[MAX_PLAYER_NAME];
+        new query[512];
+
+        GetPlayerName(playerid, adminName, sizeof(adminName));
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "INSERT INTO beta_whitelist (username, added_by, note, active) VALUES ('%e', '%e', 'manual_add', 1) ON DUPLICATE KEY UPDATE added_by='%e', note='manual_add', active=1, updated_at=NOW()",
+            targetName,
+            adminName,
+            adminName
+        );
+
+        mysql_tquery(g_SQL, query, "OnWhitelistAdded", "i", playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/wladd", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /wladd [username]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/wlremove ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa menonaktifkan whitelist beta.");
+            return 1;
+        }
+
+        new targetName[24];
+
+        if (!GetOneParam(cmdtext[10], targetName, sizeof(targetName)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /wlremove [username]");
+            return 1;
+        }
+
+        format(PlayerLastWhitelistQuery[playerid], 24, "%s", targetName);
+
+        new query[256];
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE beta_whitelist SET active=0, updated_at=NOW() WHERE username='%e' LIMIT 1", targetName);
+        mysql_tquery(g_SQL, query, "OnWhitelistRemoved", "i", playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/wlremove", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /wlremove [username]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/wlcheck ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_HELPER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+            return 1;
+        }
+
+        new targetName[24];
+
+        if (!GetOneParam(cmdtext[9], targetName, sizeof(targetName)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /wlcheck [username]");
+            return 1;
+        }
+
+        format(PlayerLastWhitelistQuery[playerid], 24, "%s", targetName);
+
+        new query[256];
+        mysql_format(g_SQL, query, sizeof(query), "SELECT username, active, added_by, created_at FROM beta_whitelist WHERE username='%e' LIMIT 1", targetName);
+        mysql_tquery(g_SQL, query, "OnWhitelistCheckLoaded", "i", playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/wlcheck", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /wlcheck [username]");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/whitelist", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_HELPER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+            return 1;
+        }
+
+        mysql_tquery(g_SQL, "SELECT username, added_by, created_at FROM beta_whitelist WHERE active=1 ORDER BY id DESC LIMIT 10", "OnWhitelistListLoaded", "i", playerid);
         return 1;
     }
 

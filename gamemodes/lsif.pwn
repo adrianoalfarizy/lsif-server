@@ -140,6 +140,11 @@
 #define ORG_RANK_ADMIN  3
 #define ORG_RANK_OWNER  5
 
+#define MAX_BUSINESSES 5
+#define BUSINESS_ACCESS_RADIUS 5.0
+#define BUSINESS_SELL_PERCENT 70
+#define BUSINESS_MAX_COLLECT 500000
+
 new MySQL:g_SQL;
 new g_AutosaveTimer;
 
@@ -497,6 +502,65 @@ new PlayerOrgName[MAX_PLAYERS][64];
 new PlayerPendingOrgName[MAX_PLAYERS][64];
 new PlayerOrgBankMoney[MAX_PLAYERS];
 
+new PlayerBusinessDBID[MAX_PLAYERS];
+new PlayerBusinessIndex[MAX_PLAYERS];
+new PlayerFindingBusiness[MAX_PLAYERS];
+new PlayerFindingBusinessIndex[MAX_PLAYERS];
+
+new Float:BusinessX[MAX_BUSINESSES] =
+{
+    1833.1124,
+    2105.4583,
+    1368.9248,
+    2420.3311,
+    1000.5822
+};
+
+new Float:BusinessY[MAX_BUSINESSES] =
+{
+    -1842.9921,
+        -1806.4227,
+        -1279.6914,
+        -1508.2178,
+        -919.9146
+    };
+
+new Float:BusinessZ[MAX_BUSINESSES] =
+{
+    13.5781,
+    13.5547,
+    13.5469,
+    24.0000,
+    42.3281
+};
+
+new BusinessPrice[MAX_BUSINESSES] =
+{
+    80000,
+    120000,
+    175000,
+    250000,
+    350000
+};
+
+new BusinessIncomePerMinute[MAX_BUSINESSES] =
+{
+    120,
+    180,
+    250,
+    350,
+    500
+};
+
+new BusinessName[MAX_BUSINESSES][64] =
+{
+    "Idlewood Mini Market",
+    "Willowfield Workshop",
+    "Market Food Store",
+    "East LS Gas Station",
+    "Vinewood Electronics"
+};
+
 stock Float:GetDistanceBetweenPoints3D(Float:x1, Float:y1, Float:z1, Float:x2, Float:y2, Float:z2)
 {
     new Float:dx = x1 - x2;
@@ -684,6 +748,10 @@ forward OnOrgRankUpdated(playerid, targetid, newRank);
 forward OnOrgMemberKicked(playerid, targetid);
 forward OnOrgDisbanded(playerid, orgid);
 forward OnOrgInfoLoaded(playerid);
+forward OnPlayerBusinessLoaded(playerid);
+forward OnPlayerBusinessBought(playerid, businessIndex, price);
+forward OnBusinessCollectLoaded(playerid);
+forward OnPlayerBusinessSold(playerid, sellPrice);
 
 stock SaveAllPlayers()
 {
@@ -766,6 +834,7 @@ stock ResetPlayerAccountData(playerid)
     PlayerFindingBank[playerid] = 0;
     ResetPlayerHouseData(playerid);
     ResetPlayerOrgData(playerid);
+    ResetPlayerBusinessData(playerid);
 
     PlayerJob[playerid] = JOB_NONE;
     PlayerWorking[playerid] = 0;
@@ -3054,6 +3123,61 @@ stock SaveOrgBankMoney(orgid, bankMoney)
     return 1;
 }
 
+stock ResetPlayerBusinessData(playerid)
+{
+    PlayerBusinessDBID[playerid] = 0;
+    PlayerBusinessIndex[playerid] = -1;
+    PlayerFindingBusiness[playerid] = 0;
+    PlayerFindingBusinessIndex[playerid] = -1;
+    return 1;
+}
+
+stock IsValidBusinessIndex(businessIndex)
+{
+    if (businessIndex < 0 || businessIndex >= MAX_BUSINESSES)
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+stock IsPlayerNearBusiness(playerid, businessIndex)
+{
+    if (!IsValidBusinessIndex(businessIndex))
+    {
+        return 0;
+    }
+
+    if (GetPlayerDistanceFromPoint(playerid, BusinessX[businessIndex], BusinessY[businessIndex], BusinessZ[businessIndex]) <= BUSINESS_ACCESS_RADIUS)
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
+stock LoadPlayerBusiness(playerid)
+{
+    if (!PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0)
+    {
+        return 0;
+    }
+
+    new query[256];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "SELECT id, business_index FROM player_businesses WHERE owner_id=%d LIMIT 1",
+        PlayerDBID[playerid]
+    );
+
+    mysql_tquery(g_SQL, query, "OnPlayerBusinessLoaded", "i", playerid);
+    return 1;
+}
+
 main()
 {
     print("========================================");
@@ -3072,7 +3196,7 @@ public OnGameModeInit()
 {
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
-    SetGameModeText("LSIF Dev v0.13C Org Bank");
+    SetGameModeText("LSIF Dev v0.14A Business");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -3118,6 +3242,7 @@ public OnGameModeInit()
         ResetTruckerWorkData(i);
         ResetPlayerHouseData(i);
         ResetPlayerOrgData(i);
+        ResetPlayerBusinessData(i);
 
         PlayerJob[i] = JOB_NONE;
         PlayerWorking[i] = 0;
@@ -3139,7 +3264,7 @@ public OnGameModeInit()
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
     print("[LSIF] Anti-cheat timer aktif setiap 10 detik.");
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
-    print("[LSIF] Gamemode v0.13C Organization Bank berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.14A Business System berhasil dijalankan.");
     return 1;
 }
 
@@ -3247,6 +3372,9 @@ public OnPlayerDisconnect(playerid, reason)
         DisablePlayerCheckpoint(playerid);
         ResetPlayerRaceData(playerid);
     }
+
+    ResetPlayerBusinessData(playerid);
+
 
     return 1;
 }
@@ -3484,6 +3612,7 @@ public OnAccountLogin(playerid)
     LoadOwnedVehicle(playerid);
     LoadPlayerHouse(playerid);
     LoadPlayerOrganization(playerid);
+    LoadPlayerBusiness(playerid);
 
     new ip[45];
     new query[256];
@@ -3536,6 +3665,21 @@ public OnPlayerEnterCheckpoint(playerid)
 
             SendClientMessage(playerid, COLOR_GREEN, "Kamu sudah sampai di lokasi rumah.");
             SendClientMessage(playerid, COLOR_WHITE, "Gunakan /buyhouse [id] jika ingin membeli rumah ini.");
+            return 1;
+        }
+    }
+
+    if (PlayerFindingBusiness[playerid])
+    {
+        new businessIndex = PlayerFindingBusinessIndex[playerid];
+
+        if (IsValidBusinessIndex(businessIndex) && IsPlayerNearBusiness(playerid, businessIndex))
+        {
+            DisablePlayerCheckpoint(playerid);
+            PlayerFindingBusiness[playerid] = 0;
+
+            SendClientMessage(playerid, COLOR_GREEN, "Kamu sudah sampai di lokasi business.");
+            SendClientMessage(playerid, COLOR_WHITE, "Gunakan /buybiz [id] jika ingin membeli business ini.");
             return 1;
         }
     }
@@ -4682,6 +4826,144 @@ public OnOrgDisbanded(playerid, orgid)
     return 1;
 }
 
+public OnPlayerBusinessLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+
+    if (rows == 0)
+    {
+        PlayerBusinessDBID[playerid] = 0;
+        PlayerBusinessIndex[playerid] = -1;
+        return 1;
+    }
+
+    cache_get_value_name_int(0, "id", PlayerBusinessDBID[playerid]);
+    cache_get_value_name_int(0, "business_index", PlayerBusinessIndex[playerid]);
+
+    SendClientMessage(playerid, COLOR_GREEN, "Data business berhasil dimuat. Gunakan /mybiz.");
+    return 1;
+}
+
+public OnPlayerBusinessBought(playerid, businessIndex, price)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new insertId = cache_insert_id();
+
+    if (insertId <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gagal membeli business. Database insert gagal.");
+        return 1;
+    }
+
+    TakePlayerCash(playerid, price);
+
+    PlayerBusinessDBID[playerid] = insertId;
+    PlayerBusinessIndex[playerid] = businessIndex;
+
+    new msg[144];
+
+    format(msg, sizeof(msg), "Kamu berhasil membeli business: %s seharga $%d.", BusinessName[businessIndex], price);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+
+    SendClientMessage(playerid, COLOR_WHITE, "Gunakan /mybiz untuk info business.");
+    SendClientMessage(playerid, COLOR_WHITE, "Gunakan /collectbiz untuk mengambil passive income.");
+
+    SavePlayerData(playerid);
+    return 1;
+}
+
+public OnBusinessCollectLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+
+    if (rows == 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Data business tidak ditemukan.");
+        return 1;
+    }
+
+    new businessIndex;
+    new incomePerMinute;
+    new minutesPassed;
+
+    cache_get_value_name_int(0, "business_index", businessIndex);
+    cache_get_value_name_int(0, "income_per_minute", incomePerMinute);
+    cache_get_value_name_int(0, "minutes_passed", minutesPassed);
+
+    if (minutesPassed < 1)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Business belum menghasilkan income baru. Coba lagi nanti.");
+        return 1;
+    }
+
+    new earned = minutesPassed * incomePerMinute;
+
+    if (earned > BUSINESS_MAX_COLLECT)
+    {
+        earned = BUSINESS_MAX_COLLECT;
+    }
+
+    GivePlayerCash(playerid, earned);
+    SavePlayerData(playerid);
+
+    new query[256];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "UPDATE player_businesses SET last_collected=NOW() WHERE owner_id=%d LIMIT 1",
+        PlayerDBID[playerid]
+    );
+
+    mysql_tquery(g_SQL, query);
+
+    new msg[144];
+
+    format(msg, sizeof(msg), "Business income dikumpulkan: $%d dari %d menit.", earned, minutesPassed);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+
+    format(msg, sizeof(msg), "Business: %s | Income/minute: $%d", BusinessName[businessIndex], incomePerMinute);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+
+    return 1;
+}
+
+public OnPlayerBusinessSold(playerid, sellPrice)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    GivePlayerCash(playerid, sellPrice);
+
+    PlayerBusinessDBID[playerid] = 0;
+    PlayerBusinessIndex[playerid] = -1;
+
+    new msg[144];
+
+    format(msg, sizeof(msg), "Business berhasil dijual. Kamu menerima $%d.", sellPrice);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+
+    SavePlayerData(playerid);
+    return 1;
+}
+
 public OnPlayerCommandText(playerid, cmdtext[])
 {
     if (!PlayerLoggedIn[playerid])
@@ -4773,6 +5055,13 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/orgbank - Melihat saldo bank organisasi");
         SendClientMessage(playerid, COLOR_WHITE, "/orgdeposit [amount/all] - Deposit cash ke org bank");
         SendClientMessage(playerid, COLOR_WHITE, "/orgwithdraw [amount] - Withdraw org bank, Admin+");
+        SendClientMessage(playerid, COLOR_WHITE, "/businesses - Melihat daftar business");
+        SendClientMessage(playerid, COLOR_WHITE, "/findbiz [id] - Cari lokasi business");
+        SendClientMessage(playerid, COLOR_WHITE, "/cancelbiz - Hapus checkpoint business");
+        SendClientMessage(playerid, COLOR_WHITE, "/buybiz [id] - Beli business");
+        SendClientMessage(playerid, COLOR_WHITE, "/mybiz - Info business pribadi");
+        SendClientMessage(playerid, COLOR_WHITE, "/collectbiz - Ambil income business");
+        SendClientMessage(playerid, COLOR_WHITE, "/sellbiz - Jual business");
 
 
         return 1;
@@ -5387,6 +5676,16 @@ public OnPlayerCommandText(playerid, cmdtext[])
         else
         {
             SendClientMessage(playerid, COLOR_WHITE, "Organization: None");
+        }
+
+        if (PlayerBusinessDBID[playerid] > 0 && PlayerBusinessIndex[playerid] != -1)
+        {
+            format(msg, sizeof(msg), "Business: %s", BusinessName[PlayerBusinessIndex[playerid]]);
+            SendClientMessage(playerid, COLOR_WHITE, msg);
+        }
+        else
+        {
+            SendClientMessage(playerid, COLOR_WHITE, "Business: None");
         }
 
         return 1;
@@ -8053,6 +8352,246 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/orgwithdraw", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /orgwithdraw [amount]");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/businesses", true))
+    {
+        new msg[144];
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== BUSINESSES ==========");
+
+        for (new i = 0; i < MAX_BUSINESSES; i++)
+        {
+            format(
+                msg,
+                sizeof(msg),
+                "%d. %s | Price: $%d | Income: $%d/min",
+                i + 1,
+                BusinessName[i],
+                BusinessPrice[i],
+                BusinessIncomePerMinute[i]
+            );
+            SendClientMessage(playerid, COLOR_WHITE, msg);
+        }
+
+        SendClientMessage(playerid, COLOR_CYAN, "Gunakan /findbiz [id] untuk mencari business.");
+        SendClientMessage(playerid, COLOR_CYAN, "Gunakan /buybiz [id] saat dekat lokasi business.");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/findbiz ", true) == 0)
+    {
+        new bizStr[16];
+
+        if (!GetOneParam(cmdtext[9], bizStr, sizeof(bizStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /findbiz [business_id]");
+            return 1;
+        }
+
+        if (!IsNumericString(bizStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Business ID harus angka.");
+            return 1;
+        }
+
+        new businessIndex = strval(bizStr) - 1;
+
+        if (!IsValidBusinessIndex(businessIndex))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Business ID tidak valid.");
+            return 1;
+        }
+
+        if (PlayerWorking[playerid] || PlayerRace[playerid] != RACE_NONE)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Selesaikan job/race aktif dulu.");
+            return 1;
+        }
+
+        SetPlayerCheckpoint(
+            playerid,
+            BusinessX[businessIndex],
+            BusinessY[businessIndex],
+            BusinessZ[businessIndex],
+            BUSINESS_ACCESS_RADIUS
+        );
+
+        PlayerFindingBusiness[playerid] = 1;
+        PlayerFindingBusinessIndex[playerid] = businessIndex;
+
+        new msg[144];
+        format(msg, sizeof(msg), "Checkpoint diarahkan ke business: %s.", BusinessName[businessIndex]);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan /cancelbiz untuk menghapus checkpoint.");
+
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/findbiz", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /findbiz [business_id]");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/cancelbiz", true))
+    {
+        if (!PlayerFindingBusiness[playerid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu tidak sedang mencari business.");
+            return 1;
+        }
+
+        DisablePlayerCheckpoint(playerid);
+        PlayerFindingBusiness[playerid] = 0;
+        PlayerFindingBusinessIndex[playerid] = -1;
+
+        SendClientMessage(playerid, COLOR_YELLOW, "Checkpoint business dihapus.");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/buybiz ", true) == 0)
+    {
+        new bizStr[16];
+
+        if (!GetOneParam(cmdtext[8], bizStr, sizeof(bizStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /buybiz [business_id]");
+            return 1;
+        }
+
+        if (!IsNumericString(bizStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Business ID harus angka.");
+            return 1;
+        }
+
+        if (PlayerBusinessDBID[playerid] > 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu sudah punya business. Gunakan /sellbiz dulu.");
+            return 1;
+        }
+
+        new businessIndex = strval(bizStr) - 1;
+
+        if (!IsValidBusinessIndex(businessIndex))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Business ID tidak valid.");
+            return 1;
+        }
+
+        if (!IsPlayerNearBusiness(playerid, businessIndex))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat business tersebut untuk membelinya.");
+            SendClientMessage(playerid, COLOR_WHITE, "Gunakan /findbiz [id].");
+            return 1;
+        }
+
+        new price = BusinessPrice[businessIndex];
+
+        if (PlayerMoney[playerid] < price)
+        {
+            new msg[144];
+            format(msg, sizeof(msg), "Cash tidak cukup. Harga business ini $%d.", price);
+            SendClientMessage(playerid, COLOR_RED, msg);
+            return 1;
+        }
+
+        new query[512];
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "INSERT INTO player_businesses (owner_id, business_index, business_name, price, income_per_minute, pos_x, pos_y, pos_z, last_collected) VALUES (%d, %d, '%e', %d, %d, %f, %f, %f, NOW())",
+            PlayerDBID[playerid],
+            businessIndex,
+            BusinessName[businessIndex],
+            price,
+            BusinessIncomePerMinute[businessIndex],
+            BusinessX[businessIndex],
+            BusinessY[businessIndex],
+            BusinessZ[businessIndex]
+        );
+
+        mysql_tquery(g_SQL, query, "OnPlayerBusinessBought", "iii", playerid, businessIndex, price);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/mybiz", true))
+    {
+        if (PlayerBusinessDBID[playerid] <= 0 || PlayerBusinessIndex[playerid] == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum punya business.");
+            return 1;
+        }
+
+        new businessIndex = PlayerBusinessIndex[playerid];
+        new msg[144];
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== MY BUSINESS ==========");
+
+        format(msg, sizeof(msg), "Business: %s", BusinessName[businessIndex]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "DBID: %d | Price: $%d", PlayerBusinessDBID[playerid], BusinessPrice[businessIndex]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Income: $%d/minute | Max collect: $%d", BusinessIncomePerMinute[businessIndex], BUSINESS_MAX_COLLECT);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Location: %.2f, %.2f, %.2f", BusinessX[businessIndex], BusinessY[businessIndex], BusinessZ[businessIndex]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        SendClientMessage(playerid, COLOR_CYAN, "Command: /collectbiz, /sellbiz.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/collectbiz", true))
+    {
+        if (PlayerBusinessDBID[playerid] <= 0 || PlayerBusinessIndex[playerid] == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum punya business.");
+            return 1;
+        }
+
+        new query[512];
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "SELECT business_index, income_per_minute, TIMESTAMPDIFF(MINUTE, last_collected, NOW()) AS minutes_passed FROM player_businesses WHERE owner_id=%d LIMIT 1",
+            PlayerDBID[playerid]
+        );
+
+        mysql_tquery(g_SQL, query, "OnBusinessCollectLoaded", "i", playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/sellbiz", true))
+    {
+        if (PlayerBusinessDBID[playerid] <= 0 || PlayerBusinessIndex[playerid] == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum punya business.");
+            return 1;
+        }
+
+        new businessIndex = PlayerBusinessIndex[playerid];
+        new sellPrice = (BusinessPrice[businessIndex] * BUSINESS_SELL_PERCENT) / 100;
+        new query[256];
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "DELETE FROM player_businesses WHERE id=%d AND owner_id=%d LIMIT 1",
+            PlayerBusinessDBID[playerid],
+            PlayerDBID[playerid]
+        );
+
+        mysql_tquery(g_SQL, query, "OnPlayerBusinessSold", "ii", playerid, sellPrice);
         return 1;
     }
 

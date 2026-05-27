@@ -202,3 +202,24 @@ CREATE TABLE IF NOT EXISTS organization_members (
     INDEX idx_org_id (org_id),
     INDEX idx_player_id (player_id)
 );
+
+CREATE TABLE IF NOT EXISTS player_businesses (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+
+    owner_id INT NOT NULL UNIQUE,
+    business_index INT NOT NULL,
+    business_name VARCHAR(64) NOT NULL,
+    price INT NOT NULL,
+    income_per_minute INT NOT NULL,
+
+    pos_x FLOAT NOT NULL,
+    pos_y FLOAT NOT NULL,
+    pos_z FLOAT NOT NULL,
+
+    last_collected DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+
+    INDEX idx_owner_id (owner_id),
+    INDEX idx_business_index (business_index)
+);

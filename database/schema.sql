@@ -241,3 +241,24 @@ DROP INDEX owner_id;
 
 ALTER TABLE player_vehicles
 ADD UNIQUE KEY unique_owner_slot (owner_id, slot);
+
+ALTER TABLE player_vehicles
+ADD COLUMN vehicle_name VARCHAR(32) NOT NULL DEFAULT 'Vehicle'
+AFTER model_id;
+
+ALTER TABLE player_vehicles
+ADD COLUMN fuel INT NOT NULL DEFAULT 100
+AFTER health;
+
+CREATE TABLE IF NOT EXISTS beta_whitelist (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(24) NOT NULL UNIQUE,
+    added_by VARCHAR(24) NOT NULL DEFAULT 'SYSTEM',
+    note VARCHAR(128) NULL,
+    active TINYINT NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+
+    INDEX idx_username (username),
+    INDEX idx_active (active)
+);

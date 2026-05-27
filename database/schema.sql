@@ -223,3 +223,21 @@ CREATE TABLE IF NOT EXISTS player_businesses (
     INDEX idx_owner_id (owner_id),
     INDEX idx_business_index (business_index)
 );
+
+ALTER TABLE player_businesses
+ADD COLUMN business_level INT NOT NULL DEFAULT 1
+AFTER income_per_minute;
+
+ALTER TABLE player_businesses
+ADD COLUMN total_collected INT NOT NULL DEFAULT 0
+AFTER business_level;
+
+ALTER TABLE player_vehicles
+ADD COLUMN slot INT NOT NULL DEFAULT 1
+AFTER owner_id;
+
+ALTER TABLE player_vehicles
+DROP INDEX owner_id;
+
+ALTER TABLE player_vehicles
+ADD UNIQUE KEY unique_owner_slot (owner_id, slot);

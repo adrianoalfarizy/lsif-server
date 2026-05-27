@@ -262,3 +262,31 @@ CREATE TABLE IF NOT EXISTS beta_whitelist (
     INDEX idx_username (username),
     INDEX idx_active (active)
 );
+
+ALTER TABLE players
+ADD COLUMN starter_pack_claimed TINYINT NOT NULL DEFAULT 0
+AFTER spawn_house;
+
+CREATE TABLE IF NOT EXISTS feedback_reports (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+
+    reporter_id INT NOT NULL,
+    reporter_name VARCHAR(24) NOT NULL,
+
+    type VARCHAR(16) NOT NULL,
+    message VARCHAR(255) NOT NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'open',
+
+    handled_by_id INT NULL,
+    handled_by_name VARCHAR(24) NULL,
+    close_note VARCHAR(128) NULL,
+    closed_at DATETIME NULL,
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+
+    INDEX idx_reporter_id (reporter_id),
+    INDEX idx_type (type),
+    INDEX idx_status (status),
+    INDEX idx_created_at (created_at)
+);

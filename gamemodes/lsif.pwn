@@ -18,6 +18,11 @@
 #define DIALOG_LOGIN    1001
 #define DIALOG_BETA_RULES 1002
 #define DIALOG_BETA_MOTD 1003
+#define DIALOG_FEEDBACK_LIST 1004
+
+#define STARTER_CASH 15000
+#define STARTER_BANK 5000
+#define STARTER_XP 250
 
 
 #define AUTOSAVE_INTERVAL 300000 // 5 menit dalam milidetik
@@ -184,6 +189,7 @@ new g_ServerStartTick;
 new PlayerMoneyMismatchCount[MAX_PLAYERS];
 new PlayerLastACWarningTick[MAX_PLAYERS];
 new PlayerLastWhitelistQuery[MAX_PLAYERS][24];
+new PlayerStarterPackClaimed[MAX_PLAYERS];
 
 new PlayerDBID[MAX_PLAYERS];
 new PlayerLoggedIn[MAX_PLAYERS];
@@ -888,6 +894,9 @@ forward OnBetaWhitelistCheck(playerid);
 forward OnWhitelistAdded(playerid);
 forward OnWhitelistRemoved(playerid);
 forward OnWhitelistListLoaded(playerid);
+forward OnFeedbackCreated(playerid);
+forward OnFeedbackListLoaded(playerid);
+forward OnFeedbackClosed(playerid, feedbackid);
 forward OnWhitelistCheckLoaded(playerid);
 
 stock ShowBetaMOTD(playerid)
@@ -925,7 +934,9 @@ stock SendBetaGuide(playerid)
     SendClientMessage(playerid, COLOR_WHITE, "Uang: kerja courier/taxi/trucker, race, business income.");
     SendClientMessage(playerid, COLOR_WHITE, "Kendaraan: /finddealer -> /vehicleshop -> /buyvehicle [id].");
     SendClientMessage(playerid, COLOR_WHITE, "Bank: /findbank -> /deposit atau /withdraw.");
-    SendClientMessage(playerid, COLOR_WHITE, "Bug/report: /report [id] [reason]. Admin online: /admins.");
+    SendClientMessage(playerid, COLOR_WHITE, "Starter: /starterpack untuk modal awal closed beta.");
+    SendClientMessage(playerid, COLOR_WHITE, "Bug/saran: /bugreport [text] atau /suggest [text].");
+    SendClientMessage(playerid, COLOR_WHITE, "Report player: /report [id] [reason]. Admin online: /admins.");
     SendClientMessage(playerid, COLOR_CYAN, "Baca aturan kapan saja dengan /serverrules dan info beta dengan /motd.");
     return 1;
 }
@@ -1050,6 +1061,7 @@ stock ResetPlayerAccountData(playerid)
     PlayerMoneyMismatchCount[playerid] = 0;
     PlayerLastACWarningTick[playerid] = 0;
     format(PlayerLastWhitelistQuery[playerid], 24, "-");
+    PlayerStarterPackClaimed[playerid] = 0;
 
     SyncPlayerMoneyHUD(playerid);
     return 1;
@@ -1160,7 +1172,7 @@ stock SavePlayerData(playerid, notify = 0)
         g_SQL,
         query,
         sizeof(query),
-        "UPDATE players SET money=%d, bank_money=%d, xp=%d, level=%d, admin_level=%d, current_job=%d, spawn_house=%d, pos_x=%f, pos_y=%f, pos_z=%f, pos_a=%f WHERE id=%d LIMIT 1",
+        "UPDATE players SET money=%d, bank_money=%d, xp=%d, level=%d, admin_level=%d, current_job=%d, spawn_house=%d, starter_pack_claimed=%d, pos_x=%f, pos_y=%f, pos_z=%f, pos_a=%f WHERE id=%d LIMIT 1",
         PlayerMoney[playerid],
         PlayerBankMoney[playerid],
         PlayerXP[playerid],
@@ -1168,6 +1180,7 @@ stock SavePlayerData(playerid, notify = 0)
         PlayerAdmin[playerid],
         PlayerJob[playerid],
         PlayerSpawnHouse[playerid],
+        PlayerStarterPackClaimed[playerid],
         x,
         y,
         z,
@@ -3845,12 +3858,170 @@ public AutoSavePlayers()
     return 1;
 }
 
+
+stock SendStarterPackInfo(playerid)
+{
+    new msg[144];
+
+    SendClientMessage(playerid, COLOR_YELLOW, "========== STARTER PACK ==========");
+    format(msg, sizeof(msg), "Cash: $%d | Bank: $%d | XP: %d", STARTER_CASH, STARTER_BANK, STARTER_XP);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+    SendClientMessage(playerid, COLOR_CYAN, "Gunakan /starterpack satu kali untuk klaim.");
+    return 1;
+}
+
+stock ShowWhereAmI(playerid)
+{
+    new Float:x, Float:y, Float:z;
+    new msg[144];
+
+    GetPlayerPos(playerid, x, y, z);
+
+    SendClientMessage(playerid, COLOR_YELLOW, "========== WHERE AM I ==========");
+
+    format(msg, sizeof(msg), "Pos: %.2f, %.2f, %.2f", x, y, z);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+
+    format(msg, sizeof(msg), "Interior: %d | VirtualWorld: %d", GetPlayerInterior(playerid), GetPlayerVirtualWorld(playerid));
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+
+    format(msg, sizeof(msg), "Nearest bank: %d unit | Nearest dealer: %d unit", GetNearestBankDistance(playerid), GetNearestDealershipDistance(playerid));
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+
+    if (PlayerInsideHouse[playerid])
+    {
+        format(msg, sizeof(msg), "Inside house owner: %d", PlayerInsideHouseOwner[playerid]);
+        SendClientMessage(playerid, COLOR_CYAN, msg);
+    }
+
+    return 1;
+}
+
+stock CreateFeedbackReport(playerid, const feedbackType[], const message[])
+{
+    if (!PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0)
+    {
+        return 0;
+    }
+
+    new playerName[MAX_PLAYER_NAME];
+    new query[768];
+
+    GetPlayerName(playerid, playerName, sizeof(playerName));
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO feedback_reports (reporter_id, reporter_name, type, message, status) VALUES (%d, '%e', '%e', '%e', 'open')",
+        PlayerDBID[playerid],
+        playerName,
+        feedbackType,
+        message
+    );
+
+    mysql_tquery(g_SQL, query, "OnFeedbackCreated", "i", playerid);
+    return 1;
+}
+
+public OnFeedbackCreated(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new feedbackId = cache_insert_id();
+    new msg[144];
+
+    if (feedbackId <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Feedback gagal dikirim ke database.");
+        return 1;
+    }
+
+    format(msg, sizeof(msg), "Feedback berhasil dikirim. ID: #%d. Terima kasih sudah membantu closed beta.", feedbackId);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+
+    format(msg, sizeof(msg), "[FEEDBACK #%d] Feedback baru masuk. Admin gunakan /feedbacks.", feedbackId);
+    SendMessageToAdmins(COLOR_ORANGE, msg);
+
+    return 1;
+}
+
+public OnFeedbackListLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+
+    SendClientMessage(playerid, COLOR_YELLOW, "========== OPEN FEEDBACK ==========");
+
+    if (rows == 0)
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "Tidak ada feedback terbuka.");
+        return 1;
+    }
+
+    new feedbackId;
+    new reporterName[24];
+    new feedbackType[16];
+    new message[96];
+    new createdAt[32];
+    new msg[144];
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name_int(i, "id", feedbackId);
+        cache_get_value_name(i, "reporter_name", reporterName, sizeof(reporterName));
+        cache_get_value_name(i, "type", feedbackType, sizeof(feedbackType));
+        cache_get_value_name(i, "message", message, sizeof(message));
+        cache_get_value_name(i, "created_at", createdAt, sizeof(createdAt));
+
+        format(msg, sizeof(msg), "#%d [%s] %s: %s", feedbackId, feedbackType, reporterName, message);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Created: %s | Close: /closefeedback %d done", createdAt, feedbackId);
+        SendClientMessage(playerid, COLOR_CYAN, msg);
+    }
+
+    return 1;
+}
+
+public OnFeedbackClosed(playerid, feedbackid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new affectedRows = cache_affected_rows();
+    new msg[144];
+
+    if (affectedRows > 0)
+    {
+        format(msg, sizeof(msg), "Feedback #%d berhasil ditutup.", feedbackid);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+    }
+    else
+    {
+        format(msg, sizeof(msg), "Feedback #%d tidak ditemukan atau sudah tertutup.", feedbackid);
+        SendClientMessage(playerid, COLOR_YELLOW, msg);
+    }
+
+    return 1;
+}
+
+
 public OnGameModeInit()
 {
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.16A Closed Beta");
+    SetGameModeText("LSIF Dev v0.16B Beta Polish");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -4109,7 +4280,7 @@ public OnPlayerSpawn(playerid)
 
 public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 {
-    if (dialogid == DIALOG_BETA_RULES || dialogid == DIALOG_BETA_MOTD)
+    if (dialogid == DIALOG_BETA_RULES || dialogid == DIALOG_BETA_MOTD || dialogid == DIALOG_FEEDBACK_LIST)
     {
         return 1;
     }
@@ -4141,7 +4312,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             g_SQL,
             query,
             sizeof(query),
-            "INSERT INTO players (username, password_hash, money, bank_money, xp, level, admin_level, current_job, pos_x, pos_y, pos_z, pos_a, last_ip, last_login) VALUES ('%e', SHA2('%e', 256), 500, 0, 0, 1, 0, 0, %f, %f, %f, %f, '%e', NOW())",
+            "INSERT INTO players (username, password_hash, money, bank_money, xp, level, admin_level, current_job, starter_pack_claimed, pos_x, pos_y, pos_z, pos_a, last_ip, last_login) VALUES ('%e', SHA2('%e', 256), 500, 0, 0, 1, 0, 0, 0, %f, %f, %f, %f, '%e', NOW())",
             username,
             inputtext,
             SPAWN_X,
@@ -4180,7 +4351,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             g_SQL,
             query,
             sizeof(query),
-            "SELECT id, money, bank_money, xp, level, admin_level, skin, current_job, spawn_house, pos_x, pos_y, pos_z, pos_a FROM players WHERE username='%e' AND password_hash=SHA2('%e', 256) LIMIT 1",
+            "SELECT id, money, bank_money, xp, level, admin_level, skin, current_job, spawn_house, starter_pack_claimed, pos_x, pos_y, pos_z, pos_a FROM players WHERE username='%e' AND password_hash=SHA2('%e', 256) LIMIT 1",
             username,
             inputtext
         );
@@ -4229,6 +4400,7 @@ public OnAccountRegister(playerid)
     PlayerLevel[playerid] = 1;
     PlayerAdmin[playerid] = 0;
     PlayerJob[playerid] = JOB_NONE;
+    PlayerStarterPackClaimed[playerid] = 0;
     PlayerSpawnHouse[playerid] = 0;
     PlayerSpawnHouse[playerid] = 0;
     ResetPlayerHouseData(playerid);
@@ -4275,6 +4447,7 @@ public OnAccountLogin(playerid)
     // cache_get_value_name_int(0, "skin", PlayerLevel[playerid]);
     cache_get_value_name_int(0, "current_job", PlayerJob[playerid]);
     cache_get_value_name_int(0, "spawn_house", PlayerSpawnHouse[playerid]);
+    cache_get_value_name_int(0, "starter_pack_claimed", PlayerStarterPackClaimed[playerid]);
 
     cache_get_value_name_float(0, "pos_x", PlayerLastX[playerid]);
     cache_get_value_name_float(0, "pos_y", PlayerLastY[playerid]);
@@ -6194,6 +6367,10 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/motd - Melihat pengumuman closed beta");
         SendClientMessage(playerid, COLOR_WHITE, "/serverrules - Membaca aturan server");
         SendClientMessage(playerid, COLOR_WHITE, "/betahelp - Starter guide closed beta");
+        SendClientMessage(playerid, COLOR_WHITE, "/starterpack - Klaim starter pack beta sekali");
+        SendClientMessage(playerid, COLOR_WHITE, "/whereami - Cek posisi/interior/debug lokasi");
+        SendClientMessage(playerid, COLOR_WHITE, "/bugreport [text] - Laporkan bug closed beta");
+        SendClientMessage(playerid, COLOR_WHITE, "/suggest [text] - Kirim saran closed beta");
 
         return 1;
     }
@@ -6215,6 +6392,148 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendBetaGuide(playerid);
         return 1;
     }
+
+
+    if (!strcmp(cmdtext, "/starterpack", true))
+    {
+        if (PlayerStarterPackClaimed[playerid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Starter pack sudah pernah kamu klaim.");
+            return 1;
+        }
+
+        GivePlayerCash(playerid, STARTER_CASH);
+        GivePlayerBankMoney(playerid, STARTER_BANK);
+        GivePlayerXPEx(playerid, STARTER_XP);
+
+        PlayerStarterPackClaimed[playerid] = 1;
+        SavePlayerData(playerid);
+
+        SendClientMessage(playerid, COLOR_GREEN, "Starter pack berhasil diklaim.");
+        SendStarterPackInfo(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/whereami", true))
+    {
+        ShowWhereAmI(playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/bugreport ", true) == 0)
+    {
+        new message[255];
+        format(message, sizeof(message), "%s", cmdtext[11]);
+
+        if (strlen(message) < 5)
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /bugreport [jelaskan bug minimal 5 karakter]");
+            return 1;
+        }
+
+        CreateFeedbackReport(playerid, "bug", message);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/bugreport", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /bugreport [jelaskan bug]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/suggest ", true) == 0)
+    {
+        new message[255];
+        format(message, sizeof(message), "%s", cmdtext[9]);
+
+        if (strlen(message) < 5)
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /suggest [saran minimal 5 karakter]");
+            return 1;
+        }
+
+        CreateFeedbackReport(playerid, "suggest", message);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/suggest", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /suggest [saran]");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/feedbacks", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_HELPER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+            return 1;
+        }
+
+        mysql_tquery(
+            g_SQL,
+            "SELECT id, reporter_name, type, message, created_at FROM feedback_reports WHERE status='open' ORDER BY id DESC LIMIT 5",
+            "OnFeedbackListLoaded",
+            "i",
+            playerid
+        );
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/closefeedback ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_HELPER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+            return 1;
+        }
+
+        new feedbackStr[16];
+        new note[128];
+
+        if (!GetFirstParamAndRest(cmdtext[15], feedbackStr, sizeof(feedbackStr), note, sizeof(note)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /closefeedback [id] [note]");
+            return 1;
+        }
+
+        if (!IsNumericString(feedbackStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Feedback ID harus angka.");
+            return 1;
+        }
+
+        new feedbackid = strval(feedbackStr);
+        new adminName[MAX_PLAYER_NAME];
+        new query[512];
+
+        GetPlayerName(playerid, adminName, sizeof(adminName));
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "UPDATE feedback_reports SET status='closed', handled_by_id=%d, handled_by_name='%e', close_note='%e', closed_at=NOW() WHERE id=%d AND status='open' LIMIT 1",
+            PlayerDBID[playerid],
+            adminName,
+            note,
+            feedbackid
+        );
+
+        mysql_tquery(g_SQL, query, "OnFeedbackClosed", "ii", playerid, feedbackid);
+
+        new detail[160];
+        format(detail, sizeof(detail), "closefeedback id=%d note=%s", feedbackid, note);
+        LogAdminAction(playerid, INVALID_PLAYER_ID, "CLOSE_FEEDBACK", detail);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/closefeedback", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /closefeedback [id] [note]");
+        return 1;
+    }
+
 
     if (strfind(cmdtext, "/abroadcast ", true) == 0)
     {
@@ -6820,6 +7139,9 @@ public OnPlayerCommandText(playerid, cmdtext[])
         format(msg, sizeof(msg), "XP: %d | Level: %d", PlayerXP[playerid], PlayerLevel[playerid]);
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
+        format(msg, sizeof(msg), "Starter Pack Claimed: %s", PlayerStarterPackClaimed[playerid] ? ("Yes") : ("No"));
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
         format(msg, sizeof(msg), "Garage: %d/%d vehicles", CountPlayerGarageVehicles(playerid), MAX_GARAGE_SLOTS);
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
@@ -7211,6 +7533,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/baninfo [username] - Cek info ban");
         SendClientMessage(playerid, COLOR_WHITE, "/reports - Lihat 5 report terbuka terakhir");
         SendClientMessage(playerid, COLOR_WHITE, "/closereport [id] [note] - Tutup report");
+        SendClientMessage(playerid, COLOR_WHITE, "/feedbacks - Lihat feedback/bug/saran terbuka");
+        SendClientMessage(playerid, COLOR_WHITE, "/closefeedback [id] [note] - Tutup feedback");
         SendClientMessage(playerid, COLOR_WHITE, "/acinfo - Melihat informasi basic anti-cheat");
         SendClientMessage(playerid, COLOR_WHITE, "/setfuel [amount] - Set fuel kendaraan aktif, Owner only");
         SendClientMessage(playerid, COLOR_WHITE, "/serverinfo - Info server dan uptime");

@@ -145,6 +145,10 @@
 #define BUSINESS_SELL_PERCENT 70
 #define BUSINESS_MAX_COLLECT 500000
 
+#define BUSINESS_MAX_LEVEL 5
+#define BUSINESS_UPGRADE_BASE_COST 50000
+#define BUSINESS_UPGRADE_COST_MULTIPLIER 2
+
 new MySQL:g_SQL;
 new g_AutosaveTimer;
 
@@ -504,6 +508,8 @@ new PlayerOrgBankMoney[MAX_PLAYERS];
 
 new PlayerBusinessDBID[MAX_PLAYERS];
 new PlayerBusinessIndex[MAX_PLAYERS];
+new PlayerBusinessLevel[MAX_PLAYERS];
+new PlayerBusinessTotalCollected[MAX_PLAYERS];
 new PlayerFindingBusiness[MAX_PLAYERS];
 new PlayerFindingBusinessIndex[MAX_PLAYERS];
 
@@ -752,6 +758,8 @@ forward OnPlayerBusinessLoaded(playerid);
 forward OnPlayerBusinessBought(playerid, businessIndex, price);
 forward OnBusinessCollectLoaded(playerid);
 forward OnPlayerBusinessSold(playerid, sellPrice);
+forward OnBusinessUpgraded(playerid, newLevel, cost);
+forward OnBusinessTopLoaded(playerid);
 
 stock SaveAllPlayers()
 {
@@ -3127,6 +3135,8 @@ stock ResetPlayerBusinessData(playerid)
 {
     PlayerBusinessDBID[playerid] = 0;
     PlayerBusinessIndex[playerid] = -1;
+    PlayerBusinessLevel[playerid] = 0;
+    PlayerBusinessTotalCollected[playerid] = 0;
     PlayerFindingBusiness[playerid] = 0;
     PlayerFindingBusinessIndex[playerid] = -1;
     return 1;
@@ -3170,12 +3180,54 @@ stock LoadPlayerBusiness(playerid)
         g_SQL,
         query,
         sizeof(query),
-        "SELECT id, business_index FROM player_businesses WHERE owner_id=%d LIMIT 1",
+        "SELECT id, business_index, business_level, total_collected FROM player_businesses WHERE owner_id=%d LIMIT 1",
         PlayerDBID[playerid]
     );
 
     mysql_tquery(g_SQL, query, "OnPlayerBusinessLoaded", "i", playerid);
     return 1;
+}
+
+stock GetBusinessIncomePerMinute(businessIndex, level)
+{
+    if (!IsValidBusinessIndex(businessIndex))
+    {
+        return 0;
+    }
+
+    if (level < 1)
+    {
+        level = 1;
+    }
+
+    return BusinessIncomePerMinute[businessIndex] * level;
+}
+
+stock GetBusinessUpgradeCost(level)
+{
+    if (level < 1)
+    {
+        level = 1;
+    }
+
+    new cost = BUSINESS_UPGRADE_BASE_COST;
+
+    for (new i = 1; i < level; i++)
+    {
+        cost *= BUSINESS_UPGRADE_COST_MULTIPLIER;
+    }
+
+    return cost;
+}
+
+stock IsBusinessOwner(playerid)
+{
+    if (PlayerBusinessDBID[playerid] > 0 && PlayerBusinessIndex[playerid] != -1)
+    {
+        return 1;
+    }
+
+    return 0;
 }
 
 main()
@@ -3196,7 +3248,7 @@ public OnGameModeInit()
 {
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
-    SetGameModeText("LSIF Dev v0.14A Business");
+    SetGameModeText("LSIF Dev v0.14B Business Upgrade");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -3264,7 +3316,7 @@ public OnGameModeInit()
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
     print("[LSIF] Anti-cheat timer aktif setiap 10 detik.");
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
-    print("[LSIF] Gamemode v0.14A Business System berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.14B Business Upgrade berhasil dijalankan.");
     return 1;
 }
 
@@ -4844,6 +4896,8 @@ public OnPlayerBusinessLoaded(playerid)
 
     cache_get_value_name_int(0, "id", PlayerBusinessDBID[playerid]);
     cache_get_value_name_int(0, "business_index", PlayerBusinessIndex[playerid]);
+    cache_get_value_name_int(0, "business_level", PlayerBusinessLevel[playerid]);
+    cache_get_value_name_int(0, "total_collected", PlayerBusinessTotalCollected[playerid]);
 
     SendClientMessage(playerid, COLOR_GREEN, "Data business berhasil dimuat. Gunakan /mybiz.");
     return 1;
@@ -4868,6 +4922,8 @@ public OnPlayerBusinessBought(playerid, businessIndex, price)
 
     PlayerBusinessDBID[playerid] = insertId;
     PlayerBusinessIndex[playerid] = businessIndex;
+    PlayerBusinessLevel[playerid] = 1;
+    PlayerBusinessTotalCollected[playerid] = 0;
 
     new msg[144];
 
@@ -4898,10 +4954,14 @@ public OnBusinessCollectLoaded(playerid)
 
     new businessIndex;
     new incomePerMinute;
+    new businessLevel;
+    new totalCollected;
     new minutesPassed;
 
     cache_get_value_name_int(0, "business_index", businessIndex);
     cache_get_value_name_int(0, "income_per_minute", incomePerMinute);
+    cache_get_value_name_int(0, "business_level", businessLevel);
+    cache_get_value_name_int(0, "total_collected", totalCollected);
     cache_get_value_name_int(0, "minutes_passed", minutesPassed);
 
     if (minutesPassed < 1)
@@ -4910,12 +4970,18 @@ public OnBusinessCollectLoaded(playerid)
         return 1;
     }
 
-    new earned = minutesPassed * incomePerMinute;
+    new currentIncome = incomePerMinute * businessLevel;
+    new earned = minutesPassed * currentIncome;
 
     if (earned > BUSINESS_MAX_COLLECT)
     {
         earned = BUSINESS_MAX_COLLECT;
     }
+
+    new newTotalCollected = totalCollected + earned;
+
+    PlayerBusinessLevel[playerid] = businessLevel;
+    PlayerBusinessTotalCollected[playerid] = newTotalCollected;
 
     GivePlayerCash(playerid, earned);
     SavePlayerData(playerid);
@@ -4926,7 +4992,8 @@ public OnBusinessCollectLoaded(playerid)
         g_SQL,
         query,
         sizeof(query),
-        "UPDATE player_businesses SET last_collected=NOW() WHERE owner_id=%d LIMIT 1",
+        "UPDATE player_businesses SET total_collected=%d, last_collected=NOW() WHERE owner_id=%d LIMIT 1",
+        newTotalCollected,
         PlayerDBID[playerid]
     );
 
@@ -4937,7 +5004,7 @@ public OnBusinessCollectLoaded(playerid)
     format(msg, sizeof(msg), "Business income dikumpulkan: $%d dari %d menit.", earned, minutesPassed);
     SendClientMessage(playerid, COLOR_GREEN, msg);
 
-    format(msg, sizeof(msg), "Business: %s | Income/minute: $%d", BusinessName[businessIndex], incomePerMinute);
+    format(msg, sizeof(msg), "Business: %s | Level: %d | Income/minute: $%d", BusinessName[businessIndex], businessLevel, currentIncome);
     SendClientMessage(playerid, COLOR_WHITE, msg);
 
     return 1;
@@ -4961,6 +5028,85 @@ public OnPlayerBusinessSold(playerid, sellPrice)
     SendClientMessage(playerid, COLOR_GREEN, msg);
 
     SavePlayerData(playerid);
+    return 1;
+}
+
+public OnBusinessUpgraded(playerid, newLevel, cost)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new affectedRows = cache_affected_rows();
+
+    if (affectedRows <= 0)
+    {
+        GivePlayerCash(playerid, cost);
+        SendClientMessage(playerid, COLOR_RED, "Upgrade business gagal. Uang dikembalikan.");
+        return 1;
+    }
+
+    PlayerBusinessLevel[playerid] = newLevel;
+
+    SavePlayerData(playerid);
+
+    new businessIndex = PlayerBusinessIndex[playerid];
+    new currentIncome = GetBusinessIncomePerMinute(businessIndex, PlayerBusinessLevel[playerid]);
+    new msg[144];
+
+    format(msg, sizeof(msg), "Business berhasil upgrade ke level %d.", newLevel);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+
+    format(msg, sizeof(msg), "Income sekarang: $%d/minute.", currentIncome);
+    SendClientMessage(playerid, COLOR_CYAN, msg);
+
+    return 1;
+}
+
+public OnBusinessTopLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+
+    SendClientMessage(playerid, COLOR_YELLOW, "========== BUSINESS TOP ==========");
+
+    if (rows == 0)
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "Belum ada data business.");
+        return 1;
+    }
+
+    new username[24];
+    new businessName[64];
+    new level;
+    new totalCollected;
+    new msg[144];
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name(i, "username", username, sizeof(username));
+        cache_get_value_name(i, "business_name", businessName, sizeof(businessName));
+        cache_get_value_name_int(i, "business_level", level);
+        cache_get_value_name_int(i, "total_collected", totalCollected);
+
+        format(
+            msg,
+            sizeof(msg),
+            "%d. %s | %s | Lv %d | Collected: $%d",
+            i + 1,
+            username,
+            businessName,
+            level,
+            totalCollected
+        );
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+    }
+
     return 1;
 }
 
@@ -5062,6 +5208,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/mybiz - Info business pribadi");
         SendClientMessage(playerid, COLOR_WHITE, "/collectbiz - Ambil income business");
         SendClientMessage(playerid, COLOR_WHITE, "/sellbiz - Jual business");
+        SendClientMessage(playerid, COLOR_WHITE, "/upgradebiz - Upgrade level business");
+        SendClientMessage(playerid, COLOR_WHITE, "/biztop - Leaderboard business income");
 
 
         return 1;
@@ -5680,7 +5828,14 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         if (PlayerBusinessDBID[playerid] > 0 && PlayerBusinessIndex[playerid] != -1)
         {
-            format(msg, sizeof(msg), "Business: %s", BusinessName[PlayerBusinessIndex[playerid]]);
+            format(
+                msg,
+                sizeof(msg),
+                "Business: %s | Lv: %d | Collected: $%d",
+                BusinessName[PlayerBusinessIndex[playerid]],
+                PlayerBusinessLevel[playerid],
+                PlayerBusinessTotalCollected[playerid]
+            );
             SendClientMessage(playerid, COLOR_WHITE, msg);
         }
         else
@@ -8504,7 +8659,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
             g_SQL,
             query,
             sizeof(query),
-            "INSERT INTO player_businesses (owner_id, business_index, business_name, price, income_per_minute, pos_x, pos_y, pos_z, last_collected) VALUES (%d, %d, '%e', %d, %d, %f, %f, %f, NOW())",
+            "INSERT INTO player_businesses (owner_id, business_index, business_name, price, income_per_minute, business_level, total_collected, pos_x, pos_y, pos_z, last_collected) VALUES (%d, %d, '%e', %d, %d, 1, 0, %f, %f, %f, NOW())",
             PlayerDBID[playerid],
             businessIndex,
             BusinessName[businessIndex],
@@ -8538,8 +8693,28 @@ public OnPlayerCommandText(playerid, cmdtext[])
         format(msg, sizeof(msg), "DBID: %d | Price: $%d", PlayerBusinessDBID[playerid], BusinessPrice[businessIndex]);
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
-        format(msg, sizeof(msg), "Income: $%d/minute | Max collect: $%d", BusinessIncomePerMinute[businessIndex], BUSINESS_MAX_COLLECT);
+        new currentIncome = GetBusinessIncomePerMinute(businessIndex, PlayerBusinessLevel[playerid]);
+
+        format(msg, sizeof(msg), "Level: %d/%d", PlayerBusinessLevel[playerid], BUSINESS_MAX_LEVEL);
         SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Base Income: $%d/min | Current Income: $%d/min", BusinessIncomePerMinute[businessIndex], currentIncome);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Total Collected: $%d | Max collect: $%d", PlayerBusinessTotalCollected[playerid], BUSINESS_MAX_COLLECT);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        if (PlayerBusinessLevel[playerid] < BUSINESS_MAX_LEVEL)
+        {
+            new upgradeCost = GetBusinessUpgradeCost(PlayerBusinessLevel[playerid]);
+
+            format(msg, sizeof(msg), "Next upgrade cost: $%d. Gunakan /upgradebiz.", upgradeCost);
+            SendClientMessage(playerid, COLOR_CYAN, msg);
+        }
+        else
+        {
+            SendClientMessage(playerid, COLOR_GREEN, "Business sudah mencapai level maksimal.");
+        }
 
         format(msg, sizeof(msg), "Location: %.2f, %.2f, %.2f", BusinessX[businessIndex], BusinessY[businessIndex], BusinessZ[businessIndex]);
         SendClientMessage(playerid, COLOR_WHITE, msg);
@@ -8562,7 +8737,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
             g_SQL,
             query,
             sizeof(query),
-            "SELECT business_index, income_per_minute, TIMESTAMPDIFF(MINUTE, last_collected, NOW()) AS minutes_passed FROM player_businesses WHERE owner_id=%d LIMIT 1",
+            "SELECT business_index, income_per_minute, business_level, total_collected, TIMESTAMPDIFF(MINUTE, last_collected, NOW()) AS minutes_passed FROM player_businesses WHERE owner_id=%d LIMIT 1",
             PlayerDBID[playerid]
         );
 
@@ -8592,6 +8767,61 @@ public OnPlayerCommandText(playerid, cmdtext[])
         );
 
         mysql_tquery(g_SQL, query, "OnPlayerBusinessSold", "ii", playerid, sellPrice);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/upgradebiz", true))
+    {
+        if (!IsBusinessOwner(playerid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum punya business.");
+            return 1;
+        }
+
+        if (PlayerBusinessLevel[playerid] >= BUSINESS_MAX_LEVEL)
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Business kamu sudah level maksimal.");
+            return 1;
+        }
+
+        new cost = GetBusinessUpgradeCost(PlayerBusinessLevel[playerid]);
+        new newLevel = PlayerBusinessLevel[playerid] + 1;
+
+        if (PlayerMoney[playerid] < cost)
+        {
+            new msg[144];
+            format(msg, sizeof(msg), "Cash tidak cukup. Biaya upgrade: $%d.", cost);
+            SendClientMessage(playerid, COLOR_RED, msg);
+            return 1;
+        }
+
+        TakePlayerCash(playerid, cost);
+
+        new query[256];
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "UPDATE player_businesses SET business_level=%d WHERE id=%d AND owner_id=%d LIMIT 1",
+            newLevel,
+            PlayerBusinessDBID[playerid],
+            PlayerDBID[playerid]
+        );
+
+        mysql_tquery(g_SQL, query, "OnBusinessUpgraded", "iii", playerid, newLevel, cost);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/biztop", true))
+    {
+        mysql_tquery(
+            g_SQL,
+            "SELECT p.username, b.business_name, b.business_level, b.total_collected FROM player_businesses b JOIN players p ON p.id = b.owner_id ORDER BY b.total_collected DESC LIMIT 5",
+            "OnBusinessTopLoaded",
+            "i",
+            playerid
+        );
         return 1;
     }
 

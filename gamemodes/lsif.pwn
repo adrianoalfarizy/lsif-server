@@ -899,6 +899,11 @@ forward OnFeedbackListLoaded(playerid);
 forward OnFeedbackClosed(playerid, feedbackid);
 forward OnWhitelistCheckLoaded(playerid);
 forward ShowPostLoginRules(playerid);
+forward OnRecentBugsLoaded(playerid);
+forward OnRecentFeedbackLoaded(playerid);
+forward OnRecentReportsLoaded(playerid);
+forward OnRecentLogsLoaded(playerid);
+
 
 stock ShowBetaMOTD(playerid)
 {
@@ -4034,12 +4039,161 @@ public OnFeedbackClosed(playerid, feedbackid)
 }
 
 
+
+public OnRecentBugsLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+    new msg[144];
+
+    SendClientMessage(playerid, COLOR_YELLOW, "========== RECENT BUGS ==========");
+
+    if (rows == 0)
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "Belum ada bug report terbuka.");
+        return 1;
+    }
+
+    new feedbackId;
+    new reporterName[24];
+    new message[96];
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name_int(i, "id", feedbackId);
+        cache_get_value_name(i, "reporter_name", reporterName, sizeof(reporterName));
+        cache_get_value_name(i, "message", message, sizeof(message));
+
+        format(msg, sizeof(msg), "#%d | %s | %s", feedbackId, reporterName, message);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+    }
+
+    return 1;
+}
+
+public OnRecentFeedbackLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+    new msg[144];
+
+    SendClientMessage(playerid, COLOR_YELLOW, "========== RECENT FEEDBACK ==========");
+
+    if (rows == 0)
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "Belum ada feedback terbuka.");
+        return 1;
+    }
+
+    new feedbackId;
+    new reporterName[24];
+    new feedbackType[16];
+    new message[88];
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name_int(i, "id", feedbackId);
+        cache_get_value_name(i, "reporter_name", reporterName, sizeof(reporterName));
+        cache_get_value_name(i, "type", feedbackType, sizeof(feedbackType));
+        cache_get_value_name(i, "message", message, sizeof(message));
+
+        format(msg, sizeof(msg), "#%d | %s | %s | %s", feedbackId, feedbackType, reporterName, message);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+    }
+
+    return 1;
+}
+
+public OnRecentReportsLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+    new msg[144];
+
+    SendClientMessage(playerid, COLOR_YELLOW, "========== RECENT PLAYER REPORTS ==========");
+
+    if (rows == 0)
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "Belum ada report player terbuka.");
+        return 1;
+    }
+
+    new reportId;
+    new reporterName[24];
+    new targetName[24];
+    new reason[80];
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name_int(i, "id", reportId);
+        cache_get_value_name(i, "reporter_name", reporterName, sizeof(reporterName));
+        cache_get_value_name(i, "target_name", targetName, sizeof(targetName));
+        cache_get_value_name(i, "reason", reason, sizeof(reason));
+
+        format(msg, sizeof(msg), "#%d | %s -> %s | %s", reportId, reporterName, targetName, reason);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+    }
+
+    return 1;
+}
+
+public OnRecentLogsLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+    new msg[144];
+
+    SendClientMessage(playerid, COLOR_YELLOW, "========== RECENT ADMIN LOGS ==========");
+
+    if (rows == 0)
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "Belum ada admin log.");
+        return 1;
+    }
+
+    new logId;
+    new adminName[24];
+    new targetName[24];
+    new action[32];
+    new detail[64];
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name_int(i, "id", logId);
+        cache_get_value_name(i, "admin_name", adminName, sizeof(adminName));
+        cache_get_value_name(i, "target_name", targetName, sizeof(targetName));
+        cache_get_value_name(i, "action", action, sizeof(action));
+        cache_get_value_name(i, "detail", detail, sizeof(detail));
+
+        format(msg, sizeof(msg), "#%d | %s | %s -> %s | %s", logId, action, adminName, targetName, detail);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+    }
+
+    return 1;
+}
+
 public OnGameModeInit()
 {
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.16B.1 Beta Login");
+    SetGameModeText("LSIF Dev v0.16C Beta Dashboard");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -4114,7 +4268,7 @@ public OnGameModeInit()
     print("[LSIF] Closed beta whitelist system aktif.");
     print("[LSIF] Manual vehicle engine mode aktif.");
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
-    print("[LSIF] Gamemode v0.16A Closed Beta Preparation berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.16C Closed Beta Dashboard berhasil dijalankan.");
     return 1;
 }
 
@@ -7567,6 +7721,13 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/wlremove [username] - Nonaktifkan whitelist beta, Owner only");
         SendClientMessage(playerid, COLOR_WHITE, "/wlcheck [username] - Cek whitelist beta");
         SendClientMessage(playerid, COLOR_WHITE, "/whitelist - Lihat 10 whitelist aktif");
+        SendClientMessage(playerid, COLOR_WHITE, "/betastatus - Dashboard status closed beta");
+        SendClientMessage(playerid, COLOR_WHITE, "/playerlist - List player online");
+        SendClientMessage(playerid, COLOR_WHITE, "/onlineadmins - List admin online");
+        SendClientMessage(playerid, COLOR_WHITE, "/recentbugs - Bug report terbaru");
+        SendClientMessage(playerid, COLOR_WHITE, "/recentreports - Player report terbaru");
+        SendClientMessage(playerid, COLOR_WHITE, "/recentfeedback - Feedback/suggest terbaru");
+        SendClientMessage(playerid, COLOR_WHITE, "/recentlogs - Admin log terbaru");
 
         return 1;
     }
@@ -10951,6 +11112,161 @@ public OnPlayerCommandText(playerid, cmdtext[])
         }
 
         mysql_tquery(g_SQL, "SELECT username, added_by, created_at FROM beta_whitelist WHERE active=1 ORDER BY id DESC LIMIT 10", "OnWhitelistListLoaded", "i", playerid);
+        return 1;
+    }
+
+
+    if (!strcmp(cmdtext, "/betastatus", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_HELPER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+            return 1;
+        }
+
+        new uptimeText[64];
+        new msg[144];
+        new adminCount = 0;
+
+        for (new i = 0; i < MAX_PLAYERS; i++)
+        {
+            if (IsPlayerConnected(i) && PlayerLoggedIn[i] && PlayerAdmin[i] > 0)
+            {
+                adminCount++;
+            }
+        }
+
+        FormatUptime(GetTickCount() - g_ServerStartTick, uptimeText, sizeof(uptimeText));
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== CLOSED BETA STATUS ==========");
+
+        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.16C Beta Dashboard");
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Uptime: %s", uptimeText);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Players: %d online | %d logged | Admins: %d", CountOnlinePlayers(), CountLoggedPlayers(), adminCount);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        SendClientMessage(playerid, COLOR_CYAN, "Dashboard: /playerlist, /onlineadmins, /recentbugs, /recentreports, /recentfeedback, /recentlogs");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/playerlist", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_HELPER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+            return 1;
+        }
+
+        new name[MAX_PLAYER_NAME];
+        new msg[144];
+        new found = 0;
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== ONLINE PLAYERS ==========");
+
+        for (new i = 0; i < MAX_PLAYERS; i++)
+        {
+            if (IsPlayerConnected(i))
+            {
+                GetPlayerName(i, name, sizeof(name));
+                format(msg, sizeof(msg), "[%d] %s | Login: %d | Admin: %d | DBID: %d", i, name, PlayerLoggedIn[i], PlayerAdmin[i], PlayerDBID[i]);
+                SendClientMessage(playerid, COLOR_WHITE, msg);
+                found++;
+            }
+        }
+
+        if (!found)
+        {
+            SendClientMessage(playerid, COLOR_WHITE, "Tidak ada player online.");
+        }
+
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/onlineadmins", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_HELPER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+            return 1;
+        }
+
+        new name[MAX_PLAYER_NAME];
+        new rankName[32];
+        new msg[144];
+        new found = 0;
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== ONLINE ADMINS ==========");
+
+        for (new i = 0; i < MAX_PLAYERS; i++)
+        {
+            if (IsPlayerConnected(i) && PlayerLoggedIn[i] && PlayerAdmin[i] > 0)
+            {
+                GetPlayerName(i, name, sizeof(name));
+                GetAdminRankName(PlayerAdmin[i], rankName, sizeof(rankName));
+
+                format(msg, sizeof(msg), "[%d] %s | Level %d | %s", i, name, PlayerAdmin[i], rankName);
+                SendClientMessage(playerid, COLOR_WHITE, msg);
+                found++;
+            }
+        }
+
+        if (!found)
+        {
+            SendClientMessage(playerid, COLOR_WHITE, "Tidak ada admin online.");
+        }
+
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/recentbugs", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_HELPER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+            return 1;
+        }
+
+        mysql_tquery(g_SQL, "SELECT id, reporter_name, message FROM feedback_reports WHERE type='bug' AND status='open' ORDER BY id DESC LIMIT 5", "OnRecentBugsLoaded", "i", playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/recentfeedback", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_HELPER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+            return 1;
+        }
+
+        mysql_tquery(g_SQL, "SELECT id, reporter_name, type, message FROM feedback_reports WHERE status='open' ORDER BY id DESC LIMIT 5", "OnRecentFeedbackLoaded", "i", playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/recentreports", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_HELPER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+            return 1;
+        }
+
+        mysql_tquery(g_SQL, "SELECT id, reporter_name, target_name, reason FROM reports WHERE status='open' ORDER BY id DESC LIMIT 5", "OnRecentReportsLoaded", "i", playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/recentlogs", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_HELPER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+            return 1;
+        }
+
+        mysql_tquery(g_SQL, "SELECT id, admin_name, target_name, action, detail FROM admin_logs ORDER BY id DESC LIMIT 5", "OnRecentLogsLoaded", "i", playerid);
         return 1;
     }
 

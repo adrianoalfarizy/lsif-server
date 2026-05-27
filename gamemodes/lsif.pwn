@@ -156,6 +156,10 @@
 
 #define MAX_GARAGE_SLOTS 3
 
+#define VEHICLE_MAX_FUEL 100
+#define VEHICLE_REPAIR_COST 1500
+#define VEHICLE_REFUEL_COST_PER_POINT 20
+
 new MySQL:g_SQL;
 new g_AutosaveTimer;
 
@@ -192,10 +196,16 @@ new Float:OwnedVehicleY[MAX_PLAYERS];
 new Float:OwnedVehicleZ[MAX_PLAYERS];
 new Float:OwnedVehicleA[MAX_PLAYERS];
 new Text3D:OwnedVehicleLabel[MAX_PLAYERS];
+new OwnedVehicleName[MAX_PLAYERS][32];
+new Float:OwnedVehicleHealth[MAX_PLAYERS];
+new OwnedVehicleFuel[MAX_PLAYERS];
 
 new PlayerGarageDBID[MAX_PLAYERS][MAX_GARAGE_SLOTS];
 new PlayerGarageModel[MAX_PLAYERS][MAX_GARAGE_SLOTS];
 new PlayerGarageLocked[MAX_PLAYERS][MAX_GARAGE_SLOTS];
+new PlayerGarageName[MAX_PLAYERS][MAX_GARAGE_SLOTS][32];
+new Float:PlayerGarageHealth[MAX_PLAYERS][MAX_GARAGE_SLOTS];
+new PlayerGarageFuel[MAX_PLAYERS][MAX_GARAGE_SLOTS];
 
 new Float:PlayerGarageX[MAX_PLAYERS][MAX_GARAGE_SLOTS];
 new Float:PlayerGarageY[MAX_PLAYERS][MAX_GARAGE_SLOTS];
@@ -1920,6 +1930,10 @@ stock ResetOwnedVehicleData(playerid)
     OwnedVehicleSlot[playerid] = -1;
     OwnedVehicleLabel[playerid] = Text3D:INVALID_3DTEXT_ID;
 
+    format(OwnedVehicleName[playerid], 32, "Vehicle");
+    OwnedVehicleHealth[playerid] = 1000.0;
+    OwnedVehicleFuel[playerid] = VEHICLE_MAX_FUEL;
+
     OwnedVehicleX[playerid] = SPAWN_X + 3.0;
     OwnedVehicleY[playerid] = SPAWN_Y;
     OwnedVehicleZ[playerid] = SPAWN_Z;
@@ -2008,11 +2022,13 @@ stock SpawnOwnedVehicle(playerid)
         return 0;
     }
 
+    SetVehicleHealth(OwnedVehicleID[playerid], OwnedVehicleHealth[playerid]);
+
     ApplyOwnedVehicleParams(playerid);
     CreateOwnedVehicleLabel(playerid);
 
     new msg[144];
-    format(msg, sizeof(msg), "Kendaraan slot %d model %d berhasil di-spawn.", OwnedVehicleSlot[playerid] + 1, OwnedVehicleModel[playerid]);
+    format(msg, sizeof(msg), "Kendaraan slot %d [%s] model %d berhasil di-spawn.", OwnedVehicleSlot[playerid] + 1, OwnedVehicleName[playerid], OwnedVehicleModel[playerid]);
     SendClientMessage(playerid, COLOR_GREEN, msg);
 
     return 1;
@@ -2044,6 +2060,11 @@ stock SaveOwnedVehicle(playerid, notify = 0)
     GetVehiclePos(OwnedVehicleID[playerid], x, y, z);
     GetVehicleZAngle(OwnedVehicleID[playerid], a);
 
+    new Float:health;
+    GetVehicleHealth(OwnedVehicleID[playerid], health);
+
+    OwnedVehicleHealth[playerid] = health;
+
     OwnedVehicleX[playerid] = x;
     OwnedVehicleY[playerid] = y;
     OwnedVehicleZ[playerid] = z;
@@ -2058,19 +2079,26 @@ stock SaveOwnedVehicle(playerid, notify = 0)
         PlayerGarageZ[playerid][slotIndex] = z;
         PlayerGarageA[playerid][slotIndex] = a;
         PlayerGarageLocked[playerid][slotIndex] = OwnedVehicleLocked[playerid];
+        PlayerGarageHealth[playerid][slotIndex] = health;
+        PlayerGarageFuel[playerid][slotIndex] = OwnedVehicleFuel[playerid];
+        format(PlayerGarageName[playerid][slotIndex], 32, "%s", OwnedVehicleName[playerid]);
     }
 
     mysql_format(
         g_SQL,
         query,
         sizeof(query),
-        "UPDATE player_vehicles SET pos_x=%f, pos_y=%f, pos_z=%f, pos_a=%f, locked=%d WHERE id=%d LIMIT 1",
-        x,
-        y,
-        z,
-        a,
+        "UPDATE player_vehicles SET vehicle_name='%e', pos_x=%f, pos_y=%f, pos_z=%f, pos_a=%f, health=%f, fuel=%d, locked=%d WHERE id=%d AND owner_id=%d LIMIT 1",
+        OwnedVehicleName[playerid],
+        OwnedVehicleX[playerid],
+        OwnedVehicleY[playerid],
+        OwnedVehicleZ[playerid],
+        OwnedVehicleA[playerid],
+        OwnedVehicleHealth[playerid],
+        OwnedVehicleFuel[playerid],
         OwnedVehicleLocked[playerid],
-        OwnedVehicleDBID[playerid]
+        OwnedVehicleDBID[playerid],
+        PlayerDBID[playerid]
     );
 
     mysql_tquery(g_SQL, query, "OnOwnedVehicleSaved", "ii", playerid, notify);
@@ -2158,7 +2186,8 @@ stock CreateOwnedVehicleLabel(playerid)
     format(
         labelText,
         sizeof(labelText),
-        "LSIF Vehicle\nOwner: %s\nModel: %d",
+        "LSIF Vehicle\n%s\nOwner: %s\nModel: %d",
+        OwnedVehicleName[playerid],
         ownerName,
         OwnedVehicleModel[playerid]
     );
@@ -3421,6 +3450,10 @@ stock ResetPlayerGarageData(playerid)
         PlayerGarageModel[playerid][i] = 0;
         PlayerGarageLocked[playerid][i] = 0;
 
+        format(PlayerGarageName[playerid][i], 32, "Vehicle");
+        PlayerGarageHealth[playerid][i] = 1000.0;
+        PlayerGarageFuel[playerid][i] = VEHICLE_MAX_FUEL;
+
         PlayerGarageX[playerid][i] = SPAWN_X + 3.0;
         PlayerGarageY[playerid][i] = SPAWN_Y;
         PlayerGarageZ[playerid][i] = SPAWN_Z;
@@ -3485,6 +3518,10 @@ stock SetActiveVehicleFromGarage(playerid, slotIndex)
     OwnedVehicleModel[playerid] = PlayerGarageModel[playerid][slotIndex];
     OwnedVehicleLocked[playerid] = PlayerGarageLocked[playerid][slotIndex];
 
+    format(OwnedVehicleName[playerid], 32, "%s", PlayerGarageName[playerid][slotIndex]);
+    OwnedVehicleHealth[playerid] = PlayerGarageHealth[playerid][slotIndex];
+    OwnedVehicleFuel[playerid] = PlayerGarageFuel[playerid][slotIndex];
+
     OwnedVehicleX[playerid] = PlayerGarageX[playerid][slotIndex];
     OwnedVehicleY[playerid] = PlayerGarageY[playerid][slotIndex];
     OwnedVehicleZ[playerid] = PlayerGarageZ[playerid][slotIndex];
@@ -3506,11 +3543,37 @@ stock LoadPlayerGarage(playerid)
         g_SQL,
         query,
         sizeof(query),
-        "SELECT id, slot, model_id, pos_x, pos_y, pos_z, pos_a, locked FROM player_vehicles WHERE owner_id=%d ORDER BY slot ASC",
+        "SELECT id, slot, model_id, vehicle_name, pos_x, pos_y, pos_z, pos_a, health, fuel, locked FROM player_vehicles WHERE owner_id=%d ORDER BY slot ASC",
         PlayerDBID[playerid]
     );
 
     mysql_tquery(g_SQL, query, "OnGarageLoaded", "i", playerid);
+    return 1;
+}
+
+stock SaveActiveVehicleMeta(playerid)
+{
+    if (OwnedVehicleDBID[playerid] <= 0)
+    {
+        return 0;
+    }
+
+    new query[512];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "UPDATE player_vehicles SET vehicle_name='%e', health=%f, fuel=%d, locked=%d WHERE id=%d AND owner_id=%d LIMIT 1",
+        OwnedVehicleName[playerid],
+        OwnedVehicleHealth[playerid],
+        OwnedVehicleFuel[playerid],
+        OwnedVehicleLocked[playerid],
+        OwnedVehicleDBID[playerid],
+        PlayerDBID[playerid]
+    );
+
+    mysql_tquery(g_SQL, query);
     return 1;
 }
 
@@ -3532,7 +3595,7 @@ public OnGameModeInit()
 {
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
-    SetGameModeText("LSIF Dev v0.15B Garage");
+    SetGameModeText("LSIF Dev v0.15C Vehicle Polish");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -3602,7 +3665,7 @@ public OnGameModeInit()
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
     print("[LSIF] Anti-cheat timer aktif setiap 10 detik.");
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
-    print("[LSIF] Gamemode v0.15B Vehicle Garage berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.15C Vehicle Polish berhasil dijalankan.");
     return 1;
 }
 
@@ -5437,6 +5500,10 @@ public OnGarageLoaded(playerid)
     new locked;
     new Float:x, Float:y, Float:z, Float:a;
 
+    new vehicleName[32];
+    new fuel;
+    new Float:health;
+
     for (new i = 0; i < rows; i++)
     {
         cache_get_value_name_int(i, "id", dbid);
@@ -5447,6 +5514,9 @@ public OnGarageLoaded(playerid)
         cache_get_value_name_float(i, "pos_z", z);
         cache_get_value_name_float(i, "pos_a", a);
         cache_get_value_name_int(i, "locked", locked);
+        cache_get_value_name(i, "vehicle_name", vehicleName, sizeof(vehicleName));
+        cache_get_value_name_float(i, "health", health);
+        cache_get_value_name_int(i, "fuel", fuel);
 
         slotIndex = slot - 1;
 
@@ -5458,6 +5528,9 @@ public OnGarageLoaded(playerid)
         PlayerGarageDBID[playerid][slotIndex] = dbid;
         PlayerGarageModel[playerid][slotIndex] = modelid;
         PlayerGarageLocked[playerid][slotIndex] = locked;
+        format(PlayerGarageName[playerid][slotIndex], 32, "%s", vehicleName);
+        PlayerGarageHealth[playerid][slotIndex] = health;
+        PlayerGarageFuel[playerid][slotIndex] = fuel;
 
         PlayerGarageX[playerid][slotIndex] = x;
         PlayerGarageY[playerid][slotIndex] = y;
@@ -5501,6 +5574,9 @@ public OnGarageVehicleBought(playerid, slotIndex, modelid, price)
     PlayerGarageDBID[playerid][slotIndex] = insertId;
     PlayerGarageModel[playerid][slotIndex] = modelid;
     PlayerGarageLocked[playerid][slotIndex] = 0;
+    format(PlayerGarageName[playerid][slotIndex], 32, "Vehicle");
+    PlayerGarageHealth[playerid][slotIndex] = 1000.0;
+    PlayerGarageFuel[playerid][slotIndex] = VEHICLE_MAX_FUEL;
 
     new Float:x, Float:y, Float:z, Float:a;
 
@@ -5675,6 +5751,10 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/canceldealer - Hapus checkpoint dealership");
         SendClientMessage(playerid, COLOR_WHITE, "/vehicleshop - Melihat daftar kendaraan");
         SendClientMessage(playerid, COLOR_WHITE, "/buyvehicle [id] - Beli kendaraan di dealership");
+        SendClientMessage(playerid, COLOR_WHITE, "/vehstatus - Status kendaraan aktif");
+        SendClientMessage(playerid, COLOR_WHITE, "/renameveh [slot] [name] - Ganti nama kendaraan");
+        SendClientMessage(playerid, COLOR_WHITE, "/repairveh - Repair kendaraan di dealership");
+        SendClientMessage(playerid, COLOR_WHITE, "/refuelveh - Isi fuel kendaraan di dealership");
 
         return 1;
     }
@@ -6581,6 +6661,9 @@ public OnPlayerCommandText(playerid, cmdtext[])
             format(msg, sizeof(msg), "Active Slot: %d", OwnedVehicleSlot[playerid] + 1);
             SendClientMessage(playerid, COLOR_WHITE, msg);
         }
+
+        format(msg, sizeof(msg), "Name: %s | Fuel: %d/%d | Health: %.1f", OwnedVehicleName[playerid], OwnedVehicleFuel[playerid], VEHICLE_MAX_FUEL, OwnedVehicleHealth[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
 
         return 1;
     }
@@ -9563,10 +9646,11 @@ public OnPlayerCommandText(playerid, cmdtext[])
             g_SQL,
             query,
             sizeof(query),
-            "INSERT INTO player_vehicles (owner_id, slot, model_id, color1, color2, pos_x, pos_y, pos_z, pos_a, locked) VALUES (%d, %d, %d, 1, 1, %f, %f, %f, %f, 0)",
+            "INSERT INTO player_vehicles (owner_id, slot, model_id, vehicle_name, color1, color2, pos_x, pos_y, pos_z, pos_a, health, fuel, locked) VALUES (%d, %d, %d, '%e', 1, 1, %f, %f, %f, %f, 1000.0, 100, 0)",
             PlayerDBID[playerid],
             freeSlot + 1,
             modelid,
+            ShopVehicleName[shopIndex],
             x + 3.0,
             y,
             z,
@@ -9590,11 +9674,12 @@ public OnPlayerCommandText(playerid, cmdtext[])
                 format(
                     msg,
                     sizeof(msg),
-                    "Slot %d: Model %d | DBID %d | Locked %d",
+                    "Slot %d: %s | Model %d | Fuel %d | HP %.0f",
                     i + 1,
+                    PlayerGarageName[playerid][i],
                     PlayerGarageModel[playerid][i],
-                    PlayerGarageDBID[playerid][i],
-                    PlayerGarageLocked[playerid][i]
+                    PlayerGarageFuel[playerid][i],
+                    PlayerGarageHealth[playerid][i]
                 );
                 SendClientMessage(playerid, COLOR_WHITE, msg);
             }
@@ -9609,6 +9694,208 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_CYAN, msg);
 
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /myveh [slot], /park, /lock, /sellveh [slot].");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/vehstatus", true))
+    {
+        if (OwnedVehicleDBID[playerid] <= 0 || OwnedVehicleSlot[playerid] == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Tidak ada kendaraan aktif. Gunakan /garage dan /myveh [slot].");
+            return 1;
+        }
+
+        new msg[144];
+        new Float:health = OwnedVehicleHealth[playerid];
+
+        if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
+        {
+            GetVehicleHealth(OwnedVehicleID[playerid], health);
+            OwnedVehicleHealth[playerid] = health;
+        }
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== VEHICLE STATUS ==========");
+
+        format(msg, sizeof(msg), "Slot: %d | Name: %s", OwnedVehicleSlot[playerid] + 1, OwnedVehicleName[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Model: %d | DBID: %d", OwnedVehicleModel[playerid], OwnedVehicleDBID[playerid]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Health: %.1f/1000 | Fuel: %d/%d", health, OwnedVehicleFuel[playerid], VEHICLE_MAX_FUEL);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        format(msg, sizeof(msg), "Locked: %s", OwnedVehicleLocked[playerid] ? ("Yes") : ("No"));
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/renameveh ", true) == 0)
+    {
+        new slotStr[16];
+        new newName[32];
+
+        if (!GetFirstParamAndRest(cmdtext[11], slotStr, sizeof(slotStr), newName, sizeof(newName)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /renameveh [slot] [name]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /renameveh 1 Infernus Merah");
+            return 1;
+        }
+
+        if (!IsNumericString(slotStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Slot harus angka.");
+            return 1;
+        }
+
+        if (strlen(newName) < 3)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Nama kendaraan minimal 3 karakter.");
+            return 1;
+        }
+
+        new slotIndex = strval(slotStr) - 1;
+
+        if (!IsValidGarageSlot(slotIndex))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Slot tidak valid.");
+            return 1;
+        }
+
+        if (PlayerGarageDBID[playerid][slotIndex] <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Slot garage ini kosong.");
+            return 1;
+        }
+
+        format(PlayerGarageName[playerid][slotIndex], 32, "%s", newName);
+
+        if (OwnedVehicleSlot[playerid] == slotIndex)
+        {
+            format(OwnedVehicleName[playerid], 32, "%s", newName);
+
+            if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
+            {
+                CreateOwnedVehicleLabel(playerid);
+            }
+        }
+
+        new query[256];
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "UPDATE player_vehicles SET vehicle_name='%e' WHERE id=%d AND owner_id=%d LIMIT 1",
+            newName,
+            PlayerGarageDBID[playerid][slotIndex],
+            PlayerDBID[playerid]
+        );
+
+        mysql_tquery(g_SQL, query);
+
+        new msg[144];
+        format(msg, sizeof(msg), "Kendaraan slot %d berhasil diberi nama: %s.", slotIndex + 1, newName);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/renameveh", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /renameveh [slot] [name]");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/repairveh", true))
+    {
+        if (OwnedVehicleID[playerid] == INVALID_VEHICLE_ID || OwnedVehicleSlot[playerid] == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Tidak ada kendaraan aktif yang sedang spawn.");
+            return 1;
+        }
+
+        if (!IsPlayerNearDealership(playerid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat dealership untuk repair kendaraan.");
+            SendClientMessage(playerid, COLOR_WHITE, "Gunakan /finddealer.");
+            return 1;
+        }
+
+        if (PlayerMoney[playerid] < VEHICLE_REPAIR_COST)
+        {
+            new msg[144];
+            format(msg, sizeof(msg), "Cash tidak cukup. Biaya repair: $%d.", VEHICLE_REPAIR_COST);
+            SendClientMessage(playerid, COLOR_RED, msg);
+            return 1;
+        }
+
+        TakePlayerCash(playerid, VEHICLE_REPAIR_COST);
+
+        SetVehicleHealth(OwnedVehicleID[playerid], 1000.0);
+        OwnedVehicleHealth[playerid] = 1000.0;
+
+        if (IsValidGarageSlot(OwnedVehicleSlot[playerid]))
+        {
+            PlayerGarageHealth[playerid][OwnedVehicleSlot[playerid]] = 1000.0;
+        }
+
+        SaveActiveVehicleMeta(playerid);
+        SavePlayerData(playerid);
+
+        SendClientMessage(playerid, COLOR_GREEN, "Kendaraan berhasil diperbaiki.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/refuelveh", true))
+    {
+        if (OwnedVehicleDBID[playerid] <= 0 || OwnedVehicleSlot[playerid] == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Tidak ada kendaraan aktif.");
+            return 1;
+        }
+
+        if (!IsPlayerNearDealership(playerid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat dealership untuk refuel kendaraan.");
+            SendClientMessage(playerid, COLOR_WHITE, "Gunakan /finddealer.");
+            return 1;
+        }
+
+        if (OwnedVehicleFuel[playerid] >= VEHICLE_MAX_FUEL)
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Fuel kendaraan sudah penuh.");
+            return 1;
+        }
+
+        new needFuel = VEHICLE_MAX_FUEL - OwnedVehicleFuel[playerid];
+        new cost = needFuel * VEHICLE_REFUEL_COST_PER_POINT;
+
+        if (PlayerMoney[playerid] < cost)
+        {
+            new msg[144];
+            format(msg, sizeof(msg), "Cash tidak cukup. Biaya full refuel: $%d.", cost);
+            SendClientMessage(playerid, COLOR_RED, msg);
+            return 1;
+        }
+
+        TakePlayerCash(playerid, cost);
+
+        OwnedVehicleFuel[playerid] = VEHICLE_MAX_FUEL;
+
+        if (IsValidGarageSlot(OwnedVehicleSlot[playerid]))
+        {
+            PlayerGarageFuel[playerid][OwnedVehicleSlot[playerid]] = VEHICLE_MAX_FUEL;
+        }
+
+        SaveActiveVehicleMeta(playerid);
+        SavePlayerData(playerid);
+
+        new msg[144];
+        format(msg, sizeof(msg), "Refuel berhasil. Biaya: $%d. Fuel sekarang: %d/%d.", cost, OwnedVehicleFuel[playerid], VEHICLE_MAX_FUEL);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+
         return 1;
     }
 

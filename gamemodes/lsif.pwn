@@ -4193,7 +4193,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.16C Beta Dashboard");
+    SetGameModeText("LSIF Dev v0.16D Release Polish");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -4268,7 +4268,7 @@ public OnGameModeInit()
     print("[LSIF] Closed beta whitelist system aktif.");
     print("[LSIF] Manual vehicle engine mode aktif.");
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
-    print("[LSIF] Gamemode v0.16C Closed Beta Dashboard berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.16D Closed Beta Release Polish berhasil dijalankan.");
     return 1;
 }
 
@@ -4309,8 +4309,9 @@ public OnPlayerConnect(playerid)
     // Sembunyikan class selection/pilih skin sebelum login.
     TogglePlayerSpectating(playerid, true);
 
-    SendClientMessage(playerid, COLOR_GREEN, "Selamat datang di LSIF - Los Santos Indonesia Freeroam.");
-    SendClientMessage(playerid, COLOR_WHITE, "Mengecek status akun kamu di database...");
+    SendClientMessage(playerid, COLOR_GREEN, "Selamat datang di LSIF Closed Beta.");
+    SendClientMessage(playerid, COLOR_WHITE, "Mengecek whitelist, ban, dan status akun kamu...");
+    SendClientMessage(playerid, COLOR_CYAN, "Setelah login gunakan /betaguide, /version, dan /serverrules.");
 
     CheckPlayerBan(playerid);
     // SendClientMessage(playerid, COLOR_WHITE, "Mengecek akun kamu di database...");
@@ -4445,7 +4446,8 @@ public OnPlayerSpawn(playerid)
     ResetPlayerWeapons(playerid);
 
     SendClientMessage(playerid, COLOR_CYAN, "Kamu berhasil spawn di Los Santos.");
-    SendClientMessage(playerid, COLOR_WHITE, "Coba command: /help, /stats, /veh 411, /kill.");
+    SendClientMessage(playerid, COLOR_WHITE, "Closed Beta: gunakan /betaguide untuk alur awal dan /bugreport jika menemukan bug.");
+    SendClientMessage(playerid, COLOR_WHITE, "Command cepat: /help, /starterpack, /jobs, /vehicleshop, /houses.");
 
     return 1;
 }
@@ -6543,6 +6545,11 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/whereami - Cek posisi/interior/debug lokasi");
         SendClientMessage(playerid, COLOR_WHITE, "/bugreport [text] - Laporkan bug closed beta");
         SendClientMessage(playerid, COLOR_WHITE, "/suggest [text] - Kirim saran closed beta");
+        SendClientMessage(playerid, COLOR_WHITE, "/version - Melihat versi server");
+        SendClientMessage(playerid, COLOR_WHITE, "/changelog - Melihat ringkasan update closed beta");
+        SendClientMessage(playerid, COLOR_WHITE, "/credits - Melihat credit project LSIF");
+        SendClientMessage(playerid, COLOR_WHITE, "/betaguide - Panduan ringkas closed beta");
+        SendClientMessage(playerid, COLOR_WHITE, "/staff - Melihat staff/admin online");
 
         return 1;
     }
@@ -6565,6 +6572,79 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+
+    if (!strcmp(cmdtext, "/version", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.16D Closed Beta Release Polish");
+        SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
+        SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/changelog", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.16D: Release polish, version, credits, staff, beta guide.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.16C: Admin beta dashboard dan monitoring reports/logs.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.16B: Starter pack, bug report, suggestion, feedback handling.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.16A: Whitelist, MOTD, rules, closed beta gate.");
+        SendClientMessage(playerid, COLOR_WHITE, "Core: jobs, race, house, org, business, dealership, garage, fuel.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/credits", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CREDITS ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "Founder/Developer: Adriano");
+        SendClientMessage(playerid, COLOR_WHITE, "Project: Los Santos Indonesia Freeroam");
+        SendClientMessage(playerid, COLOR_WHITE, "Engine: open.mp / SA-MP compatible server");
+        SendClientMessage(playerid, COLOR_WHITE, "Thanks: Closed beta testers yang bantu lapor bug dan saran.");
+        SendClientMessage(playerid, COLOR_CYAN, "Gunakan /bugreport dan /suggest untuk bantu pengembangan.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/betaguide", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "========== CLOSED BETA GUIDE ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "1. Klaim modal awal: /starterpack");
+        SendClientMessage(playerid, COLOR_WHITE, "2. Mulai kerja: /jobs lalu /joinjob courier/taxi/trucker dan /work");
+        SendClientMessage(playerid, COLOR_WHITE, "3. Beli kendaraan: /finddealer, /vehicleshop, /buyvehicle [id]");
+        SendClientMessage(playerid, COLOR_WHITE, "4. Simpan uang: /findbank lalu /deposit [amount/all]");
+        SendClientMessage(playerid, COLOR_WHITE, "5. Aktivitas lanjutan: /houses, /businesses, /orgs, /races");
+        SendClientMessage(playerid, COLOR_CYAN, "Lapor bug: /bugreport [text] | Saran: /suggest [text]");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/staff", true))
+    {
+        new name[MAX_PLAYER_NAME];
+        new rankName[32];
+        new msg[144];
+        new found = 0;
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== STAFF ONLINE ==========");
+
+        for (new i = 0; i < MAX_PLAYERS; i++)
+        {
+            if (IsPlayerConnected(i) && PlayerLoggedIn[i] && PlayerAdmin[i] > 0)
+            {
+                GetPlayerName(i, name, sizeof(name));
+                GetAdminRankName(PlayerAdmin[i], rankName, sizeof(rankName));
+                format(msg, sizeof(msg), "%s [%d] - %s", name, i, rankName);
+                SendClientMessage(playerid, COLOR_WHITE, msg);
+                found++;
+            }
+        }
+
+        if (!found)
+        {
+            SendClientMessage(playerid, COLOR_WHITE, "Tidak ada staff online saat ini.");
+        }
+
+        return 1;
+    }
 
     if (!strcmp(cmdtext, "/starterpack", true))
     {
@@ -7728,6 +7808,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/recentreports - Player report terbaru");
         SendClientMessage(playerid, COLOR_WHITE, "/recentfeedback - Feedback/suggest terbaru");
         SendClientMessage(playerid, COLOR_WHITE, "/recentlogs - Admin log terbaru");
+        SendClientMessage(playerid, COLOR_WHITE, "/version, /changelog, /credits, /staff - Release info commands");
 
         return 1;
     }
@@ -11140,7 +11221,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         SendClientMessage(playerid, COLOR_YELLOW, "========== CLOSED BETA STATUS ==========");
 
-        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.16C Beta Dashboard");
+        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.16D Release Polish");
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         format(msg, sizeof(msg), "Uptime: %s", uptimeText);

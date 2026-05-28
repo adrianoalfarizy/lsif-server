@@ -19,6 +19,10 @@
 #define DIALOG_BETA_RULES 1002
 #define DIALOG_BETA_MOTD 1003
 #define DIALOG_FEEDBACK_LIST 1004
+#define DIALOG_ATM_MENU 1005
+#define DIALOG_ATM_DEPOSIT 1006
+#define DIALOG_ATM_WITHDRAW 1007
+#define DIALOG_ATM_BALANCE 1008
 
 #define STARTER_CASH 15000
 #define STARTER_BANK 5000
@@ -476,11 +480,11 @@ new Float:BankPointX[MAX_BANK_POINTS] =
 new Float:BankPointY[MAX_BANK_POINTS] =
 {
     -1842.4136,
-    -1758.2188,
-    -919.9146,
-    -1224.3597,
-    -1769.6847
-};
+        -1758.2188,
+        -919.9146,
+        -1224.3597,
+        -1769.6847
+    };
 
 new Float:BankPointZ[MAX_BANK_POINTS] =
 {
@@ -3183,13 +3187,13 @@ stock CreatePlayerHouseExitPickup(playerid, ownerid)
     DestroyPlayerHouseExitPickup(playerid);
 
     PlayerHouseExitPickup[playerid] = CreatePickup(
-        HOUSE_PICKUP_MODEL,
-        HOUSE_PICKUP_TYPE,
-        HOUSE_INT_X,
-        HOUSE_INT_Y + HOUSE_EXIT_PICKUP_Y_OFFSET,
-        HOUSE_INT_Z,
-        GetPlayerHouseVirtualWorld(ownerid)
-    );
+                                          HOUSE_PICKUP_MODEL,
+                                          HOUSE_PICKUP_TYPE,
+                                          HOUSE_INT_X,
+                                          HOUSE_INT_Y + HOUSE_EXIT_PICKUP_Y_OFFSET,
+                                          HOUSE_INT_Z,
+                                          GetPlayerHouseVirtualWorld(ownerid)
+                                      );
 
     return 1;
 }
@@ -3199,13 +3203,13 @@ stock CreateHouseExteriorPickups()
     for (new i = 0; i < MAX_HOUSES; i++)
     {
         HouseExteriorPickup[i] = CreatePickup(
-            HOUSE_PICKUP_MODEL,
-            HOUSE_PICKUP_TYPE,
-            HouseX[i],
-            HouseY[i],
-            HouseZ[i],
-            0
-        );
+                                     HOUSE_PICKUP_MODEL,
+                                     HOUSE_PICKUP_TYPE,
+                                     HouseX[i],
+                                     HouseY[i],
+                                     HouseZ[i],
+                                     0
+                                 );
     }
 
     return 1;
@@ -4384,7 +4388,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.17B.1 House Cooldown");
+    SetGameModeText("LSIF Dev v0.17C ATM Dialog");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -4464,7 +4468,7 @@ public OnGameModeInit()
     print("[LSIF] Manual vehicle engine mode aktif.");
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
     print("[LSIF] Custom house arrow pickups aktif.");
-    print("[LSIF] Gamemode v0.17B Offline-like Interaction berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.17C ATM Dialog UI berhasil dijalankan.");
     return 1;
 }
 
@@ -4654,7 +4658,7 @@ public OnPlayerSpawn(playerid)
 
     SendClientMessage(playerid, COLOR_CYAN, "Kamu berhasil spawn di Los Santos.");
     SendClientMessage(playerid, COLOR_WHITE, "Closed Beta: gunakan /betaguide untuk alur awal dan /bugreport jika menemukan bug.");
-    SendClientMessage(playerid, COLOR_WHITE, "Command cepat: /help, /starterpack, /jobs, /vehicleshop, /houses. ALT untuk interaksi, tombol 2 untuk start job.");
+    SendClientMessage(playerid, COLOR_WHITE, "Command cepat: /help, /starterpack, /jobs. ALT untuk interaksi/dialog, tombol 2 untuk start job.");
 
     return 1;
 }
@@ -4663,6 +4667,73 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 {
     if (dialogid == DIALOG_BETA_RULES || dialogid == DIALOG_BETA_MOTD || dialogid == DIALOG_FEEDBACK_LIST)
     {
+        return 1;
+    }
+
+    if (dialogid == DIALOG_ATM_MENU)
+    {
+        if (!response)
+        {
+            return 1;
+        }
+
+        if (!IsPlayerNearBankPoint(playerid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu sudah tidak dekat ATM/bank.");
+            return 1;
+        }
+
+        if (listitem == 0)
+        {
+            ShowATMBalanceDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 1)
+        {
+            ShowATMDepositDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 2)
+        {
+            ShowATMWithdrawDialog(playerid);
+            return 1;
+        }
+
+        return 1;
+    }
+
+    if (dialogid == DIALOG_ATM_BALANCE)
+    {
+        if (response)
+        {
+            ShowATMDialog(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_ATM_DEPOSIT)
+    {
+        if (!response)
+        {
+            ShowATMDialog(playerid);
+            return 1;
+        }
+
+        ProcessATMDeposit(playerid, inputtext);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_ATM_WITHDRAW)
+    {
+        if (!response)
+        {
+            ShowATMDialog(playerid);
+            return 1;
+        }
+
+        ProcessATMWithdraw(playerid, inputtext);
         return 1;
     }
 
@@ -4960,6 +5031,240 @@ stock ShowInteractionNoPoint(playerid)
     return 1;
 }
 
+
+stock ShowATMDialog(playerid)
+{
+    if (!PlayerLoggedIn[playerid])
+    {
+        return 0;
+    }
+
+    if (!IsPlayerNearBankPoint(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat ATM/bank untuk memakai menu ATM.");
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan /findbank untuk mencari ATM terdekat.");
+        return 0;
+    }
+
+    new dialogText[256];
+
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "Balance - Lihat saldo\nDeposit - Simpan cash ke bank\nWithdraw - Ambil uang dari bank\nCancel"
+    );
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_ATM_MENU,
+        DIALOG_STYLE_LIST,
+        "LSIF ATM",
+        dialogText,
+        "Pilih",
+        "Tutup"
+    );
+
+    return 1;
+}
+
+stock ShowATMBalanceDialog(playerid)
+{
+    if (!IsPlayerNearBankPoint(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat ATM/bank.");
+        return 0;
+    }
+
+    new dialogText[256];
+
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "Cash: $%d\nBank: $%d\nTotal: $%d\n\nGunakan menu Deposit atau Withdraw untuk transaksi.",
+        PlayerMoney[playerid],
+        PlayerBankMoney[playerid],
+        PlayerMoney[playerid] + PlayerBankMoney[playerid]
+    );
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_ATM_BALANCE,
+        DIALOG_STYLE_MSGBOX,
+        "ATM Balance",
+        dialogText,
+        "Kembali",
+        "Tutup"
+    );
+
+    return 1;
+}
+
+stock ShowATMDepositDialog(playerid)
+{
+    if (!IsPlayerNearBankPoint(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat ATM/bank.");
+        return 0;
+    }
+
+    new dialogText[256];
+
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "Cash kamu: $%d\nBank kamu: $%d\n\nMasukkan jumlah deposit.\nKetik all untuk menyimpan semua cash.",
+        PlayerMoney[playerid],
+        PlayerBankMoney[playerid]
+    );
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_ATM_DEPOSIT,
+        DIALOG_STYLE_INPUT,
+        "ATM Deposit",
+        dialogText,
+        "Deposit",
+        "Kembali"
+    );
+
+    return 1;
+}
+
+stock ShowATMWithdrawDialog(playerid)
+{
+    if (!IsPlayerNearBankPoint(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat ATM/bank.");
+        return 0;
+    }
+
+    new dialogText[256];
+
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "Cash kamu: $%d\nBank kamu: $%d\n\nMasukkan jumlah withdraw.\nKetik all untuk mengambil semua saldo bank.",
+        PlayerMoney[playerid],
+        PlayerBankMoney[playerid]
+    );
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_ATM_WITHDRAW,
+        DIALOG_STYLE_INPUT,
+        "ATM Withdraw",
+        dialogText,
+        "Withdraw",
+        "Kembali"
+    );
+
+    return 1;
+}
+
+stock ProcessATMDeposit(playerid, const amountText[])
+{
+    if (!IsPlayerNearBankPoint(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat ATM/bank untuk deposit.");
+        return 0;
+    }
+
+    new amount;
+
+    if (!strcmp(amountText, "all", true))
+    {
+        amount = PlayerMoney[playerid];
+    }
+    else
+    {
+        if (!IsNumericString(amountText))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Jumlah harus angka atau all.");
+            ShowATMDepositDialog(playerid);
+            return 0;
+        }
+
+        amount = strval(amountText);
+    }
+
+    if (!IsValidBankAmount(amount))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Jumlah deposit tidak valid.");
+        ShowATMDepositDialog(playerid);
+        return 0;
+    }
+
+    if (PlayerMoney[playerid] < amount)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Cash kamu tidak cukup.");
+        ShowATMDepositDialog(playerid);
+        return 0;
+    }
+
+    TakePlayerCash(playerid, amount);
+    GivePlayerBankMoney(playerid, amount);
+    SavePlayerData(playerid);
+
+    new msg[144];
+    format(msg, sizeof(msg), "Deposit berhasil: $%d masuk ke bank.", amount);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+
+    ShowATMBalanceDialog(playerid);
+    return 1;
+}
+
+stock ProcessATMWithdraw(playerid, const amountText[])
+{
+    if (!IsPlayerNearBankPoint(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat ATM/bank untuk withdraw.");
+        return 0;
+    }
+
+    new amount;
+
+    if (!strcmp(amountText, "all", true))
+    {
+        amount = PlayerBankMoney[playerid];
+    }
+    else
+    {
+        if (!IsNumericString(amountText))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Jumlah harus angka atau all.");
+            ShowATMWithdrawDialog(playerid);
+            return 0;
+        }
+
+        amount = strval(amountText);
+    }
+
+    if (!IsValidBankAmount(amount))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Jumlah withdraw tidak valid.");
+        ShowATMWithdrawDialog(playerid);
+        return 0;
+    }
+
+    if (PlayerBankMoney[playerid] < amount)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Saldo bank kamu tidak cukup.");
+        ShowATMWithdrawDialog(playerid);
+        return 0;
+    }
+
+    TakePlayerBankMoney(playerid, amount);
+    GivePlayerCash(playerid, amount);
+    SavePlayerData(playerid);
+
+    new msg[144];
+    format(msg, sizeof(msg), "Withdraw berhasil: $%d keluar dari bank.", amount);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+
+    ShowATMBalanceDialog(playerid);
+    return 1;
+}
+
 stock HandleWorldInteractKey(playerid)
 {
     if (!PlayerLoggedIn[playerid])
@@ -4982,12 +5287,7 @@ stock HandleWorldInteractKey(playerid)
 
     if (IsPlayerNearBankPoint(playerid))
     {
-        new msg[144];
-        format(msg, sizeof(msg), "ATM/Bank terdeteksi. Cash: $%d | Bank: $%d", PlayerMoney[playerid], PlayerBankMoney[playerid]);
-        SendClientMessage(playerid, COLOR_YELLOW, "========== ATM INTERACTION ==========");
-        SendClientMessage(playerid, COLOR_WHITE, msg);
-        SendClientMessage(playerid, COLOR_CYAN, "ALT untuk ATM: gunakan /balance, /deposit [amount/all], atau /withdraw [amount/all].");
-        SendClientMessage(playerid, COLOR_WHITE, "Lokasi ATM diarahkan ke area supermarket/market agar lebih terasa seperti offline mode.");
+        ShowATMDialog(playerid);
         return 1;
     }
 
@@ -6887,7 +7187,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF HELP ==========");
         SendClientMessage(playerid, COLOR_WHITE, "/help - Menampilkan bantuan");
-        SendClientMessage(playerid, COLOR_WHITE, "ALT - Interaksi transaksi/menu dunia, /interact sebagai fallback");
+        SendClientMessage(playerid, COLOR_WHITE, "ALT - Interaksi dunia; ATM sudah memakai Dialog UI, /interact sebagai fallback");
         SendClientMessage(playerid, COLOR_WHITE, "Tombol 2 - Khusus start job/vehicle mission saat driver kendaraan job");
         SendClientMessage(playerid, COLOR_WHITE, "/stats - Melihat statistik player");
         SendClientMessage(playerid, COLOR_WHITE, "/money - Melihat uang kamu");
@@ -7027,7 +7327,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.17B Offline-like Interaction");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.17C ATM Dialog UI");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -7037,8 +7337,9 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D: Release polish, version, credits, staff, beta guide.");
-    	SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");
-    	SendClientMessage(playerid, COLOR_WHITE, "v0.17B: house arrow enter/exit, ALT transaksi/menu, dan job vehicle grace timer.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.17C: ATM memakai dialog UI; ALT dekat ATM membuka menu Balance/Deposit/Withdraw.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.17B: house arrow enter/exit, ALT transaksi/menu, dan job vehicle grace timer.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16C: Admin beta dashboard dan monitoring reports/logs.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16B: Starter pack, bug report, suggestion, feedback handling.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16A: Whitelist, MOTD, rules, closed beta gate.");
@@ -11703,7 +12004,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         SendClientMessage(playerid, COLOR_YELLOW, "========== CLOSED BETA STATUS ==========");
 
-        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.17B.1 House Cooldown");
+        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.17C ATM Dialog");
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         format(msg, sizeof(msg), "Uptime: %s", uptimeText);

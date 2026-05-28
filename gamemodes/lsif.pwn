@@ -4193,7 +4193,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.16D Release Polish");
+    SetGameModeText("LSIF Dev v0.16D.1 Beta Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -4268,7 +4268,7 @@ public OnGameModeInit()
     print("[LSIF] Closed beta whitelist system aktif.");
     print("[LSIF] Manual vehicle engine mode aktif.");
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
-    print("[LSIF] Gamemode v0.16D Closed Beta Release Polish berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.16D.1 Temporary Vehicle Engine Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -6577,7 +6577,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.16D Closed Beta Release Polish");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.16D.1 Closed Beta Vehicle Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -6587,6 +6587,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D: Release polish, version, credits, staff, beta guide.");
+    	SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16C: Admin beta dashboard dan monitoring reports/logs.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16B: Starter pack, bug report, suggestion, feedback handling.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16A: Whitelist, MOTD, rules, closed beta gate.");
@@ -6895,7 +6896,19 @@ public OnPlayerCommandText(playerid, cmdtext[])
         new vehicleid = GetPlayerVehicleID(playerid);
         RepairVehicle(vehicleid);
         SetVehicleHealth(vehicleid, 1000.0);
-        SendClientMessage(playerid, COLOR_GREEN, "Kendaraan berhasil diperbaiki.");
+
+        new engine;
+        new lights;
+        new alarm;
+        new doors;
+        new bonnet;
+        new boot;
+        new objective;
+
+        GetVehicleParamsEx(vehicleid, engine, lights, alarm, doors, bonnet, boot, objective);
+        SetVehicleParamsEx(vehicleid, 1, lights, alarm, doors, bonnet, boot, objective);
+
+        SendClientMessage(playerid, COLOR_GREEN, "Kendaraan berhasil diperbaiki dan mesin dinyalakan.");
         return 1;
     }
 
@@ -6935,10 +6948,28 @@ public OnPlayerCommandText(playerid, cmdtext[])
         }
 
         PlayerVehicle[playerid] = CreateVehicle(modelid, x + 3.0, y, z, a, 1, 1, -1);
+
+        if (PlayerVehicle[playerid] == INVALID_VEHICLE_ID)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Gagal membuat kendaraan sementara.");
+            return 1;
+        }
+
+        SetVehicleParamsEx(
+            PlayerVehicle[playerid],
+            1, // engine ON for temporary /veh vehicles
+            0, // lights OFF
+            0, // alarm OFF
+            0, // doors unlocked
+            0, // bonnet closed
+            0, // boot closed
+            0  // objective off
+        );
+
         PutPlayerInVehicle(playerid, PlayerVehicle[playerid], 0);
 
         new msg[144];
-        format(msg, sizeof(msg), "Kendaraan model ID %d berhasil dibuat.", modelid);
+        format(msg, sizeof(msg), "Kendaraan temporary model ID %d berhasil dibuat dan mesin dinyalakan.", modelid);
         SendClientMessage(playerid, COLOR_GREEN, msg);
 
         return 1;
@@ -11221,7 +11252,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         SendClientMessage(playerid, COLOR_YELLOW, "========== CLOSED BETA STATUS ==========");
 
-        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.16D Release Polish");
+        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.16D.1 Beta Fix");
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         format(msg, sizeof(msg), "Uptime: %s", uptimeText);

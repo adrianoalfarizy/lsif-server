@@ -151,6 +151,7 @@
 
 #define HOUSE_PICKUP_MODEL 1318
 #define HOUSE_PICKUP_TYPE 1
+#define HOUSE_PICKUP_COOLDOWN_MS 3000
 #define HOUSE_EXIT_PICKUP_Y_OFFSET -2.0
 
 #define ORG_CREATE_PRICE 100000
@@ -510,6 +511,7 @@ new PlayerFindingHouse[MAX_PLAYERS];
 new PlayerFindingHouseIndex[MAX_PLAYERS];
 new HouseExteriorPickup[MAX_HOUSES];
 new PlayerHouseExitPickup[MAX_PLAYERS];
+new PlayerLastHousePickupTick[MAX_PLAYERS];
 
 new Float:HouseX[MAX_HOUSES] =
 {
@@ -3141,6 +3143,7 @@ stock ResetPlayerHouseData(playerid)
     PlayerInsideHouseOwner[playerid] = INVALID_PLAYER_ID;
     PlayerHouseInvite[playerid] = INVALID_PLAYER_ID;
     PlayerHouseExitPickup[playerid] = -1;
+    PlayerLastHousePickupTick[playerid] = 0;
     PlayerFindingHouse[playerid] = 0;
     PlayerFindingHouseIndex[playerid] = -1;
     return 1;
@@ -3154,6 +3157,24 @@ stock DestroyPlayerHouseExitPickup(playerid)
         PlayerHouseExitPickup[playerid] = -1;
     }
 
+    return 1;
+}
+
+stock IsPlayerInHousePickupCooldown(playerid)
+{
+    new nowTick = GetTickCount();
+
+    if (PlayerLastHousePickupTick[playerid] != 0 && nowTick - PlayerLastHousePickupTick[playerid] < HOUSE_PICKUP_COOLDOWN_MS)
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
+stock SetPlayerHousePickupCooldown(playerid)
+{
+    PlayerLastHousePickupTick[playerid] = GetTickCount();
     return 1;
 }
 
@@ -3371,6 +3392,7 @@ stock EnterHouseAsVisitor(playerid, ownerid)
 
     PlayerInsideHouse[playerid] = 1;
     PlayerInsideHouseOwner[playerid] = ownerid;
+    SetPlayerHousePickupCooldown(playerid);
 
     SetPlayerInterior(playerid, HOUSE_INTERIOR_ID);
     SetPlayerVirtualWorld(playerid, GetPlayerHouseVirtualWorld(ownerid));
@@ -3415,6 +3437,7 @@ stock KickPlayerFromHouse(playerid)
 
     if (ownerid == INVALID_PLAYER_ID || !IsPlayerConnected(ownerid) || PlayerHouseIndex[ownerid] == -1)
     {
+        SetPlayerHousePickupCooldown(playerid);
         DestroyPlayerHouseExitPickup(playerid);
         PlayerInsideHouse[playerid] = 0;
         PlayerInsideHouseOwner[playerid] = INVALID_PLAYER_ID;
@@ -3428,6 +3451,7 @@ stock KickPlayerFromHouse(playerid)
 
     new houseIndex = PlayerHouseIndex[ownerid];
 
+    SetPlayerHousePickupCooldown(playerid);
     DestroyPlayerHouseExitPickup(playerid);
     PlayerInsideHouse[playerid] = 0;
     PlayerInsideHouseOwner[playerid] = INVALID_PLAYER_ID;
@@ -4360,7 +4384,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.17B Offline UI");
+    SetGameModeText("LSIF Dev v0.17B.1 House Cooldown");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -5015,6 +5039,11 @@ public OnPlayerPickUpPickup(playerid, pickupid)
 
     if (PlayerHouseExitPickup[playerid] != -1 && pickupid == PlayerHouseExitPickup[playerid])
     {
+        if (IsPlayerInHousePickupCooldown(playerid))
+        {
+            return 1;
+        }
+
         ExitPlayerHouse(playerid);
         return 1;
     }
@@ -5023,6 +5052,11 @@ public OnPlayerPickUpPickup(playerid, pickupid)
     {
         if (pickupid == HouseExteriorPickup[i])
         {
+            if (IsPlayerInHousePickupCooldown(playerid))
+            {
+                return 1;
+            }
+
             if (PlayerWorking[playerid] || PlayerRace[playerid] != RACE_NONE)
             {
                 SendClientMessage(playerid, COLOR_RED, "Tidak bisa masuk rumah saat job/race aktif.");
@@ -11669,7 +11703,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         SendClientMessage(playerid, COLOR_YELLOW, "========== CLOSED BETA STATUS ==========");
 
-        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.17B Offline UI");
+        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.17B.1 House Cooldown");
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         format(msg, sizeof(msg), "Uptime: %s", uptimeText);

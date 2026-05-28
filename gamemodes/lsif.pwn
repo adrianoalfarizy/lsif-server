@@ -230,6 +230,25 @@
 
 #define MAX_SHOP_VEHICLES 12
 
+#define WORLD_MARKER_PICKUP_MODEL 1239
+#define WORLD_MARKER_PICKUP_TYPE 1
+#define WORLD_LABEL_DRAW_DISTANCE 22.0
+
+#define MAPICON_BASE_ATM 10
+#define MAPICON_BASE_HOUSE 20
+#define MAPICON_BASE_BUSINESS 30
+#define MAPICON_BASE_DEALER 40
+#define MAPICON_BASE_RACE 50
+
+#define MAPICON_TYPE_ATM 52
+#define MAPICON_TYPE_HOUSE 31
+#define MAPICON_TYPE_BUSINESS 52
+#define MAPICON_TYPE_DEALER 55
+#define MAPICON_TYPE_RACE 53
+#if !defined MAPICON_LOCAL
+#define MAPICON_LOCAL 0
+#endif
+
 #define MAX_GARAGE_SLOTS 3
 
 #define VEHICLE_MAX_FUEL 100
@@ -686,6 +705,19 @@ new PlayerDialogDealerVehicle[MAX_PLAYERS];
 new PlayerDialogHouseIndex[MAX_PLAYERS];
 new PlayerDialogBusinessIndex[MAX_PLAYERS];
 new PlayerDialogGarageSlot[MAX_PLAYERS];
+
+new BankPointPickup[MAX_BANK_POINTS];
+new Text3D:BankPointLabel[MAX_BANK_POINTS];
+
+new DealershipPickup[MAX_DEALERSHIPS];
+new Text3D:DealershipLabel[MAX_DEALERSHIPS];
+
+new BusinessPickup[MAX_BUSINESSES];
+new Text3D:BusinessLabel[MAX_BUSINESSES];
+
+new Text3D:HouseExteriorLabel[MAX_HOUSES];
+new RaceStartPickup;
+new Text3D:RaceStartLabel;
 
 new Float:DealershipX[MAX_DEALERSHIPS] =
 {
@@ -5187,7 +5219,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.17G Admin Dialog");
+    SetGameModeText("LSIF Dev v0.17H Map Markers");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -5216,6 +5248,7 @@ public OnGameModeInit()
     );
 
     CreateHouseExteriorPickups();
+    CreateWorldInteractionMarkers();
 
     for (new i = 0; i < MAX_PLAYERS; i++)
     {
@@ -5267,7 +5300,8 @@ public OnGameModeInit()
     print("[LSIF] Manual vehicle engine mode aktif.");
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
     print("[LSIF] Custom house arrow pickups aktif.");
-    print("[LSIF] Gamemode v0.17G Admin & Beta Dialog Pack berhasil dijalankan.");
+    print("[LSIF] Map icons, 3D labels, and ALT world markers aktif.");
+    print("[LSIF] Gamemode v0.17H Map Legend & World Markers berhasil dijalankan.");
     return 1;
 }
 
@@ -5293,6 +5327,8 @@ public OnGameModeExit()
         KillTimer(g_FuelTimer);
         g_FuelTimer = 0;
     }
+
+    DestroyWorldInteractionMarkers();
 
     for (new i = 0; i < MAX_HOUSES; i++)
     {
@@ -5333,6 +5369,7 @@ public OnPlayerDisconnect(playerid, reason)
 {
     SavePlayerData(playerid);
     SaveOwnedVehicle(playerid);
+    RemoveLSIFMapIcons(playerid);
     DestroyPlayerHouseExitPickup(playerid);
     if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
     {
@@ -5454,10 +5491,11 @@ public OnPlayerSpawn(playerid)
     }
 
     ResetPlayerWeapons(playerid);
+    ApplyLSIFMapIcons(playerid);
 
     SendClientMessage(playerid, COLOR_CYAN, "Kamu berhasil spawn di Los Santos.");
     SendClientMessage(playerid, COLOR_WHITE, "Closed Beta: gunakan /betaguide untuk alur awal dan /bugreport jika menemukan bug.");
-    SendClientMessage(playerid, COLOR_WHITE, "Command cepat: /help, /starterpack, /jobs. ALT untuk interaksi/dialog, tombol 2 untuk start job.");
+    SendClientMessage(playerid, COLOR_WHITE, "Command cepat: /help, /starterpack, /jobs, /maplegend. Cari marker [ALT] untuk interaksi dunia.");
 
     return 1;
 }
@@ -5528,7 +5566,7 @@ stock ShowBetaStatusDialog(playerid)
     format(
         dialogText,
         sizeof(dialogText),
-        "Gamemode: LSIF Dev v0.17G Admin Dialog\n\nUptime: %s\nPlayers Online: %d\nLogged Players: %d\nAdmins Online: %d\n\nClosed Beta: ACTIVE\nWhitelist: ENABLED after first active whitelist user\n\nMenu terkait:\n/adminmenu\n/betamenu",
+        "Gamemode: LSIF Dev v0.17H Map Markers\n\nUptime: %s\nPlayers Online: %d\nLogged Players: %d\nAdmins Online: %d\n\nClosed Beta: ACTIVE\nWhitelist: ENABLED after first active whitelist user\n\nMenu terkait:\n/adminmenu\n/betamenu",
         uptimeText,
         CountOnlinePlayers(),
         CountLoggedPlayers(),
@@ -7069,10 +7107,221 @@ stock HandleVehicleMissionKey(playerid)
     return 1;
 }
 
+
+stock InitWorldMarkerArrays()
+{
+    for (new i = 0; i < MAX_BANK_POINTS; i++)
+    {
+        BankPointPickup[i] = -1;
+        BankPointLabel[i] = Text3D:INVALID_3DTEXT_ID;
+    }
+
+    for (new i = 0; i < MAX_DEALERSHIPS; i++)
+    {
+        DealershipPickup[i] = -1;
+        DealershipLabel[i] = Text3D:INVALID_3DTEXT_ID;
+    }
+
+    for (new i = 0; i < MAX_BUSINESSES; i++)
+    {
+        BusinessPickup[i] = -1;
+        BusinessLabel[i] = Text3D:INVALID_3DTEXT_ID;
+    }
+
+    for (new i = 0; i < MAX_HOUSES; i++)
+    {
+        HouseExteriorLabel[i] = Text3D:INVALID_3DTEXT_ID;
+    }
+
+    RaceStartPickup = -1;
+    RaceStartLabel = Text3D:INVALID_3DTEXT_ID;
+    return 1;
+}
+
+stock CreateWorldInteractionMarkers()
+{
+    InitWorldMarkerArrays();
+
+    new labelText[144];
+
+    for (new i = 0; i < MAX_BANK_POINTS; i++)
+    {
+        BankPointPickup[i] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, BankPointX[i], BankPointY[i], BankPointZ[i], 0);
+
+        format(labelText, sizeof(labelText), "[ALT] ATM\n%s\nBalance / Deposit / Withdraw", BankPointName[i]);
+        BankPointLabel[i] = Create3DTextLabel(labelText, COLOR_CYAN, BankPointX[i], BankPointY[i], BankPointZ[i] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
+    }
+
+    for (new i = 0; i < MAX_DEALERSHIPS; i++)
+    {
+        DealershipPickup[i] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, DealershipX[i], DealershipY[i], DealershipZ[i], 0);
+
+        format(labelText, sizeof(labelText), "[ALT] Dealership\n%s\nVehicle Shop / Garage Service", DealershipName[i]);
+        DealershipLabel[i] = Create3DTextLabel(labelText, COLOR_GREEN, DealershipX[i], DealershipY[i], DealershipZ[i] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
+    }
+
+    for (new i = 0; i < MAX_BUSINESSES; i++)
+    {
+        BusinessPickup[i] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, BusinessX[i], BusinessY[i], BusinessZ[i], 0);
+
+        format(labelText, sizeof(labelText), "[ALT] Business\n%s\nBuy / Manage / Collect", BusinessName[i]);
+        BusinessLabel[i] = Create3DTextLabel(labelText, COLOR_YELLOW, BusinessX[i], BusinessY[i], BusinessZ[i] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
+    }
+
+    for (new i = 0; i < MAX_HOUSES; i++)
+    {
+        format(labelText, sizeof(labelText), "[ALT] House Menu\n%s\nPanah = Enter/Exit", HouseName[i]);
+        HouseExteriorLabel[i] = Create3DTextLabel(labelText, COLOR_WHITE, HouseX[i], HouseY[i], HouseZ[i] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
+    }
+
+    RaceStartPickup = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, RaceLSX[0], RaceLSY[0], RaceLSZ[0], 0);
+    RaceStartLabel = Create3DTextLabel("[RACE] LS Intro\nGunakan /joinrace ls\nTombol 2 hanya untuk vehicle mission/job", COLOR_ORANGE, RaceLSX[0], RaceLSY[0], RaceLSZ[0] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
+
+    print("[LSIF] World interaction markers and 3D labels created.");
+    return 1;
+}
+
+stock DestroyWorldInteractionMarkers()
+{
+    for (new i = 0; i < MAX_BANK_POINTS; i++)
+    {
+        if (BankPointPickup[i] != -1)
+        {
+            DestroyPickup(BankPointPickup[i]);
+            BankPointPickup[i] = -1;
+        }
+
+        if (BankPointLabel[i] != Text3D:INVALID_3DTEXT_ID)
+        {
+            Delete3DTextLabel(BankPointLabel[i]);
+            BankPointLabel[i] = Text3D:INVALID_3DTEXT_ID;
+        }
+    }
+
+    for (new i = 0; i < MAX_DEALERSHIPS; i++)
+    {
+        if (DealershipPickup[i] != -1)
+        {
+            DestroyPickup(DealershipPickup[i]);
+            DealershipPickup[i] = -1;
+        }
+
+        if (DealershipLabel[i] != Text3D:INVALID_3DTEXT_ID)
+        {
+            Delete3DTextLabel(DealershipLabel[i]);
+            DealershipLabel[i] = Text3D:INVALID_3DTEXT_ID;
+        }
+    }
+
+    for (new i = 0; i < MAX_BUSINESSES; i++)
+    {
+        if (BusinessPickup[i] != -1)
+        {
+            DestroyPickup(BusinessPickup[i]);
+            BusinessPickup[i] = -1;
+        }
+
+        if (BusinessLabel[i] != Text3D:INVALID_3DTEXT_ID)
+        {
+            Delete3DTextLabel(BusinessLabel[i]);
+            BusinessLabel[i] = Text3D:INVALID_3DTEXT_ID;
+        }
+    }
+
+    for (new i = 0; i < MAX_HOUSES; i++)
+    {
+        if (HouseExteriorLabel[i] != Text3D:INVALID_3DTEXT_ID)
+        {
+            Delete3DTextLabel(HouseExteriorLabel[i]);
+            HouseExteriorLabel[i] = Text3D:INVALID_3DTEXT_ID;
+        }
+    }
+
+    if (RaceStartPickup != -1)
+    {
+        DestroyPickup(RaceStartPickup);
+        RaceStartPickup = -1;
+    }
+
+    if (RaceStartLabel != Text3D:INVALID_3DTEXT_ID)
+    {
+        Delete3DTextLabel(RaceStartLabel);
+        RaceStartLabel = Text3D:INVALID_3DTEXT_ID;
+    }
+
+    return 1;
+}
+
+stock ApplyLSIFMapIcons(playerid)
+{
+    for (new i = 0; i < MAX_BANK_POINTS; i++)
+    {
+        SetPlayerMapIcon(playerid, MAPICON_BASE_ATM + i, BankPointX[i], BankPointY[i], BankPointZ[i], MAPICON_TYPE_ATM, COLOR_CYAN, MAPICON_LOCAL);
+    }
+
+    for (new i = 0; i < MAX_HOUSES; i++)
+    {
+        SetPlayerMapIcon(playerid, MAPICON_BASE_HOUSE + i, HouseX[i], HouseY[i], HouseZ[i], MAPICON_TYPE_HOUSE, COLOR_WHITE, MAPICON_LOCAL);
+    }
+
+    for (new i = 0; i < MAX_BUSINESSES; i++)
+    {
+        SetPlayerMapIcon(playerid, MAPICON_BASE_BUSINESS + i, BusinessX[i], BusinessY[i], BusinessZ[i], MAPICON_TYPE_BUSINESS, COLOR_YELLOW, MAPICON_LOCAL);
+    }
+
+    for (new i = 0; i < MAX_DEALERSHIPS; i++)
+    {
+        SetPlayerMapIcon(playerid, MAPICON_BASE_DEALER + i, DealershipX[i], DealershipY[i], DealershipZ[i], MAPICON_TYPE_DEALER, COLOR_GREEN, MAPICON_LOCAL);
+    }
+
+    SetPlayerMapIcon(playerid, MAPICON_BASE_RACE, RaceLSX[0], RaceLSY[0], RaceLSZ[0], MAPICON_TYPE_RACE, COLOR_ORANGE, MAPICON_LOCAL);
+    return 1;
+}
+
+stock RemoveLSIFMapIcons(playerid)
+{
+    for (new i = 0; i < MAX_BANK_POINTS; i++)
+    {
+        RemovePlayerMapIcon(playerid, MAPICON_BASE_ATM + i);
+    }
+
+    for (new i = 0; i < MAX_HOUSES; i++)
+    {
+        RemovePlayerMapIcon(playerid, MAPICON_BASE_HOUSE + i);
+    }
+
+    for (new i = 0; i < MAX_BUSINESSES; i++)
+    {
+        RemovePlayerMapIcon(playerid, MAPICON_BASE_BUSINESS + i);
+    }
+
+    for (new i = 0; i < MAX_DEALERSHIPS; i++)
+    {
+        RemovePlayerMapIcon(playerid, MAPICON_BASE_DEALER + i);
+    }
+
+    RemovePlayerMapIcon(playerid, MAPICON_BASE_RACE);
+    return 1;
+}
+
+stock ShowMapLegendDialog(playerid)
+{
+    new dialogText[768];
+
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "Radar/Map Icon LSIF:\n\nATM/Bank - transaksi bank, pakai ALT di marker ATM.\nHouse - rumah/interior; ALT untuk menu, panah untuk masuk/keluar.\nBusiness - beli/manage/collect business dengan ALT.\nDealership - vehicle shop dan garage service dengan ALT.\nRace - lokasi race/time trial.\n\nDi dunia, cari 3D label seperti [ALT] ATM atau [ALT] Dealership. Berdiri dekat marker lalu tekan ALT.\nTombol 2 hanya untuk start vehicle mission/job."
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_BETA_MOTD, DIALOG_STYLE_MSGBOX, "LSIF Map Legend", dialogText, "OK", "Tutup");
+    return 1;
+}
+
 stock ShowInteractionNoPoint(playerid)
 {
     SendClientMessage(playerid, COLOR_YELLOW, "Tidak ada interaksi dekatmu.");
-    SendClientMessage(playerid, COLOR_WHITE, "ALT dipakai untuk interaksi dunia: ATM, dealership, beli rumah, dan business.");
+    SendClientMessage(playerid, COLOR_WHITE, "ALT dipakai di marker [ALT]: ATM, dealership, house, dan business.");
     SendClientMessage(playerid, COLOR_WHITE, "Tombol 2 khusus untuk start job/vehicle mission.");
     return 1;
 }
@@ -10430,6 +10679,19 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/maplegend", true))
+    {
+        ShowMapLegendDialog(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/refreshicons", true))
+    {
+        ApplyLSIFMapIcons(playerid);
+        SendClientMessage(playerid, COLOR_GREEN, "Map icon LSIF sudah direfresh.");
+        return 1;
+    }
+
 
     if (!strcmp(cmdtext, "/adminmenu", true))
     {
@@ -10449,6 +10711,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/help - Menampilkan bantuan");
         SendClientMessage(playerid, COLOR_WHITE, "ALT - Interaksi dunia; ATM, dealer, house, business, dan garage service memakai Dialog UI");
         SendClientMessage(playerid, COLOR_WHITE, "Tombol 2 - Khusus start job/vehicle mission saat driver kendaraan job");
+        SendClientMessage(playerid, COLOR_WHITE, "/maplegend - Penjelasan icon radar/map LSIF");
+        SendClientMessage(playerid, COLOR_WHITE, "/refreshicons - Refresh icon radar/map LSIF");
         SendClientMessage(playerid, COLOR_WHITE, "/stats - Melihat statistik player");
         SendClientMessage(playerid, COLOR_WHITE, "/money - Melihat uang kamu");
         SendClientMessage(playerid, COLOR_WHITE, "/givemoney - Dev test tambah uang");
@@ -10590,7 +10854,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.17G Admin & Beta Dialog Pack");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.17H Map Legend & World Markers");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -15275,7 +15539,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         SendClientMessage(playerid, COLOR_YELLOW, "========== CLOSED BETA STATUS ==========");
 
-        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.17G Admin Dialog");
+        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.17H Map Markers");
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         format(msg, sizeof(msg), "Uptime: %s", uptimeText);

@@ -290,3 +290,36 @@ CREATE TABLE IF NOT EXISTS feedback_reports (
     INDEX idx_status (status),
     INDEX idx_created_at (created_at)
 );
+
+ALTER TABLE players
+ADD COLUMN starter_pack_claimed TINYINT NOT NULL DEFAULT 0
+AFTER spawn_house;
+
+-- LSIF Dev v0.19B - Weapon License & Saved Loadout
+
+ALTER TABLE players
+ADD COLUMN IF NOT EXISTS weapon_license TINYINT NOT NULL DEFAULT 1
+AFTER starter_pack_claimed;
+
+-- Closed beta default: existing players get basic weapon license active.
+UPDATE players
+SET weapon_license = 1
+WHERE weapon_license IS NULL OR weapon_license = 0;
+
+CREATE TABLE IF NOT EXISTS player_weapons (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+
+    player_id INT NOT NULL,
+    weapon_id INT NOT NULL,
+    weapon_name VARCHAR(32) NOT NULL,
+    ammo INT NOT NULL DEFAULT 0,
+    total_purchased INT NOT NULL DEFAULT 0,
+
+    last_purchased_at DATETIME NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+
+    UNIQUE KEY unique_player_weapon (player_id, weapon_id),
+    INDEX idx_player_id (player_id),
+    INDEX idx_weapon_id (weapon_id)
+);

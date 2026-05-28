@@ -78,6 +78,8 @@
 #define DIALOG_WEAPON_SHOP 1061
 #define DIALOG_WEAPON_CONFIRM 1062
 #define DIALOG_WEAPON_INFO 1063
+#define DIALOG_LOADOUT_INFO 1064
+#define DIALOG_WEAPON_LICENSE 1065
 
 #define STARTER_CASH 15000
 #define STARTER_BANK 5000
@@ -262,6 +264,8 @@
 #define MAX_AMMUNATIONS 3
 #define AMMUNATION_ACCESS_RADIUS 7.0
 #define MAX_WEAPON_SHOP_ITEMS 9
+#define MAX_SAVED_WEAPON_LOADOUT MAX_WEAPON_SHOP_ITEMS
+#define DEFAULT_WEAPON_LICENSE 1
 
 #define MAX_SHOP_VEHICLES 12
 
@@ -830,6 +834,9 @@ new PlayerDialogHouseIndex[MAX_PLAYERS];
 new PlayerDialogBusinessIndex[MAX_PLAYERS];
 new PlayerDialogGarageSlot[MAX_PLAYERS];
 new PlayerDialogWeaponIndex[MAX_PLAYERS];
+new PlayerWeaponLicense[MAX_PLAYERS];
+new PlayerSavedWeaponOwned[MAX_PLAYERS][MAX_SAVED_WEAPON_LOADOUT];
+new PlayerSavedWeaponAmmo[MAX_PLAYERS][MAX_SAVED_WEAPON_LOADOUT];
 
 new BankPointPickup[MAX_BANK_POINTS];
 new Text3D:BankPointLabel[MAX_BANK_POINTS];
@@ -1275,6 +1282,8 @@ forward OnRecentBugsDialogLoaded(playerid);
 forward OnRecentFeedbackDialogLoaded(playerid);
 forward OnRecentReportsDialogLoaded(playerid);
 forward OnRecentLogsDialogLoaded(playerid);
+forward OnPlayerWeaponsLoaded(playerid);
+forward ApplySavedWeaponLoadout(playerid);
 
 
 stock ShowBetaMOTD(playerid)
@@ -1462,6 +1471,8 @@ stock ResetPlayerAccountData(playerid)
     PlayerLastACWarningTick[playerid] = 0;
     format(PlayerLastWhitelistQuery[playerid], 24, "-");
     PlayerStarterPackClaimed[playerid] = 0;
+    PlayerWeaponLicense[playerid] = DEFAULT_WEAPON_LICENSE;
+    ResetPlayerWeaponLoadoutData(playerid);
 
     SyncPlayerMoneyHUD(playerid);
     return 1;
@@ -1574,7 +1585,7 @@ stock SavePlayerData(playerid, notify = 0)
         g_SQL,
         query,
         sizeof(query),
-        "UPDATE players SET money=%d, bank_money=%d, xp=%d, level=%d, admin_level=%d, current_job=%d, spawn_house=%d, starter_pack_claimed=%d, pos_x=%f, pos_y=%f, pos_z=%f, pos_a=%f WHERE id=%d LIMIT 1",
+        "UPDATE players SET money=%d, bank_money=%d, xp=%d, level=%d, admin_level=%d, current_job=%d, spawn_house=%d, starter_pack_claimed=%d, weapon_license=%d, pos_x=%f, pos_y=%f, pos_z=%f, pos_a=%f WHERE id=%d LIMIT 1",
         PlayerMoney[playerid],
         PlayerBankMoney[playerid],
         PlayerXP[playerid],
@@ -1583,6 +1594,7 @@ stock SavePlayerData(playerid, notify = 0)
         PlayerJob[playerid],
         PlayerSpawnHouse[playerid],
         PlayerStarterPackClaimed[playerid],
+        PlayerWeaponLicense[playerid],
         x,
         y,
         z,
@@ -5804,7 +5816,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.19A Ammu-Nation");
+    SetGameModeText("LSIF Dev v0.19B Weapon License");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -5888,7 +5900,7 @@ public OnGameModeInit()
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
     print("[LSIF] Custom house arrow pickups aktif.");
     print("[LSIF] Map icons, 3D labels, and ALT world markers aktif.");
-    print("[LSIF] Gamemode v0.19A Ammu-Nation & Weapon Shop berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.19B Weapon License & Saved Loadout berhasil dijalankan.");
     return 1;
 }
 
@@ -6081,6 +6093,7 @@ public OnPlayerSpawn(playerid)
     }
 
     ResetPlayerWeapons(playerid);
+    SetTimerEx("ApplySavedWeaponLoadout", 1000, false, "i", playerid);
     ApplyLSIFMapIcons(playerid);
 
     SendClientMessage(playerid, COLOR_CYAN, "Kamu berhasil spawn di Los Santos.");
@@ -6156,7 +6169,7 @@ stock ShowBetaStatusDialog(playerid)
     format(
         dialogText,
         sizeof(dialogText),
-        "Gamemode: LSIF Dev v0.19A Ammu-Nation\n\nUptime: %s\nPlayers Online: %d\nLogged Players: %d\nAdmins Online: %d\n\nClosed Beta: ACTIVE\nWhitelist: ENABLED after first active whitelist user\n\nMenu terkait:\n/adminmenu\n/betamenu",
+        "Gamemode: LSIF Dev v0.19B Weapon License\n\nUptime: %s\nPlayers Online: %d\nLogged Players: %d\nAdmins Online: %d\n\nClosed Beta: ACTIVE\nWhitelist: ENABLED after first active whitelist user\n\nMenu terkait:\n/adminmenu\n/betamenu",
         uptimeText,
         CountOnlinePlayers(),
         CountLoggedPlayers(),
@@ -6963,6 +6976,11 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 
 
 
+    if (dialogid == DIALOG_LOADOUT_INFO || dialogid == DIALOG_WEAPON_LICENSE)
+    {
+        return 1;
+    }
+
     if (dialogid == DIALOG_WEAPON_SHOP)
     {
         if (!response)
@@ -7495,9 +7513,10 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             g_SQL,
             query,
             sizeof(query),
-            "INSERT INTO players (username, password_hash, money, bank_money, xp, level, admin_level, current_job, starter_pack_claimed, pos_x, pos_y, pos_z, pos_a, last_ip, last_login) VALUES ('%e', SHA2('%e', 256), 500, 0, 0, 1, 0, 0, 0, %f, %f, %f, %f, '%e', NOW())",
+            "INSERT INTO players (username, password_hash, money, bank_money, xp, level, admin_level, current_job, starter_pack_claimed, weapon_license, pos_x, pos_y, pos_z, pos_a, last_ip, last_login) VALUES ('%e', SHA2('%e', 256), 500, 0, 0, 1, 0, 0, 0, %d, %f, %f, %f, %f, '%e', NOW())",
             username,
             inputtext,
+            DEFAULT_WEAPON_LICENSE,
             SPAWN_X,
             SPAWN_Y,
             SPAWN_Z,
@@ -7534,7 +7553,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             g_SQL,
             query,
             sizeof(query),
-            "SELECT id, money, bank_money, xp, level, admin_level, skin, current_job, spawn_house, starter_pack_claimed, pos_x, pos_y, pos_z, pos_a FROM players WHERE username='%e' AND password_hash=SHA2('%e', 256) LIMIT 1",
+            "SELECT id, money, bank_money, xp, level, admin_level, skin, current_job, spawn_house, starter_pack_claimed, weapon_license, pos_x, pos_y, pos_z, pos_a FROM players WHERE username='%e' AND password_hash=SHA2('%e', 256) LIMIT 1",
             username,
             inputtext
         );
@@ -7584,6 +7603,8 @@ public OnAccountRegister(playerid)
     PlayerAdmin[playerid] = 0;
     PlayerJob[playerid] = JOB_NONE;
     PlayerStarterPackClaimed[playerid] = 0;
+    PlayerWeaponLicense[playerid] = DEFAULT_WEAPON_LICENSE;
+    ResetPlayerWeaponLoadoutData(playerid);
     PlayerSpawnHouse[playerid] = 0;
     PlayerSpawnHouse[playerid] = 0;
     ResetPlayerHouseData(playerid);
@@ -7631,6 +7652,7 @@ public OnAccountLogin(playerid)
     cache_get_value_name_int(0, "current_job", PlayerJob[playerid]);
     cache_get_value_name_int(0, "spawn_house", PlayerSpawnHouse[playerid]);
     cache_get_value_name_int(0, "starter_pack_claimed", PlayerStarterPackClaimed[playerid]);
+    cache_get_value_name_int(0, "weapon_license", PlayerWeaponLicense[playerid]);
 
     cache_get_value_name_float(0, "pos_x", PlayerLastX[playerid]);
     cache_get_value_name_float(0, "pos_y", PlayerLastY[playerid]);
@@ -7644,6 +7666,7 @@ public OnAccountLogin(playerid)
     LoadPlayerHouse(playerid);
     LoadPlayerOrganization(playerid);
     LoadPlayerBusiness(playerid);
+    LoadPlayerWeaponLoadout(playerid);
 
     new ip[45];
     new query[256];
@@ -9516,6 +9539,177 @@ stock ProcessDialogBusinessSell(playerid)
     return 1;
 }
 
+
+stock ResetPlayerWeaponLoadoutData(playerid)
+{
+    for (new i = 0; i < MAX_SAVED_WEAPON_LOADOUT; i++)
+    {
+        PlayerSavedWeaponOwned[playerid][i] = 0;
+        PlayerSavedWeaponAmmo[playerid][i] = 0;
+    }
+    return 1;
+}
+
+stock GetWeaponShopIndexFromWeaponID(weaponid)
+{
+    for (new i = 0; i < MAX_WEAPON_SHOP_ITEMS; i++)
+    {
+        if (WeaponShopWeaponID[i] == weaponid)
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+stock LoadPlayerWeaponLoadout(playerid)
+{
+    if (!PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0)
+    {
+        return 0;
+    }
+
+    new query[256];
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "SELECT weapon_id, ammo FROM player_weapons WHERE player_id=%d ORDER BY weapon_id ASC",
+        PlayerDBID[playerid]
+    );
+
+    mysql_tquery(g_SQL, query, "OnPlayerWeaponsLoaded", "i", playerid);
+    return 1;
+}
+
+stock SaveWeaponPurchase(playerid, weaponIndex)
+{
+    if (!PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0)
+    {
+        return 0;
+    }
+
+    if (weaponIndex < 0 || weaponIndex >= MAX_WEAPON_SHOP_ITEMS)
+    {
+        return 0;
+    }
+
+    new query[512];
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO player_weapons (player_id, weapon_id, weapon_name, ammo, total_purchased, last_purchased_at) VALUES (%d, %d, '%e', %d, 1, NOW()) ON DUPLICATE KEY UPDATE ammo=ammo+VALUES(ammo), total_purchased=total_purchased+1, weapon_name=VALUES(weapon_name), last_purchased_at=NOW()",
+        PlayerDBID[playerid],
+        WeaponShopWeaponID[weaponIndex],
+        WeaponShopName[weaponIndex],
+        WeaponShopAmmo[weaponIndex]
+    );
+
+    mysql_tquery(g_SQL, query);
+    return 1;
+}
+
+stock ShowLoadoutDialog(playerid)
+{
+    new dialogText[1024];
+    new found = 0;
+
+    dialogText[0] = EOS;
+
+    for (new i = 0; i < MAX_WEAPON_SHOP_ITEMS; i++)
+    {
+        if (PlayerSavedWeaponOwned[playerid][i] && PlayerSavedWeaponAmmo[playerid][i] > 0)
+        {
+            format(dialogText, sizeof(dialogText), "%s%s | Ammo: %d\n", dialogText, WeaponShopName[i], PlayerSavedWeaponAmmo[playerid][i]);
+            found++;
+        }
+    }
+
+    if (!found)
+    {
+        format(dialogText, sizeof(dialogText), "Belum ada saved weapon loadout.\n\nBeli weapon di Ammu-Nation agar tersimpan.");
+    }
+    else
+    {
+        format(dialogText, sizeof(dialogText), "%s\nGunakan /reloadout untuk apply ulang weapon setelah spawn.", dialogText);
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_LOADOUT_INFO, DIALOG_STYLE_MSGBOX, "Saved Weapon Loadout", dialogText, "OK", "Tutup");
+    return 1;
+}
+
+stock ShowWeaponLicenseDialog(playerid)
+{
+    new dialogText[384];
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "Weapon License: %s\n\nLicense ini dipakai untuk akses pembelian weapon di Ammu-Nation.\nClosed beta default: basic license aktif.\n\nSaved loadout: /loadout\nApply ulang loadout: /reloadout",
+        PlayerWeaponLicense[playerid] ? ("ACTIVE") : ("INACTIVE")
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_WEAPON_LICENSE, DIALOG_STYLE_MSGBOX, "Weapon License", dialogText, "OK", "Tutup");
+    return 1;
+}
+
+public OnPlayerWeaponsLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    ResetPlayerWeaponLoadoutData(playerid);
+
+    new rows = cache_num_rows();
+    new weaponid;
+    new ammo;
+    new index;
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name_int(i, "weapon_id", weaponid);
+        cache_get_value_name_int(i, "ammo", ammo);
+
+        index = GetWeaponShopIndexFromWeaponID(weaponid);
+
+        if (index == -1)
+        {
+            continue;
+        }
+
+        PlayerSavedWeaponOwned[playerid][index] = 1;
+        PlayerSavedWeaponAmmo[playerid][index] = ammo;
+    }
+
+    if (rows > 0)
+    {
+        SetTimerEx("ApplySavedWeaponLoadout", 1000, false, "i", playerid);
+        SendClientMessage(playerid, COLOR_GREEN, "Saved weapon loadout berhasil dimuat. Gunakan /loadout.");
+    }
+
+    return 1;
+}
+
+public ApplySavedWeaponLoadout(playerid)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
+    {
+        return 1;
+    }
+
+    for (new i = 0; i < MAX_WEAPON_SHOP_ITEMS; i++)
+    {
+        if (PlayerSavedWeaponOwned[playerid][i] && PlayerSavedWeaponAmmo[playerid][i] > 0)
+        {
+            GivePlayerWeapon(playerid, t_WEAPON:WeaponShopWeaponID[i], PlayerSavedWeaponAmmo[playerid][i]);
+        }
+    }
+
+    return 1;
+}
+
 stock GetNearestAmmuNation(playerid)
 {
     new nearest = -1;
@@ -9579,7 +9773,7 @@ stock ShowWeaponInfoDialog(playerid)
         format(dialogText, sizeof(dialogText), "%s%d. %s | Weapon ID %d | Ammo %d | Price $%d\n", dialogText, i + 1, WeaponShopName[i], WeaponShopWeaponID[i], WeaponShopAmmo[i], WeaponShopPrice[i]);
     }
 
-    ShowPlayerDialog(playerid, DIALOG_WEAPON_INFO, DIALOG_STYLE_MSGBOX, "Weapon Shop Info", dialogText, "OK", "Tutup");
+    ShowPlayerDialog(playerid, DIALOG_WEAPON_INFO, DIALOG_STYLE_MSGBOX, "Weapon Shop Info / Saved Loadout", dialogText, "OK", "Tutup");
     return 1;
 }
 
@@ -9628,6 +9822,13 @@ stock ProcessWeaponPurchase(playerid, weaponIndex)
         return 0;
     }
 
+    if (!PlayerWeaponLicense[playerid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum punya weapon license.");
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan /weaponlicense untuk cek status license.");
+        return 0;
+    }
+
     new price = WeaponShopPrice[weaponIndex];
 
     if (PlayerMoney[playerid] < price)
@@ -9640,13 +9841,18 @@ stock ProcessWeaponPurchase(playerid, weaponIndex)
     }
 
     TakePlayerCash(playerid, price);
-    GivePlayerWeapon(playerid, WeaponShopWeaponID[weaponIndex], WeaponShopAmmo[weaponIndex]);
+    GivePlayerWeapon(playerid, t_WEAPON:WeaponShopWeaponID[weaponIndex], WeaponShopAmmo[weaponIndex]);
+
+    PlayerSavedWeaponOwned[playerid][weaponIndex] = 1;
+    PlayerSavedWeaponAmmo[playerid][weaponIndex] += WeaponShopAmmo[weaponIndex];
+
+    SaveWeaponPurchase(playerid, weaponIndex);
     SavePlayerData(playerid);
 
     new msg[144];
     format(msg, sizeof(msg), "Ammu-Nation: kamu membeli %s dengan ammo %d seharga $%d.", WeaponShopName[weaponIndex], WeaponShopAmmo[weaponIndex], price);
     SendClientMessage(playerid, COLOR_GREEN, msg);
-    SendClientMessage(playerid, COLOR_WHITE, "Catatan: v0.19A belum menyimpan loadout weapon ke database. Ini runtime weapon shop dulu.");
+    SendClientMessage(playerid, COLOR_WHITE, "Weapon sudah tersimpan ke saved loadout. Gunakan /loadout atau /reloadout.");
     return 1;
 }
 
@@ -11703,6 +11909,64 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/loadout", true))
+    {
+        ShowLoadoutDialog(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/reloadout", true))
+    {
+        ResetPlayerWeapons(playerid);
+        ApplySavedWeaponLoadout(playerid);
+        SendClientMessage(playerid, COLOR_GREEN, "Saved weapon loadout sudah di-apply ulang.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/weaponlicense", true))
+    {
+        ShowWeaponLicenseDialog(playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/givelicense ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa memberi weapon license.");
+            return 1;
+        }
+
+        new targetStr[16];
+
+        if (!GetOneParam(cmdtext[13], targetStr, sizeof(targetStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /givelicense [playerid]");
+            return 1;
+        }
+
+        if (!IsNumericString(targetStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Player ID harus angka.");
+            return 1;
+        }
+
+        new targetid = strval(targetStr);
+
+        if (!IsPlayerConnected(targetid) || !PlayerLoggedIn[targetid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Target tidak online/login.");
+            return 1;
+        }
+
+        PlayerWeaponLicense[targetid] = 1;
+        SavePlayerData(targetid);
+
+        SendClientMessage(targetid, COLOR_GREEN, "Kamu menerima basic weapon license dari admin.");
+        SendClientMessage(playerid, COLOR_GREEN, "Weapon license berhasil diberikan.");
+        return 1;
+    }
+
 
     if (!strcmp(cmdtext, "/adminmenu", true))
     {
@@ -11726,6 +11990,9 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/refreshicons - Refresh icon radar/map LSIF");
         SendClientMessage(playerid, COLOR_WHITE, "/weaponshop - Buka Ammu-Nation Weapon Shop, harus dekat Ammu-Nation");
         SendClientMessage(playerid, COLOR_WHITE, "/weaponinfo - Lihat daftar weapon dan harga");
+        SendClientMessage(playerid, COLOR_WHITE, "/weaponlicense - Cek status weapon license");
+        SendClientMessage(playerid, COLOR_WHITE, "/loadout - Lihat saved weapon loadout");
+        SendClientMessage(playerid, COLOR_WHITE, "/reloadout - Apply ulang saved weapon loadout");
         SendClientMessage(playerid, COLOR_WHITE, "/stats - Melihat statistik player");
         SendClientMessage(playerid, COLOR_WHITE, "/money - Melihat uang kamu");
         SendClientMessage(playerid, COLOR_WHITE, "/givemoney - Dev test tambah uang");
@@ -13201,6 +13468,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/closefeedback [id] [note] - Tutup feedback");
         SendClientMessage(playerid, COLOR_WHITE, "/acinfo - Melihat informasi basic anti-cheat");
         SendClientMessage(playerid, COLOR_WHITE, "/setfuel [amount] - Set fuel kendaraan aktif, Owner only");
+        SendClientMessage(playerid, COLOR_WHITE, "/givelicense [id] - Beri basic weapon license, Owner only");
         SendClientMessage(playerid, COLOR_WHITE, "/serverinfo - Info server dan uptime");
         SendClientMessage(playerid, COLOR_WHITE, "/dbping - Test koneksi database");
         SendClientMessage(playerid, COLOR_WHITE, "/saveall - Simpan semua player, Owner only");
@@ -16641,7 +16909,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         SendClientMessage(playerid, COLOR_YELLOW, "========== CLOSED BETA STATUS ==========");
 
-        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.19A Ammu-Nation");
+        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.19B Weapon License");
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         format(msg, sizeof(msg), "Uptime: %s", uptimeText);

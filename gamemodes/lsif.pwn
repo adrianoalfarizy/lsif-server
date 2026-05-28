@@ -4193,7 +4193,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.16D.1 Beta Fix");
+    SetGameModeText("LSIF Dev v0.17A Interaction");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -4268,7 +4268,7 @@ public OnGameModeInit()
     print("[LSIF] Closed beta whitelist system aktif.");
     print("[LSIF] Manual vehicle engine mode aktif.");
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
-    print("[LSIF] Gamemode v0.16D.1 Temporary Vehicle Engine Fix berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.17A Interaction Foundation berhasil dijalankan.");
     return 1;
 }
 
@@ -4447,7 +4447,7 @@ public OnPlayerSpawn(playerid)
 
     SendClientMessage(playerid, COLOR_CYAN, "Kamu berhasil spawn di Los Santos.");
     SendClientMessage(playerid, COLOR_WHITE, "Closed Beta: gunakan /betaguide untuk alur awal dan /bugreport jika menemukan bug.");
-    SendClientMessage(playerid, COLOR_WHITE, "Command cepat: /help, /starterpack, /jobs, /vehicleshop, /houses.");
+    SendClientMessage(playerid, COLOR_WHITE, "Command cepat: /help, /starterpack, /jobs, /vehicleshop, /houses. ALT untuk interaksi, tombol 2 untuk start job.");
 
     return 1;
 }
@@ -4654,6 +4654,180 @@ public OnAccountLogin(playerid)
 
     SendBetaLoginMessages(playerid, 0);
 
+    return 1;
+}
+
+
+stock GetNearestBusiness(playerid)
+{
+    new nearest = -1;
+    new Float:nearestDistance = 999999.0;
+
+    for (new i = 0; i < MAX_BUSINESSES; i++)
+    {
+        new Float:distance = GetPlayerDistanceFromPoint(playerid, BusinessX[i], BusinessY[i], BusinessZ[i]);
+
+        if (distance < nearestDistance)
+        {
+            nearestDistance = distance;
+            nearest = i;
+        }
+    }
+
+    return nearest;
+}
+
+stock HandleVehicleMissionKey(playerid)
+{
+    if (!PlayerLoggedIn[playerid])
+    {
+        return 0;
+    }
+
+    if (PlayerWorking[playerid])
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Kamu sudah sedang menjalankan pekerjaan. Gunakan /cancelwork jika ingin membatalkan.");
+        return 1;
+    }
+
+    if (!IsPlayerInAnyVehicle(playerid) || GetPlayerState(playerid) != PLAYER_STATE_DRIVER)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Tombol 2 digunakan untuk mulai vehicle mission saat kamu menjadi driver kendaraan job.");
+        SendClientMessage(playerid, COLOR_WHITE, "Contoh: Taxi/Cabbie, delivery van, atau truck.");
+        return 1;
+    }
+
+    if (IsPlayerInTaxiVehicle(playerid))
+    {
+        if (PlayerJob[playerid] != JOB_TAXI)
+        {
+            PlayerJob[playerid] = JOB_TAXI;
+            SavePlayerData(playerid);
+            SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Taxi Driver.");
+        }
+
+        StartTaxiWork(playerid);
+        return 1;
+    }
+
+    if (IsPlayerInCourierVehicle(playerid))
+    {
+        if (PlayerJob[playerid] != JOB_COURIER)
+        {
+            PlayerJob[playerid] = JOB_COURIER;
+            SavePlayerData(playerid);
+            SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Courier.");
+        }
+
+        StartCourierWork(playerid);
+        return 1;
+    }
+
+    if (IsPlayerInTruckerVehicle(playerid))
+    {
+        if (PlayerJob[playerid] != JOB_TRUCKER)
+        {
+            PlayerJob[playerid] = JOB_TRUCKER;
+            SavePlayerData(playerid);
+            SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Trucker.");
+        }
+
+        StartTruckerWork(playerid);
+        return 1;
+    }
+
+    new vehicleid = GetPlayerVehicleID(playerid);
+    new modelid = GetVehicleModel(vehicleid);
+    new msg[144];
+
+    format(msg, sizeof(msg), "Model kendaraan %d belum punya vehicle mission. Tombol 2 khusus start job/mission kendaraan.", modelid);
+    SendClientMessage(playerid, COLOR_YELLOW, msg);
+    return 1;
+}
+
+stock ShowInteractionNoPoint(playerid)
+{
+    SendClientMessage(playerid, COLOR_YELLOW, "Tidak ada interaksi dekatmu.");
+    SendClientMessage(playerid, COLOR_WHITE, "ALT dipakai untuk interaksi dunia: ATM, dealership, rumah, business, dan interior.");
+    SendClientMessage(playerid, COLOR_WHITE, "Tombol 2 khusus untuk start job/vehicle mission.");
+    return 1;
+}
+
+stock HandleWorldInteractKey(playerid)
+{
+    if (!PlayerLoggedIn[playerid])
+    {
+        return 0;
+    }
+
+    if (PlayerInsideHouse[playerid])
+    {
+        ExitPlayerHouse(playerid);
+        return 1;
+    }
+
+    if (PlayerWorking[playerid] || PlayerRace[playerid] != RACE_NONE)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Tidak bisa memakai ALT interaction saat job/race aktif.");
+        return 1;
+    }
+
+    if (PlayerHouseDBID[playerid] > 0 && PlayerHouseIndex[playerid] != -1 && IsPlayerNearHouse(playerid, PlayerHouseIndex[playerid]))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "========== HOUSE INTERACTION ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "ALT mendeteksi rumah pribadi kamu.");
+        SendClientMessage(playerid, COLOR_CYAN, "Aksi cepat: kamu masuk ke rumah. Gunakan /lockhouse untuk kunci/buka rumah.");
+        EnterPlayerHouse(playerid);
+        return 1;
+    }
+
+    if (IsPlayerNearBankPoint(playerid))
+    {
+        new msg[144];
+        format(msg, sizeof(msg), "ATM/Bank terdeteksi. Cash: $%d | Bank: $%d", PlayerMoney[playerid], PlayerBankMoney[playerid]);
+        SendClientMessage(playerid, COLOR_YELLOW, "========== ATM INTERACTION ==========");
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+        SendClientMessage(playerid, COLOR_CYAN, "Gunakan /balance, /deposit [amount/all], atau /withdraw [amount/all].");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.17B akan mengubah ini menjadi dialog ATM penuh.");
+        return 1;
+    }
+
+    if (IsPlayerNearDealership(playerid))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "========== DEALERSHIP INTERACTION ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "Dealership terdeteksi.");
+        SendClientMessage(playerid, COLOR_CYAN, "Gunakan /vehicleshop untuk lihat kendaraan dan /buyvehicle [id] untuk beli.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.17C akan mengubah dealership menjadi dialog vehicle shop.");
+        return 1;
+    }
+
+    new nearestHouse = GetNearestHouse(playerid);
+
+    if (nearestHouse != -1 && IsPlayerNearHouse(playerid, nearestHouse))
+    {
+        new msg[144];
+        format(msg, sizeof(msg), "Rumah terdekat: %s | Harga: $%d", HouseName[nearestHouse], HousePrice[nearestHouse]);
+        SendClientMessage(playerid, COLOR_YELLOW, "========== HOUSE INTERACTION ==========");
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+        SendClientMessage(playerid, COLOR_CYAN, "Gunakan /buyhouse [id] jika ingin membeli atau /visithouse [ownerid] jika ingin berkunjung.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.17D akan mengubah rumah menjadi dialog house menu.");
+        return 1;
+    }
+
+    new nearestBusiness = GetNearestBusiness(playerid);
+
+    if (nearestBusiness != -1 && IsPlayerNearBusiness(playerid, nearestBusiness))
+    {
+        new msg[144];
+        format(msg, sizeof(msg), "Business terdekat: %s | Harga: $%d", BusinessName[nearestBusiness], BusinessPrice[nearestBusiness]);
+        SendClientMessage(playerid, COLOR_YELLOW, "========== BUSINESS INTERACTION ==========");
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+        SendClientMessage(playerid, COLOR_CYAN, "Gunakan /buybiz [id], /mybiz, /collectbiz, atau /upgradebiz.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.17E akan mengubah business menjadi dialog business menu.");
+        return 1;
+    }
+
+    ShowInteractionNoPoint(playerid);
     return 1;
 }
 
@@ -6428,6 +6602,29 @@ public OnWhitelistCheckLoaded(playerid)
     return 1;
 }
 
+
+public OnPlayerKeyStateChange(playerid, KEY:newkeys, KEY:oldkeys)
+{
+    if (!PlayerLoggedIn[playerid])
+    {
+        return 1;
+    }
+
+    if ((newkeys & KEY_SUBMISSION) && !(oldkeys & KEY_SUBMISSION))
+    {
+        HandleVehicleMissionKey(playerid);
+        return 1;
+    }
+
+    if ((newkeys & KEY_WALK) && !(oldkeys & KEY_WALK))
+    {
+        HandleWorldInteractKey(playerid);
+        return 1;
+    }
+
+    return 1;
+}
+
 public OnPlayerCommandText(playerid, cmdtext[])
 {
     if (!PlayerLoggedIn[playerid])
@@ -6435,10 +6632,18 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_RED, "Kamu harus login/register terlebih dahulu.");
         return 1;
     }
+    if (!strcmp(cmdtext, "/interact", true))
+    {
+        HandleWorldInteractKey(playerid);
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/help", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF HELP ==========");
         SendClientMessage(playerid, COLOR_WHITE, "/help - Menampilkan bantuan");
+        SendClientMessage(playerid, COLOR_WHITE, "ALT - Interaksi dunia terdekat, /interact sebagai fallback");
+        SendClientMessage(playerid, COLOR_WHITE, "Tombol 2 - Start job/vehicle mission saat driver kendaraan job");
         SendClientMessage(playerid, COLOR_WHITE, "/stats - Melihat statistik player");
         SendClientMessage(playerid, COLOR_WHITE, "/money - Melihat uang kamu");
         SendClientMessage(playerid, COLOR_WHITE, "/givemoney - Dev test tambah uang");
@@ -6577,7 +6782,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.16D.1 Closed Beta Vehicle Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.17A Interaction Foundation");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -6588,6 +6793,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D: Release polish, version, credits, staff, beta guide.");
     	SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");
+    	SendClientMessage(playerid, COLOR_WHITE, "v0.17A: ALT world interaction foundation + tombol 2 vehicle mission starter.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16C: Admin beta dashboard dan monitoring reports/logs.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16B: Starter pack, bug report, suggestion, feedback handling.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16A: Whitelist, MOTD, rules, closed beta gate.");
@@ -6610,7 +6816,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== CLOSED BETA GUIDE ==========");
         SendClientMessage(playerid, COLOR_WHITE, "1. Klaim modal awal: /starterpack");
-        SendClientMessage(playerid, COLOR_WHITE, "2. Mulai kerja: /jobs lalu /joinjob courier/taxi/trucker dan /work");
+        SendClientMessage(playerid, COLOR_WHITE, "2. Mulai kerja: naik kendaraan job lalu tekan tombol 2. Command /work tetap fallback");
         SendClientMessage(playerid, COLOR_WHITE, "3. Beli kendaraan: /finddealer, /vehicleshop, /buyvehicle [id]");
         SendClientMessage(playerid, COLOR_WHITE, "4. Simpan uang: /findbank lalu /deposit [amount/all]");
         SendClientMessage(playerid, COLOR_WHITE, "5. Aktivitas lanjutan: /houses, /businesses, /orgs, /races");
@@ -11252,7 +11458,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         SendClientMessage(playerid, COLOR_YELLOW, "========== CLOSED BETA STATUS ==========");
 
-        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.16D.1 Beta Fix");
+        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.17A Interaction");
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         format(msg, sizeof(msg), "Uptime: %s", uptimeText);

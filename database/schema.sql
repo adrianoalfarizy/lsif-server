@@ -347,3 +347,88 @@ CREATE TABLE IF NOT EXISTS gang_territories (
     INDEX idx_owner_org_id (owner_org_id),
     INDEX idx_territory_index (territory_index)
 );
+
+-- LSIF v0.20A.1 — Separate Organization and Gang Foundation
+-- Organization tetap untuk ekonomi/bisnis/job.
+-- Gang menjadi entitas terpisah untuk turf/territory.
+
+CREATE TABLE IF NOT EXISTS gangs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(64) NOT NULL UNIQUE,
+    leader_id INT NOT NULL,
+    leader_name VARCHAR(24) NOT NULL,
+    gang_color INT NOT NULL DEFAULT -1,
+    bank_money INT NOT NULL DEFAULT 0,
+    reputation INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+
+    INDEX idx_leader_id (leader_id)
+);
+
+CREATE TABLE IF NOT EXISTS gang_members (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    gang_id INT NOT NULL,
+    player_id INT NOT NULL UNIQUE,
+    player_name VARCHAR(24) NOT NULL,
+    rank_level TINYINT NOT NULL DEFAULT 1,
+    joined_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_gang_id (gang_id),
+    INDEX idx_player_id (player_id)
+);
+
+
+CREATE TABLE IF NOT EXISTS gang_territories (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    territory_index INT NOT NULL UNIQUE,
+    territory_name VARCHAR(64) NOT NULL,
+    owner_gang_id INT NOT NULL DEFAULT 0,
+    owner_gang_name VARCHAR(64) NOT NULL DEFAULT 'Neutral',
+    owner_color INT NOT NULL DEFAULT -1431655681,
+
+    center_x FLOAT NOT NULL,
+    center_y FLOAT NOT NULL,
+    center_z FLOAT NOT NULL,
+    radius FLOAT NOT NULL DEFAULT 100,
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+
+    INDEX idx_owner_gang_id (owner_gang_id),
+    INDEX idx_territory_index (territory_index)
+);
+
+-- Jika table territory sudah dibuat dari v0.20A lama, tambahkan kolom gang baru tanpa menghapus kolom lama.
+ALTER TABLE gang_territories
+ADD COLUMN IF NOT EXISTS owner_gang_id INT NOT NULL DEFAULT 0 AFTER territory_name;
+
+ALTER TABLE gang_territories
+ADD COLUMN IF NOT EXISTS owner_gang_name VARCHAR(64) NOT NULL DEFAULT 'Neutral' AFTER owner_gang_id;
+
+-- Pastikan owner_color tetap ada.
+ALTER TABLE gang_territories
+ADD COLUMN IF NOT EXISTS owner_color INT NOT NULL DEFAULT -1431655681 AFTER owner_gang_name;
+
+-- Index gang owner, jika belum ada.
+CREATE INDEX IF NOT EXISTS idx_owner_gang_id ON gang_territories (owner_gang_id);
+
+-- Seed / refresh territory dasar dengan owner gang neutral.
+INSERT INTO gang_territories
+    (territory_index, territory_name, owner_gang_id, owner_gang_name, owner_color, center_x, center_y, center_z, radius)
+VALUES
+    (1, 'Ganton Block', 0, 'Neutral', -1431655681, 2229.3215, -1159.7343, 25.7331, 110),
+    (2, 'Idlewood District', 0, 'Neutral', -1431655681, 1833.8134, -1842.4136, 13.5781, 120),
+    (3, 'Market Strip', 0, 'Neutral', -1431655681, 1368.9248, -1279.6914, 13.5469, 100),
+    (4, 'East Los Santos', 0, 'Neutral', -1431655681, 2421.5427, -1224.3597, 25.3828, 110),
+    (5, 'Vinewood Hills', 0, 'Neutral', -1431655681, 1000.5822, -919.9146, 42.3281, 120),
+    (6, 'Pershing Square', 0, 'Neutral', -1431655681, 1554.8425, -1675.6542, 16.1953, 90)
+ON DUPLICATE KEY UPDATE
+    territory_name = VALUES(territory_name),
+    center_x = VALUES(center_x),
+    center_y = VALUES(center_y),
+    center_z = VALUES(center_z),
+    radius = VALUES(radius);
+
+-- Optional: organisasi lama boleh tetap punya kolom gang_color dari v0.20A, tapi mulai v0.20A.1 tidak dipakai lagi.
+-- Jangan drop kolom dulu agar migrasi aman.

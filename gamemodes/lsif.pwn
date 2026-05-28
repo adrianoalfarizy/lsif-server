@@ -101,11 +101,15 @@
 #define JOB_COURIER     1
 #define JOB_TAXI        2
 #define JOB_TRUCKER     3
+#define JOB_BUS         4
+#define JOB_POLICE      5
 
 #define WORK_NONE       0
 #define WORK_COURIER    1
 #define WORK_TAXI       2
 #define WORK_TRUCKER    3
+#define WORK_BUS        4
+#define WORK_POLICE     5
 
 #define JOB_VEHICLE_GRACE_SECONDS 30
 
@@ -163,6 +167,28 @@
 #define VEHICLE_MULE 414
 #define VEHICLE_PONY 413
 #define VEHICLE_RUMPO 440
+
+#define VEHICLE_BUS       431
+#define VEHICLE_COACH     437
+
+#define VEHICLE_POLICE_LS 596
+#define VEHICLE_POLICE_SF 597
+#define VEHICLE_POLICE_LV 598
+#define VEHICLE_POLICE_RANGER 599
+#define VEHICLE_POLICE_BIKE 523
+#define VEHICLE_ENFORCER 427
+
+#define MAX_BUS_STOPS 6
+#define BUS_COOLDOWN_SECONDS 45
+#define BUS_REWARD_PER_STOP 180
+#define BUS_XP_PER_STOP 12
+#define BUS_COMPLETE_BONUS 500
+#define BUS_COMPLETE_XP_BONUS 35
+
+#define MAX_POLICE_TARGETS 6
+#define POLICE_COOLDOWN_SECONDS 60
+#define POLICE_BASE_REWARD 900
+#define POLICE_BASE_XP 55
 
 #define VEHICLE_OWNER_NONE 0
 
@@ -324,6 +350,88 @@ new PlayerTaxiRoute[MAX_PLAYERS];
 
 new PlayerTruckerStage[MAX_PLAYERS];
 new PlayerTruckerRoute[MAX_PLAYERS];
+new PlayerBusStop[MAX_PLAYERS];
+new PlayerPoliceTarget[MAX_PLAYERS];
+
+new Float:BusStopX[MAX_BUS_STOPS] =
+{
+    1807.9344,
+    1672.5364,
+    1369.8120,
+    1195.1022,
+    1529.5574,
+    1807.9344
+};
+
+new Float:BusStopY[MAX_BUS_STOPS] =
+{
+    -1908.1141,
+        -1734.7712,
+        -1579.4437,
+        -1324.8833,
+        -1030.2186,
+        -1908.1141
+    };
+
+new Float:BusStopZ[MAX_BUS_STOPS] =
+{
+    13.5781,
+    13.5469,
+    13.5469,
+    13.3984,
+    23.9063,
+    13.5781
+};
+
+new BusStopName[MAX_BUS_STOPS][48] =
+{
+    "Unity Station",
+    "Commerce",
+    "Pershing Square",
+    "Market",
+    "Mulholland",
+    "Unity Station Return"
+};
+
+new Float:PoliceTargetX[MAX_POLICE_TARGETS] =
+{
+    2185.2810,
+    1942.9137,
+    1525.7268,
+    1131.3441,
+    2407.8320,
+    2695.3125
+};
+
+new Float:PoliceTargetY[MAX_POLICE_TARGETS] =
+{
+    -1677.2144,
+        -2124.5295,
+        -1675.2481,
+        -1370.4922,
+        -1238.7169,
+        -1704.3347
+    };
+
+new Float:PoliceTargetZ[MAX_POLICE_TARGETS] =
+{
+    15.0859,
+    13.5469,
+    13.5469,
+    13.7357,
+    24.0000,
+    11.8438
+};
+
+new PoliceTargetName[MAX_POLICE_TARGETS][48] =
+{
+    "Idlewood disturbance",
+    "Willowfield suspect",
+    "Commerce pursuit call",
+    "Market incident",
+    "East LS robbery call",
+    "Ganton backup call"
+};
 
 new Float:TruckerPickupX[MAX_TRUCKER_ROUTES] =
 {
@@ -1187,6 +1295,8 @@ stock ResetPlayerAccountData(playerid)
     PlayerWorkExitTick[playerid] = 0;
     ResetTaxiWorkData(playerid);
     ResetTruckerWorkData(playerid);
+    ResetBusWorkData(playerid);
+    ResetPoliceWorkData(playerid);
 
     PlayerLastX[playerid] = SPAWN_X;
     PlayerLastY[playerid] = SPAWN_Y;
@@ -1681,6 +1791,18 @@ stock GetJobName(jobid, output[], size)
         return 1;
     }
 
+    if (jobid == JOB_BUS)
+    {
+        format(output, size, "Bus Driver");
+        return 1;
+    }
+
+    if (jobid == JOB_POLICE)
+    {
+        format(output, size, "Police / Vigilante");
+        return 1;
+    }
+
     format(output, size, "None");
     return 1;
 }
@@ -2156,6 +2278,265 @@ stock CompleteTruckerWork(playerid)
     return 1;
 }
 
+
+stock IsBusVehicleModel(modelid)
+{
+    if (modelid == VEHICLE_BUS) return 1;
+    if (modelid == VEHICLE_COACH) return 1;
+    return 0;
+}
+
+stock IsPlayerInBusVehicle(playerid)
+{
+    if (!IsPlayerInAnyVehicle(playerid)) return 0;
+    if (GetPlayerState(playerid) != PLAYER_STATE_DRIVER) return 0;
+    return IsBusVehicleModel(GetVehicleModel(GetPlayerVehicleID(playerid)));
+}
+
+stock IsPoliceVehicleModel(modelid)
+{
+    if (modelid == VEHICLE_POLICE_LS) return 1;
+    if (modelid == VEHICLE_POLICE_SF) return 1;
+    if (modelid == VEHICLE_POLICE_LV) return 1;
+    if (modelid == VEHICLE_POLICE_RANGER) return 1;
+    if (modelid == VEHICLE_POLICE_BIKE) return 1;
+    if (modelid == VEHICLE_ENFORCER) return 1;
+    return 0;
+}
+
+stock IsPlayerInPoliceVehicle(playerid)
+{
+    if (!IsPlayerInAnyVehicle(playerid)) return 0;
+    if (GetPlayerState(playerid) != PLAYER_STATE_DRIVER) return 0;
+    return IsPoliceVehicleModel(GetVehicleModel(GetPlayerVehicleID(playerid)));
+}
+
+stock ResetBusWorkData(playerid)
+{
+    PlayerBusStop[playerid] = -1;
+    return 1;
+}
+
+stock ResetPoliceWorkData(playerid)
+{
+    PlayerPoliceTarget[playerid] = -1;
+    return 1;
+}
+
+stock GetBusCooldownLeft(playerid)
+{
+    new lastTick = PlayerLastWorkTick[playerid];
+    if (lastTick == 0) return 0;
+    new elapsed = (GetTickCount() - lastTick) / 1000;
+    if (elapsed >= BUS_COOLDOWN_SECONDS) return 0;
+    return BUS_COOLDOWN_SECONDS - elapsed;
+}
+
+stock GetPoliceCooldownLeft(playerid)
+{
+    new lastTick = PlayerLastWorkTick[playerid];
+    if (lastTick == 0) return 0;
+    new elapsed = (GetTickCount() - lastTick) / 1000;
+    if (elapsed >= POLICE_COOLDOWN_SECONDS) return 0;
+    return POLICE_COOLDOWN_SECONDS - elapsed;
+}
+
+stock StartBusWork(playerid)
+{
+    if (PlayerJob[playerid] != JOB_BUS)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum bekerja sebagai bus driver. Naik Bus/Coach lalu tekan tombol 2 untuk auto-join.");
+        return 0;
+    }
+    if (PlayerWorking[playerid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu sedang menjalankan pekerjaan lain.");
+        return 0;
+    }
+    new cooldownLeft = GetBusCooldownLeft(playerid);
+    if (cooldownLeft > 0)
+    {
+        new msg[144];
+        format(msg, sizeof(msg), "Bus mission cooldown: %d detik.", cooldownLeft);
+        SendClientMessage(playerid, COLOR_YELLOW, msg);
+        return 0;
+    }
+    if (!IsPlayerInBusVehicle(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus menjadi driver Bus/Coach untuk mulai bus mission.");
+        return 0;
+    }
+    PlayerWorking[playerid] = 1;
+    PlayerWorkType[playerid] = WORK_BUS;
+    PlayerWorkPoint[playerid] = 0;
+    PlayerBusStop[playerid] = 0;
+    PlayerWorkExitTick[playerid] = 0;
+    SetPlayerCheckpoint(playerid, BusStopX[0], BusStopY[0], BusStopZ[0], 7.0);
+    SendClientMessage(playerid, COLOR_GREEN, "Bus Mission dimulai. Ikuti checkpoint halte berurutan.");
+    SendClientMessage(playerid, COLOR_WHITE, "Tetap gunakan kendaraan bus yang sama. Keluar terlalu lama akan membatalkan mission.");
+    return 1;
+}
+
+stock CompleteBusWork(playerid)
+{
+    if (!PlayerWorking[playerid] || PlayerWorkType[playerid] != WORK_BUS) return 0;
+    new totalMoney = (BUS_REWARD_PER_STOP * MAX_BUS_STOPS) + BUS_COMPLETE_BONUS;
+    new totalXP = (BUS_XP_PER_STOP * MAX_BUS_STOPS) + BUS_COMPLETE_XP_BONUS;
+    GivePlayerCash(playerid, BUS_COMPLETE_BONUS);
+    GivePlayerXPEx(playerid, BUS_COMPLETE_XP_BONUS);
+    AddJobProgress(playerid, "bus", totalMoney, totalXP);
+    DisablePlayerCheckpoint(playerid);
+    PlayerWorking[playerid] = 0;
+    PlayerWorkType[playerid] = WORK_NONE;
+    PlayerWorkPoint[playerid] = -1;
+    PlayerLastWorkTick[playerid] = GetTickCount();
+    ResetBusWorkData(playerid);
+    SendClientMessage(playerid, COLOR_GREEN, "Bus route selesai. Bonus route diberikan.");
+    SavePlayerData(playerid);
+    return 1;
+}
+
+stock HandleBusCheckpoint(playerid)
+{
+    if (!PlayerWorking[playerid] || PlayerWorkType[playerid] != WORK_BUS) return 0;
+    if (!IsPlayerInBusVehicle(playerid))
+    {
+        StartWorkVehicleGrace(playerid);
+        return 1;
+    }
+    new stop = PlayerBusStop[playerid];
+    if (stop < 0 || stop >= MAX_BUS_STOPS)
+    {
+        CancelPlayerWork(playerid);
+        SendClientMessage(playerid, COLOR_RED, "Bus route error. Mission dibatalkan.");
+        return 1;
+    }
+    GivePlayerCash(playerid, BUS_REWARD_PER_STOP);
+    GivePlayerXPEx(playerid, BUS_XP_PER_STOP);
+    new msg[144];
+    format(msg, sizeof(msg), "Halte %s selesai. Reward: $%d dan %d XP.", BusStopName[stop], BUS_REWARD_PER_STOP, BUS_XP_PER_STOP);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    stop++;
+    if (stop >= MAX_BUS_STOPS)
+    {
+        CompleteBusWork(playerid);
+        return 1;
+    }
+    PlayerBusStop[playerid] = stop;
+    PlayerWorkPoint[playerid] = stop;
+    SetPlayerCheckpoint(playerid, BusStopX[stop], BusStopY[stop], BusStopZ[stop], 7.0);
+    format(msg, sizeof(msg), "Bus route berikutnya: %s.", BusStopName[stop]);
+    SendClientMessage(playerid, COLOR_CYAN, msg);
+    return 1;
+}
+
+stock StartPoliceWork(playerid)
+{
+    if (PlayerJob[playerid] != JOB_POLICE)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum bekerja sebagai police/vigilante. Naik police vehicle lalu tekan tombol 2 untuk auto-join.");
+        return 0;
+    }
+    if (PlayerWorking[playerid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu sedang menjalankan pekerjaan lain.");
+        return 0;
+    }
+    new cooldownLeft = GetPoliceCooldownLeft(playerid);
+    if (cooldownLeft > 0)
+    {
+        new msg[144];
+        format(msg, sizeof(msg), "Vigilante cooldown: %d detik.", cooldownLeft);
+        SendClientMessage(playerid, COLOR_YELLOW, msg);
+        return 0;
+    }
+    if (!IsPlayerInPoliceVehicle(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus menjadi driver kendaraan polisi untuk mulai Vigilante Mission.");
+        return 0;
+    }
+    new target = random(MAX_POLICE_TARGETS);
+    PlayerWorking[playerid] = 1;
+    PlayerWorkType[playerid] = WORK_POLICE;
+    PlayerWorkPoint[playerid] = target;
+    PlayerPoliceTarget[playerid] = target;
+    PlayerWorkExitTick[playerid] = 0;
+    SetPlayerCheckpoint(playerid, PoliceTargetX[target], PoliceTargetY[target], PoliceTargetZ[target], 8.0);
+    new msg[144];
+    format(msg, sizeof(msg), "Vigilante Mission dimulai: menuju %s.", PoliceTargetName[target]);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    SendClientMessage(playerid, COLOR_WHITE, "Tahap basic: capai area suspect untuk menyelesaikan panggilan.");
+    return 1;
+}
+
+stock HandlePoliceCheckpoint(playerid)
+{
+    if (!PlayerWorking[playerid] || PlayerWorkType[playerid] != WORK_POLICE) return 0;
+    if (!IsPlayerInPoliceVehicle(playerid))
+    {
+        StartWorkVehicleGrace(playerid);
+        return 1;
+    }
+    new target = PlayerPoliceTarget[playerid];
+    if (target < 0 || target >= MAX_POLICE_TARGETS) target = 0;
+    GivePlayerCash(playerid, POLICE_BASE_REWARD);
+    GivePlayerXPEx(playerid, POLICE_BASE_XP);
+    AddJobProgress(playerid, "police", POLICE_BASE_REWARD, POLICE_BASE_XP);
+    DisablePlayerCheckpoint(playerid);
+    PlayerWorking[playerid] = 0;
+    PlayerWorkType[playerid] = WORK_NONE;
+    PlayerWorkPoint[playerid] = -1;
+    PlayerLastWorkTick[playerid] = GetTickCount();
+    ResetPoliceWorkData(playerid);
+    new msg[144];
+    format(msg, sizeof(msg), "Vigilante call selesai di %s. Reward: $%d dan %d XP.", PoliceTargetName[target], POLICE_BASE_REWARD, POLICE_BASE_XP);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    SavePlayerData(playerid);
+    return 1;
+}
+
+stock SendVehicleMissionHint(playerid)
+{
+    if (!IsPlayerInAnyVehicle(playerid) || GetPlayerState(playerid) != PLAYER_STATE_DRIVER)
+    {
+        return 0;
+    }
+
+    new modelid = GetVehicleModel(GetPlayerVehicleID(playerid));
+
+    if (IsTaxiVehicleModel(modelid))
+    {
+        SendClientMessage(playerid, COLOR_CYAN, "Vehicle Mission: tekan tombol 2 untuk mulai Taxi Mission.");
+        return 1;
+    }
+
+    if (IsCourierVehicleModel(modelid))
+    {
+        SendClientMessage(playerid, COLOR_CYAN, "Vehicle Mission: tekan tombol 2 untuk mulai Courier Mission.");
+        return 1;
+    }
+
+    if (IsTruckerVehicleModel(modelid))
+    {
+        SendClientMessage(playerid, COLOR_CYAN, "Vehicle Mission: tekan tombol 2 untuk mulai Trucker Mission.");
+        return 1;
+    }
+
+    if (IsBusVehicleModel(modelid))
+    {
+        SendClientMessage(playerid, COLOR_CYAN, "Vehicle Mission: tekan tombol 2 untuk mulai Bus Driver route.");
+        return 1;
+    }
+
+    if (IsPoliceVehicleModel(modelid))
+    {
+        SendClientMessage(playerid, COLOR_CYAN, "Vehicle Mission: tekan tombol 2 untuk mulai Police/Vigilante Mission.");
+        return 1;
+    }
+
+    return 0;
+}
+
 stock IsCurrentWorkVehicleValid(playerid)
 {
     if (!PlayerWorking[playerid])
@@ -2176,6 +2557,16 @@ stock IsCurrentWorkVehicleValid(playerid)
     if (PlayerWorkType[playerid] == WORK_COURIER)
     {
         return IsPlayerInCourierVehicle(playerid);
+    }
+
+    if (PlayerWorkType[playerid] == WORK_BUS)
+    {
+        return IsPlayerInBusVehicle(playerid);
+    }
+
+    if (PlayerWorkType[playerid] == WORK_POLICE)
+    {
+        return IsPlayerInPoliceVehicle(playerid);
     }
 
     return 1;
@@ -2277,6 +2668,8 @@ stock CancelPlayerWork(playerid)
 
     ResetTaxiWorkData(playerid);
     ResetTruckerWorkData(playerid);
+    ResetBusWorkData(playerid);
+    ResetPoliceWorkData(playerid);
 
     SendClientMessage(playerid, COLOR_YELLOW, "Pekerjaan aktif dibatalkan.");
     return 1;
@@ -3056,6 +3449,18 @@ stock GetJobCode(jobid, output[], size)
         return 1;
     }
 
+    if (jobid == JOB_BUS)
+    {
+        format(output, size, "bus");
+        return 1;
+    }
+
+    if (jobid == JOB_POLICE)
+    {
+        format(output, size, "police");
+        return 1;
+    }
+
     format(output, size, "none");
     return 1;
 }
@@ -3065,6 +3470,8 @@ stock IsValidJobCode(const jobCode[])
     if (!strcmp(jobCode, "courier", true)) return 1;
     if (!strcmp(jobCode, "taxi", true)) return 1;
     if (!strcmp(jobCode, "trucker", true)) return 1;
+    if (!strcmp(jobCode, "bus", true)) return 1;
+    if (!strcmp(jobCode, "police", true)) return 1;
 
     return 0;
 }
@@ -3159,6 +3566,18 @@ stock GetWorkName(workType, output[], size)
     if (workType == WORK_TRUCKER)
     {
         format(output, size, "Trucker");
+        return 1;
+    }
+
+    if (workType == WORK_BUS)
+    {
+        format(output, size, "Bus Driver");
+        return 1;
+    }
+
+    if (workType == WORK_POLICE)
+    {
+        format(output, size, "Police / Vigilante");
         return 1;
     }
 
@@ -5219,7 +5638,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.17H Map Markers");
+    SetGameModeText("LSIF Dev v0.18A Vehicle Mission");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -5267,6 +5686,8 @@ public OnGameModeInit()
         PlayerLastRaceTick[i] = 0;
         ResetTaxiWorkData(i);
         ResetTruckerWorkData(i);
+        ResetBusWorkData(i);
+        ResetPoliceWorkData(i);
         ResetPlayerHouseData(i);
         ResetPlayerOrgData(i);
         ResetPlayerBusinessData(i);
@@ -5301,7 +5722,7 @@ public OnGameModeInit()
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
     print("[LSIF] Custom house arrow pickups aktif.");
     print("[LSIF] Map icons, 3D labels, and ALT world markers aktif.");
-    print("[LSIF] Gamemode v0.17H Map Legend & World Markers berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.18A Offline-like Vehicle Mission Pack berhasil dijalankan.");
     return 1;
 }
 
@@ -5566,7 +5987,7 @@ stock ShowBetaStatusDialog(playerid)
     format(
         dialogText,
         sizeof(dialogText),
-        "Gamemode: LSIF Dev v0.17H Map Markers\n\nUptime: %s\nPlayers Online: %d\nLogged Players: %d\nAdmins Online: %d\n\nClosed Beta: ACTIVE\nWhitelist: ENABLED after first active whitelist user\n\nMenu terkait:\n/adminmenu\n/betamenu",
+        "Gamemode: LSIF Dev v0.18A Vehicle Mission\n\nUptime: %s\nPlayers Online: %d\nLogged Players: %d\nAdmins Online: %d\n\nClosed Beta: ACTIVE\nWhitelist: ENABLED after first active whitelist user\n\nMenu terkait:\n/adminmenu\n/betamenu",
         uptimeText,
         CountOnlinePlayers(),
         CountLoggedPlayers(),
@@ -7041,24 +7462,18 @@ stock GetNearestBusiness(playerid)
 
 stock HandleVehicleMissionKey(playerid)
 {
-    if (!PlayerLoggedIn[playerid])
-    {
-        return 0;
-    }
-
+    if (!PlayerLoggedIn[playerid]) return 0;
     if (PlayerWorking[playerid])
     {
-        SendClientMessage(playerid, COLOR_YELLOW, "Kamu sudah sedang menjalankan pekerjaan. Gunakan /cancelwork jika ingin membatalkan.");
+        SendClientMessage(playerid, COLOR_YELLOW, "Kamu sudah sedang menjalankan vehicle mission. Gunakan /cancelwork jika ingin membatalkan.");
         return 1;
     }
-
     if (!IsPlayerInAnyVehicle(playerid) || GetPlayerState(playerid) != PLAYER_STATE_DRIVER)
     {
         SendClientMessage(playerid, COLOR_YELLOW, "Tombol 2 digunakan untuk mulai vehicle mission saat kamu menjadi driver kendaraan job.");
-        SendClientMessage(playerid, COLOR_WHITE, "Contoh: Taxi/Cabbie, delivery van, atau truck.");
+        SendClientMessage(playerid, COLOR_WHITE, "Contoh: Taxi/Cabbie, delivery van, truck, bus, atau police vehicle.");
         return 1;
     }
-
     if (IsPlayerInTaxiVehicle(playerid))
     {
         if (PlayerJob[playerid] != JOB_TAXI)
@@ -7067,11 +7482,9 @@ stock HandleVehicleMissionKey(playerid)
             SavePlayerData(playerid);
             SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Taxi Driver.");
         }
-
         StartTaxiWork(playerid);
         return 1;
     }
-
     if (IsPlayerInCourierVehicle(playerid))
     {
         if (PlayerJob[playerid] != JOB_COURIER)
@@ -7080,11 +7493,9 @@ stock HandleVehicleMissionKey(playerid)
             SavePlayerData(playerid);
             SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Courier.");
         }
-
         StartCourierWork(playerid);
         return 1;
     }
-
     if (IsPlayerInTruckerVehicle(playerid))
     {
         if (PlayerJob[playerid] != JOB_TRUCKER)
@@ -7093,20 +7504,36 @@ stock HandleVehicleMissionKey(playerid)
             SavePlayerData(playerid);
             SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Trucker.");
         }
-
         StartTruckerWork(playerid);
         return 1;
     }
-
-    new vehicleid = GetPlayerVehicleID(playerid);
-    new modelid = GetVehicleModel(vehicleid);
+    if (IsPlayerInBusVehicle(playerid))
+    {
+        if (PlayerJob[playerid] != JOB_BUS)
+        {
+            PlayerJob[playerid] = JOB_BUS;
+            SavePlayerData(playerid);
+            SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Bus Driver.");
+        }
+        StartBusWork(playerid);
+        return 1;
+    }
+    if (IsPlayerInPoliceVehicle(playerid))
+    {
+        if (PlayerJob[playerid] != JOB_POLICE)
+        {
+            PlayerJob[playerid] = JOB_POLICE;
+            SavePlayerData(playerid);
+            SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Police / Vigilante.");
+        }
+        StartPoliceWork(playerid);
+        return 1;
+    }
     new msg[144];
-
-    format(msg, sizeof(msg), "Model kendaraan %d belum punya vehicle mission. Tombol 2 khusus start job/mission kendaraan.", modelid);
+    format(msg, sizeof(msg), "Model kendaraan %d belum punya vehicle mission. Tombol 2 khusus start job/mission kendaraan.", GetVehicleModel(GetPlayerVehicleID(playerid)));
     SendClientMessage(playerid, COLOR_YELLOW, msg);
     return 1;
 }
-
 
 stock InitWorldMarkerArrays()
 {
@@ -8862,6 +9289,18 @@ public OnPlayerEnterCheckpoint(playerid)
         }
     }
 
+    if (PlayerWorking[playerid] && PlayerWorkType[playerid] == WORK_BUS)
+    {
+        HandleBusCheckpoint(playerid);
+        return 1;
+    }
+
+    if (PlayerWorking[playerid] && PlayerWorkType[playerid] == WORK_POLICE)
+    {
+        HandlePoliceCheckpoint(playerid);
+        return 1;
+    }
+
     if (PlayerWorking[playerid] && PlayerWorkType[playerid] == WORK_TRUCKER)
     {
         HandleTruckerCheckpoint(playerid);
@@ -9065,6 +9504,11 @@ public OnPlayerStateChange(playerid, PLAYER_STATE:newstate, PLAYER_STATE:oldstat
                 StopVehicleEngineDueFuel(playerid);
             }
         }
+    }
+
+    if (newstate == PLAYER_STATE_DRIVER)
+    {
+        SendVehicleMissionHint(playerid);
     }
 
     if (PlayerWorking[playerid])
@@ -10728,6 +11172,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/joinjob courier - Ambil job courier");
         SendClientMessage(playerid, COLOR_WHITE, "/joinjob taxi - Ambil job taxi");
         SendClientMessage(playerid, COLOR_WHITE, "/joinjob trucker - Ambil job trucker");
+        SendClientMessage(playerid, COLOR_WHITE, "/joinjob bus - Ambil job bus driver");
+        SendClientMessage(playerid, COLOR_WHITE, "/joinjob police - Ambil job police/vigilante");
         SendClientMessage(playerid, COLOR_WHITE, "/jobinfo - Melihat informasi job aktif");
         SendClientMessage(playerid, COLOR_WHITE, "/jobstats - Melihat statistik job kamu");
         SendClientMessage(playerid, COLOR_WHITE, "/jobtop [job] - Leaderboard job");
@@ -11406,10 +11852,12 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/jobs", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== JOBS ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "courier - Antar paket ke beberapa lokasi di Los Santos.");
-        SendClientMessage(playerid, COLOR_WHITE, "taxi - Antar penumpang dari pickup ke tujuan.");
-        SendClientMessage(playerid, COLOR_WHITE, "trucker - Ambil cargo dan kirim ke lokasi industri.");
-        SendClientMessage(playerid, COLOR_WHITE, "Gunakan: /joinjob courier, /joinjob taxi, atau /joinjob trucker");
+        SendClientMessage(playerid, COLOR_WHITE, "courier - Delivery van + tombol 2.");
+        SendClientMessage(playerid, COLOR_WHITE, "taxi - Taxi/Cabbie + tombol 2.");
+        SendClientMessage(playerid, COLOR_WHITE, "trucker - Truck + tombol 2.");
+        SendClientMessage(playerid, COLOR_WHITE, "bus - Bus/Coach route + tombol 2.");
+        SendClientMessage(playerid, COLOR_WHITE, "police - Police/Vigilante basic call + tombol 2.");
+        SendClientMessage(playerid, COLOR_CYAN, "Cara utama: naik kendaraan job lalu tekan tombol 2. /joinjob dan /work tetap fallback.");
         return 1;
     }
 
@@ -11467,9 +11915,39 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/joinjob bus", true))
+    {
+        if (PlayerWorking[playerid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Selesaikan atau batalkan pekerjaan aktif dulu.");
+            return 1;
+        }
+
+        PlayerJob[playerid] = JOB_BUS;
+        SavePlayerData(playerid);
+        SendClientMessage(playerid, COLOR_GREEN, "Kamu sekarang bekerja sebagai Bus Driver.");
+        SendClientMessage(playerid, COLOR_WHITE, "Naik Bus/Coach lalu tekan tombol 2 untuk mulai route.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/joinjob police", true) || !strcmp(cmdtext, "/joinjob vigilante", true))
+    {
+        if (PlayerWorking[playerid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Selesaikan atau batalkan pekerjaan aktif dulu.");
+            return 1;
+        }
+
+        PlayerJob[playerid] = JOB_POLICE;
+        SavePlayerData(playerid);
+        SendClientMessage(playerid, COLOR_GREEN, "Kamu sekarang aktif sebagai Police / Vigilante.");
+        SendClientMessage(playerid, COLOR_WHITE, "Naik kendaraan polisi lalu tekan tombol 2 untuk mulai call.");
+        return 1;
+    }
+
     if (strfind(cmdtext, "/joinjob", true) == 0)
     {
-        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /joinjob courier, /joinjob taxi, atau /joinjob trucker");
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /joinjob courier, taxi, trucker, bus, atau police");
         return 1;
     }
 
@@ -11515,6 +11993,18 @@ public OnPlayerCommandText(playerid, cmdtext[])
         if (PlayerJob[playerid] == JOB_TRUCKER)
         {
             StartTruckerWork(playerid);
+            return 1;
+        }
+
+        if (PlayerJob[playerid] == JOB_BUS)
+        {
+            StartBusWork(playerid);
+            return 1;
+        }
+
+        if (PlayerJob[playerid] == JOB_POLICE)
+        {
+            StartPoliceWork(playerid);
             return 1;
         }
 
@@ -11649,6 +12139,42 @@ public OnPlayerCommandText(playerid, cmdtext[])
                 }
             }
 
+            return 1;
+        }
+
+        if (PlayerJob[playerid] == JOB_BUS)
+        {
+            SendClientMessage(playerid, COLOR_WHITE, "Tugas: jalankan rute bus antar halte di Los Santos.");
+            SendClientMessage(playerid, COLOR_WHITE, "Kendaraan valid: Bus atau Coach. Cara utama: tekan tombol 2 saat menjadi driver.");
+
+            new cooldownLeft = GetBusCooldownLeft(playerid);
+            if (cooldownLeft > 0)
+            {
+                format(msg, sizeof(msg), "Cooldown: %d detik.", cooldownLeft);
+                SendClientMessage(playerid, COLOR_YELLOW, msg);
+            }
+            else
+            {
+                SendClientMessage(playerid, COLOR_GREEN, "Cooldown: siap menjalankan route.");
+            }
+            return 1;
+        }
+
+        if (PlayerJob[playerid] == JOB_POLICE)
+        {
+            SendClientMessage(playerid, COLOR_WHITE, "Tugas: tanggapi panggilan vigilante di checkpoint suspect area.");
+            SendClientMessage(playerid, COLOR_WHITE, "Kendaraan valid: Police car, ranger, bike, atau enforcer. Tekan tombol 2 untuk mulai.");
+
+            new cooldownLeft = GetPoliceCooldownLeft(playerid);
+            if (cooldownLeft > 0)
+            {
+                format(msg, sizeof(msg), "Cooldown: %d detik.", cooldownLeft);
+                SendClientMessage(playerid, COLOR_YELLOW, msg);
+            }
+            else
+            {
+                SendClientMessage(playerid, COLOR_GREEN, "Cooldown: siap menerima call.");
+            }
             return 1;
         }
 
@@ -12818,13 +13344,13 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         if (!GetOneParam(cmdtext[8], jobCode, sizeof(jobCode)))
         {
-            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /jobtop [courier/taxi/trucker]");
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /jobtop [courier/taxi/trucker/bus/police]");
             return 1;
         }
 
         if (!IsValidJobCode(jobCode))
         {
-            SendClientMessage(playerid, COLOR_RED, "Job tidak valid. Pilih: courier, taxi, atau trucker.");
+            SendClientMessage(playerid, COLOR_RED, "Job tidak valid. Pilih: courier, taxi, trucker, bus, atau police.");
             return 1;
         }
 
@@ -12846,7 +13372,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
     if (!strcmp(cmdtext, "/jobtop", true))
     {
-        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /jobtop [courier/taxi/trucker]");
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /jobtop [courier/taxi/trucker/bus/police]");
         SendClientMessage(playerid, COLOR_WHITE, "Contoh: /jobtop courier");
         return 1;
     }
@@ -15539,7 +16065,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         SendClientMessage(playerid, COLOR_YELLOW, "========== CLOSED BETA STATUS ==========");
 
-        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.17H Map Markers");
+        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.18A Vehicle Mission");
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         format(msg, sizeof(msg), "Uptime: %s", uptimeText);

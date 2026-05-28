@@ -59,6 +59,21 @@
 #define DIALOG_ORG_CREATE_INPUT 1043
 #define DIALOG_ORG_LIST 1044
 
+#define DIALOG_ADMIN_MENU 1045
+#define DIALOG_BETA_MENU 1046
+#define DIALOG_ADMIN_PLAYERS 1047
+#define DIALOG_ADMIN_ADMINS 1048
+#define DIALOG_ADMIN_RECENT_BUGS 1049
+#define DIALOG_ADMIN_RECENT_REPORTS 1050
+#define DIALOG_ADMIN_RECENT_FEEDBACK 1051
+#define DIALOG_ADMIN_RECENT_LOGS 1052
+#define DIALOG_BETA_STATUS_DIALOG 1053
+#define DIALOG_BETA_WHITELIST_LIST 1054
+#define DIALOG_BETA_WLADD_INPUT 1055
+#define DIALOG_BETA_WLREMOVE_INPUT 1056
+#define DIALOG_BETA_WLCHECK_INPUT 1057
+#define DIALOG_BETA_WLCHECK_RESULT 1058
+
 #define STARTER_CASH 15000
 #define STARTER_BANK 5000
 #define STARTER_XP 250
@@ -515,11 +530,11 @@ new Float:BankPointX[MAX_BANK_POINTS] =
 new Float:BankPointY[MAX_BANK_POINTS] =
 {
     -1842.4136,
-    -1758.2188,
-    -919.9146,
-    -1224.3597,
-    -1769.6847
-};
+        -1758.2188,
+        -919.9146,
+        -1224.3597,
+        -1769.6847
+    };
 
 new Float:BankPointZ[MAX_BANK_POINTS] =
 {
@@ -960,6 +975,12 @@ forward OnRecentBugsLoaded(playerid);
 forward OnRecentFeedbackLoaded(playerid);
 forward OnRecentReportsLoaded(playerid);
 forward OnRecentLogsLoaded(playerid);
+forward OnWhitelistDialogLoaded(playerid);
+forward OnWhitelistCheckDialogLoaded(playerid);
+forward OnRecentBugsDialogLoaded(playerid);
+forward OnRecentFeedbackDialogLoaded(playerid);
+forward OnRecentReportsDialogLoaded(playerid);
+forward OnRecentLogsDialogLoaded(playerid);
 
 
 stock ShowBetaMOTD(playerid)
@@ -3229,13 +3250,13 @@ stock CreatePlayerHouseExitPickup(playerid, ownerid)
     DestroyPlayerHouseExitPickup(playerid);
 
     PlayerHouseExitPickup[playerid] = CreatePickup(
-        HOUSE_PICKUP_MODEL,
-        HOUSE_PICKUP_TYPE,
-        HOUSE_INT_X,
-        HOUSE_INT_Y + HOUSE_EXIT_PICKUP_Y_OFFSET,
-        HOUSE_INT_Z,
-        GetPlayerHouseVirtualWorld(ownerid)
-    );
+                                          HOUSE_PICKUP_MODEL,
+                                          HOUSE_PICKUP_TYPE,
+                                          HOUSE_INT_X,
+                                          HOUSE_INT_Y + HOUSE_EXIT_PICKUP_Y_OFFSET,
+                                          HOUSE_INT_Z,
+                                          GetPlayerHouseVirtualWorld(ownerid)
+                                      );
 
     return 1;
 }
@@ -3245,13 +3266,13 @@ stock CreateHouseExteriorPickups()
     for (new i = 0; i < MAX_HOUSES; i++)
     {
         HouseExteriorPickup[i] = CreatePickup(
-            HOUSE_PICKUP_MODEL,
-            HOUSE_PICKUP_TYPE,
-            HouseX[i],
-            HouseY[i],
-            HouseZ[i],
-            0
-        );
+                                     HOUSE_PICKUP_MODEL,
+                                     HOUSE_PICKUP_TYPE,
+                                     HouseX[i],
+                                     HouseY[i],
+                                     HouseZ[i],
+                                     0
+                                 );
     }
 
     return 1;
@@ -4936,12 +4957,237 @@ public OnRecentLogsLoaded(playerid)
     return 1;
 }
 
+
+public OnWhitelistDialogLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+    new dialogText[2048];
+    new line[160];
+    new username[24];
+    new addedBy[24];
+    new createdAt[32];
+
+    if (rows == 0)
+    {
+        ShowPlayerDialog(playerid, DIALOG_BETA_WHITELIST_LIST, DIALOG_STYLE_MSGBOX, "Active Whitelist", "Whitelist aktif kosong.", "Back", "Close");
+        return 1;
+    }
+
+    format(dialogText, sizeof(dialogText), "Username\tAdded By\tCreated\n");
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name(i, "username", username, sizeof(username));
+        cache_get_value_name(i, "added_by", addedBy, sizeof(addedBy));
+        cache_get_value_name(i, "created_at", createdAt, sizeof(createdAt));
+        format(line, sizeof(line), "%s\t%s\t%s\n", username, addedBy, createdAt);
+        strcat(dialogText, line, sizeof(dialogText));
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_BETA_WHITELIST_LIST, DIALOG_STYLE_TABLIST_HEADERS, "Active Whitelist", dialogText, "Back", "Close");
+    return 1;
+}
+
+public OnWhitelistCheckDialogLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+    new dialogText[512];
+
+    if (rows == 0)
+    {
+        format(dialogText, sizeof(dialogText), "%s tidak ditemukan di whitelist.", PlayerLastWhitelistQuery[playerid]);
+        ShowPlayerDialog(playerid, DIALOG_BETA_WLCHECK_RESULT, DIALOG_STYLE_MSGBOX, "Whitelist Check", dialogText, "Back", "Close");
+        return 1;
+    }
+
+    new username[24];
+    new addedBy[24];
+    new createdAt[32];
+    new active;
+
+    cache_get_value_name(0, "username", username, sizeof(username));
+    cache_get_value_name_int(0, "active", active);
+    cache_get_value_name(0, "added_by", addedBy, sizeof(addedBy));
+    cache_get_value_name(0, "created_at", createdAt, sizeof(createdAt));
+
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "Username: %s\nActive: %d\nAdded By: %s\nCreated: %s",
+        username,
+        active,
+        addedBy,
+        createdAt
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_BETA_WLCHECK_RESULT, DIALOG_STYLE_MSGBOX, "Whitelist Check", dialogText, "Back", "Close");
+    return 1;
+}
+
+public OnRecentBugsDialogLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+    new dialogText[2048];
+    new line[192];
+    new feedbackId;
+    new reporterName[24];
+    new message[96];
+
+    if (rows == 0)
+    {
+        ShowPlayerDialog(playerid, DIALOG_ADMIN_RECENT_BUGS, DIALOG_STYLE_MSGBOX, "Recent Bugs", "Belum ada bug report terbuka.", "Back", "Close");
+        return 1;
+    }
+
+    format(dialogText, sizeof(dialogText), "ID\tReporter\tMessage\n");
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name_int(i, "id", feedbackId);
+        cache_get_value_name(i, "reporter_name", reporterName, sizeof(reporterName));
+        cache_get_value_name(i, "message", message, sizeof(message));
+        format(line, sizeof(line), "%d\t%s\t%s\n", feedbackId, reporterName, message);
+        strcat(dialogText, line, sizeof(dialogText));
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_ADMIN_RECENT_BUGS, DIALOG_STYLE_TABLIST_HEADERS, "Recent Bugs", dialogText, "Back", "Close");
+    return 1;
+}
+
+public OnRecentFeedbackDialogLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+    new dialogText[2048];
+    new line[192];
+    new feedbackId;
+    new reporterName[24];
+    new feedbackType[16];
+    new message[88];
+
+    if (rows == 0)
+    {
+        ShowPlayerDialog(playerid, DIALOG_ADMIN_RECENT_FEEDBACK, DIALOG_STYLE_MSGBOX, "Recent Feedback", "Belum ada feedback terbuka.", "Back", "Close");
+        return 1;
+    }
+
+    format(dialogText, sizeof(dialogText), "ID\tType\tReporter\tMessage\n");
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name_int(i, "id", feedbackId);
+        cache_get_value_name(i, "reporter_name", reporterName, sizeof(reporterName));
+        cache_get_value_name(i, "type", feedbackType, sizeof(feedbackType));
+        cache_get_value_name(i, "message", message, sizeof(message));
+        format(line, sizeof(line), "%d\t%s\t%s\t%s\n", feedbackId, feedbackType, reporterName, message);
+        strcat(dialogText, line, sizeof(dialogText));
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_ADMIN_RECENT_FEEDBACK, DIALOG_STYLE_TABLIST_HEADERS, "Recent Feedback", dialogText, "Back", "Close");
+    return 1;
+}
+
+public OnRecentReportsDialogLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+    new dialogText[2048];
+    new line[192];
+    new reportId;
+    new reporterName[24];
+    new targetName[24];
+    new reason[80];
+
+    if (rows == 0)
+    {
+        ShowPlayerDialog(playerid, DIALOG_ADMIN_RECENT_REPORTS, DIALOG_STYLE_MSGBOX, "Recent Player Reports", "Belum ada report player terbuka.", "Back", "Close");
+        return 1;
+    }
+
+    format(dialogText, sizeof(dialogText), "ID\tReporter\tTarget\tReason\n");
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name_int(i, "id", reportId);
+        cache_get_value_name(i, "reporter_name", reporterName, sizeof(reporterName));
+        cache_get_value_name(i, "target_name", targetName, sizeof(targetName));
+        cache_get_value_name(i, "reason", reason, sizeof(reason));
+        format(line, sizeof(line), "%d\t%s\t%s\t%s\n", reportId, reporterName, targetName, reason);
+        strcat(dialogText, line, sizeof(dialogText));
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_ADMIN_RECENT_REPORTS, DIALOG_STYLE_TABLIST_HEADERS, "Recent Player Reports", dialogText, "Back", "Close");
+    return 1;
+}
+
+public OnRecentLogsDialogLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+    new dialogText[2048];
+    new line[192];
+    new logId;
+    new adminName[24];
+    new targetName[24];
+    new action[32];
+    new detail[64];
+
+    if (rows == 0)
+    {
+        ShowPlayerDialog(playerid, DIALOG_ADMIN_RECENT_LOGS, DIALOG_STYLE_MSGBOX, "Recent Admin Logs", "Belum ada admin log.", "Back", "Close");
+        return 1;
+    }
+
+    format(dialogText, sizeof(dialogText), "ID\tAction\tAdmin\tTarget\tDetail\n");
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name_int(i, "id", logId);
+        cache_get_value_name(i, "admin_name", adminName, sizeof(adminName));
+        cache_get_value_name(i, "target_name", targetName, sizeof(targetName));
+        cache_get_value_name(i, "action", action, sizeof(action));
+        cache_get_value_name(i, "detail", detail, sizeof(detail));
+        format(line, sizeof(line), "%d\t%s\t%s\t%s\t%s\n", logId, action, adminName, targetName, detail);
+        strcat(dialogText, line, sizeof(dialogText));
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_ADMIN_RECENT_LOGS, DIALOG_STYLE_TABLIST_HEADERS, "Recent Admin Logs", dialogText, "Back", "Close");
+    return 1;
+}
+
 public OnGameModeInit()
 {
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.17F Org Dialog");
+    SetGameModeText("LSIF Dev v0.17G Admin Dialog");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -5021,7 +5267,7 @@ public OnGameModeInit()
     print("[LSIF] Manual vehicle engine mode aktif.");
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
     print("[LSIF] Custom house arrow pickups aktif.");
-    print("[LSIF] Gamemode v0.17F Organization Dialog Pack berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.17G Admin & Beta Dialog Pack berhasil dijalankan.");
     return 1;
 }
 
@@ -5216,10 +5462,484 @@ public OnPlayerSpawn(playerid)
     return 1;
 }
 
+
+stock ShowAdminDashboardMenu(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_HELPER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+        return 0;
+    }
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_ADMIN_MENU,
+        DIALOG_STYLE_LIST,
+        "LSIF Admin Dashboard",
+        "Beta Status\nPlayer List\nOnline Admins\nRecent Bugs\nRecent Player Reports\nRecent Feedback\nRecent Admin Logs\nBeta/Whitelist Menu",
+        "Select",
+        "Close"
+    );
+    return 1;
+}
+
+stock ShowBetaDashboardMenu(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_HELPER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+        return 0;
+    }
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_BETA_MENU,
+        DIALOG_STYLE_LIST,
+        "LSIF Beta Dashboard",
+        "Beta Status\nWhitelist Active List\nAdd Whitelist\nRemove Whitelist\nCheck Whitelist\nRecent Bugs\nRecent Feedback\nRecent Player Reports",
+        "Select",
+        "Back"
+    );
+    return 1;
+}
+
+stock ShowBetaStatusDialog(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_HELPER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+        return 0;
+    }
+
+    new uptimeText[64];
+    new dialogText[768];
+    new adminCount = 0;
+
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (IsPlayerConnected(i) && PlayerLoggedIn[i] && PlayerAdmin[i] > 0)
+        {
+            adminCount++;
+        }
+    }
+
+    FormatUptime(GetTickCount() - g_ServerStartTick, uptimeText, sizeof(uptimeText));
+
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "Gamemode: LSIF Dev v0.17G Admin Dialog\n\nUptime: %s\nPlayers Online: %d\nLogged Players: %d\nAdmins Online: %d\n\nClosed Beta: ACTIVE\nWhitelist: ENABLED after first active whitelist user\n\nMenu terkait:\n/adminmenu\n/betamenu",
+        uptimeText,
+        CountOnlinePlayers(),
+        CountLoggedPlayers(),
+        adminCount
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_BETA_STATUS_DIALOG, DIALOG_STYLE_MSGBOX, "Closed Beta Status", dialogText, "Back", "Close");
+    return 1;
+}
+
+stock ShowPlayerListDialog(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_HELPER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+        return 0;
+    }
+
+    new dialogText[2048];
+    new line[160];
+    new name[MAX_PLAYER_NAME];
+    new found = 0;
+
+    format(dialogText, sizeof(dialogText), "ID\tName\tLogin\tAdmin\tDBID\n");
+
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (IsPlayerConnected(i))
+        {
+            GetPlayerName(i, name, sizeof(name));
+            format(line, sizeof(line), "%d\t%s\t%d\t%d\t%d\n", i, name, PlayerLoggedIn[i], PlayerAdmin[i], PlayerDBID[i]);
+            strcat(dialogText, line, sizeof(dialogText));
+            found++;
+        }
+    }
+
+    if (!found)
+    {
+        format(dialogText, sizeof(dialogText), "Tidak ada player online.");
+        ShowPlayerDialog(playerid, DIALOG_ADMIN_PLAYERS, DIALOG_STYLE_MSGBOX, "Online Players", dialogText, "Back", "Close");
+        return 1;
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_ADMIN_PLAYERS, DIALOG_STYLE_TABLIST_HEADERS, "Online Players", dialogText, "Back", "Close");
+    return 1;
+}
+
+stock ShowOnlineAdminsDialog(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_HELPER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+        return 0;
+    }
+
+    new dialogText[1536];
+    new line[144];
+    new name[MAX_PLAYER_NAME];
+    new rankName[32];
+    new found = 0;
+
+    format(dialogText, sizeof(dialogText), "ID\tName\tLevel\tRank\n");
+
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (IsPlayerConnected(i) && PlayerLoggedIn[i] && PlayerAdmin[i] > 0)
+        {
+            GetPlayerName(i, name, sizeof(name));
+            GetAdminRankName(PlayerAdmin[i], rankName, sizeof(rankName));
+            format(line, sizeof(line), "%d\t%s\t%d\t%s\n", i, name, PlayerAdmin[i], rankName);
+            strcat(dialogText, line, sizeof(dialogText));
+            found++;
+        }
+    }
+
+    if (!found)
+    {
+        format(dialogText, sizeof(dialogText), "Tidak ada admin online.");
+        ShowPlayerDialog(playerid, DIALOG_ADMIN_ADMINS, DIALOG_STYLE_MSGBOX, "Online Admins", dialogText, "Back", "Close");
+        return 1;
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_ADMIN_ADMINS, DIALOG_STYLE_TABLIST_HEADERS, "Online Admins", dialogText, "Back", "Close");
+    return 1;
+}
+
+stock ShowWhitelistAddInput(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa menambah whitelist beta.");
+        return 0;
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_BETA_WLADD_INPUT, DIALOG_STYLE_INPUT, "Add Beta Whitelist", "Masukkan username player yang ingin ditambahkan ke whitelist.", "Add", "Back");
+    return 1;
+}
+
+stock ShowWhitelistRemoveInput(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa menonaktifkan whitelist beta.");
+        return 0;
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_BETA_WLREMOVE_INPUT, DIALOG_STYLE_INPUT, "Remove Beta Whitelist", "Masukkan username whitelist yang ingin dinonaktifkan.", "Remove", "Back");
+    return 1;
+}
+
+stock ShowWhitelistCheckInput(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_HELPER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+        return 0;
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_BETA_WLCHECK_INPUT, DIALOG_STYLE_INPUT, "Check Beta Whitelist", "Masukkan username yang ingin dicek.", "Check", "Back");
+    return 1;
+}
+
+stock OpenRecentBugsDialog(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_HELPER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+        return 0;
+    }
+
+    mysql_tquery(g_SQL, "SELECT id, reporter_name, message FROM feedback_reports WHERE type='bug' AND status='open' ORDER BY id DESC LIMIT 10", "OnRecentBugsDialogLoaded", "i", playerid);
+    return 1;
+}
+
+stock OpenRecentFeedbackDialog(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_HELPER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+        return 0;
+    }
+
+    mysql_tquery(g_SQL, "SELECT id, reporter_name, type, message FROM feedback_reports WHERE status='open' ORDER BY id DESC LIMIT 10", "OnRecentFeedbackDialogLoaded", "i", playerid);
+    return 1;
+}
+
+stock OpenRecentReportsDialog(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_HELPER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+        return 0;
+    }
+
+    mysql_tquery(g_SQL, "SELECT id, reporter_name, target_name, reason FROM reports WHERE status='open' ORDER BY id DESC LIMIT 10", "OnRecentReportsDialogLoaded", "i", playerid);
+    return 1;
+}
+
+stock OpenRecentLogsDialog(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_HELPER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+        return 0;
+    }
+
+    mysql_tquery(g_SQL, "SELECT id, admin_name, target_name, action, detail FROM admin_logs ORDER BY id DESC LIMIT 10", "OnRecentLogsDialogLoaded", "i", playerid);
+    return 1;
+}
+
+stock OpenWhitelistListDialog(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_HELPER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+        return 0;
+    }
+
+    mysql_tquery(g_SQL, "SELECT username, added_by, created_at FROM beta_whitelist WHERE active=1 ORDER BY id DESC LIMIT 20", "OnWhitelistDialogLoaded", "i", playerid);
+    return 1;
+}
+
 public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 {
     if (dialogid == DIALOG_BETA_RULES || dialogid == DIALOG_BETA_MOTD || dialogid == DIALOG_FEEDBACK_LIST)
     {
+        return 1;
+    }
+
+
+    if (dialogid == DIALOG_ADMIN_MENU)
+    {
+        if (!response)
+        {
+            return 1;
+        }
+
+        if (listitem == 0)
+        {
+            ShowBetaStatusDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 1)
+        {
+            ShowPlayerListDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 2)
+        {
+            ShowOnlineAdminsDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 3)
+        {
+            OpenRecentBugsDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 4)
+        {
+            OpenRecentReportsDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 5)
+        {
+            OpenRecentFeedbackDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 6)
+        {
+            OpenRecentLogsDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 7)
+        {
+            ShowBetaDashboardMenu(playerid);
+            return 1;
+        }
+
+        return 1;
+    }
+
+    if (dialogid == DIALOG_BETA_MENU)
+    {
+        if (!response)
+        {
+            ShowAdminDashboardMenu(playerid);
+            return 1;
+        }
+
+        if (listitem == 0)
+        {
+            ShowBetaStatusDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 1)
+        {
+            OpenWhitelistListDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 2)
+        {
+            ShowWhitelistAddInput(playerid);
+            return 1;
+        }
+
+        if (listitem == 3)
+        {
+            ShowWhitelistRemoveInput(playerid);
+            return 1;
+        }
+
+        if (listitem == 4)
+        {
+            ShowWhitelistCheckInput(playerid);
+            return 1;
+        }
+
+        if (listitem == 5)
+        {
+            OpenRecentBugsDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 6)
+        {
+            OpenRecentFeedbackDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 7)
+        {
+            OpenRecentReportsDialog(playerid);
+            return 1;
+        }
+
+        return 1;
+    }
+
+    if (dialogid == DIALOG_ADMIN_PLAYERS || dialogid == DIALOG_ADMIN_ADMINS || dialogid == DIALOG_ADMIN_RECENT_BUGS || dialogid == DIALOG_ADMIN_RECENT_REPORTS || dialogid == DIALOG_ADMIN_RECENT_FEEDBACK || dialogid == DIALOG_ADMIN_RECENT_LOGS || dialogid == DIALOG_BETA_STATUS_DIALOG || dialogid == DIALOG_BETA_WHITELIST_LIST || dialogid == DIALOG_BETA_WLCHECK_RESULT)
+    {
+        if (response)
+        {
+            ShowAdminDashboardMenu(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_BETA_WLADD_INPUT)
+    {
+        if (!response)
+        {
+            ShowBetaDashboardMenu(playerid);
+            return 1;
+        }
+
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa menambah whitelist beta.");
+            return 1;
+        }
+
+        if (strlen(inputtext) < 3)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Username minimal 3 karakter.");
+            ShowWhitelistAddInput(playerid);
+            return 1;
+        }
+
+        new adminName[MAX_PLAYER_NAME];
+        new query[512];
+
+        GetPlayerName(playerid, adminName, sizeof(adminName));
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "INSERT INTO beta_whitelist (username, added_by, note, active) VALUES ('%e', '%e', 'dialog_add', 1) ON DUPLICATE KEY UPDATE added_by='%e', note='dialog_add', active=1, updated_at=NOW()",
+            inputtext,
+            adminName,
+            adminName
+        );
+
+        mysql_tquery(g_SQL, query, "OnWhitelistAdded", "i", playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_BETA_WLREMOVE_INPUT)
+    {
+        if (!response)
+        {
+            ShowBetaDashboardMenu(playerid);
+            return 1;
+        }
+
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa menonaktifkan whitelist beta.");
+            return 1;
+        }
+
+        if (strlen(inputtext) < 3)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Username minimal 3 karakter.");
+            ShowWhitelistRemoveInput(playerid);
+            return 1;
+        }
+
+        new query[256];
+
+        format(PlayerLastWhitelistQuery[playerid], 24, "%s", inputtext);
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE beta_whitelist SET active=0, updated_at=NOW() WHERE username='%e' LIMIT 1", inputtext);
+        mysql_tquery(g_SQL, query, "OnWhitelistRemoved", "i", playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_BETA_WLCHECK_INPUT)
+    {
+        if (!response)
+        {
+            ShowBetaDashboardMenu(playerid);
+            return 1;
+        }
+
+        if (!IsAdminLevel(playerid, ADMIN_HELPER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+            return 1;
+        }
+
+        if (strlen(inputtext) < 3)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Username minimal 3 karakter.");
+            ShowWhitelistCheckInput(playerid);
+            return 1;
+        }
+
+        new query[256];
+
+        format(PlayerLastWhitelistQuery[playerid], 24, "%s", inputtext);
+        mysql_format(g_SQL, query, sizeof(query), "SELECT username, active, added_by, created_at FROM beta_whitelist WHERE username='%e' LIMIT 1", inputtext);
+        mysql_tquery(g_SQL, query, "OnWhitelistCheckDialogLoaded", "i", playerid);
         return 1;
     }
 
@@ -9710,6 +10430,19 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+
+    if (!strcmp(cmdtext, "/adminmenu", true))
+    {
+        ShowAdminDashboardMenu(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/betamenu", true))
+    {
+        ShowBetaDashboardMenu(playerid);
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/help", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF HELP ==========");
@@ -9782,6 +10515,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/kickhouse [id] - Keluarkan visitor dari rumah");
         SendClientMessage(playerid, COLOR_WHITE, "/housevisitors - Lihat visitor rumah");
         SendClientMessage(playerid, COLOR_WHITE, "/orgmenu - Menu dialog organisasi");
+        SendClientMessage(playerid, COLOR_WHITE, "/adminmenu - Dialog dashboard admin closed beta");
+        SendClientMessage(playerid, COLOR_WHITE, "/betamenu - Dialog whitelist/beta management");
         SendClientMessage(playerid, COLOR_WHITE, "/orgs - Melihat daftar organisasi");
         SendClientMessage(playerid, COLOR_WHITE, "/createorg [nama] - Membuat organisasi");
         SendClientMessage(playerid, COLOR_WHITE, "/org - Info organisasi kamu");
@@ -9855,7 +10590,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.17F Organization Dialog Pack");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.17G Admin & Beta Dialog Pack");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -9865,9 +10600,9 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D: Release polish, version, credits, staff, beta guide.");
-    	SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");
-    	SendClientMessage(playerid, COLOR_WHITE, "v0.17F: Organization info, members, bank, invite, rank, kick, leave, dan disband memakai Dialog UI.");
-    	SendClientMessage(playerid, COLOR_WHITE, "v0.17B: house arrow enter/exit, ALT transaksi/menu, dan job vehicle grace timer.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.17F: Organization info, members, bank, invite, rank, kick, leave, dan disband memakai Dialog UI.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.17B: house arrow enter/exit, ALT transaksi/menu, dan job vehicle grace timer.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16C: Admin beta dashboard dan monitoring reports/logs.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16B: Starter pack, bug report, suggestion, feedback handling.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16A: Whitelist, MOTD, rules, closed beta gate.");
@@ -11119,6 +11854,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/recentreports - Player report terbaru");
         SendClientMessage(playerid, COLOR_WHITE, "/recentfeedback - Feedback/suggest terbaru");
         SendClientMessage(playerid, COLOR_WHITE, "/recentlogs - Admin log terbaru");
+        SendClientMessage(playerid, COLOR_WHITE, "/adminmenu - Dashboard admin berbasis dialog");
+        SendClientMessage(playerid, COLOR_WHITE, "/betamenu - Dashboard beta/whitelist berbasis dialog");
         SendClientMessage(playerid, COLOR_WHITE, "/version, /changelog, /credits, /staff - Release info commands");
 
         return 1;
@@ -14538,7 +15275,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         SendClientMessage(playerid, COLOR_YELLOW, "========== CLOSED BETA STATUS ==========");
 
-        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.17F Org Dialog");
+        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.17G Admin Dialog");
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         format(msg, sizeof(msg), "Uptime: %s", uptimeText);

@@ -92,6 +92,10 @@
 #define DIALOG_GANG_LEAVE_CONFIRM 1073
 #define DIALOG_GANG_DISBAND_CONFIRM 1074
 #define DIALOG_GANG_LIST 1075
+#define DIALOG_GANG_HQ_MENU 1076
+#define DIALOG_GANG_KICK_INPUT 1077
+#define DIALOG_GANG_KICK_CONFIRM 1078
+#define DIALOG_GANG_SETRANK_INPUT 1079
 
 
 #define STARTER_CASH 15000
@@ -266,7 +270,9 @@
 #define TERRITORY_ACCESS_RADIUS 80.0
 #define DEFAULT_GANG_COLOR 0xFFFFFFFF
 #define MAX_GANG_COLOR_PRESETS 8
-#define GANG_CREATE_PRICE 75000
+#define MAX_PRESET_GANGS 4
+#define GANG_HQ_ACCESS_RADIUS 8.0
+#define GANG_CREATE_PRICE 75000 // deprecated after v0.20A.2
 
 #define GANG_RANK_NONE      0
 #define GANG_RANK_MEMBER    1
@@ -308,6 +314,7 @@
 #define MAPICON_BASE_BUS_STOP 70
 #define MAPICON_BASE_AMMUNATION 80
 #define MAPICON_BASE_TERRITORY 90
+#define MAPICON_BASE_GANG_HQ 100
 
 #define MAPICON_TYPE_ATM 52
 #define MAPICON_TYPE_HOUSE 31
@@ -318,6 +325,7 @@
 #define MAPICON_TYPE_BUS_STOP 55
 #define MAPICON_TYPE_AMMUNATION 6
 #define MAPICON_TYPE_TERRITORY 19
+#define MAPICON_TYPE_GANG_HQ 19
 #if !defined MAPICON_LOCAL
 #define MAPICON_LOCAL 0
 #endif
@@ -804,6 +812,10 @@ new PlayerPendingGangName[MAX_PLAYERS][64];
 new PlayerGangColor[MAX_PLAYERS];
 new PlayerSelectedGangTarget[MAX_PLAYERS];
 new PlayerDialogTerritoryIndex[MAX_PLAYERS];
+new PlayerDialogGangID[MAX_PLAYERS];
+
+new GangHQPickup[MAX_PRESET_GANGS];
+new Text3D:GangHQLabel[MAX_PRESET_GANGS];
 
 new TerritoryPickup[MAX_TERRITORIES];
 new Text3D:TerritoryLabel[MAX_TERRITORIES];
@@ -883,6 +895,78 @@ new GangColorName[MAX_GANG_COLOR_PRESETS][24] =
     "Orange",
     "Purple",
     "Gray"
+};
+
+new PresetGangID[MAX_PRESET_GANGS] =
+{
+    1,
+    2,
+    3,
+    4
+};
+
+new PresetGangName[MAX_PRESET_GANGS][64] =
+{
+    "Grove Street Families",
+    "Ballas",
+    "Los Santos Vagos",
+    "Varrios Los Aztecas"
+};
+
+new PresetGangShortName[MAX_PRESET_GANGS][24] =
+{
+    "Grove",
+    "Ballas",
+    "Vagos",
+    "Aztecas"
+};
+
+new PresetGangColor[MAX_PRESET_GANGS] =
+{
+    0x00FF00FF, // Grove green
+    0xAA66CCFF, // Ballas purple
+    0xFFFF00FF, // Vagos yellow
+    0x00FFFFFF  // Aztecas turquoise
+};
+
+new PresetGangColorName[MAX_PRESET_GANGS][24] =
+{
+    "Green",
+    "Purple",
+    "Yellow",
+    "Turquoise"
+};
+
+new Float:GangHQX[MAX_PRESET_GANGS] =
+{
+    2495.4094, // Grove Street / Ganton
+    2229.3215, // Ballas / Glen Park-Idlewood
+    2421.5427, // Vagos / East LS
+    1766.6000  // Aztecas / El Corona
+};
+
+new Float:GangHQY[MAX_PRESET_GANGS] =
+{
+    -1686.1682,
+        -1159.7343,
+        -1224.3597,
+        -1918.3000
+    };
+
+new Float:GangHQZ[MAX_PRESET_GANGS] =
+{
+    13.5153,
+    25.7331,
+    25.3828,
+    13.5600
+};
+
+new GangHQName[MAX_PRESET_GANGS][64] =
+{
+    "Grove Street HQ",
+    "Ballas HQ",
+    "Los Santos Vagos HQ",
+    "Varrios Los Aztecas HQ"
 };
 
 new PlayerBusinessDBID[MAX_PLAYERS];
@@ -4296,6 +4380,7 @@ stock ResetPlayerOrgData(playerid)
     PlayerOrgBankMoney[playerid] = 0;
     PlayerSelectedOrgTarget[playerid] = INVALID_PLAYER_ID;
     PlayerDialogTerritoryIndex[playerid] = -1;
+    PlayerDialogGangID[playerid] = 0;
     format(PlayerOrgName[playerid], 64, "None");
     format(PlayerPendingOrgName[playerid], 64, "None");
     return 1;
@@ -4397,6 +4482,7 @@ stock ResetPlayerGangData(playerid)
     PlayerGangColor[playerid] = DEFAULT_GANG_COLOR;
     PlayerSelectedGangTarget[playerid] = INVALID_PLAYER_ID;
     PlayerDialogTerritoryIndex[playerid] = -1;
+    PlayerDialogGangID[playerid] = 0;
     format(PlayerGangName[playerid], 64, "None");
     format(PlayerPendingGangName[playerid], 64, "None");
     return 1;
@@ -4406,7 +4492,7 @@ stock GetGangRankName(rank, output[], size)
 {
     if (rank >= GANG_RANK_LEADER)
     {
-        format(output, size, "Leader");
+        format(output, size, "Gang Boss");
         return 1;
     }
 
@@ -4489,6 +4575,248 @@ stock SendMessageToGang(gangid, color, const message[])
         }
     }
 
+    return 1;
+}
+
+stock GetPresetGangIndexByID(gangid)
+{
+    for (new i = 0; i < MAX_PRESET_GANGS; i++)
+    {
+        if (PresetGangID[i] == gangid)
+        {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+stock IsPresetGangID(gangid)
+{
+    return GetPresetGangIndexByID(gangid) != -1;
+}
+
+stock GetNearestGangHQ(playerid)
+{
+    new nearest = -1;
+    new Float:nearestDistance = 999999.0;
+
+    for (new i = 0; i < MAX_PRESET_GANGS; i++)
+    {
+        new Float:distance = GetPlayerDistanceFromPoint(playerid, GangHQX[i], GangHQY[i], GangHQZ[i]);
+
+        if (distance < nearestDistance)
+        {
+            nearestDistance = distance;
+            nearest = i;
+        }
+    }
+
+    return nearest;
+}
+
+stock IsPlayerNearGangHQ(playerid, gangIndex)
+{
+    if (gangIndex < 0 || gangIndex >= MAX_PRESET_GANGS)
+    {
+        return 0;
+    }
+
+    if (GetPlayerDistanceFromPoint(playerid, GangHQX[gangIndex], GangHQY[gangIndex], GangHQZ[gangIndex]) <= GANG_HQ_ACCESS_RADIUS)
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
+stock ShowGangHQDialog(playerid, gangid)
+{
+    new gangIndex = GetPresetGangIndexByID(gangid);
+
+    if (gangIndex == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang HQ tidak valid.");
+        return 0;
+    }
+
+    PlayerDialogGangID[playerid] = gangid;
+
+    new title[96];
+    new body[384];
+
+    format(title, sizeof(title), "%s", PresetGangName[gangIndex]);
+
+    if (PlayerGangID[playerid] == gangid)
+    {
+        format(
+            body,
+            sizeof(body),
+            "Gang Info
+            Gang Members
+            Leave Gang
+            Kick Member(Gang Boss)
+            Turf Map
+            Organization Menu"
+        );
+    }
+    else
+    {
+        format(
+            body,
+            sizeof(body),
+            "Gang Info
+            Join Gang
+            Turf Map
+            Organization Menu"
+        );
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_GANG_HQ_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Close");
+    return 1;
+}
+
+stock ProcessJoinPresetGang(playerid, gangid)
+{
+    new gangIndex = GetPresetGangIndexByID(gangid);
+
+    if (gangIndex == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang tidak valid.");
+        return 0;
+    }
+
+    if (PlayerGangID[playerid] > 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu sudah tergabung dalam gang. Gunakan /leavegang dulu.");
+        return 0;
+    }
+
+    if (!IsPlayerNearGangHQ(playerid, gangIndex))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada di HQ gang untuk bergabung.");
+        return 0;
+    }
+
+    new playerName[MAX_PLAYER_NAME];
+    new query[512];
+
+    GetPlayerName(playerid, playerName, sizeof(playerName));
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO gang_members (gang_id, player_id, player_name, rank_level) VALUES (%d, %d, '%e', %d) ON DUPLICATE KEY UPDATE gang_id=VALUES(gang_id), player_name=VALUES(player_name), rank_level=VALUES(rank_level)",
+        gangid,
+        PlayerDBID[playerid],
+        playerName,
+        GANG_RANK_MEMBER
+    );
+
+    mysql_tquery(g_SQL, query);
+
+    PlayerGangID[playerid] = gangid;
+    PlayerGangRank[playerid] = GANG_RANK_MEMBER;
+    PlayerGangColor[playerid] = PresetGangColor[gangIndex];
+    format(PlayerGangName[playerid], 64, "%s", PresetGangName[gangIndex]);
+
+    new msg[160];
+    format(msg, sizeof(msg), "Kamu bergabung dengan %s.", PresetGangName[gangIndex]);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+
+    format(msg, sizeof(msg), "[GANG] %s bergabung ke %s.", playerName, PresetGangName[gangIndex]);
+    SendMessageToGang(gangid, PresetGangColor[gangIndex], msg);
+
+    return 1;
+}
+
+stock ProcessKickGangMember(playerid, targetid)
+{
+    if (!IsGangLeader(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Gang Boss yang bisa kick member gang.");
+        return 0;
+    }
+
+    if (!IsPlayerConnected(targetid) || !PlayerLoggedIn[targetid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Target tidak online/login.");
+        return 0;
+    }
+
+    if (targetid == playerid)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gunakan /leavegang untuk keluar sendiri.");
+        return 0;
+    }
+
+    if (PlayerGangID[targetid] != PlayerGangID[playerid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Target bukan anggota gang kamu.");
+        return 0;
+    }
+
+    if (PlayerGangRank[targetid] >= PlayerGangRank[playerid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Tidak bisa kick rank yang sama/lebih tinggi.");
+        return 0;
+    }
+
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "DELETE FROM gang_members WHERE player_id=%d LIMIT 1", PlayerDBID[targetid]);
+    mysql_tquery(g_SQL, query);
+
+    new targetName[MAX_PLAYER_NAME];
+    new msg[160];
+
+    GetPlayerName(targetid, targetName, sizeof(targetName));
+
+    ResetPlayerGangData(targetid);
+    SendClientMessage(targetid, COLOR_RED, "Kamu dikeluarkan dari gang oleh Gang Boss.");
+
+    format(msg, sizeof(msg), "%s dikeluarkan dari gang.", targetName);
+    SendMessageToGang(PlayerGangID[playerid], COLOR_YELLOW, msg);
+    SendClientMessage(playerid, COLOR_GREEN, "Member berhasil dikeluarkan dari gang.");
+
+    return 1;
+}
+
+stock ProcessSetGangRank(playerid, targetid, rank)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner server yang bisa set rank gang.");
+        return 0;
+    }
+
+    if (!IsPlayerConnected(targetid) || !PlayerLoggedIn[targetid] || PlayerGangID[targetid] <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Target tidak online/login atau belum punya gang.");
+        return 0;
+    }
+
+    if (rank < GANG_RANK_MEMBER || rank > GANG_RANK_LEADER)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Rank valid: 1 Member, 2 Soldier, 3 Enforcer, 4 OG, 5 Gang Boss.");
+        return 0;
+    }
+
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE gang_members SET rank_level=%d WHERE player_id=%d LIMIT 1", rank, PlayerDBID[targetid]);
+    mysql_tquery(g_SQL, query);
+
+    PlayerGangRank[targetid] = rank;
+
+    new rankName[32];
+    new msg[144];
+    GetGangRankName(rank, rankName, sizeof(rankName));
+
+    format(msg, sizeof(msg), "Rank gang target diset menjadi %s (%d).", rankName, rank);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+
+    format(msg, sizeof(msg), "Rank gang kamu diubah menjadi %s (%d).", rankName, rank);
+    SendClientMessage(targetid, COLOR_YELLOW, msg);
     return 1;
 }
 
@@ -4618,7 +4946,7 @@ stock ShowGangMenuDialog(playerid)
         DIALOG_GANG_MENU,
         DIALOG_STYLE_LIST,
         "LSIF Gang Menu",
-        "Gang Info\nTurf Map\nGang Members\nGang Color\nCreate Gang\nInvite Gang Member\nLeave Gang\nDisband Gang\nOrganization Menu",
+        "Gang Info\nTurf Map\nGang Members\nLeave Gang\nKick Member (Gang Boss)\nGang HQ List\nOrganization Menu",
         "Select",
         "Close"
     );
@@ -4633,7 +4961,7 @@ stock ShowGangInfoDialog(playerid)
 
     if (PlayerGangID[playerid] <= 0)
     {
-        format(dialogText, sizeof(dialogText), "Kamu belum tergabung dalam gang.\n\nGang berbeda dari Organization.\nOrganization = ekonomi/bisnis/job.\nGang = territory/turf/area control.\n\nGunakan /creategang [nama] atau tunggu invite gang.");
+        format(dialogText, sizeof(dialogText), "Kamu belum tergabung dalam gang.\n\nGang berbeda dari Organization.\nOrganization = ekonomi/bisnis/job.\nGang = territory/turf/area control.\n\nUntuk join gang, datang ke HQ gang lalu tekan ALT.");
     }
     else
     {
@@ -4641,7 +4969,7 @@ stock ShowGangInfoDialog(playerid)
         format(
             dialogText,
             sizeof(dialogText),
-            "Gang: %s\nGang ID: %d\nRank: %s (%d)\nGang Color: %s\nTerritories Owned: %d/%d\n\nCatatan: Gang adalah kelompok turf/territory. Organization tetap terpisah untuk ekonomi/bisnis.",
+            "Gang: %s\nGang ID: %d\nRank: %s (%d)\nGang Color: %s\nTerritories Owned: %d/%d\n\nCatatan: Gang adalah faction preset offline-like. Nama, HQ, dan warna tidak bisa diubah player.",
             PlayerGangName[playerid],
             PlayerGangID[playerid],
             rankName,
@@ -4675,30 +5003,7 @@ stock ShowTurfMapDialog(playerid)
 
 stock ShowGangColorDialog(playerid)
 {
-    if (PlayerGangID[playerid] <= 0)
-    {
-        SendClientMessage(playerid, COLOR_RED, "Kamu belum tergabung dalam gang.");
-        return 0;
-    }
-
-    if (!IsGangLeader(playerid))
-    {
-        SendClientMessage(playerid, COLOR_RED, "Hanya Leader gang yang bisa mengubah gang color.");
-        return 0;
-    }
-
-    new dialogText[512];
-    new line[64];
-
-    format(dialogText, sizeof(dialogText), "Color\n");
-
-    for (new i = 0; i < MAX_GANG_COLOR_PRESETS; i++)
-    {
-        format(line, sizeof(line), "%d. %s\n", i + 1, GangColorName[i]);
-        strcat(dialogText, line, sizeof(dialogText));
-    }
-
-    ShowPlayerDialog(playerid, DIALOG_GANG_COLOR, DIALOG_STYLE_TABLIST_HEADERS, "Set Gang Color", dialogText, "Set", "Back");
+    SendClientMessage(playerid, COLOR_YELLOW, "Gang color fixed mengikuti versi offline GTA SA dan tidak bisa diubah player.");
     return 1;
 }
 
@@ -4850,18 +5155,17 @@ stock ProcessLeaveGang(playerid)
         return 0;
     }
 
-    if (PlayerGangRank[playerid] >= GANG_RANK_LEADER)
-    {
-        SendClientMessage(playerid, COLOR_RED, "Leader tidak bisa leave. Gunakan /disbandgang.");
-        return 0;
-    }
-
+    new gangid = PlayerGangID[playerid];
     new query[256];
     mysql_format(g_SQL, query, sizeof(query), "DELETE FROM gang_members WHERE player_id=%d LIMIT 1", PlayerDBID[playerid]);
     mysql_tquery(g_SQL, query);
 
     ResetPlayerGangData(playerid);
     SendClientMessage(playerid, COLOR_YELLOW, "Kamu keluar dari gang.");
+
+    new msg[128];
+    format(msg, sizeof(msg), "[GANG] Seseorang keluar dari gang.");
+    SendMessageToGang(gangid, COLOR_YELLOW, msg);
     return 1;
 }
 
@@ -6466,7 +6770,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.20A.1 Org Gang Split");
+    SetGameModeText("LSIF Dev v0.20A.2 Preset Gang HQ");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -6553,7 +6857,7 @@ public OnGameModeInit()
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
     print("[LSIF] Custom house arrow pickups aktif.");
     print("[LSIF] Map icons, 3D labels, ALT world markers, and turf markers aktif.");
-    print("[LSIF] Gamemode v0.20A.1 Separate Organization and Gang berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.20A.2 Predefined Gang HQ Join berhasil dijalankan.");
     return 1;
 }
 
@@ -7658,45 +7962,157 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 
         if (listitem == 3)
         {
-            ShowGangColorDialog(playerid);
+            ShowPlayerDialog(playerid, DIALOG_GANG_LEAVE_CONFIRM, DIALOG_STYLE_MSGBOX, "Leave Gang", "Yakin ingin keluar dari gang?", "Leave", "Back");
             return 1;
         }
 
         if (listitem == 4)
         {
-            ShowGangCreateDialog(playerid);
+            if (!IsGangLeader(playerid))
+            {
+                SendClientMessage(playerid, COLOR_RED, "Hanya Gang Boss yang bisa kick member.");
+                return 1;
+            }
+
+            ShowPlayerDialog(playerid, DIALOG_GANG_KICK_INPUT, DIALOG_STYLE_INPUT, "Kick Gang Member", "Masukkan player ID member yang ingin dikeluarkan.", "Next", "Back");
             return 1;
         }
 
         if (listitem == 5)
         {
-            if (PlayerGangID[playerid] <= 0 || PlayerGangRank[playerid] < GANG_RANK_ENFORCER)
-            {
-                SendClientMessage(playerid, COLOR_RED, "Minimal Enforcer gang untuk invite.");
-                return 1;
-            }
-            ShowPlayerDialog(playerid, DIALOG_GANG_INVITE, DIALOG_STYLE_INPUT, "Invite Gang Member", "Masukkan player ID yang ingin diundang ke gang.", "Invite", "Back");
+            mysql_tquery(g_SQL, "SELECT id, name, leader_name, reputation FROM gangs WHERE id BETWEEN 1 AND 4 ORDER BY id ASC", "OnGangListLoaded", "i", playerid);
             return 1;
         }
 
         if (listitem == 6)
         {
-            ShowPlayerDialog(playerid, DIALOG_GANG_LEAVE_CONFIRM, DIALOG_STYLE_MSGBOX, "Leave Gang", "Yakin ingin keluar dari gang?", "Leave", "Back");
-            return 1;
-        }
-
-        if (listitem == 7)
-        {
-            ShowPlayerDialog(playerid, DIALOG_GANG_DISBAND_CONFIRM, DIALOG_STYLE_MSGBOX, "Disband Gang", "PERINGATAN: gang akan dihapus permanen dan territory kembali Neutral. Lanjutkan?", "Disband", "Back");
-            return 1;
-        }
-
-        if (listitem == 8)
-        {
             ShowOrgMenuDialog(playerid);
             return 1;
         }
 
+        return 1;
+    }
+
+    if (dialogid == DIALOG_GANG_HQ_MENU)
+    {
+        if (!response)
+        {
+            return 1;
+        }
+
+        new gangid = PlayerDialogGangID[playerid];
+
+        if (!IsPresetGangID(gangid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Gang HQ tidak valid.");
+            return 1;
+        }
+
+        if (PlayerGangID[playerid] == gangid)
+        {
+            if (listitem == 0)
+            {
+                ShowGangInfoDialog(playerid);
+                return 1;
+            }
+
+            if (listitem == 1)
+            {
+                ShowGangMembersDialog(playerid);
+                return 1;
+            }
+
+            if (listitem == 2)
+            {
+                ShowPlayerDialog(playerid, DIALOG_GANG_LEAVE_CONFIRM, DIALOG_STYLE_MSGBOX, "Leave Gang", "Yakin ingin keluar dari gang?", "Leave", "Back");
+                return 1;
+            }
+
+            if (listitem == 3)
+            {
+                if (!IsGangLeader(playerid))
+                {
+                    SendClientMessage(playerid, COLOR_RED, "Hanya Gang Boss yang bisa kick member.");
+                    return 1;
+                }
+
+                ShowPlayerDialog(playerid, DIALOG_GANG_KICK_INPUT, DIALOG_STYLE_INPUT, "Kick Gang Member", "Masukkan player ID member yang ingin dikeluarkan.", "Next", "Back");
+                return 1;
+            }
+
+            if (listitem == 4)
+            {
+                ShowTurfMapDialog(playerid);
+                return 1;
+            }
+
+            if (listitem == 5)
+            {
+                ShowOrgMenuDialog(playerid);
+                return 1;
+            }
+        }
+        else
+        {
+            if (listitem == 0)
+            {
+                ShowGangInfoDialog(playerid);
+                return 1;
+            }
+
+            if (listitem == 1)
+            {
+                ProcessJoinPresetGang(playerid, gangid);
+                return 1;
+            }
+
+            if (listitem == 2)
+            {
+                ShowTurfMapDialog(playerid);
+                return 1;
+            }
+
+            if (listitem == 3)
+            {
+                ShowOrgMenuDialog(playerid);
+                return 1;
+            }
+        }
+
+        return 1;
+    }
+
+    if (dialogid == DIALOG_GANG_KICK_INPUT)
+    {
+        if (!response)
+        {
+            ShowGangMenuDialog(playerid);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Player ID harus angka.");
+            return 1;
+        }
+
+        PlayerSelectedGangTarget[playerid] = strval(inputtext);
+        ShowPlayerDialog(playerid, DIALOG_GANG_KICK_CONFIRM, DIALOG_STYLE_MSGBOX, "Confirm Kick", "Yakin ingin mengeluarkan player ini dari gang?", "Kick", "Back");
+        return 1;
+    }
+
+    if (dialogid == DIALOG_GANG_KICK_CONFIRM)
+    {
+        if (response)
+        {
+            ProcessKickGangMember(playerid, PlayerSelectedGangTarget[playerid]);
+        }
+        else
+        {
+            ShowGangMenuDialog(playerid);
+        }
+
+        PlayerSelectedGangTarget[playerid] = INVALID_PLAYER_ID;
         return 1;
     }
 
@@ -7767,34 +8183,8 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 
     if (dialogid == DIALOG_GANG_COLOR)
     {
-        if (!response)
-        {
-            ShowGangMenuDialog(playerid);
-            return 1;
-        }
-
-        if (!IsGangLeader(playerid))
-        {
-            SendClientMessage(playerid, COLOR_RED, "Hanya Leader gang yang bisa mengubah gang color.");
-            return 1;
-        }
-
-        if (listitem < 0 || listitem >= MAX_GANG_COLOR_PRESETS)
-        {
-            SendClientMessage(playerid, COLOR_RED, "Color tidak valid.");
-            return 1;
-        }
-
-        new query[256];
-        mysql_format(
-            g_SQL,
-            query,
-            sizeof(query),
-            "UPDATE gangs SET gang_color=%d WHERE id=%d LIMIT 1",
-            GangColorValue[listitem],
-            PlayerGangID[playerid]
-        );
-        mysql_tquery(g_SQL, query, "OnGangColorUpdated", "ii", playerid, listitem);
+        SendClientMessage(playerid, COLOR_YELLOW, "Gang color fixed mengikuti versi offline GTA SA.");
+        ShowGangMenuDialog(playerid);
         return 1;
     }
 
@@ -8656,6 +9046,12 @@ stock InitWorldMarkerArrays()
         TerritoryLabel[i] = Text3D:INVALID_3DTEXT_ID;
     }
 
+    for (new i = 0; i < MAX_PRESET_GANGS; i++)
+    {
+        GangHQPickup[i] = -1;
+        GangHQLabel[i] = Text3D:INVALID_3DTEXT_ID;
+    }
+
     RaceStartPickup = -1;
     RaceStartLabel = Text3D:INVALID_3DTEXT_ID;
     return 1;
@@ -8728,7 +9124,14 @@ stock CreateWorldInteractionMarkers()
         UpdateTerritoryMarkerLabel(i);
     }
 
-    print("[LSIF] World interaction markers, job markers, bus stops, territories, and 3D labels created.");
+    for (new i = 0; i < MAX_PRESET_GANGS; i++)
+    {
+        GangHQPickup[i] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, GangHQX[i], GangHQY[i], GangHQZ[i], 0);
+        format(labelText, sizeof(labelText), "[ALT] %s\n%s\nJoin / Gang Menu", PresetGangShortName[i], GangHQName[i]);
+        GangHQLabel[i] = Create3DTextLabel(labelText, PresetGangColor[i], GangHQX[i], GangHQY[i], GangHQZ[i] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
+    }
+
+    print("[LSIF] World interaction markers, job markers, bus stops, territories, gang HQ, and 3D labels created.");
     return 1;
 }
 
@@ -8848,6 +9251,21 @@ stock DestroyWorldInteractionMarkers()
         }
     }
 
+    for (new i = 0; i < MAX_PRESET_GANGS; i++)
+    {
+        if (GangHQPickup[i] != -1)
+        {
+            DestroyPickup(GangHQPickup[i]);
+            GangHQPickup[i] = -1;
+        }
+
+        if (GangHQLabel[i] != Text3D:INVALID_3DTEXT_ID)
+        {
+            Delete3DTextLabel(GangHQLabel[i]);
+            GangHQLabel[i] = Text3D:INVALID_3DTEXT_ID;
+        }
+    }
+
     if (RaceStartPickup != -1)
     {
         DestroyPickup(RaceStartPickup);
@@ -8907,6 +9325,11 @@ stock ApplyLSIFMapIcons(playerid)
         SetPlayerMapIcon(playerid, MAPICON_BASE_TERRITORY + i, TerritoryX[i], TerritoryY[i], TerritoryZ[i], MAPICON_TYPE_TERRITORY, TerritoryOwnerColor[i], MAPICON_LOCAL);
     }
 
+    for (new i = 0; i < MAX_PRESET_GANGS; i++)
+    {
+        SetPlayerMapIcon(playerid, MAPICON_BASE_GANG_HQ + i, GangHQX[i], GangHQY[i], GangHQZ[i], MAPICON_TYPE_GANG_HQ, PresetGangColor[i], MAPICON_LOCAL);
+    }
+
     return 1;
 }
 
@@ -8952,6 +9375,11 @@ stock RemoveLSIFMapIcons(playerid)
     for (new i = 0; i < MAX_TERRITORIES; i++)
     {
         RemovePlayerMapIcon(playerid, MAPICON_BASE_TERRITORY + i);
+    }
+
+    for (new i = 0; i < MAX_PRESET_GANGS; i++)
+    {
+        RemovePlayerMapIcon(playerid, MAPICON_BASE_GANG_HQ + i);
     }
 
     return 1;
@@ -9013,7 +9441,7 @@ stock ShowMapLegendDialog(playerid)
     format(
         dialogText,
         sizeof(dialogText),
-        "Radar/Map Icon LSIF:\n\nATM/Bank - transaksi bank, pakai ALT di marker ATM.\nHouse - rumah/interior; ALT untuk menu, panah untuk masuk/keluar.\nBusiness - beli/manage/collect business dengan ALT.\nDealership - vehicle shop dan garage service dengan ALT.\nAmmu-Nation - weapon shop dengan ALT.\nTerritory/Turf - area gang, bukan organization. Lihat /turfmap.\nRace - lokasi race/time trial.\nJob Marker - titik panduan vehicle mission/job.\nBus Stop - rute Bus Driver Mission.\n\nDi dunia, cari 3D label seperti [ALT] ATM, [ALT] Dealership, [ALT] Ammu-Nation, atau [JOB] Bus Terminal.\nALT = menu/transaksi. Tombol 2 = start vehicle mission/job. Turf map = /gangmenu atau /turfmap. Organization tetap untuk ekonomi/bisnis."
+        "Radar/Map Icon LSIF:\n\nATM/Bank - transaksi bank, pakai ALT di marker ATM.\nHouse - rumah/interior; ALT untuk menu, panah untuk masuk/keluar.\nBusiness - beli/manage/collect business dengan ALT.\nDealership - vehicle shop dan garage service dengan ALT.\nAmmu-Nation - weapon shop dengan ALT.\nTerritory/Turf - area gang, bukan organization. Lihat /turfmap.\nGang HQ - markas gang preset; tekan ALT untuk join/menu gang.\nRace - lokasi race/time trial.\nJob Marker - titik panduan vehicle mission/job.\nBus Stop - rute Bus Driver Mission.\n\nDi dunia, cari 3D label seperti [ALT] ATM, [ALT] Dealership, [ALT] Ammu-Nation, [ALT] Grove/Ballas/Vagos/Aztecas HQ, atau [JOB] Bus Terminal.\nALT = menu/transaksi. Tombol 2 = start vehicle mission/job. Turf map = /gangmenu atau /turfmap. Organization tetap untuk ekonomi/bisnis."
     );
 
     ShowPlayerDialog(playerid, DIALOG_BETA_MOTD, DIALOG_STYLE_MSGBOX, "LSIF Map Legend", dialogText, "OK", "Tutup");
@@ -10754,6 +11182,14 @@ stock HandleWorldInteractKey(playerid)
         return 1;
     }
 
+    new nearestGangHQ = GetNearestGangHQ(playerid);
+
+    if (nearestGangHQ != -1 && IsPlayerNearGangHQ(playerid, nearestGangHQ))
+    {
+        ShowGangHQDialog(playerid, PresetGangID[nearestGangHQ]);
+        return 1;
+    }
+
     new nearestHouse = GetNearestHouse(playerid);
 
     if (nearestHouse != -1 && IsPlayerNearHouse(playerid, nearestHouse))
@@ -12077,7 +12513,7 @@ public OnGangListLoaded(playerid)
     new leaderName[24];
     new rep;
 
-    format(dialogText, sizeof(dialogText), "ID\tGang\tLeader\tRep\n");
+    format(dialogText, sizeof(dialogText), "ID\tGang Preset\tType\tRep\n");
 
     if (rows == 0)
     {
@@ -12090,7 +12526,7 @@ public OnGangListLoaded(playerid)
         cache_get_value_name(i, "name", name, sizeof(name));
         cache_get_value_name(i, "leader_name", leaderName, sizeof(leaderName));
         cache_get_value_name_int(i, "reputation", rep);
-        format(line, sizeof(line), "%d\t%s\t%s\t%d\n", gangid, name, leaderName, rep);
+        format(line, sizeof(line), "%d\t%s\tPreset\t%d\n", gangid, name, rep);
         strcat(dialogText, line, sizeof(dialogText));
     }
 
@@ -13152,7 +13588,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
     if (!strcmp(cmdtext, "/gangs", true))
     {
-        mysql_tquery(g_SQL, "SELECT id, name, leader_name, reputation FROM gangs ORDER BY id ASC LIMIT 20", "OnGangListLoaded", "i", playerid);
+        mysql_tquery(g_SQL, "SELECT id, name, leader_name, reputation FROM gangs WHERE id BETWEEN 1 AND 4 ORDER BY id ASC", "OnGangListLoaded", "i", playerid);
         return 1;
     }
 
@@ -13168,122 +13604,27 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
-    if (!strcmp(cmdtext, "/gangcolor", true))
+    if (!strcmp(cmdtext, "/gangcolor", true) || strfind(cmdtext, "/gangcolor ", true) == 0)
     {
-        ShowGangColorDialog(playerid);
+        SendClientMessage(playerid, COLOR_YELLOW, "Gang color fixed mengikuti versi offline GTA SA dan tidak bisa diubah player.");
         return 1;
     }
 
-    if (strfind(cmdtext, "/gangcolor ", true) == 0)
+    if (!strcmp(cmdtext, "/creategang", true) || strfind(cmdtext, "/creategang ", true) == 0)
     {
-        if (!IsGangLeader(playerid))
-        {
-            SendClientMessage(playerid, COLOR_RED, "Hanya Leader gang yang bisa mengubah gang color.");
-            return 1;
-        }
-
-        new colorStr[16];
-
-        if (!GetOneParam(cmdtext[11], colorStr, sizeof(colorStr)))
-        {
-            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangcolor [1-8]");
-            return 1;
-        }
-
-        if (!IsNumericString(colorStr))
-        {
-            SendClientMessage(playerid, COLOR_RED, "Color harus angka 1 sampai 8.");
-            return 1;
-        }
-
-        new colorIndex = strval(colorStr) - 1;
-
-        if (colorIndex < 0 || colorIndex >= MAX_GANG_COLOR_PRESETS)
-        {
-            SendClientMessage(playerid, COLOR_RED, "Color harus 1 sampai 8.");
-            return 1;
-        }
-
-        new query[256];
-        mysql_format(g_SQL, query, sizeof(query), "UPDATE gangs SET gang_color=%d WHERE id=%d LIMIT 1", GangColorValue[colorIndex], PlayerGangID[playerid]);
-        mysql_tquery(g_SQL, query, "OnGangColorUpdated", "ii", playerid, colorIndex);
+        SendClientMessage(playerid, COLOR_RED, "Gang tidak bisa dibuat player. Datang ke HQ gang preset lalu tekan ALT untuk join.");
         return 1;
     }
 
-    if (strfind(cmdtext, "/creategang ", true) == 0)
+    if (!strcmp(cmdtext, "/invitegang", true) || strfind(cmdtext, "/invitegang ", true) == 0 || !strcmp(cmdtext, "/acceptgang", true))
     {
-        new gangName[64];
-        format(gangName, sizeof(gangName), "%s", cmdtext[12]);
-        ProcessCreateGang(playerid, gangName);
+        SendClientMessage(playerid, COLOR_RED, "Gang tidak memakai sistem invite. Join gang dilakukan langsung di HQ dengan ALT.");
         return 1;
     }
 
-    if (!strcmp(cmdtext, "/creategang", true))
+    if (!strcmp(cmdtext, "/disbandgang", true))
     {
-        ShowGangCreateDialog(playerid);
-        return 1;
-    }
-
-    if (strfind(cmdtext, "/invitegang ", true) == 0)
-    {
-        new targetStr[16];
-
-        if (!GetOneParam(cmdtext[12], targetStr, sizeof(targetStr)))
-        {
-            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /invitegang [playerid]");
-            return 1;
-        }
-
-        if (!IsNumericString(targetStr))
-        {
-            SendClientMessage(playerid, COLOR_RED, "Player ID harus angka.");
-            return 1;
-        }
-
-        ProcessGangInvite(playerid, strval(targetStr));
-        return 1;
-    }
-
-    if (!strcmp(cmdtext, "/invitegang", true))
-    {
-        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /invitegang [playerid]");
-        return 1;
-    }
-
-    if (!strcmp(cmdtext, "/acceptgang", true))
-    {
-        if (PlayerGangID[playerid] > 0)
-        {
-            SendClientMessage(playerid, COLOR_RED, "Kamu sudah tergabung dalam gang.");
-            return 1;
-        }
-
-        new inviterid = PlayerGangInvite[playerid];
-
-        if (inviterid == INVALID_PLAYER_ID || !IsPlayerConnected(inviterid) || PlayerGangID[inviterid] <= 0)
-        {
-            SendClientMessage(playerid, COLOR_RED, "Tidak ada invite gang aktif.");
-            PlayerGangInvite[playerid] = INVALID_PLAYER_ID;
-            return 1;
-        }
-
-        new playerName[MAX_PLAYER_NAME];
-        new query[512];
-
-        GetPlayerName(playerid, playerName, sizeof(playerName));
-
-        mysql_format(
-            g_SQL,
-            query,
-            sizeof(query),
-            "INSERT INTO gang_members (gang_id, player_id, player_name, rank_level) VALUES (%d, %d, '%e', %d)",
-            PlayerGangID[inviterid],
-            PlayerDBID[playerid],
-            playerName,
-            GANG_RANK_MEMBER
-        );
-
-        mysql_tquery(g_SQL, query, "OnGangInviteAccepted", "i", playerid);
+        SendClientMessage(playerid, COLOR_RED, "Gang adalah faction preset offline-like dan tidak bisa dibubarkan player.");
         return 1;
     }
 
@@ -13293,9 +13634,57 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
-    if (!strcmp(cmdtext, "/disbandgang", true))
+    if (strfind(cmdtext, "/kickgang ", true) == 0)
     {
-        ProcessDisbandGang(playerid);
+        new targetStr[16];
+
+        if (!GetOneParam(cmdtext[10], targetStr, sizeof(targetStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /kickgang [playerid]");
+            return 1;
+        }
+
+        if (!IsNumericString(targetStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Player ID harus angka.");
+            return 1;
+        }
+
+        ProcessKickGangMember(playerid, strval(targetStr));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/kickgang", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /kickgang [playerid]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/setgangrank ", true) == 0)
+    {
+        new targetStr[16];
+        new rankStr[16];
+
+        if (!GetTwoParams(cmdtext[13], targetStr, sizeof(targetStr), rankStr, sizeof(rankStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setgangrank [playerid] [rank]");
+            SendClientMessage(playerid, COLOR_WHITE, "Rank: 1 Member, 2 Soldier, 3 Enforcer, 4 OG, 5 Gang Boss");
+            return 1;
+        }
+
+        if (!IsNumericString(targetStr) || !IsNumericString(rankStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Player ID dan rank harus angka.");
+            return 1;
+        }
+
+        ProcessSetGangRank(playerid, strval(targetStr), strval(rankStr));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/setgangrank", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setgangrank [playerid] [rank]");
         return 1;
     }
 
@@ -13329,6 +13718,12 @@ public OnPlayerCommandText(playerid, cmdtext[])
         if (!IsValidTerritoryIndex(territoryIndex))
         {
             SendClientMessage(playerid, COLOR_RED, "Territory ID tidak valid.");
+            return 1;
+        }
+
+        if (gangid > 0 && !IsPresetGangID(gangid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Gang ID harus gang preset. Lihat /gangs.");
             return 1;
         }
 
@@ -13367,10 +13762,10 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/weaponlicense - Cek status weapon license");
         SendClientMessage(playerid, COLOR_WHITE, "/gangmenu - Menu gang/territory");
         SendClientMessage(playerid, COLOR_WHITE, "/gangs - Lihat daftar gang");
-        SendClientMessage(playerid, COLOR_WHITE, "/creategang [nama] - Membuat gang, terpisah dari organisasi");
-        SendClientMessage(playerid, COLOR_WHITE, "/invitegang [id] /acceptgang /leavegang - Membership gang");
+        SendClientMessage(playerid, COLOR_WHITE, "Gang preset: datang ke HQ gang lalu ALT untuk join");
+        SendClientMessage(playerid, COLOR_WHITE, "/leavegang - Keluar dari gang | /kickgang [id] - Gang Boss only");
         SendClientMessage(playerid, COLOR_WHITE, "/turfmap - Lihat territory map");
-        SendClientMessage(playerid, COLOR_WHITE, "/gangcolor - Set warna gang, Leader only");
+        SendClientMessage(playerid, COLOR_WHITE, "/setgangrank [id] [rank] - Owner server only untuk testing rank gang");
         SendClientMessage(playerid, COLOR_WHITE, "/setterritory [territory] [gang] - Set owner turf, Owner server only");
         SendClientMessage(playerid, COLOR_WHITE, "/loadout - Lihat saved weapon loadout");
         SendClientMessage(playerid, COLOR_WHITE, "/reloadout - Apply ulang saved weapon loadout");
@@ -13518,7 +13913,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.20A.1 Org/Gang Split Foundation");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.20A.2 Predefined Gang HQ Join");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -13527,7 +13922,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.20A: Gang identity, territory map, gang color, dan territory owner foundation.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.20A.2: gang preset offline-like, join via HQ+ALT, no create/invite/disband.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.19B: Weapon license dan saved loadout persistence.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D: Release polish, version, credits, staff, beta guide.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");

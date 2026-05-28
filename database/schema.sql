@@ -348,15 +348,15 @@ CREATE TABLE IF NOT EXISTS gang_territories (
     INDEX idx_territory_index (territory_index)
 );
 
--- LSIF v0.20A.1 — Separate Organization and Gang Foundation
--- Organization tetap untuk ekonomi/bisnis/job.
--- Gang menjadi entitas terpisah untuk turf/territory.
+-- LSIF v0.20A.2 — Predefined Offline-like Gang HQ Join System
+-- Organization tetap player-made untuk ekonomi/bisnis/job.
+-- Gang adalah faction preset offline-like: tidak bisa dibuat, dihapus, atau diubah warnanya oleh player.
 
 CREATE TABLE IF NOT EXISTS gangs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(64) NOT NULL UNIQUE,
-    leader_id INT NOT NULL,
-    leader_name VARCHAR(24) NOT NULL,
+    leader_id INT NOT NULL DEFAULT 0,
+    leader_name VARCHAR(24) NOT NULL DEFAULT 'SYSTEM',
     gang_color INT NOT NULL DEFAULT -1,
     bank_money INT NOT NULL DEFAULT 0,
     reputation INT NOT NULL DEFAULT 0,
@@ -378,7 +378,6 @@ CREATE TABLE IF NOT EXISTS gang_members (
     INDEX idx_player_id (player_id)
 );
 
-
 CREATE TABLE IF NOT EXISTS gang_territories (
     id INT AUTO_INCREMENT PRIMARY KEY,
     territory_index INT NOT NULL UNIQUE,
@@ -399,21 +398,33 @@ CREATE TABLE IF NOT EXISTS gang_territories (
     INDEX idx_territory_index (territory_index)
 );
 
--- Jika table territory sudah dibuat dari v0.20A lama, tambahkan kolom gang baru tanpa menghapus kolom lama.
 ALTER TABLE gang_territories
 ADD COLUMN IF NOT EXISTS owner_gang_id INT NOT NULL DEFAULT 0 AFTER territory_name;
 
 ALTER TABLE gang_territories
 ADD COLUMN IF NOT EXISTS owner_gang_name VARCHAR(64) NOT NULL DEFAULT 'Neutral' AFTER owner_gang_id;
 
--- Pastikan owner_color tetap ada.
 ALTER TABLE gang_territories
 ADD COLUMN IF NOT EXISTS owner_color INT NOT NULL DEFAULT -1431655681 AFTER owner_gang_name;
 
--- Index gang owner, jika belum ada.
 CREATE INDEX IF NOT EXISTS idx_owner_gang_id ON gang_territories (owner_gang_id);
 
--- Seed / refresh territory dasar dengan owner gang neutral.
+-- Seed gang preset offline-like. ID dibuat fixed agar script bisa menganggap 1-4 sebagai gang resmi LS.
+INSERT INTO gangs
+    (id, name, leader_id, leader_name, gang_color, bank_money, reputation)
+VALUES
+    (1, 'Grove Street Families', 0, 'SYSTEM', 16711935, 0, 0),
+    (2, 'Ballas', 0, 'SYSTEM', -1436103425, 0, 0),
+    (3, 'Los Santos Vagos', 0, 'SYSTEM', -65281, 0, 0),
+    (4, 'Varrios Los Aztecas', 0, 'SYSTEM', 16777215, 0, 0)
+ON DUPLICATE KEY UPDATE
+    name = VALUES(name),
+    leader_id = 0,
+    leader_name = 'SYSTEM',
+    gang_color = VALUES(gang_color),
+    updated_at = NOW();
+
+-- Seed / refresh territory dasar.
 INSERT INTO gang_territories
     (territory_index, territory_name, owner_gang_id, owner_gang_name, owner_color, center_x, center_y, center_z, radius)
 VALUES
@@ -430,5 +441,13 @@ ON DUPLICATE KEY UPDATE
     center_z = VALUES(center_z),
     radius = VALUES(radius);
 
--- Optional: organisasi lama boleh tetap punya kolom gang_color dari v0.20A, tapi mulai v0.20A.1 tidak dipakai lagi.
--- Jangan drop kolom dulu agar migrasi aman.
+-- Bersihkan owner territory dari gang custom prototype lama jika ada.
+UPDATE gang_territories
+SET owner_gang_id = 0,
+    owner_gang_name = 'Neutral',
+    owner_color = -1431655681,
+    updated_at = NOW()
+WHERE owner_gang_id NOT IN (0, 1, 2, 3, 4);
+
+-- Opsional: custom gang lama tidak dihapus otomatis agar tidak menghilangkan data tanpa sengaja.
+-- Script v0.20A.2 hanya menampilkan/mengizinkan gang ID 1-4 sebagai gang resmi.

@@ -44,6 +44,20 @@
 #define DIALOG_GARAGE_REPAIR_CONFIRM 1028
 #define DIALOG_GARAGE_REFUEL_CONFIRM 1029
 #define DIALOG_GARAGE_STATUS 1030
+#define DIALOG_ORG_MENU 1031
+#define DIALOG_ORG_INFO 1032
+#define DIALOG_ORG_MEMBERS 1033
+#define DIALOG_ORG_BANK 1034
+#define DIALOG_ORG_DEPOSIT 1035
+#define DIALOG_ORG_WITHDRAW 1036
+#define DIALOG_ORG_INVITE 1037
+#define DIALOG_ORG_SETRANK 1038
+#define DIALOG_ORG_KICK 1039
+#define DIALOG_ORG_KICK_CONFIRM 1040
+#define DIALOG_ORG_LEAVE_CONFIRM 1041
+#define DIALOG_ORG_DISBAND_CONFIRM 1042
+#define DIALOG_ORG_CREATE_INPUT 1043
+#define DIALOG_ORG_LIST 1044
 
 #define STARTER_CASH 15000
 #define STARTER_BANK 5000
@@ -501,11 +515,11 @@ new Float:BankPointX[MAX_BANK_POINTS] =
 new Float:BankPointY[MAX_BANK_POINTS] =
 {
     -1842.4136,
-        -1758.2188,
-        -919.9146,
-        -1224.3597,
-        -1769.6847
-    };
+    -1758.2188,
+    -919.9146,
+    -1224.3597,
+    -1769.6847
+};
 
 new Float:BankPointZ[MAX_BANK_POINTS] =
 {
@@ -589,6 +603,7 @@ new PlayerOrgInvite[MAX_PLAYERS];
 new PlayerOrgName[MAX_PLAYERS][64];
 new PlayerPendingOrgName[MAX_PLAYERS][64];
 new PlayerOrgBankMoney[MAX_PLAYERS];
+new PlayerSelectedOrgTarget[MAX_PLAYERS];
 
 new PlayerBusinessDBID[MAX_PLAYERS];
 new PlayerBusinessIndex[MAX_PLAYERS];
@@ -921,6 +936,8 @@ forward OnOrgRankUpdated(playerid, targetid, newRank);
 forward OnOrgMemberKicked(playerid, targetid);
 forward OnOrgDisbanded(playerid, orgid);
 forward OnOrgInfoLoaded(playerid);
+forward OnOrgMembersDialogLoaded(playerid);
+forward OnOrgListDialogLoaded(playerid);
 forward OnPlayerBusinessLoaded(playerid);
 forward OnPlayerBusinessBought(playerid, businessIndex, price);
 forward OnBusinessCollectLoaded(playerid);
@@ -3212,13 +3229,13 @@ stock CreatePlayerHouseExitPickup(playerid, ownerid)
     DestroyPlayerHouseExitPickup(playerid);
 
     PlayerHouseExitPickup[playerid] = CreatePickup(
-                                          HOUSE_PICKUP_MODEL,
-                                          HOUSE_PICKUP_TYPE,
-                                          HOUSE_INT_X,
-                                          HOUSE_INT_Y + HOUSE_EXIT_PICKUP_Y_OFFSET,
-                                          HOUSE_INT_Z,
-                                          GetPlayerHouseVirtualWorld(ownerid)
-                                      );
+        HOUSE_PICKUP_MODEL,
+        HOUSE_PICKUP_TYPE,
+        HOUSE_INT_X,
+        HOUSE_INT_Y + HOUSE_EXIT_PICKUP_Y_OFFSET,
+        HOUSE_INT_Z,
+        GetPlayerHouseVirtualWorld(ownerid)
+    );
 
     return 1;
 }
@@ -3228,13 +3245,13 @@ stock CreateHouseExteriorPickups()
     for (new i = 0; i < MAX_HOUSES; i++)
     {
         HouseExteriorPickup[i] = CreatePickup(
-                                     HOUSE_PICKUP_MODEL,
-                                     HOUSE_PICKUP_TYPE,
-                                     HouseX[i],
-                                     HouseY[i],
-                                     HouseZ[i],
-                                     0
-                                 );
+            HOUSE_PICKUP_MODEL,
+            HOUSE_PICKUP_TYPE,
+            HouseX[i],
+            HouseY[i],
+            HouseZ[i],
+            0
+        );
     }
 
     return 1;
@@ -3499,6 +3516,7 @@ stock ResetPlayerOrgData(playerid)
     PlayerOrgRank[playerid] = ORG_RANK_NONE;
     PlayerOrgInvite[playerid] = INVALID_PLAYER_ID;
     PlayerOrgBankMoney[playerid] = 0;
+    PlayerSelectedOrgTarget[playerid] = INVALID_PLAYER_ID;
     format(PlayerOrgName[playerid], 64, "None");
     format(PlayerPendingOrgName[playerid], 64, "None");
     return 1;
@@ -3638,6 +3656,512 @@ stock SaveOrgBankMoney(orgid, bankMoney)
     );
 
     mysql_tquery(g_SQL, query);
+    return 1;
+}
+
+stock ShowOrgMenuDialog(playerid)
+{
+    if (PlayerOrgID[playerid] <= 0)
+    {
+        ShowPlayerDialog(
+            playerid,
+            DIALOG_ORG_MENU,
+            DIALOG_STYLE_LIST,
+            "Organization Menu",
+            "Create Organization\nView Organizations",
+            "Pilih",
+            "Tutup"
+        );
+        return 1;
+    }
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_ORG_MENU,
+        DIALOG_STYLE_LIST,
+        "Organization Menu",
+        "Organization Info\nMembers\nOrg Bank\nDeposit Org Bank\nWithdraw Org Bank\nInvite Member\nSet Member Rank\nKick Member\nLeave Organization\nDisband Organization",
+        "Pilih",
+        "Tutup"
+    );
+    return 1;
+}
+
+stock ShowOrgInfoDialog(playerid)
+{
+    if (PlayerOrgID[playerid] <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum tergabung dalam organisasi.");
+        return 0;
+    }
+
+    new rankName[32];
+    new dialogText[512];
+
+    GetOrgRankName(PlayerOrgRank[playerid], rankName, sizeof(rankName));
+
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "Organization: %s\nOrg ID: %d\nYour Rank: %s (%d)\nOrg Bank: $%d\n\nGunakan menu ini untuk mengelola organisasi tanpa banyak command.",
+        PlayerOrgName[playerid],
+        PlayerOrgID[playerid],
+        rankName,
+        PlayerOrgRank[playerid],
+        PlayerOrgBankMoney[playerid]
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_ORG_INFO, DIALOG_STYLE_MSGBOX, "Organization Info", dialogText, "Back", "Tutup");
+    return 1;
+}
+
+stock ShowOrgBankDialog(playerid)
+{
+    if (PlayerOrgID[playerid] <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum tergabung dalam organisasi.");
+        return 0;
+    }
+
+    new rankName[32];
+    new dialogText[512];
+
+    GetOrgRankName(PlayerOrgRank[playerid], rankName, sizeof(rankName));
+
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "Organization: %s\nYour Rank: %s (%d)\nOrg Bank: $%d\nYour Cash: $%d\n\nMember bisa deposit. Admin/Owner bisa withdraw.",
+        PlayerOrgName[playerid],
+        rankName,
+        PlayerOrgRank[playerid],
+        PlayerOrgBankMoney[playerid],
+        PlayerMoney[playerid]
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_ORG_BANK, DIALOG_STYLE_MSGBOX, "Organization Bank", dialogText, "Back", "Tutup");
+    return 1;
+}
+
+stock ShowOrgDepositDialog(playerid)
+{
+    if (PlayerOrgID[playerid] <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum tergabung dalam organisasi.");
+        return 0;
+    }
+
+    new dialogText[256];
+    format(dialogText, sizeof(dialogText), "Cash kamu: $%d\nOrg bank: $%d\n\nMasukkan jumlah deposit, atau ketik all.", PlayerMoney[playerid], PlayerOrgBankMoney[playerid]);
+    ShowPlayerDialog(playerid, DIALOG_ORG_DEPOSIT, DIALOG_STYLE_INPUT, "Deposit Org Bank", dialogText, "Deposit", "Back");
+    return 1;
+}
+
+stock ShowOrgWithdrawDialog(playerid)
+{
+    if (PlayerOrgID[playerid] <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum tergabung dalam organisasi.");
+        return 0;
+    }
+
+    if (PlayerOrgRank[playerid] < ORG_RANK_ADMIN)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Minimal Admin organisasi untuk withdraw.");
+        return 0;
+    }
+
+    new dialogText[256];
+    format(dialogText, sizeof(dialogText), "Org bank: $%d\nCash kamu: $%d\n\nMasukkan jumlah withdraw.", PlayerOrgBankMoney[playerid], PlayerMoney[playerid]);
+    ShowPlayerDialog(playerid, DIALOG_ORG_WITHDRAW, DIALOG_STYLE_INPUT, "Withdraw Org Bank", dialogText, "Withdraw", "Back");
+    return 1;
+}
+
+stock ShowOrgInviteDialog(playerid)
+{
+    if (PlayerOrgID[playerid] <= 0 || PlayerOrgRank[playerid] < ORG_RANK_ADMIN)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Minimal Admin organisasi untuk invite.");
+        return 0;
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_ORG_INVITE, DIALOG_STYLE_INPUT, "Invite Organization Member", "Masukkan player ID yang ingin diundang ke organisasi.", "Invite", "Back");
+    return 1;
+}
+
+stock ShowOrgSetRankDialog(playerid)
+{
+    if (!IsOrgOwner(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner organisasi yang bisa mengubah rank.");
+        return 0;
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_ORG_SETRANK, DIALOG_STYLE_INPUT, "Set Organization Rank", "Format: playerid rank\n\nRank valid:\n1 = Member\n3 = Admin\n\nContoh: 2 3", "Set", "Back");
+    return 1;
+}
+
+stock ShowOrgKickDialog(playerid)
+{
+    if (!IsOrgAdmin(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Minimal Admin organisasi untuk kick member.");
+        return 0;
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_ORG_KICK, DIALOG_STYLE_INPUT, "Kick Organization Member", "Masukkan player ID yang ingin dikeluarkan dari organisasi.", "Kick", "Back");
+    return 1;
+}
+
+stock ShowOrgMembersDialog(playerid)
+{
+    if (PlayerOrgID[playerid] <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum tergabung dalam organisasi.");
+        return 0;
+    }
+
+    new query[512];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "SELECT player_name, rank_level FROM organization_members WHERE org_id=%d ORDER BY rank_level DESC, player_name ASC LIMIT 20",
+        PlayerOrgID[playerid]
+    );
+
+    mysql_tquery(g_SQL, query, "OnOrgMembersDialogLoaded", "i", playerid);
+    return 1;
+}
+
+stock ShowOrgListDialog(playerid)
+{
+    mysql_tquery(
+        g_SQL,
+        "SELECT id, name, owner_name, bank_money FROM organizations ORDER BY id ASC LIMIT 10",
+        "OnOrgListDialogLoaded",
+        "i",
+        playerid
+    );
+    return 1;
+}
+
+stock ShowOrgCreateInputDialog(playerid)
+{
+    if (PlayerOrgID[playerid] > 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu sudah tergabung dalam organisasi.");
+        return 0;
+    }
+
+    new dialogText[256];
+    format(dialogText, sizeof(dialogText), "Biaya membuat organisasi: $%d\nCash kamu: $%d\n\nMasukkan nama organisasi baru.", ORG_CREATE_PRICE, PlayerMoney[playerid]);
+    ShowPlayerDialog(playerid, DIALOG_ORG_CREATE_INPUT, DIALOG_STYLE_INPUT, "Create Organization", dialogText, "Create", "Back");
+    return 1;
+}
+
+stock OrgDepositMoney(playerid, const amountStr[])
+{
+    if (PlayerOrgID[playerid] <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum tergabung dalam organisasi.");
+        return 0;
+    }
+
+    new amount;
+
+    if (!strcmp(amountStr, "all", true))
+    {
+        amount = PlayerMoney[playerid];
+    }
+    else
+    {
+        if (!IsNumericString(amountStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Amount harus angka atau all.");
+            return 0;
+        }
+
+        amount = strval(amountStr);
+    }
+
+    if (!IsValidOrgBankAmount(amount))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Jumlah deposit organisasi tidak valid.");
+        return 0;
+    }
+
+    if (PlayerMoney[playerid] < amount)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Cash kamu tidak cukup.");
+        return 0;
+    }
+
+    TakePlayerCash(playerid, amount);
+
+    new newBank = PlayerOrgBankMoney[playerid] + amount;
+
+    SyncOrgBankMoney(PlayerOrgID[playerid], newBank);
+    SaveOrgBankMoney(PlayerOrgID[playerid], newBank);
+    SavePlayerData(playerid);
+
+    new playerName[MAX_PLAYER_NAME];
+    new msg[160];
+
+    GetPlayerName(playerid, playerName, sizeof(playerName));
+
+    format(msg, sizeof(msg), "[ORG BANK] %s deposit $%d. Org bank sekarang: $%d.", playerName, amount, newBank);
+    SendMessageToOrg(PlayerOrgID[playerid], COLOR_CYAN, msg);
+    return 1;
+}
+
+stock OrgWithdrawMoney(playerid, const amountStr[])
+{
+    if (PlayerOrgID[playerid] <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum tergabung dalam organisasi.");
+        return 0;
+    }
+
+    if (PlayerOrgRank[playerid] < ORG_RANK_ADMIN)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Minimal Admin organisasi untuk withdraw.");
+        return 0;
+    }
+
+    if (!IsNumericString(amountStr))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Amount harus angka.");
+        return 0;
+    }
+
+    new amount = strval(amountStr);
+
+    if (!IsValidOrgBankAmount(amount))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Jumlah withdraw organisasi tidak valid.");
+        return 0;
+    }
+
+    if (PlayerOrgBankMoney[playerid] < amount)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Saldo bank organisasi tidak cukup.");
+        return 0;
+    }
+
+    new newBank = PlayerOrgBankMoney[playerid] - amount;
+
+    SyncOrgBankMoney(PlayerOrgID[playerid], newBank);
+    SaveOrgBankMoney(PlayerOrgID[playerid], newBank);
+
+    GivePlayerCash(playerid, amount);
+    SavePlayerData(playerid);
+
+    new playerName[MAX_PLAYER_NAME];
+    new msg[160];
+
+    GetPlayerName(playerid, playerName, sizeof(playerName));
+
+    format(msg, sizeof(msg), "[ORG BANK] %s withdraw $%d. Org bank sekarang: $%d.", playerName, amount, newBank);
+    SendMessageToOrg(PlayerOrgID[playerid], COLOR_ORANGE, msg);
+    return 1;
+}
+
+stock OrgInvitePlayer(playerid, targetid)
+{
+    if (PlayerOrgID[playerid] <= 0 || PlayerOrgRank[playerid] < ORG_RANK_ADMIN)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Minimal admin organisasi untuk invite.");
+        return 0;
+    }
+
+    if (!IsPlayerConnected(targetid) || !PlayerLoggedIn[targetid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Target tidak online/login.");
+        return 0;
+    }
+
+    if (PlayerOrgID[targetid] > 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Target sudah tergabung dalam organisasi.");
+        return 0;
+    }
+
+    PlayerOrgInvite[targetid] = playerid;
+
+    new msg[144];
+    new inviterName[MAX_PLAYER_NAME];
+
+    GetPlayerName(playerid, inviterName, sizeof(inviterName));
+
+    format(msg, sizeof(msg), "Kamu mengundang player ID %d ke organisasi %s.", targetid, PlayerOrgName[playerid]);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+
+    format(msg, sizeof(msg), "%s mengundang kamu ke organisasi %s. Gunakan /acceptorg.", inviterName, PlayerOrgName[playerid]);
+    SendClientMessage(targetid, COLOR_GREEN, msg);
+    return 1;
+}
+
+stock OrgSetMemberRank(playerid, targetid, newRank)
+{
+    if (!IsOrgOwner(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner organisasi yang bisa mengubah rank.");
+        return 0;
+    }
+
+    if (!IsPlayerConnected(targetid) || !PlayerLoggedIn[targetid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Target tidak online/login.");
+        return 0;
+    }
+
+    if (targetid == playerid)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak bisa mengubah rank diri sendiri.");
+        return 0;
+    }
+
+    if (PlayerOrgID[targetid] != PlayerOrgID[playerid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Target bukan anggota organisasi kamu.");
+        return 0;
+    }
+
+    if (!IsValidOrgRank(newRank) || newRank == ORG_RANK_OWNER)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Rank tidak valid untuk dialog ini. Gunakan 1 atau 3.");
+        return 0;
+    }
+
+    new query[256];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "UPDATE organization_members SET rank_level=%d WHERE player_id=%d AND org_id=%d LIMIT 1",
+        newRank,
+        PlayerDBID[targetid],
+        PlayerOrgID[playerid]
+    );
+
+    mysql_tquery(g_SQL, query, "OnOrgRankUpdated", "iii", playerid, targetid, newRank);
+    return 1;
+}
+
+stock OrgKickMember(playerid, targetid)
+{
+    if (!IsOrgAdmin(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Minimal Admin organisasi untuk kick member.");
+        return 0;
+    }
+
+    if (!IsPlayerConnected(targetid) || !PlayerLoggedIn[targetid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Target tidak online/login.");
+        return 0;
+    }
+
+    if (targetid == playerid)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gunakan Leave Organization untuk keluar sendiri.");
+        return 0;
+    }
+
+    if (PlayerOrgID[targetid] != PlayerOrgID[playerid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Target bukan anggota organisasi kamu.");
+        return 0;
+    }
+
+    if (PlayerOrgRank[targetid] >= ORG_RANK_OWNER)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Owner tidak bisa dikick.");
+        return 0;
+    }
+
+    if (PlayerOrgRank[targetid] >= PlayerOrgRank[playerid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak bisa kick anggota dengan rank sama/lebih tinggi.");
+        return 0;
+    }
+
+    new query[256];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "DELETE FROM organization_members WHERE player_id=%d AND org_id=%d LIMIT 1",
+        PlayerDBID[targetid],
+        PlayerOrgID[playerid]
+    );
+
+    mysql_tquery(g_SQL, query, "OnOrgMemberKicked", "ii", playerid, targetid);
+    return 1;
+}
+
+stock OrgLeave(playerid)
+{
+    if (PlayerOrgID[playerid] <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum tergabung dalam organisasi.");
+        return 0;
+    }
+
+    if (PlayerOrgRank[playerid] >= ORG_RANK_OWNER)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Owner tidak bisa leave. Gunakan Disband Organization.");
+        return 0;
+    }
+
+    new query[256];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "DELETE FROM organization_members WHERE player_id=%d LIMIT 1",
+        PlayerDBID[playerid]
+    );
+
+    mysql_tquery(g_SQL, query);
+    ResetPlayerOrgData(playerid);
+    SendClientMessage(playerid, COLOR_YELLOW, "Kamu keluar dari organisasi.");
+    return 1;
+}
+
+stock OrgDisband(playerid)
+{
+    if (!IsOrgOwner(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner organisasi yang bisa membubarkan organisasi.");
+        return 0;
+    }
+
+    new orgid = PlayerOrgID[playerid];
+    new query[256];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "DELETE FROM organization_members WHERE org_id=%d",
+        orgid
+    );
+    mysql_tquery(g_SQL, query);
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "DELETE FROM organizations WHERE id=%d LIMIT 1",
+        orgid
+    );
+    mysql_tquery(g_SQL, query, "OnOrgDisbanded", "ii", playerid, orgid);
     return 1;
 }
 
@@ -4417,7 +4941,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.17E Garage Dialog");
+    SetGameModeText("LSIF Dev v0.17F Org Dialog");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -4497,7 +5021,7 @@ public OnGameModeInit()
     print("[LSIF] Manual vehicle engine mode aktif.");
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
     print("[LSIF] Custom house arrow pickups aktif.");
-    print("[LSIF] Gamemode v0.17E Vehicle Garage Dialog Pack berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.17F Organization Dialog Pack berhasil dijalankan.");
     return 1;
 }
 
@@ -4696,6 +5220,308 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 {
     if (dialogid == DIALOG_BETA_RULES || dialogid == DIALOG_BETA_MOTD || dialogid == DIALOG_FEEDBACK_LIST)
     {
+        return 1;
+    }
+
+    if (dialogid == DIALOG_ORG_MENU)
+    {
+        if (!response)
+        {
+            return 1;
+        }
+
+        if (PlayerOrgID[playerid] <= 0)
+        {
+            if (listitem == 0)
+            {
+                ShowOrgCreateInputDialog(playerid);
+                return 1;
+            }
+
+            if (listitem == 1)
+            {
+                ShowOrgListDialog(playerid);
+                return 1;
+            }
+
+            return 1;
+        }
+
+        if (listitem == 0)
+        {
+            ShowOrgInfoDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 1)
+        {
+            ShowOrgMembersDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 2)
+        {
+            ShowOrgBankDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 3)
+        {
+            ShowOrgDepositDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 4)
+        {
+            ShowOrgWithdrawDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 5)
+        {
+            ShowOrgInviteDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 6)
+        {
+            ShowOrgSetRankDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 7)
+        {
+            ShowOrgKickDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 8)
+        {
+            ShowPlayerDialog(playerid, DIALOG_ORG_LEAVE_CONFIRM, DIALOG_STYLE_MSGBOX, "Leave Organization", "Yakin ingin keluar dari organisasi?", "Leave", "Back");
+            return 1;
+        }
+
+        if (listitem == 9)
+        {
+            if (!IsOrgOwner(playerid))
+            {
+                SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membubarkan organisasi.");
+                return 1;
+            }
+
+            ShowPlayerDialog(playerid, DIALOG_ORG_DISBAND_CONFIRM, DIALOG_STYLE_MSGBOX, "Disband Organization", "PERINGATAN: organisasi akan dihapus permanen. Semua member akan keluar. Lanjutkan?", "Disband", "Back");
+            return 1;
+        }
+
+        return 1;
+    }
+
+    if (dialogid == DIALOG_ORG_INFO || dialogid == DIALOG_ORG_BANK || dialogid == DIALOG_ORG_MEMBERS || dialogid == DIALOG_ORG_LIST)
+    {
+        if (response)
+        {
+            ShowOrgMenuDialog(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_ORG_CREATE_INPUT)
+    {
+        if (!response)
+        {
+            ShowOrgMenuDialog(playerid);
+            return 1;
+        }
+
+        if (PlayerOrgID[playerid] > 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu sudah tergabung dalam organisasi.");
+            return 1;
+        }
+
+        if (strlen(inputtext) < 3)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Nama organisasi minimal 3 karakter.");
+            ShowOrgCreateInputDialog(playerid);
+            return 1;
+        }
+
+        if (PlayerMoney[playerid] < ORG_CREATE_PRICE)
+        {
+            new msg[144];
+            format(msg, sizeof(msg), "Cash tidak cukup. Biaya membuat organisasi: $%d.", ORG_CREATE_PRICE);
+            SendClientMessage(playerid, COLOR_RED, msg);
+            return 1;
+        }
+
+        new playerName[MAX_PLAYER_NAME];
+        new query[768];
+
+        GetPlayerName(playerid, playerName, sizeof(playerName));
+        format(PlayerPendingOrgName[playerid], 64, "%s", inputtext);
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "INSERT INTO organizations (name, owner_id, owner_name, bank_money) VALUES ('%e', %d, '%e', 0)",
+            inputtext,
+            PlayerDBID[playerid],
+            playerName
+        );
+
+        mysql_tquery(g_SQL, query, "OnOrgCreated", "i", playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_ORG_DEPOSIT)
+    {
+        if (!response)
+        {
+            ShowOrgMenuDialog(playerid);
+            return 1;
+        }
+
+        OrgDepositMoney(playerid, inputtext);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_ORG_WITHDRAW)
+    {
+        if (!response)
+        {
+            ShowOrgMenuDialog(playerid);
+            return 1;
+        }
+
+        OrgWithdrawMoney(playerid, inputtext);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_ORG_INVITE)
+    {
+        if (!response)
+        {
+            ShowOrgMenuDialog(playerid);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Player ID harus angka.");
+            ShowOrgInviteDialog(playerid);
+            return 1;
+        }
+
+        OrgInvitePlayer(playerid, strval(inputtext));
+        return 1;
+    }
+
+    if (dialogid == DIALOG_ORG_SETRANK)
+    {
+        if (!response)
+        {
+            ShowOrgMenuDialog(playerid);
+            return 1;
+        }
+
+        new targetStr[16];
+        new rankStr[16];
+
+        if (!GetTwoParams(inputtext, targetStr, sizeof(targetStr), rankStr, sizeof(rankStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Format: playerid rank. Contoh: 2 3");
+            ShowOrgSetRankDialog(playerid);
+            return 1;
+        }
+
+        if (!IsNumericString(targetStr) || !IsNumericString(rankStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Player ID dan rank harus angka.");
+            ShowOrgSetRankDialog(playerid);
+            return 1;
+        }
+
+        OrgSetMemberRank(playerid, strval(targetStr), strval(rankStr));
+        return 1;
+    }
+
+    if (dialogid == DIALOG_ORG_KICK)
+    {
+        if (!response)
+        {
+            ShowOrgMenuDialog(playerid);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Player ID harus angka.");
+            ShowOrgKickDialog(playerid);
+            return 1;
+        }
+
+        new targetid = strval(inputtext);
+
+        if (!IsPlayerConnected(targetid) || !PlayerLoggedIn[targetid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Target tidak online/login.");
+            return 1;
+        }
+
+        if (PlayerOrgID[targetid] != PlayerOrgID[playerid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Target bukan anggota organisasi kamu.");
+            return 1;
+        }
+
+        PlayerSelectedOrgTarget[playerid] = targetid;
+
+        new targetName[MAX_PLAYER_NAME];
+        new dialogText[256];
+        GetPlayerName(targetid, targetName, sizeof(targetName));
+
+        format(dialogText, sizeof(dialogText), "Yakin ingin mengeluarkan %s [%d] dari organisasi?", targetName, targetid);
+        ShowPlayerDialog(playerid, DIALOG_ORG_KICK_CONFIRM, DIALOG_STYLE_MSGBOX, "Confirm Kick Member", dialogText, "Kick", "Back");
+        return 1;
+    }
+
+    if (dialogid == DIALOG_ORG_KICK_CONFIRM)
+    {
+        if (!response)
+        {
+            PlayerSelectedOrgTarget[playerid] = INVALID_PLAYER_ID;
+            ShowOrgMenuDialog(playerid);
+            return 1;
+        }
+
+        new targetid = PlayerSelectedOrgTarget[playerid];
+        PlayerSelectedOrgTarget[playerid] = INVALID_PLAYER_ID;
+        OrgKickMember(playerid, targetid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_ORG_LEAVE_CONFIRM)
+    {
+        if (!response)
+        {
+            ShowOrgMenuDialog(playerid);
+            return 1;
+        }
+
+        OrgLeave(playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_ORG_DISBAND_CONFIRM)
+    {
+        if (!response)
+        {
+            ShowOrgMenuDialog(playerid);
+            return 1;
+        }
+
+        OrgDisband(playerid);
         return 1;
     }
 
@@ -8264,6 +9090,83 @@ public OnOrgDisbanded(playerid, orgid)
     return 1;
 }
 
+
+public OnOrgMembersDialogLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+    new dialogText[1536];
+    new memberName[24];
+    new rank;
+    new rankName[32];
+    new line[128];
+
+    format(dialogText, sizeof(dialogText), "Member\tRank\n");
+
+    if (rows == 0)
+    {
+        strcat(dialogText, "Tidak ada member\t-\n", sizeof(dialogText));
+    }
+    else
+    {
+        for (new i = 0; i < rows; i++)
+        {
+            cache_get_value_name(i, "player_name", memberName, sizeof(memberName));
+            cache_get_value_name_int(i, "rank_level", rank);
+            GetOrgRankName(rank, rankName, sizeof(rankName));
+
+            format(line, sizeof(line), "%s\t%s (%d)\n", memberName, rankName, rank);
+            strcat(dialogText, line, sizeof(dialogText));
+        }
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_ORG_MEMBERS, DIALOG_STYLE_TABLIST_HEADERS, "Organization Members", dialogText, "Back", "Tutup");
+    return 1;
+}
+
+public OnOrgListDialogLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+    new dialogText[1536];
+    new orgid;
+    new name[64];
+    new ownerName[24];
+    new bankMoney;
+    new line[160];
+
+    format(dialogText, sizeof(dialogText), "ID\tName\tOwner\tBank\n");
+
+    if (rows == 0)
+    {
+        strcat(dialogText, "-\tBelum ada organisasi\t-\t-\n", sizeof(dialogText));
+    }
+    else
+    {
+        for (new i = 0; i < rows; i++)
+        {
+            cache_get_value_name_int(i, "id", orgid);
+            cache_get_value_name(i, "name", name, sizeof(name));
+            cache_get_value_name(i, "owner_name", ownerName, sizeof(ownerName));
+            cache_get_value_name_int(i, "bank_money", bankMoney);
+
+            format(line, sizeof(line), "%d\t%s\t%s\t$%d\n", orgid, name, ownerName, bankMoney);
+            strcat(dialogText, line, sizeof(dialogText));
+        }
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_ORG_LIST, DIALOG_STYLE_TABLIST_HEADERS, "Organizations", dialogText, "Back", "Tutup");
+    return 1;
+}
+
 public OnPlayerBusinessLoaded(playerid)
 {
     if (!IsPlayerConnected(playerid))
@@ -8878,6 +9781,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/invitehouse [id] - Undang player ke rumah");
         SendClientMessage(playerid, COLOR_WHITE, "/kickhouse [id] - Keluarkan visitor dari rumah");
         SendClientMessage(playerid, COLOR_WHITE, "/housevisitors - Lihat visitor rumah");
+        SendClientMessage(playerid, COLOR_WHITE, "/orgmenu - Menu dialog organisasi");
         SendClientMessage(playerid, COLOR_WHITE, "/orgs - Melihat daftar organisasi");
         SendClientMessage(playerid, COLOR_WHITE, "/createorg [nama] - Membuat organisasi");
         SendClientMessage(playerid, COLOR_WHITE, "/org - Info organisasi kamu");
@@ -8951,7 +9855,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.17E Vehicle Garage Dialog Pack");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.17F Organization Dialog Pack");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -8961,9 +9865,9 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D: Release polish, version, credits, staff, beta guide.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.17E: Garage, vehicle service, spawn, rename, repair/refuel, dan sell memakai Dialog UI.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.17B: house arrow enter/exit, ALT transaksi/menu, dan job vehicle grace timer.");
+    	SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");
+    	SendClientMessage(playerid, COLOR_WHITE, "v0.17F: Organization info, members, bank, invite, rank, kick, leave, dan disband memakai Dialog UI.");
+    	SendClientMessage(playerid, COLOR_WHITE, "v0.17B: house arrow enter/exit, ALT transaksi/menu, dan job vehicle grace timer.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16C: Admin beta dashboard dan monitoring reports/logs.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16B: Starter pack, bug report, suggestion, feedback handling.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16A: Whitelist, MOTD, rules, closed beta gate.");
@@ -11987,6 +12891,12 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/orgmenu", true))
+    {
+        ShowOrgMenuDialog(playerid);
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/orgs", true))
     {
         mysql_tquery(
@@ -13628,7 +14538,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         SendClientMessage(playerid, COLOR_YELLOW, "========== CLOSED BETA STATUS ==========");
 
-        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.17E Garage Dialog");
+        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.17F Org Dialog");
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         format(msg, sizeof(msg), "Uptime: %s", uptimeText);

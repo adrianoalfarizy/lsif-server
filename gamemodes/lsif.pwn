@@ -299,6 +299,7 @@ new PlayerStarterPackClaimed[MAX_PLAYERS];
 
 new PlayerDBID[MAX_PLAYERS];
 new PlayerLoggedIn[MAX_PLAYERS];
+new PlayerAuthDialogShown[MAX_PLAYERS];
 
 new Float:PlayerLastX[MAX_PLAYERS];
 new Float:PlayerLastY[MAX_PLAYERS];
@@ -366,12 +367,12 @@ new Float:BusStopX[MAX_BUS_STOPS] =
 new Float:BusStopY[MAX_BUS_STOPS] =
 {
     -1908.1141,
-        -1734.7712,
-        -1579.4437,
-        -1324.8833,
-        -1030.2186,
-        -1908.1141
-    };
+    -1734.7712,
+    -1579.4437,
+    -1324.8833,
+    -1030.2186,
+    -1908.1141
+};
 
 new Float:BusStopZ[MAX_BUS_STOPS] =
 {
@@ -406,12 +407,12 @@ new Float:PoliceTargetX[MAX_POLICE_TARGETS] =
 new Float:PoliceTargetY[MAX_POLICE_TARGETS] =
 {
     -1677.2144,
-        -2124.5295,
-        -1675.2481,
-        -1370.4922,
-        -1238.7169,
-        -1704.3347
-    };
+    -2124.5295,
+    -1675.2481,
+    -1370.4922,
+    -1238.7169,
+    -1704.3347
+};
 
 new Float:PoliceTargetZ[MAX_POLICE_TARGETS] =
 {
@@ -657,11 +658,11 @@ new Float:BankPointX[MAX_BANK_POINTS] =
 new Float:BankPointY[MAX_BANK_POINTS] =
 {
     -1842.4136,
-        -1758.2188,
-        -919.9146,
-        -1224.3597,
-        -1769.6847
-    };
+    -1758.2188,
+    -919.9146,
+    -1224.3597,
+    -1769.6847
+};
 
 new Float:BankPointZ[MAX_BANK_POINTS] =
 {
@@ -1064,6 +1065,7 @@ forward OnOwnedVehicleBought(playerid, modelid, price);
 forward OnOwnedVehicleSaved(playerid, notify);
 forward OnOwnedVehicleSold(playerid, sellPrice);
 forward DelayedKick(playerid);
+forward EnsureAuthDialog(playerid);
 forward OnPlayerBanCheck(playerid);
 forward OnPlayerBanned(playerid, targetid);
 forward OnPlayerUnbanned(playerid);
@@ -1269,6 +1271,7 @@ stock ResetPlayerAccountData(playerid)
 {
     PlayerDBID[playerid] = 0;
     PlayerLoggedIn[playerid] = 0;
+    PlayerAuthDialogShown[playerid] = 0;
 
     PlayerMoney[playerid] = 500;
     PlayerBankMoney[playerid] = 0;
@@ -1314,6 +1317,7 @@ stock ResetPlayerAccountData(playerid)
 
 stock ShowRegisterDialog(playerid)
 {
+    PlayerAuthDialogShown[playerid] = 1;
     ShowPlayerDialog(
         playerid,
         DIALOG_REGISTER,
@@ -1328,6 +1332,7 @@ stock ShowRegisterDialog(playerid)
 
 stock ShowLoginDialog(playerid)
 {
+    PlayerAuthDialogShown[playerid] = 1;
     ShowPlayerDialog(
         playerid,
         DIALOG_LOGIN,
@@ -3701,13 +3706,13 @@ stock CreatePlayerHouseExitPickup(playerid, ownerid)
     DestroyPlayerHouseExitPickup(playerid);
 
     PlayerHouseExitPickup[playerid] = CreatePickup(
-                                          HOUSE_PICKUP_MODEL,
-                                          HOUSE_PICKUP_TYPE,
-                                          HOUSE_INT_X,
-                                          HOUSE_INT_Y + HOUSE_EXIT_PICKUP_Y_OFFSET,
-                                          HOUSE_INT_Z,
-                                          GetPlayerHouseVirtualWorld(ownerid)
-                                      );
+        HOUSE_PICKUP_MODEL,
+        HOUSE_PICKUP_TYPE,
+        HOUSE_INT_X,
+        HOUSE_INT_Y + HOUSE_EXIT_PICKUP_Y_OFFSET,
+        HOUSE_INT_Z,
+        GetPlayerHouseVirtualWorld(ownerid)
+    );
 
     return 1;
 }
@@ -3717,13 +3722,13 @@ stock CreateHouseExteriorPickups()
     for (new i = 0; i < MAX_HOUSES; i++)
     {
         HouseExteriorPickup[i] = CreatePickup(
-                                     HOUSE_PICKUP_MODEL,
-                                     HOUSE_PICKUP_TYPE,
-                                     HouseX[i],
-                                     HouseY[i],
-                                     HouseZ[i],
-                                     0
-                                 );
+            HOUSE_PICKUP_MODEL,
+            HOUSE_PICKUP_TYPE,
+            HouseX[i],
+            HouseY[i],
+            HouseZ[i],
+            0
+        );
     }
 
     return 1;
@@ -5638,7 +5643,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.18A Vehicle Mission");
+    SetGameModeText("LSIF Dev v0.18A.1 Auth Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -5779,6 +5784,8 @@ public OnPlayerConnect(playerid)
     SendClientMessage(playerid, COLOR_CYAN, "Setelah login gunakan /betaguide, /version, dan /serverrules.");
 
     CheckPlayerBan(playerid);
+    // Safety net: jika callback ban/whitelist/account gagal terpanggil, paksa flow auth lanjut.
+    SetTimerEx("EnsureAuthDialog", 3000, false, "i", playerid);
     // SendClientMessage(playerid, COLOR_WHITE, "Mengecek akun kamu di database...");
 
     // CheckPlayerAccount(playerid);
@@ -5810,6 +5817,7 @@ public OnPlayerDisconnect(playerid, reason)
 
     PlayerLoggedIn[playerid] = 0;
     PlayerDBID[playerid] = 0;
+    PlayerAuthDialogShown[playerid] = 0;
     PlayerFindingBank[playerid] = 0;
     ResetPlayerOrgData(playerid);
 
@@ -5987,7 +5995,7 @@ stock ShowBetaStatusDialog(playerid)
     format(
         dialogText,
         sizeof(dialogText),
-        "Gamemode: LSIF Dev v0.18A Vehicle Mission\n\nUptime: %s\nPlayers Online: %d\nLogged Players: %d\nAdmins Online: %d\n\nClosed Beta: ACTIVE\nWhitelist: ENABLED after first active whitelist user\n\nMenu terkait:\n/adminmenu\n/betamenu",
+        "Gamemode: LSIF Dev v0.18A.1 Auth Fix\n\nUptime: %s\nPlayers Online: %d\nLogged Players: %d\nAdmins Online: %d\n\nClosed Beta: ACTIVE\nWhitelist: ENABLED after first active whitelist user\n\nMenu terkait:\n/adminmenu\n/betamenu",
         uptimeText,
         CountOnlinePlayers(),
         CountLoggedPlayers(),
@@ -7476,58 +7484,28 @@ stock HandleVehicleMissionKey(playerid)
     }
     if (IsPlayerInTaxiVehicle(playerid))
     {
-        if (PlayerJob[playerid] != JOB_TAXI)
-        {
-            PlayerJob[playerid] = JOB_TAXI;
-            SavePlayerData(playerid);
-            SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Taxi Driver.");
-        }
-        StartTaxiWork(playerid);
-        return 1;
+        if (PlayerJob[playerid] != JOB_TAXI) { PlayerJob[playerid] = JOB_TAXI; SavePlayerData(playerid); SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Taxi Driver."); }
+        StartTaxiWork(playerid); return 1;
     }
     if (IsPlayerInCourierVehicle(playerid))
     {
-        if (PlayerJob[playerid] != JOB_COURIER)
-        {
-            PlayerJob[playerid] = JOB_COURIER;
-            SavePlayerData(playerid);
-            SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Courier.");
-        }
-        StartCourierWork(playerid);
-        return 1;
+        if (PlayerJob[playerid] != JOB_COURIER) { PlayerJob[playerid] = JOB_COURIER; SavePlayerData(playerid); SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Courier."); }
+        StartCourierWork(playerid); return 1;
     }
     if (IsPlayerInTruckerVehicle(playerid))
     {
-        if (PlayerJob[playerid] != JOB_TRUCKER)
-        {
-            PlayerJob[playerid] = JOB_TRUCKER;
-            SavePlayerData(playerid);
-            SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Trucker.");
-        }
-        StartTruckerWork(playerid);
-        return 1;
+        if (PlayerJob[playerid] != JOB_TRUCKER) { PlayerJob[playerid] = JOB_TRUCKER; SavePlayerData(playerid); SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Trucker."); }
+        StartTruckerWork(playerid); return 1;
     }
     if (IsPlayerInBusVehicle(playerid))
     {
-        if (PlayerJob[playerid] != JOB_BUS)
-        {
-            PlayerJob[playerid] = JOB_BUS;
-            SavePlayerData(playerid);
-            SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Bus Driver.");
-        }
-        StartBusWork(playerid);
-        return 1;
+        if (PlayerJob[playerid] != JOB_BUS) { PlayerJob[playerid] = JOB_BUS; SavePlayerData(playerid); SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Bus Driver."); }
+        StartBusWork(playerid); return 1;
     }
     if (IsPlayerInPoliceVehicle(playerid))
     {
-        if (PlayerJob[playerid] != JOB_POLICE)
-        {
-            PlayerJob[playerid] = JOB_POLICE;
-            SavePlayerData(playerid);
-            SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Police / Vigilante.");
-        }
-        StartPoliceWork(playerid);
-        return 1;
+        if (PlayerJob[playerid] != JOB_POLICE) { PlayerJob[playerid] = JOB_POLICE; SavePlayerData(playerid); SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Police / Vigilante."); }
+        StartPoliceWork(playerid); return 1;
     }
     new msg[144];
     format(msg, sizeof(msg), "Model kendaraan %d belum punya vehicle mission. Tombol 2 khusus start job/mission kendaraan.", GetVehicleModel(GetPlayerVehicleID(playerid)));
@@ -9595,6 +9573,29 @@ public OnBetaWhitelistCheck(playerid)
     return 1;
 }
 
+
+public EnsureAuthDialog(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    if (PlayerLoggedIn[playerid])
+    {
+        return 1;
+    }
+
+    if (PlayerAuthDialogShown[playerid])
+    {
+        return 1;
+    }
+
+    SendClientMessage(playerid, COLOR_YELLOW, "Auth flow fallback aktif. Membuka login/register ulang...");
+    CheckBetaWhitelist(playerid);
+    return 1;
+}
+
 public OnPlayerBanCheck(playerid)
 {
     if (!IsPlayerConnected(playerid))
@@ -11310,9 +11311,9 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D: Release polish, version, credits, staff, beta guide.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.17F: Organization info, members, bank, invite, rank, kick, leave, dan disband memakai Dialog UI.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.17B: house arrow enter/exit, ALT transaksi/menu, dan job vehicle grace timer.");
+    	SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");
+    	SendClientMessage(playerid, COLOR_WHITE, "v0.17F: Organization info, members, bank, invite, rank, kick, leave, dan disband memakai Dialog UI.");
+    	SendClientMessage(playerid, COLOR_WHITE, "v0.17B: house arrow enter/exit, ALT transaksi/menu, dan job vehicle grace timer.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16C: Admin beta dashboard dan monitoring reports/logs.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16B: Starter pack, bug report, suggestion, feedback handling.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16A: Whitelist, MOTD, rules, closed beta gate.");
@@ -16065,7 +16066,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         SendClientMessage(playerid, COLOR_YELLOW, "========== CLOSED BETA STATUS ==========");
 
-        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.18A Vehicle Mission");
+        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.18A.1 Auth Fix");
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         format(msg, sizeof(msg), "Uptime: %s", uptimeText);

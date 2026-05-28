@@ -8,6 +8,8 @@
 #define COLOR_YELLOW    0xFFFF00FF
 #define COLOR_CYAN      0x00FFFFFF
 #define COLOR_ORANGE    0xFF9900FF
+#define COLOR_GRAY      0xAAAAAAFF
+#define COLOR_PURPLE    0xAA66CCFF
 
 #define MYSQL_HOST      "localhost"
 #define MYSQL_USER      "lsif_user"
@@ -80,6 +82,11 @@
 #define DIALOG_WEAPON_INFO 1063
 #define DIALOG_LOADOUT_INFO 1064
 #define DIALOG_WEAPON_LICENSE 1065
+#define DIALOG_GANG_MENU 1066
+#define DIALOG_GANG_INFO 1067
+#define DIALOG_TURF_MAP 1068
+#define DIALOG_GANG_COLOR 1069
+
 
 #define STARTER_CASH 15000
 #define STARTER_BANK 5000
@@ -249,6 +256,11 @@
 #define ORG_RANK_ADMIN  3
 #define ORG_RANK_OWNER  5
 
+#define MAX_TERRITORIES 6
+#define TERRITORY_ACCESS_RADIUS 80.0
+#define DEFAULT_GANG_COLOR 0xFFFFFFFF
+#define MAX_GANG_COLOR_PRESETS 8
+
 #define MAX_BUSINESSES 5
 #define BUSINESS_ACCESS_RADIUS 5.0
 #define BUSINESS_SELL_PERCENT 70
@@ -281,6 +293,7 @@
 #define MAPICON_BASE_JOB 60
 #define MAPICON_BASE_BUS_STOP 70
 #define MAPICON_BASE_AMMUNATION 80
+#define MAPICON_BASE_TERRITORY 90
 
 #define MAPICON_TYPE_ATM 52
 #define MAPICON_TYPE_HOUSE 31
@@ -290,6 +303,7 @@
 #define MAPICON_TYPE_JOB 51
 #define MAPICON_TYPE_BUS_STOP 55
 #define MAPICON_TYPE_AMMUNATION 6
+#define MAPICON_TYPE_TERRITORY 19
 #if !defined MAPICON_LOCAL
 #define MAPICON_LOCAL 0
 #endif
@@ -765,7 +779,89 @@ new PlayerOrgInvite[MAX_PLAYERS];
 new PlayerOrgName[MAX_PLAYERS][64];
 new PlayerPendingOrgName[MAX_PLAYERS][64];
 new PlayerOrgBankMoney[MAX_PLAYERS];
+new PlayerOrgColor[MAX_PLAYERS];
 new PlayerSelectedOrgTarget[MAX_PLAYERS];
+new PlayerDialogTerritoryIndex[MAX_PLAYERS];
+
+new TerritoryPickup[MAX_TERRITORIES];
+new Text3D:TerritoryLabel[MAX_TERRITORIES];
+new TerritoryOwnerOrgID[MAX_TERRITORIES];
+new TerritoryOwnerColor[MAX_TERRITORIES];
+new TerritoryOwnerName[MAX_TERRITORIES][64];
+
+new Float:TerritoryX[MAX_TERRITORIES] =
+{
+    2229.3215,
+    1833.8134,
+    1368.9248,
+    2421.5427,
+    1000.5822,
+    1554.8425
+};
+
+new Float:TerritoryY[MAX_TERRITORIES] =
+{
+    -1159.7343,
+        -1842.4136,
+        -1279.6914,
+        -1224.3597,
+        -919.9146,
+        -1675.6542
+    };
+
+new Float:TerritoryZ[MAX_TERRITORIES] =
+{
+    25.7331,
+    13.5781,
+    13.5469,
+    25.3828,
+    42.3281,
+    16.1953
+};
+
+new Float:TerritoryRadius[MAX_TERRITORIES] =
+{
+    110.0,
+    120.0,
+    100.0,
+    110.0,
+    120.0,
+    90.0
+};
+
+new TerritoryName[MAX_TERRITORIES][64] =
+{
+    "Ganton Block",
+    "Idlewood District",
+    "Market Strip",
+    "East Los Santos",
+    "Vinewood Hills",
+    "Pershing Square"
+};
+
+new GangColorValue[MAX_GANG_COLOR_PRESETS] =
+{
+    0xFFFFFFFF,
+    0xFF0000FF,
+    0x00FF00FF,
+    0x00FFFFFF,
+    0xFFFF00FF,
+    0xFF9900FF,
+    0xAA66CCFF,
+    0xAAAAAAFF
+};
+
+new GangColorName[MAX_GANG_COLOR_PRESETS][24] =
+{
+    "White",
+    "Red",
+    "Green",
+    "Cyan",
+    "Yellow",
+    "Orange",
+    "Purple",
+    "Gray"
+};
 
 new PlayerBusinessDBID[MAX_PLAYERS];
 new PlayerBusinessIndex[MAX_PLAYERS];
@@ -1284,6 +1380,10 @@ forward OnRecentReportsDialogLoaded(playerid);
 forward OnRecentLogsDialogLoaded(playerid);
 forward OnPlayerWeaponsLoaded(playerid);
 forward ApplySavedWeaponLoadout(playerid);
+forward OnGangTerritoriesLoaded();
+forward OnGangTerritoryOrgLookup(playerid, territoryIndex, orgid);
+forward OnGangColorUpdated(playerid, colorIndex);
+
 
 
 stock ShowBetaMOTD(playerid)
@@ -4166,7 +4266,9 @@ stock ResetPlayerOrgData(playerid)
     PlayerOrgRank[playerid] = ORG_RANK_NONE;
     PlayerOrgInvite[playerid] = INVALID_PLAYER_ID;
     PlayerOrgBankMoney[playerid] = 0;
+    PlayerOrgColor[playerid] = DEFAULT_GANG_COLOR;
     PlayerSelectedOrgTarget[playerid] = INVALID_PLAYER_ID;
+    PlayerDialogTerritoryIndex[playerid] = -1;
     format(PlayerOrgName[playerid], 64, "None");
     format(PlayerPendingOrgName[playerid], 64, "None");
     return 1;
@@ -4209,7 +4311,7 @@ stock LoadPlayerOrganization(playerid)
         g_SQL,
         query,
         sizeof(query),
-        "SELECT om.org_id, om.rank_level, o.name, o.bank_money FROM organization_members om JOIN organizations o ON o.id = om.org_id WHERE om.player_id=%d LIMIT 1",
+        "SELECT om.org_id, om.rank_level, o.name, o.bank_money, o.gang_color FROM organization_members om JOIN organizations o ON o.id = om.org_id WHERE om.player_id=%d LIMIT 1",
         PlayerDBID[playerid]
     );
 
@@ -4257,6 +4359,246 @@ stock IsOrgAdmin(playerid)
     }
 
     return 0;
+}
+
+
+stock ResetGangTerritoryData()
+{
+    for (new i = 0; i < MAX_TERRITORIES; i++)
+    {
+        TerritoryPickup[i] = -1;
+        TerritoryLabel[i] = Text3D:INVALID_3DTEXT_ID;
+        TerritoryOwnerOrgID[i] = 0;
+        TerritoryOwnerColor[i] = COLOR_GRAY;
+        format(TerritoryOwnerName[i], 64, "Neutral");
+    }
+
+    return 1;
+}
+
+stock IsValidTerritoryIndex(territoryIndex)
+{
+    if (territoryIndex < 0 || territoryIndex >= MAX_TERRITORIES)
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+stock GetGangColorIndexByValue(color)
+{
+    for (new i = 0; i < MAX_GANG_COLOR_PRESETS; i++)
+    {
+        if (GangColorValue[i] == color)
+        {
+            return i;
+        }
+    }
+
+    return 0;
+}
+
+stock CountOrgTerritories(orgid)
+{
+    new count = 0;
+
+    for (new i = 0; i < MAX_TERRITORIES; i++)
+    {
+        if (TerritoryOwnerOrgID[i] == orgid)
+        {
+            count++;
+        }
+    }
+
+    return count;
+}
+
+stock UpdateTerritoryMarkerLabel(territoryIndex)
+{
+    if (!IsValidTerritoryIndex(territoryIndex))
+    {
+        return 0;
+    }
+
+    if (TerritoryLabel[territoryIndex] != Text3D:INVALID_3DTEXT_ID)
+    {
+        Delete3DTextLabel(TerritoryLabel[territoryIndex]);
+        TerritoryLabel[territoryIndex] = Text3D:INVALID_3DTEXT_ID;
+    }
+
+    new labelText[192];
+    format(
+        labelText,
+        sizeof(labelText),
+        "[TURF] %s\nOwner: %s\n/gangmenu atau /turfmap",
+        TerritoryName[territoryIndex],
+        TerritoryOwnerName[territoryIndex]
+    );
+
+    TerritoryLabel[territoryIndex] = Create3DTextLabel(
+                                         labelText,
+                                         TerritoryOwnerColor[territoryIndex],
+                                         TerritoryX[territoryIndex],
+                                         TerritoryY[territoryIndex],
+                                         TerritoryZ[territoryIndex] + 0.8,
+                                         WORLD_LABEL_DRAW_DISTANCE,
+                                         0,
+                                         true
+                                     );
+
+    return 1;
+}
+
+stock RefreshAllTerritoryLabels()
+{
+    for (new i = 0; i < MAX_TERRITORIES; i++)
+    {
+        UpdateTerritoryMarkerLabel(i);
+    }
+
+    return 1;
+}
+
+stock RefreshAllPlayerMapIcons()
+{
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (IsPlayerConnected(i))
+        {
+            RemoveLSIFMapIcons(i);
+            ApplyLSIFMapIcons(i);
+        }
+    }
+
+    return 1;
+}
+
+stock LoadGangTerritories()
+{
+    ResetGangTerritoryData();
+    mysql_tquery(g_SQL, "SELECT territory_index, owner_org_id, owner_org_name, owner_color FROM gang_territories ORDER BY territory_index ASC", "OnGangTerritoriesLoaded");
+    return 1;
+}
+
+stock ShowGangMenuDialog(playerid)
+{
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_GANG_MENU,
+        DIALOG_STYLE_LIST,
+        "LSIF Gang / Territory Menu",
+        "Gang Info\nTurf Map\nGang Color\nOrganization Menu",
+        "Select",
+        "Close"
+    );
+    return 1;
+}
+
+stock ShowGangInfoDialog(playerid)
+{
+    new dialogText[768];
+    new rankName[32];
+    new colorIndex = GetGangColorIndexByValue(PlayerOrgColor[playerid]);
+
+    if (PlayerOrgID[playerid] <= 0)
+    {
+        format(dialogText, sizeof(dialogText), "Kamu belum tergabung dalam organization/gang.\n\nGunakan /orgmenu untuk membuat atau bergabung ke organization.");
+    }
+    else
+    {
+        GetOrgRankName(PlayerOrgRank[playerid], rankName, sizeof(rankName));
+        format(
+            dialogText,
+            sizeof(dialogText),
+            "Organization/Gang: %s\nOrg ID: %d\nRank: %s (%d)\nGang Color: %s\nTerritories Owned: %d/%d\nOrg Bank: $%d\n\nCatatan: v0.20A masih foundation. Turf war aktif di versi berikutnya.",
+            PlayerOrgName[playerid],
+            PlayerOrgID[playerid],
+            rankName,
+            PlayerOrgRank[playerid],
+            GangColorName[colorIndex],
+            CountOrgTerritories(PlayerOrgID[playerid]),
+            MAX_TERRITORIES,
+            PlayerOrgBankMoney[playerid]
+        );
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_GANG_INFO, DIALOG_STYLE_MSGBOX, "Gang Info", dialogText, "Back", "Close");
+    return 1;
+}
+
+stock ShowTurfMapDialog(playerid)
+{
+    new dialogText[1536];
+    new line[192];
+
+    format(dialogText, sizeof(dialogText), "Territory\tOwner\tRadius\n");
+
+    for (new i = 0; i < MAX_TERRITORIES; i++)
+    {
+        format(line, sizeof(line), "%d. %s\t%s\t%.0f\n", i + 1, TerritoryName[i], TerritoryOwnerName[i], TerritoryRadius[i]);
+        strcat(dialogText, line, sizeof(dialogText));
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_TURF_MAP, DIALOG_STYLE_TABLIST_HEADERS, "LSIF Turf Map", dialogText, "Back", "Close");
+    return 1;
+}
+
+stock ShowGangColorDialog(playerid)
+{
+    if (PlayerOrgID[playerid] <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum tergabung dalam organization/gang.");
+        return 0;
+    }
+
+    if (!IsOrgOwner(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner organization yang bisa mengubah gang color.");
+        return 0;
+    }
+
+    new dialogText[512];
+    new line[64];
+
+    format(dialogText, sizeof(dialogText), "Color\n");
+
+    for (new i = 0; i < MAX_GANG_COLOR_PRESETS; i++)
+    {
+        format(line, sizeof(line), "%d. %s\n", i + 1, GangColorName[i]);
+        strcat(dialogText, line, sizeof(dialogText));
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_GANG_COLOR, DIALOG_STYLE_TABLIST_HEADERS, "Set Gang Color", dialogText, "Set", "Back");
+    return 1;
+}
+
+stock ApplyGangColorToOnlineMembers(orgid, color)
+{
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (IsPlayerConnected(i) && PlayerLoggedIn[i] && PlayerOrgID[i] == orgid)
+        {
+            PlayerOrgColor[i] = color;
+        }
+    }
+
+    return 1;
+}
+
+stock ApplyGangColorToTerritories(orgid, color)
+{
+    for (new i = 0; i < MAX_TERRITORIES; i++)
+    {
+        if (TerritoryOwnerOrgID[i] == orgid)
+        {
+            TerritoryOwnerColor[i] = color;
+            UpdateTerritoryMarkerLabel(i);
+        }
+    }
+
+    RefreshAllPlayerMapIcons();
+    return 1;
 }
 
 stock IsValidOrgBankAmount(amount)
@@ -5816,7 +6158,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.19B Weapon License");
+    SetGameModeText("LSIF Dev v0.20A Gang Territory");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -5844,8 +6186,10 @@ public OnGameModeInit()
         WEAPON:WEAPON_FIST, 0
     );
 
+    ResetGangTerritoryData();
     CreateHouseExteriorPickups();
     CreateWorldInteractionMarkers();
+    LoadGangTerritories();
 
     for (new i = 0; i < MAX_PLAYERS; i++)
     {
@@ -5899,8 +6243,8 @@ public OnGameModeInit()
     print("[LSIF] Manual vehicle engine mode aktif.");
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
     print("[LSIF] Custom house arrow pickups aktif.");
-    print("[LSIF] Map icons, 3D labels, and ALT world markers aktif.");
-    print("[LSIF] Gamemode v0.19B Weapon License & Saved Loadout berhasil dijalankan.");
+    print("[LSIF] Map icons, 3D labels, ALT world markers, and turf markers aktif.");
+    print("[LSIF] Gamemode v0.20A Gang / Territory Foundation berhasil dijalankan.");
     return 1;
 }
 
@@ -6976,6 +7320,83 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 
 
 
+
+    if (dialogid == DIALOG_GANG_MENU)
+    {
+        if (!response)
+        {
+            return 1;
+        }
+
+        if (listitem == 0)
+        {
+            ShowGangInfoDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 1)
+        {
+            ShowTurfMapDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 2)
+        {
+            ShowGangColorDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 3)
+        {
+            ShowOrgMenuDialog(playerid);
+            return 1;
+        }
+
+        return 1;
+    }
+
+    if (dialogid == DIALOG_GANG_INFO || dialogid == DIALOG_TURF_MAP)
+    {
+        if (response)
+        {
+            ShowGangMenuDialog(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_GANG_COLOR)
+    {
+        if (!response)
+        {
+            ShowGangMenuDialog(playerid);
+            return 1;
+        }
+
+        if (!IsOrgOwner(playerid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner organization yang bisa mengubah gang color.");
+            return 1;
+        }
+
+        if (listitem < 0 || listitem >= MAX_GANG_COLOR_PRESETS)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Color tidak valid.");
+            return 1;
+        }
+
+        new query[256];
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "UPDATE organizations SET gang_color=%d WHERE id=%d LIMIT 1",
+            GangColorValue[listitem],
+            PlayerOrgID[playerid]
+        );
+        mysql_tquery(g_SQL, query, "OnGangColorUpdated", "ii", playerid, listitem);
+        return 1;
+    }
+
     if (dialogid == DIALOG_LOADOUT_INFO || dialogid == DIALOG_WEAPON_LICENSE)
     {
         return 1;
@@ -7827,6 +8248,12 @@ stock InitWorldMarkerArrays()
         BusStopLabel[i] = Text3D:INVALID_3DTEXT_ID;
     }
 
+    for (new i = 0; i < MAX_TERRITORIES; i++)
+    {
+        TerritoryPickup[i] = -1;
+        TerritoryLabel[i] = Text3D:INVALID_3DTEXT_ID;
+    }
+
     RaceStartPickup = -1;
     RaceStartLabel = Text3D:INVALID_3DTEXT_ID;
     return 1;
@@ -7893,7 +8320,13 @@ stock CreateWorldInteractionMarkers()
         BusStopLabel[i] = Create3DTextLabel(labelText, COLOR_YELLOW, BusStopX[i], BusStopY[i], BusStopZ[i] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
     }
 
-    print("[LSIF] World interaction markers, job markers, bus stops, and 3D labels created.");
+    for (new i = 0; i < MAX_TERRITORIES; i++)
+    {
+        TerritoryPickup[i] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, TerritoryX[i], TerritoryY[i], TerritoryZ[i], 0);
+        UpdateTerritoryMarkerLabel(i);
+    }
+
+    print("[LSIF] World interaction markers, job markers, bus stops, territories, and 3D labels created.");
     return 1;
 }
 
@@ -7998,6 +8431,21 @@ stock DestroyWorldInteractionMarkers()
         }
     }
 
+    for (new i = 0; i < MAX_TERRITORIES; i++)
+    {
+        if (TerritoryPickup[i] != -1)
+        {
+            DestroyPickup(TerritoryPickup[i]);
+            TerritoryPickup[i] = -1;
+        }
+
+        if (TerritoryLabel[i] != Text3D:INVALID_3DTEXT_ID)
+        {
+            Delete3DTextLabel(TerritoryLabel[i]);
+            TerritoryLabel[i] = Text3D:INVALID_3DTEXT_ID;
+        }
+    }
+
     if (RaceStartPickup != -1)
     {
         DestroyPickup(RaceStartPickup);
@@ -8052,6 +8500,11 @@ stock ApplyLSIFMapIcons(playerid)
         SetPlayerMapIcon(playerid, MAPICON_BASE_BUS_STOP + i, BusStopX[i], BusStopY[i], BusStopZ[i], MAPICON_TYPE_BUS_STOP, COLOR_YELLOW, MAPICON_LOCAL);
     }
 
+    for (new i = 0; i < MAX_TERRITORIES; i++)
+    {
+        SetPlayerMapIcon(playerid, MAPICON_BASE_TERRITORY + i, TerritoryX[i], TerritoryY[i], TerritoryZ[i], MAPICON_TYPE_TERRITORY, TerritoryOwnerColor[i], MAPICON_LOCAL);
+    }
+
     return 1;
 }
 
@@ -8092,6 +8545,11 @@ stock RemoveLSIFMapIcons(playerid)
     for (new i = 0; i < MAX_BUS_STOPS; i++)
     {
         RemovePlayerMapIcon(playerid, MAPICON_BASE_BUS_STOP + i);
+    }
+
+    for (new i = 0; i < MAX_TERRITORIES; i++)
+    {
+        RemovePlayerMapIcon(playerid, MAPICON_BASE_TERRITORY + i);
     }
 
     return 1;
@@ -8153,7 +8611,7 @@ stock ShowMapLegendDialog(playerid)
     format(
         dialogText,
         sizeof(dialogText),
-        "Radar/Map Icon LSIF:\n\nATM/Bank - transaksi bank, pakai ALT di marker ATM.\nHouse - rumah/interior; ALT untuk menu, panah untuk masuk/keluar.\nBusiness - beli/manage/collect business dengan ALT.\nDealership - vehicle shop dan garage service dengan ALT.\nAmmu-Nation - weapon shop dengan ALT.\nRace - lokasi race/time trial.\nJob Marker - titik panduan vehicle mission/job.\nBus Stop - rute Bus Driver Mission.\n\nDi dunia, cari 3D label seperti [ALT] ATM, [ALT] Dealership, [ALT] Ammu-Nation, atau [JOB] Bus Terminal.\nALT = menu/transaksi. Tombol 2 = start vehicle mission/job."
+        "Radar/Map Icon LSIF:\n\nATM/Bank - transaksi bank, pakai ALT di marker ATM.\nHouse - rumah/interior; ALT untuk menu, panah untuk masuk/keluar.\nBusiness - beli/manage/collect business dengan ALT.\nDealership - vehicle shop dan garage service dengan ALT.\nAmmu-Nation - weapon shop dengan ALT.\nTerritory/Turf - area gang foundation, lihat /turfmap.\nRace - lokasi race/time trial.\nJob Marker - titik panduan vehicle mission/job.\nBus Stop - rute Bus Driver Mission.\n\nDi dunia, cari 3D label seperti [ALT] ATM, [ALT] Dealership, [ALT] Ammu-Nation, atau [JOB] Bus Terminal.\nALT = menu/transaksi. Tombol 2 = start vehicle mission/job. Turf map = /gangmenu atau /turfmap."
     );
 
     ShowPlayerDialog(playerid, DIALOG_BETA_MOTD, DIALOG_STYLE_MSGBOX, "LSIF Map Legend", dialogText, "OK", "Tutup");
@@ -10941,6 +11399,131 @@ public OnPlayerHouseSold(playerid, sellPrice)
     return 1;
 }
 
+
+public OnGangTerritoriesLoaded()
+{
+    new rows = cache_num_rows();
+    new territoryIndex;
+    new ownerOrgID;
+    new ownerColor;
+    new ownerName[64];
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name_int(i, "territory_index", territoryIndex);
+        cache_get_value_name_int(i, "owner_org_id", ownerOrgID);
+        cache_get_value_name(i, "owner_org_name", ownerName, sizeof(ownerName));
+        cache_get_value_name_int(i, "owner_color", ownerColor);
+
+        territoryIndex--;
+
+        if (!IsValidTerritoryIndex(territoryIndex))
+        {
+            continue;
+        }
+
+        TerritoryOwnerOrgID[territoryIndex] = ownerOrgID;
+        TerritoryOwnerColor[territoryIndex] = ownerColor;
+        format(TerritoryOwnerName[territoryIndex], 64, "%s", ownerName);
+
+        if (TerritoryOwnerOrgID[territoryIndex] <= 0)
+        {
+            TerritoryOwnerColor[territoryIndex] = COLOR_GRAY;
+            format(TerritoryOwnerName[territoryIndex], 64, "Neutral");
+        }
+    }
+
+    RefreshAllTerritoryLabels();
+    RefreshAllPlayerMapIcons();
+    print("[LSIF] Gang territories ownership loaded.");
+    return 1;
+}
+
+public OnGangTerritoryOrgLookup(playerid, territoryIndex, orgid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner server yang bisa set territory owner.");
+        return 1;
+    }
+
+    if (!IsValidTerritoryIndex(territoryIndex))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Territory ID tidak valid.");
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+
+    if (rows == 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Organization ID tidak ditemukan.");
+        return 1;
+    }
+
+    new orgName[64];
+    new orgColor;
+    new query[512];
+
+    cache_get_value_name(0, "name", orgName, sizeof(orgName));
+    cache_get_value_name_int(0, "gang_color", orgColor);
+
+    TerritoryOwnerOrgID[territoryIndex] = orgid;
+    TerritoryOwnerColor[territoryIndex] = orgColor;
+    format(TerritoryOwnerName[territoryIndex], 64, "%s", orgName);
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "UPDATE gang_territories SET owner_org_id=%d, owner_org_name='%e', owner_color=%d, updated_at=NOW() WHERE territory_index=%d LIMIT 1",
+        orgid,
+        orgName,
+        orgColor,
+        territoryIndex + 1
+    );
+    mysql_tquery(g_SQL, query);
+
+    UpdateTerritoryMarkerLabel(territoryIndex);
+    RefreshAllPlayerMapIcons();
+
+    new msg[144];
+    format(msg, sizeof(msg), "Territory %s sekarang dimiliki oleh %s.", TerritoryName[territoryIndex], orgName);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    return 1;
+}
+
+public OnGangColorUpdated(playerid, colorIndex)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new affectedRows = cache_affected_rows();
+
+    if (affectedRows <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gagal mengubah gang color.");
+        return 1;
+    }
+
+    new color = GangColorValue[colorIndex];
+    PlayerOrgColor[playerid] = color;
+    ApplyGangColorToOnlineMembers(PlayerOrgID[playerid], color);
+    ApplyGangColorToTerritories(PlayerOrgID[playerid], color);
+
+    new msg[144];
+    format(msg, sizeof(msg), "Gang color organisasi kamu diubah menjadi %s.", GangColorName[colorIndex]);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    return 1;
+}
+
 public OnPlayerOrgLoaded(playerid)
 {
     if (!IsPlayerConnected(playerid))
@@ -10960,6 +11543,7 @@ public OnPlayerOrgLoaded(playerid)
     cache_get_value_name_int(0, "rank_level", PlayerOrgRank[playerid]);
     cache_get_value_name(0, "name", PlayerOrgName[playerid], 64);
     cache_get_value_name_int(0, "bank_money", PlayerOrgBankMoney[playerid]);
+    cache_get_value_name_int(0, "gang_color", PlayerOrgColor[playerid]);
 
     new msg[144];
     format(msg, sizeof(msg), "Organisasi dimuat: %s.", PlayerOrgName[playerid]);
@@ -11045,6 +11629,7 @@ public OnOrgCreated(playerid)
 
     format(PlayerOrgName[playerid], 64, "%s", PlayerPendingOrgName[playerid]);
     PlayerOrgBankMoney[playerid] = 0;
+    PlayerOrgColor[playerid] = DEFAULT_GANG_COLOR;
 
     SendClientMessage(playerid, COLOR_GREEN, "Organisasi berhasil dibuat. Kamu menjadi Owner.");
     SendClientMessage(playerid, COLOR_WHITE, "Gunakan /org untuk melihat info organisasi.");
@@ -11074,6 +11659,7 @@ public OnOrgInviteAccepted(playerid)
     PlayerOrgRank[playerid] = ORG_RANK_MEMBER;
     format(PlayerOrgName[playerid], 64, "%s", PlayerOrgName[inviterid]);
     PlayerOrgBankMoney[playerid] = PlayerOrgBankMoney[inviterid];
+    PlayerOrgColor[playerid] = PlayerOrgColor[inviterid];
     PlayerOrgInvite[playerid] = INVALID_PLAYER_ID;
 
     SendClientMessage(playerid, COLOR_GREEN, "Kamu berhasil bergabung ke organisasi.");
@@ -11980,6 +12566,122 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+
+    if (!strcmp(cmdtext, "/gangmenu", true))
+    {
+        ShowGangMenuDialog(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/ganginfo", true))
+    {
+        ShowGangInfoDialog(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/turfmap", true) || !strcmp(cmdtext, "/territories", true))
+    {
+        ShowTurfMapDialog(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/gangcolor", true))
+    {
+        ShowGangColorDialog(playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/gangcolor ", true) == 0)
+    {
+        if (!IsOrgOwner(playerid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner organization yang bisa mengubah gang color.");
+            return 1;
+        }
+
+        new colorStr[16];
+
+        if (!GetOneParam(cmdtext[11], colorStr, sizeof(colorStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangcolor [1-8]");
+            return 1;
+        }
+
+        if (!IsNumericString(colorStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Color harus angka 1 sampai 8.");
+            return 1;
+        }
+
+        new colorIndex = strval(colorStr) - 1;
+
+        if (colorIndex < 0 || colorIndex >= MAX_GANG_COLOR_PRESETS)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Color harus 1 sampai 8.");
+            return 1;
+        }
+
+        new query[256];
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE organizations SET gang_color=%d WHERE id=%d LIMIT 1", GangColorValue[colorIndex], PlayerOrgID[playerid]);
+        mysql_tquery(g_SQL, query, "OnGangColorUpdated", "ii", playerid, colorIndex);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/setterritory ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner server yang bisa set territory owner.");
+            return 1;
+        }
+
+        new territoryStr[16];
+        new orgStr[16];
+
+        if (!GetTwoParams(cmdtext[14], territoryStr, sizeof(territoryStr), orgStr, sizeof(orgStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setterritory [territory_id] [org_id]");
+            SendClientMessage(playerid, COLOR_WHITE, "Gunakan org_id 0 untuk Neutral. Lihat ID territory di /turfmap dan org ID di /orgs.");
+            return 1;
+        }
+
+        if (!IsNumericString(territoryStr) || !IsNumericString(orgStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Territory ID dan Org ID harus angka.");
+            return 1;
+        }
+
+        new territoryIndex = strval(territoryStr) - 1;
+        new orgid = strval(orgStr);
+
+        if (!IsValidTerritoryIndex(territoryIndex))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Territory ID tidak valid.");
+            return 1;
+        }
+
+        if (orgid <= 0)
+        {
+            TerritoryOwnerOrgID[territoryIndex] = 0;
+            TerritoryOwnerColor[territoryIndex] = COLOR_GRAY;
+            format(TerritoryOwnerName[territoryIndex], 64, "Neutral");
+
+            new query[256];
+            mysql_format(g_SQL, query, sizeof(query), "UPDATE gang_territories SET owner_org_id=0, owner_org_name='Neutral', owner_color=%d, updated_at=NOW() WHERE territory_index=%d LIMIT 1", COLOR_GRAY, territoryIndex + 1);
+            mysql_tquery(g_SQL, query);
+
+            UpdateTerritoryMarkerLabel(territoryIndex);
+            RefreshAllPlayerMapIcons();
+            SendClientMessage(playerid, COLOR_GREEN, "Territory berhasil dikembalikan ke Neutral.");
+            return 1;
+        }
+
+        new query[256];
+        mysql_format(g_SQL, query, sizeof(query), "SELECT id, name, gang_color FROM organizations WHERE id=%d LIMIT 1", orgid);
+        mysql_tquery(g_SQL, query, "OnGangTerritoryOrgLookup", "iii", playerid, territoryIndex, orgid);
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/help", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF HELP ==========");
@@ -11991,6 +12693,10 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/weaponshop - Buka Ammu-Nation Weapon Shop, harus dekat Ammu-Nation");
         SendClientMessage(playerid, COLOR_WHITE, "/weaponinfo - Lihat daftar weapon dan harga");
         SendClientMessage(playerid, COLOR_WHITE, "/weaponlicense - Cek status weapon license");
+        SendClientMessage(playerid, COLOR_WHITE, "/gangmenu - Menu gang/territory");
+        SendClientMessage(playerid, COLOR_WHITE, "/turfmap - Lihat territory map");
+        SendClientMessage(playerid, COLOR_WHITE, "/gangcolor - Set warna gang, Owner org only");
+        SendClientMessage(playerid, COLOR_WHITE, "/setterritory [territory] [org] - Set owner turf, Owner server only");
         SendClientMessage(playerid, COLOR_WHITE, "/loadout - Lihat saved weapon loadout");
         SendClientMessage(playerid, COLOR_WHITE, "/reloadout - Apply ulang saved weapon loadout");
         SendClientMessage(playerid, COLOR_WHITE, "/stats - Melihat statistik player");
@@ -12137,7 +12843,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.17H Map Legend & World Markers");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.20A Gang Territory Foundation");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -12146,6 +12852,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.20A: Gang identity, territory map, gang color, dan territory owner foundation.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.19B: Weapon license dan saved loadout persistence.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D: Release polish, version, credits, staff, beta guide.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.17F: Organization info, members, bank, invite, rank, kick, leave, dan disband memakai Dialog UI.");

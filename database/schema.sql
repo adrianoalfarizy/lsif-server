@@ -323,3 +323,27 @@ CREATE TABLE IF NOT EXISTS player_weapons (
     INDEX idx_player_id (player_id),
     INDEX idx_weapon_id (weapon_id)
 );
+
+ALTER TABLE organizations
+ADD COLUMN IF NOT EXISTS gang_color INT NOT NULL DEFAULT -1
+AFTER bank_money;
+
+CREATE TABLE IF NOT EXISTS gang_territories (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    territory_index INT NOT NULL UNIQUE,
+    territory_name VARCHAR(64) NOT NULL,
+    owner_org_id INT NOT NULL DEFAULT 0,
+    owner_org_name VARCHAR(64) NOT NULL DEFAULT 'Neutral',
+    owner_color INT NOT NULL DEFAULT -1431655681,
+
+    center_x FLOAT NOT NULL,
+    center_y FLOAT NOT NULL,
+    center_z FLOAT NOT NULL,
+    radius FLOAT NOT NULL DEFAULT 100,
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+
+    INDEX idx_owner_org_id (owner_org_id),
+    INDEX idx_territory_index (territory_index)
+);

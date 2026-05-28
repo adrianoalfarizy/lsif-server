@@ -34,6 +34,16 @@
 #define DIALOG_BUSINESS_BUY_CONFIRM 1018
 #define DIALOG_BUSINESS_UPGRADE_CONFIRM 1019
 #define DIALOG_BUSINESS_SELL_CONFIRM 1020
+#define DIALOG_DEALER_MAIN 1021
+#define DIALOG_GARAGE_MENU 1022
+#define DIALOG_GARAGE_SPAWN 1023
+#define DIALOG_GARAGE_RENAME_SLOT 1024
+#define DIALOG_GARAGE_RENAME_INPUT 1025
+#define DIALOG_GARAGE_SELL_SLOT 1026
+#define DIALOG_GARAGE_SELL_CONFIRM 1027
+#define DIALOG_GARAGE_REPAIR_CONFIRM 1028
+#define DIALOG_GARAGE_REFUEL_CONFIRM 1029
+#define DIALOG_GARAGE_STATUS 1030
 
 #define STARTER_CASH 15000
 #define STARTER_BANK 5000
@@ -645,6 +655,7 @@ new PlayerFindingDealer[MAX_PLAYERS];
 new PlayerDialogDealerVehicle[MAX_PLAYERS];
 new PlayerDialogHouseIndex[MAX_PLAYERS];
 new PlayerDialogBusinessIndex[MAX_PLAYERS];
+new PlayerDialogGarageSlot[MAX_PLAYERS];
 
 new Float:DealershipX[MAX_DEALERSHIPS] =
 {
@@ -3735,6 +3746,7 @@ stock ResetPlayerDealerData(playerid)
     PlayerDialogDealerVehicle[playerid] = -1;
     PlayerDialogHouseIndex[playerid] = -1;
     PlayerDialogBusinessIndex[playerid] = -1;
+    PlayerDialogGarageSlot[playerid] = -1;
     return 1;
 }
 
@@ -4405,7 +4417,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.17D Dialog Pack");
+    SetGameModeText("LSIF Dev v0.17E Garage Dialog");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -4485,7 +4497,7 @@ public OnGameModeInit()
     print("[LSIF] Manual vehicle engine mode aktif.");
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
     print("[LSIF] Custom house arrow pickups aktif.");
-    print("[LSIF] Gamemode v0.17D Location Dialog Pack berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.17E Vehicle Garage Dialog Pack berhasil dijalankan.");
     return 1;
 }
 
@@ -4754,6 +4766,201 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         return 1;
     }
 
+
+
+    if (dialogid == DIALOG_DEALER_MAIN)
+    {
+        if (!response)
+        {
+            return 1;
+        }
+
+        if (!IsPlayerNearDealership(playerid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu sudah tidak dekat dealership.");
+            return 1;
+        }
+
+        if (listitem == 0)
+        {
+            ShowDealershipDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 1)
+        {
+            ShowGarageMenuDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 2)
+        {
+            ShowGarageRepairConfirmDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 3)
+        {
+            ShowGarageRefuelConfirmDialog(playerid);
+            return 1;
+        }
+
+        return 1;
+    }
+
+    if (dialogid == DIALOG_GARAGE_MENU)
+    {
+        if (!response)
+        {
+            ShowDealershipMainDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 0)
+        {
+            ShowGarageStatusDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 1)
+        {
+            ShowGarageSpawnDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 2)
+        {
+            ShowGarageRenameSlotDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 3)
+        {
+            ShowGarageRepairConfirmDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 4)
+        {
+            ShowGarageRefuelConfirmDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 5)
+        {
+            ShowGarageSellSlotDialog(playerid);
+            return 1;
+        }
+
+        return 1;
+    }
+
+    if (dialogid == DIALOG_GARAGE_STATUS)
+    {
+        if (response)
+        {
+            ShowGarageMenuDialog(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_GARAGE_SPAWN)
+    {
+        if (!response)
+        {
+            ShowGarageMenuDialog(playerid);
+            return 1;
+        }
+
+        ProcessDialogGarageSpawn(playerid, listitem);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_GARAGE_RENAME_SLOT)
+    {
+        if (!response)
+        {
+            ShowGarageMenuDialog(playerid);
+            return 1;
+        }
+
+        if (!IsValidGarageSlot(listitem) || PlayerGarageDBID[playerid][listitem] <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Slot garage ini kosong/tidak valid.");
+            ShowGarageRenameSlotDialog(playerid);
+            return 1;
+        }
+
+        ShowGarageRenameInputDialog(playerid, listitem);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_GARAGE_RENAME_INPUT)
+    {
+        if (!response)
+        {
+            ShowGarageRenameSlotDialog(playerid);
+            return 1;
+        }
+
+        ProcessDialogGarageRename(playerid, PlayerDialogGarageSlot[playerid], inputtext);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_GARAGE_SELL_SLOT)
+    {
+        if (!response)
+        {
+            ShowGarageMenuDialog(playerid);
+            return 1;
+        }
+
+        if (!IsValidGarageSlot(listitem) || PlayerGarageDBID[playerid][listitem] <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Slot garage ini kosong/tidak valid.");
+            ShowGarageSellSlotDialog(playerid);
+            return 1;
+        }
+
+        ShowGarageSellConfirmDialog(playerid, listitem);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_GARAGE_SELL_CONFIRM)
+    {
+        if (!response)
+        {
+            ShowGarageSellSlotDialog(playerid);
+            return 1;
+        }
+
+        ProcessDialogGarageSell(playerid, PlayerDialogGarageSlot[playerid]);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_GARAGE_REPAIR_CONFIRM)
+    {
+        if (!response)
+        {
+            ShowGarageMenuDialog(playerid);
+            return 1;
+        }
+
+        ProcessDialogVehicleRepair(playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_GARAGE_REFUEL_CONFIRM)
+    {
+        if (!response)
+        {
+            ShowGarageMenuDialog(playerid);
+            return 1;
+        }
+
+        ProcessDialogVehicleRefuel(playerid);
+        return 1;
+    }
 
     if (dialogid == DIALOG_DEALER_MENU)
     {
@@ -5559,6 +5766,529 @@ stock ProcessATMWithdraw(playerid, const amountText[])
 }
 
 
+stock ShowDealershipMainDialog(playerid)
+{
+    if (!IsPlayerNearDealership(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat dealership.");
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan /finddealer untuk mencari dealership terdekat.");
+        return 0;
+    }
+
+    new dialogText[256];
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "Vehicle Shop\nGarage Service\nRepair Active Vehicle\nRefuel Active Vehicle\nCancel"
+    );
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_DEALER_MAIN,
+        DIALOG_STYLE_LIST,
+        "Dealership Interaction",
+        dialogText,
+        "Pilih",
+        "Tutup"
+    );
+    return 1;
+}
+
+stock ShowGarageMenuDialog(playerid)
+{
+    if (!IsPlayerNearDealership(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Garage service hanya tersedia dekat dealership.");
+        return 0;
+    }
+
+    new dialogText[256];
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "View Garage Status\nSpawn Vehicle\nRename Vehicle\nRepair Active Vehicle\nRefuel Active Vehicle\nSell Vehicle\nCancel"
+    );
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_GARAGE_MENU,
+        DIALOG_STYLE_LIST,
+        "Garage Service",
+        dialogText,
+        "Pilih",
+        "Back"
+    );
+    return 1;
+}
+
+stock BuildGarageSlotList(playerid, output[], size)
+{
+    output[0] = EOS;
+
+    for (new i = 0; i < MAX_GARAGE_SLOTS; i++)
+    {
+        new row[144];
+
+        if (PlayerGarageDBID[playerid][i] > 0)
+        {
+            format(
+                row,
+                sizeof(row),
+                "Slot %d: %s | Model %d | Fuel %d | HP %.0f\n",
+                i + 1,
+                PlayerGarageName[playerid][i],
+                PlayerGarageModel[playerid][i],
+                PlayerGarageFuel[playerid][i],
+                PlayerGarageHealth[playerid][i]
+            );
+        }
+        else
+        {
+            format(row, sizeof(row), "Slot %d: Empty\n", i + 1);
+        }
+
+        strcat(output, row, size);
+    }
+
+    return 1;
+}
+
+stock ShowGarageStatusDialog(playerid)
+{
+    new dialogText[1024];
+    new header[128];
+
+    format(
+        header,
+        sizeof(header),
+        "Garage: %d/%d vehicles\nActive Slot: %d\n\n",
+        CountPlayerGarageVehicles(playerid),
+        MAX_GARAGE_SLOTS,
+        OwnedVehicleSlot[playerid] == -1 ? 0 : OwnedVehicleSlot[playerid] + 1
+    );
+
+    format(dialogText, sizeof(dialogText), "%s", header);
+
+    new slots[768];
+    BuildGarageSlotList(playerid, slots, sizeof(slots));
+    strcat(dialogText, slots, sizeof(dialogText));
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_GARAGE_STATUS,
+        DIALOG_STYLE_MSGBOX,
+        "Garage Status",
+        dialogText,
+        "Back",
+        "Tutup"
+    );
+    return 1;
+}
+
+stock ShowGarageSpawnDialog(playerid)
+{
+    new dialogText[1024];
+    BuildGarageSlotList(playerid, dialogText, sizeof(dialogText));
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_GARAGE_SPAWN,
+        DIALOG_STYLE_LIST,
+        "Spawn Vehicle",
+        dialogText,
+        "Spawn",
+        "Back"
+    );
+    return 1;
+}
+
+stock ShowGarageRenameSlotDialog(playerid)
+{
+    new dialogText[1024];
+    BuildGarageSlotList(playerid, dialogText, sizeof(dialogText));
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_GARAGE_RENAME_SLOT,
+        DIALOG_STYLE_LIST,
+        "Rename Vehicle",
+        dialogText,
+        "Pilih",
+        "Back"
+    );
+    return 1;
+}
+
+stock ShowGarageRenameInputDialog(playerid, slotIndex)
+{
+    if (!IsValidGarageSlot(slotIndex) || PlayerGarageDBID[playerid][slotIndex] <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Slot garage ini kosong/tidak valid.");
+        return 0;
+    }
+
+    PlayerDialogGarageSlot[playerid] = slotIndex;
+
+    new dialogText[256];
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "Slot %d: %s\n\nMasukkan nama baru kendaraan.\nMinimal 3 karakter, maksimal 31 karakter.",
+        slotIndex + 1,
+        PlayerGarageName[playerid][slotIndex]
+    );
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_GARAGE_RENAME_INPUT,
+        DIALOG_STYLE_INPUT,
+        "Rename Vehicle",
+        dialogText,
+        "Save",
+        "Back"
+    );
+    return 1;
+}
+
+stock ShowGarageSellSlotDialog(playerid)
+{
+    new dialogText[1024];
+    BuildGarageSlotList(playerid, dialogText, sizeof(dialogText));
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_GARAGE_SELL_SLOT,
+        DIALOG_STYLE_LIST,
+        "Sell Vehicle",
+        dialogText,
+        "Pilih",
+        "Back"
+    );
+    return 1;
+}
+
+stock ShowGarageSellConfirmDialog(playerid, slotIndex)
+{
+    if (!IsValidGarageSlot(slotIndex) || PlayerGarageDBID[playerid][slotIndex] <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Slot garage ini kosong/tidak valid.");
+        return 0;
+    }
+
+    PlayerDialogGarageSlot[playerid] = slotIndex;
+
+    new modelid = PlayerGarageModel[playerid][slotIndex];
+    new basePrice = GetVehicleBasePrice(modelid);
+    new sellPrice = basePrice / 2;
+    new dialogText[384];
+
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "Slot %d: %s\nModel: %d\nSell price: $%d\n\nJual kendaraan ini?",
+        slotIndex + 1,
+        PlayerGarageName[playerid][slotIndex],
+        modelid,
+        sellPrice
+    );
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_GARAGE_SELL_CONFIRM,
+        DIALOG_STYLE_MSGBOX,
+        "Confirm Sell Vehicle",
+        dialogText,
+        "Sell",
+        "Back"
+    );
+    return 1;
+}
+
+stock ShowGarageRepairConfirmDialog(playerid)
+{
+    if (OwnedVehicleID[playerid] == INVALID_VEHICLE_ID || OwnedVehicleSlot[playerid] == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Tidak ada kendaraan aktif yang sedang spawn.");
+        return 0;
+    }
+
+    if (!IsPlayerNearDealership(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat dealership untuk repair kendaraan.");
+        return 0;
+    }
+
+    new Float:health = OwnedVehicleHealth[playerid];
+    if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
+    {
+        GetVehicleHealth(OwnedVehicleID[playerid], health);
+    }
+
+    new dialogText[384];
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "Vehicle: %s\nSlot: %d\nHealth: %.1f/1000\nRepair Cost: $%d\n\nRepair kendaraan aktif?",
+        OwnedVehicleName[playerid],
+        OwnedVehicleSlot[playerid] + 1,
+        health,
+        VEHICLE_REPAIR_COST
+    );
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_GARAGE_REPAIR_CONFIRM,
+        DIALOG_STYLE_MSGBOX,
+        "Repair Vehicle",
+        dialogText,
+        "Repair",
+        "Back"
+    );
+    return 1;
+}
+
+stock ShowGarageRefuelConfirmDialog(playerid)
+{
+    if (OwnedVehicleDBID[playerid] <= 0 || OwnedVehicleSlot[playerid] == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Tidak ada kendaraan aktif.");
+        return 0;
+    }
+
+    if (!IsPlayerNearDealership(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat dealership untuk refuel kendaraan.");
+        return 0;
+    }
+
+    new needFuel = VEHICLE_MAX_FUEL - OwnedVehicleFuel[playerid];
+    if (needFuel < 0)
+    {
+        needFuel = 0;
+    }
+
+    new cost = needFuel * VEHICLE_REFUEL_COST_PER_POINT;
+    new dialogText[384];
+
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "Vehicle: %s\nSlot: %d\nFuel: %d/%d\nNeed Fuel: %d\nCost: $%d\n\nRefuel kendaraan aktif sampai penuh?",
+        OwnedVehicleName[playerid],
+        OwnedVehicleSlot[playerid] + 1,
+        OwnedVehicleFuel[playerid],
+        VEHICLE_MAX_FUEL,
+        needFuel,
+        cost
+    );
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_GARAGE_REFUEL_CONFIRM,
+        DIALOG_STYLE_MSGBOX,
+        "Refuel Vehicle",
+        dialogText,
+        "Refuel",
+        "Back"
+    );
+    return 1;
+}
+
+stock ProcessDialogGarageSpawn(playerid, slotIndex)
+{
+    if (!IsValidGarageSlot(slotIndex))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Slot tidak valid.");
+        return 0;
+    }
+
+    if (PlayerGarageDBID[playerid][slotIndex] <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Slot garage ini kosong.");
+        ShowGarageSpawnDialog(playerid);
+        return 0;
+    }
+
+    SetActiveVehicleFromGarage(playerid, slotIndex);
+    SpawnOwnedVehicle(playerid);
+
+    new msg[144];
+    format(msg, sizeof(msg), "Kendaraan slot %d sekarang aktif.", slotIndex + 1);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    return 1;
+}
+
+stock ProcessDialogGarageRename(playerid, slotIndex, const newName[])
+{
+    if (!IsValidGarageSlot(slotIndex) || PlayerGarageDBID[playerid][slotIndex] <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Slot garage ini kosong/tidak valid.");
+        return 0;
+    }
+
+    if (strlen(newName) < 3)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Nama kendaraan minimal 3 karakter.");
+        ShowGarageRenameInputDialog(playerid, slotIndex);
+        return 0;
+    }
+
+    format(PlayerGarageName[playerid][slotIndex], 32, "%s", newName);
+
+    if (OwnedVehicleSlot[playerid] == slotIndex)
+    {
+        format(OwnedVehicleName[playerid], 32, "%s", newName);
+
+        if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
+        {
+            CreateOwnedVehicleLabel(playerid);
+        }
+    }
+
+    new query[256];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "UPDATE player_vehicles SET vehicle_name='%e' WHERE id=%d AND owner_id=%d LIMIT 1",
+        newName,
+        PlayerGarageDBID[playerid][slotIndex],
+        PlayerDBID[playerid]
+    );
+
+    mysql_tquery(g_SQL, query);
+
+    new msg[144];
+    format(msg, sizeof(msg), "Kendaraan slot %d berhasil diberi nama: %s.", slotIndex + 1, newName);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    ShowGarageMenuDialog(playerid);
+    return 1;
+}
+
+stock ProcessDialogGarageSell(playerid, slotIndex)
+{
+    if (!IsValidGarageSlot(slotIndex) || PlayerGarageDBID[playerid][slotIndex] <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Slot garage ini kosong/tidak valid.");
+        return 0;
+    }
+
+    new modelid = PlayerGarageModel[playerid][slotIndex];
+    new basePrice = GetVehicleBasePrice(modelid);
+    new sellPrice = basePrice / 2;
+    new query[256];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "DELETE FROM player_vehicles WHERE id=%d AND owner_id=%d LIMIT 1",
+        PlayerGarageDBID[playerid][slotIndex],
+        PlayerDBID[playerid]
+    );
+
+    mysql_tquery(g_SQL, query, "OnGarageVehicleSold", "iii", playerid, slotIndex, sellPrice);
+    return 1;
+}
+
+stock ProcessDialogVehicleRepair(playerid)
+{
+    if (OwnedVehicleID[playerid] == INVALID_VEHICLE_ID || OwnedVehicleSlot[playerid] == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Tidak ada kendaraan aktif yang sedang spawn.");
+        return 0;
+    }
+
+    if (!IsPlayerNearDealership(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat dealership untuk repair kendaraan.");
+        return 0;
+    }
+
+    if (PlayerMoney[playerid] < VEHICLE_REPAIR_COST)
+    {
+        new msg[144];
+        format(msg, sizeof(msg), "Cash tidak cukup. Biaya repair: $%d.", VEHICLE_REPAIR_COST);
+        SendClientMessage(playerid, COLOR_RED, msg);
+        return 0;
+    }
+
+    TakePlayerCash(playerid, VEHICLE_REPAIR_COST);
+
+    SetVehicleHealth(OwnedVehicleID[playerid], 1000.0);
+    OwnedVehicleHealth[playerid] = 1000.0;
+
+    if (IsValidGarageSlot(OwnedVehicleSlot[playerid]))
+    {
+        PlayerGarageHealth[playerid][OwnedVehicleSlot[playerid]] = 1000.0;
+    }
+
+    SaveActiveVehicleMeta(playerid);
+    SavePlayerData(playerid);
+
+    SendClientMessage(playerid, COLOR_GREEN, "Kendaraan berhasil diperbaiki.");
+    ShowGarageMenuDialog(playerid);
+    return 1;
+}
+
+stock ProcessDialogVehicleRefuel(playerid)
+{
+    if (OwnedVehicleDBID[playerid] <= 0 || OwnedVehicleSlot[playerid] == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Tidak ada kendaraan aktif.");
+        return 0;
+    }
+
+    if (!IsPlayerNearDealership(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat dealership untuk refuel kendaraan.");
+        return 0;
+    }
+
+    if (OwnedVehicleFuel[playerid] >= VEHICLE_MAX_FUEL)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Fuel kendaraan sudah penuh.");
+        ShowGarageMenuDialog(playerid);
+        return 0;
+    }
+
+    new needFuel = VEHICLE_MAX_FUEL - OwnedVehicleFuel[playerid];
+    new cost = needFuel * VEHICLE_REFUEL_COST_PER_POINT;
+
+    if (PlayerMoney[playerid] < cost)
+    {
+        new msg[144];
+        format(msg, sizeof(msg), "Cash tidak cukup. Biaya full refuel: $%d.", cost);
+        SendClientMessage(playerid, COLOR_RED, msg);
+        return 0;
+    }
+
+    TakePlayerCash(playerid, cost);
+
+    OwnedVehicleFuel[playerid] = VEHICLE_MAX_FUEL;
+
+    if (IsValidGarageSlot(OwnedVehicleSlot[playerid]))
+    {
+        PlayerGarageFuel[playerid][OwnedVehicleSlot[playerid]] = VEHICLE_MAX_FUEL;
+    }
+
+    if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
+    {
+        ApplyOwnedVehicleParams(playerid);
+    }
+
+    SaveActiveVehicleMeta(playerid);
+    SavePlayerData(playerid);
+
+    new msg[144];
+    format(msg, sizeof(msg), "Refuel berhasil. Biaya: $%d. Fuel sekarang: %d/%d.", cost, OwnedVehicleFuel[playerid], VEHICLE_MAX_FUEL);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    ShowGarageMenuDialog(playerid);
+    return 1;
+}
+
+
 stock ShowDealershipDialog(playerid)
 {
     if (!IsPlayerNearDealership(playerid))
@@ -6200,7 +6930,7 @@ stock HandleWorldInteractKey(playerid)
 
     if (IsPlayerNearDealership(playerid))
     {
-        ShowDealershipDialog(playerid);
+        ShowDealershipMainDialog(playerid);
         return 1;
     }
 
@@ -8081,7 +8811,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF HELP ==========");
         SendClientMessage(playerid, COLOR_WHITE, "/help - Menampilkan bantuan");
-        SendClientMessage(playerid, COLOR_WHITE, "ALT - Interaksi dunia; ATM sudah memakai Dialog UI, /interact sebagai fallback");
+        SendClientMessage(playerid, COLOR_WHITE, "ALT - Interaksi dunia; ATM, dealer, house, business, dan garage service memakai Dialog UI");
         SendClientMessage(playerid, COLOR_WHITE, "Tombol 2 - Khusus start job/vehicle mission saat driver kendaraan job");
         SendClientMessage(playerid, COLOR_WHITE, "/stats - Melihat statistik player");
         SendClientMessage(playerid, COLOR_WHITE, "/money - Melihat uang kamu");
@@ -8221,7 +8951,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.17D Location Dialog Pack");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.17E Vehicle Garage Dialog Pack");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -8232,7 +8962,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D: Release polish, version, credits, staff, beta guide.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.17D: ATM, dealership, house, dan business memakai Dialog UI berbasis ALT.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.17E: Garage, vehicle service, spawn, rename, repair/refuel, dan sell memakai Dialog UI.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.17B: house arrow enter/exit, ALT transaksi/menu, dan job vehicle grace timer.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16C: Admin beta dashboard dan monitoring reports/logs.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16B: Starter pack, bug report, suggestion, feedback handling.");
@@ -12898,7 +13628,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         SendClientMessage(playerid, COLOR_YELLOW, "========== CLOSED BETA STATUS ==========");
 
-        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.17D Dialog Pack");
+        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.17E Garage Dialog");
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         format(msg, sizeof(msg), "Uptime: %s", uptimeText);

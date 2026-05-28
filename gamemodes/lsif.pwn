@@ -23,6 +23,17 @@
 #define DIALOG_ATM_DEPOSIT 1006
 #define DIALOG_ATM_WITHDRAW 1007
 #define DIALOG_ATM_BALANCE 1008
+#define DIALOG_DEALER_MENU 1010
+#define DIALOG_DEALER_CONFIRM 1011
+#define DIALOG_HOUSE_MENU 1012
+#define DIALOG_HOUSE_INFO 1013
+#define DIALOG_HOUSE_BUY_CONFIRM 1014
+#define DIALOG_HOUSE_SELL_CONFIRM 1015
+#define DIALOG_BUSINESS_MENU 1016
+#define DIALOG_BUSINESS_INFO 1017
+#define DIALOG_BUSINESS_BUY_CONFIRM 1018
+#define DIALOG_BUSINESS_UPGRADE_CONFIRM 1019
+#define DIALOG_BUSINESS_SELL_CONFIRM 1020
 
 #define STARTER_CASH 15000
 #define STARTER_BANK 5000
@@ -631,6 +642,9 @@ new BusinessName[MAX_BUSINESSES][64] =
 };
 
 new PlayerFindingDealer[MAX_PLAYERS];
+new PlayerDialogDealerVehicle[MAX_PLAYERS];
+new PlayerDialogHouseIndex[MAX_PLAYERS];
+new PlayerDialogBusinessIndex[MAX_PLAYERS];
 
 new Float:DealershipX[MAX_DEALERSHIPS] =
 {
@@ -3718,6 +3732,9 @@ stock IsBusinessOwner(playerid)
 stock ResetPlayerDealerData(playerid)
 {
     PlayerFindingDealer[playerid] = 0;
+    PlayerDialogDealerVehicle[playerid] = -1;
+    PlayerDialogHouseIndex[playerid] = -1;
+    PlayerDialogBusinessIndex[playerid] = -1;
     return 1;
 }
 
@@ -4388,7 +4405,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.17C ATM Dialog");
+    SetGameModeText("LSIF Dev v0.17D Dialog Pack");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -4468,7 +4485,7 @@ public OnGameModeInit()
     print("[LSIF] Manual vehicle engine mode aktif.");
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
     print("[LSIF] Custom house arrow pickups aktif.");
-    print("[LSIF] Gamemode v0.17C ATM Dialog UI berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.17D Location Dialog Pack berhasil dijalankan.");
     return 1;
 }
 
@@ -4734,6 +4751,282 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         }
 
         ProcessATMWithdraw(playerid, inputtext);
+        return 1;
+    }
+
+
+    if (dialogid == DIALOG_DEALER_MENU)
+    {
+        if (!response)
+        {
+            return 1;
+        }
+
+        if (!IsPlayerNearDealership(playerid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu sudah tidak dekat dealership.");
+            return 1;
+        }
+
+        if (!IsValidShopVehicleIndex(listitem))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Pilihan kendaraan tidak valid.");
+            return 1;
+        }
+
+        ShowDealershipConfirmDialog(playerid, listitem);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_DEALER_CONFIRM)
+    {
+        new shopIndex = PlayerDialogDealerVehicle[playerid];
+
+        if (!response)
+        {
+            ShowDealershipDialog(playerid);
+            return 1;
+        }
+
+        ProcessDialogVehiclePurchase(playerid, shopIndex);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_HOUSE_MENU)
+    {
+        if (!response)
+        {
+            return 1;
+        }
+
+        new houseIndex = PlayerDialogHouseIndex[playerid];
+
+        if (!IsValidHouseIndex(houseIndex) || !IsPlayerNearHouse(playerid, houseIndex))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu sudah tidak dekat rumah.");
+            return 1;
+        }
+
+        if (listitem == 0)
+        {
+            ShowHouseInfoDialog(playerid, houseIndex);
+            return 1;
+        }
+
+        if (listitem == 1)
+        {
+            ShowHouseBuyConfirmDialog(playerid, houseIndex);
+            return 1;
+        }
+
+        if (listitem == 2)
+        {
+            if (PlayerHouseDBID[playerid] <= 0 || PlayerHouseIndex[playerid] == -1)
+            {
+                SendClientMessage(playerid, COLOR_RED, "Kamu belum punya rumah.");
+                return 1;
+            }
+            ShowHouseInfoDialog(playerid, PlayerHouseIndex[playerid]);
+            return 1;
+        }
+
+        if (listitem == 3)
+        {
+            if (PlayerHouseDBID[playerid] <= 0 || PlayerHouseIndex[playerid] == -1)
+            {
+                SendClientMessage(playerid, COLOR_RED, "Kamu belum punya rumah.");
+                return 1;
+            }
+
+            if (!PlayerInsideHouse[playerid] && !IsPlayerNearHouse(playerid, PlayerHouseIndex[playerid]))
+            {
+                SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat rumahmu untuk lock/unlock.");
+                return 1;
+            }
+
+            if (PlayerHouseLocked[playerid])
+            {
+                PlayerHouseLocked[playerid] = 0;
+                SendClientMessage(playerid, COLOR_GREEN, "Rumah dibuka.");
+            }
+            else
+            {
+                PlayerHouseLocked[playerid] = 1;
+                SendClientMessage(playerid, COLOR_YELLOW, "Rumah dikunci.");
+            }
+
+            SavePlayerHouseLock(playerid);
+            return 1;
+        }
+
+        if (listitem == 4)
+        {
+            ShowHouseSellConfirmDialog(playerid);
+            return 1;
+        }
+
+        return 1;
+    }
+
+    if (dialogid == DIALOG_HOUSE_INFO)
+    {
+        if (response)
+        {
+            new houseIndex = PlayerDialogHouseIndex[playerid];
+            if (IsValidHouseIndex(houseIndex) && IsPlayerNearHouse(playerid, houseIndex))
+            {
+                ShowHouseInteractionDialog(playerid, houseIndex);
+            }
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_HOUSE_BUY_CONFIRM)
+    {
+        new houseIndex = PlayerDialogHouseIndex[playerid];
+
+        if (!response)
+        {
+            if (IsValidHouseIndex(houseIndex) && IsPlayerNearHouse(playerid, houseIndex))
+            {
+                ShowHouseInteractionDialog(playerid, houseIndex);
+            }
+            return 1;
+        }
+
+        ProcessDialogHouseBuy(playerid, houseIndex);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_HOUSE_SELL_CONFIRM)
+    {
+        if (!response)
+        {
+            new houseIndex = PlayerDialogHouseIndex[playerid];
+            if (IsValidHouseIndex(houseIndex) && IsPlayerNearHouse(playerid, houseIndex))
+            {
+                ShowHouseInteractionDialog(playerid, houseIndex);
+            }
+            return 1;
+        }
+
+        ProcessDialogHouseSell(playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_BUSINESS_MENU)
+    {
+        if (!response)
+        {
+            return 1;
+        }
+
+        new businessIndex = PlayerDialogBusinessIndex[playerid];
+
+        if (!IsValidBusinessIndex(businessIndex) || !IsPlayerNearBusiness(playerid, businessIndex))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu sudah tidak dekat business.");
+            return 1;
+        }
+
+        if (listitem == 0)
+        {
+            ShowBusinessInfoDialog(playerid, businessIndex);
+            return 1;
+        }
+
+        if (listitem == 1)
+        {
+            ShowBusinessBuyConfirmDialog(playerid, businessIndex);
+            return 1;
+        }
+
+        if (listitem == 2)
+        {
+            ShowMyBusinessDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 3)
+        {
+            ProcessDialogBusinessCollect(playerid);
+            return 1;
+        }
+
+        if (listitem == 4)
+        {
+            ShowBusinessUpgradeConfirmDialog(playerid);
+            return 1;
+        }
+
+        if (listitem == 5)
+        {
+            ShowBusinessSellConfirmDialog(playerid);
+            return 1;
+        }
+
+        return 1;
+    }
+
+    if (dialogid == DIALOG_BUSINESS_INFO)
+    {
+        if (response)
+        {
+            new businessIndex = PlayerDialogBusinessIndex[playerid];
+            if (IsValidBusinessIndex(businessIndex) && IsPlayerNearBusiness(playerid, businessIndex))
+            {
+                ShowBusinessInteractionDialog(playerid, businessIndex);
+            }
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_BUSINESS_BUY_CONFIRM)
+    {
+        new businessIndex = PlayerDialogBusinessIndex[playerid];
+
+        if (!response)
+        {
+            if (IsValidBusinessIndex(businessIndex) && IsPlayerNearBusiness(playerid, businessIndex))
+            {
+                ShowBusinessInteractionDialog(playerid, businessIndex);
+            }
+            return 1;
+        }
+
+        ProcessDialogBusinessBuy(playerid, businessIndex);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_BUSINESS_UPGRADE_CONFIRM)
+    {
+        if (!response)
+        {
+            new businessIndex = PlayerDialogBusinessIndex[playerid];
+            if (IsValidBusinessIndex(businessIndex) && IsPlayerNearBusiness(playerid, businessIndex))
+            {
+                ShowBusinessInteractionDialog(playerid, businessIndex);
+            }
+            return 1;
+        }
+
+        ProcessDialogBusinessUpgrade(playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_BUSINESS_SELL_CONFIRM)
+    {
+        if (!response)
+        {
+            new businessIndex = PlayerDialogBusinessIndex[playerid];
+            if (IsValidBusinessIndex(businessIndex) && IsPlayerNearBusiness(playerid, businessIndex))
+            {
+                ShowBusinessInteractionDialog(playerid, businessIndex);
+            }
+            return 1;
+        }
+
+        ProcessDialogBusinessSell(playerid);
         return 1;
     }
 
@@ -5265,6 +5558,620 @@ stock ProcessATMWithdraw(playerid, const amountText[])
     return 1;
 }
 
+
+stock ShowDealershipDialog(playerid)
+{
+    if (!IsPlayerNearDealership(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat dealership.");
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan /finddealer untuk mencari dealership terdekat.");
+        return 0;
+    }
+
+    new dialogText[1024];
+    dialogText[0] = EOS;
+
+    for (new i = 0; i < MAX_SHOP_VEHICLES; i++)
+    {
+        new row[96];
+        format(row, sizeof(row), "%d. %s - $%d\n", i + 1, ShopVehicleName[i], ShopVehiclePrice[i]);
+        strcat(dialogText, row, sizeof(dialogText));
+    }
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_DEALER_MENU,
+        DIALOG_STYLE_LIST,
+        "LSIF Dealership",
+        dialogText,
+        "Detail",
+        "Tutup"
+    );
+
+    return 1;
+}
+
+stock ShowDealershipConfirmDialog(playerid, shopIndex)
+{
+    if (!IsValidShopVehicleIndex(shopIndex))
+    {
+        return 0;
+    }
+
+    PlayerDialogDealerVehicle[playerid] = shopIndex;
+
+    new dialogText[512];
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "Vehicle: %s\nModel ID: %d\nPrice: $%d\n\nKendaraan akan masuk ke slot garage kosong pertama.\nLanjutkan pembelian?",
+        ShopVehicleName[shopIndex],
+        ShopVehicleModel[shopIndex],
+        ShopVehiclePrice[shopIndex]
+    );
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_DEALER_CONFIRM,
+        DIALOG_STYLE_MSGBOX,
+        "Confirm Vehicle Purchase",
+        dialogText,
+        "Buy",
+        "Back"
+    );
+    return 1;
+}
+
+stock ProcessDialogVehiclePurchase(playerid, shopIndex)
+{
+    if (!IsPlayerNearDealership(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat dealership untuk membeli kendaraan.");
+        return 0;
+    }
+
+    if (!IsValidShopVehicleIndex(shopIndex))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Vehicle shop ID tidak valid.");
+        return 0;
+    }
+
+    new freeSlot = GetFreeGarageSlot(playerid);
+
+    if (freeSlot == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Garage penuh. Jual salah satu kendaraan dengan /sellveh [slot].");
+        return 0;
+    }
+
+    new modelid = ShopVehicleModel[shopIndex];
+    new price = ShopVehiclePrice[shopIndex];
+
+    if (PlayerMoney[playerid] < price)
+    {
+        new msg[144];
+        format(msg, sizeof(msg), "Cash tidak cukup. Harga %s adalah $%d.", ShopVehicleName[shopIndex], price);
+        SendClientMessage(playerid, COLOR_RED, msg);
+        return 0;
+    }
+
+    new Float:x, Float:y, Float:z, Float:a;
+    new query[512];
+
+    GetPlayerPos(playerid, x, y, z);
+    GetPlayerFacingAngle(playerid, a);
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO player_vehicles (owner_id, slot, model_id, vehicle_name, color1, color2, pos_x, pos_y, pos_z, pos_a, health, fuel, locked) VALUES (%d, %d, %d, '%e', 1, 1, %f, %f, %f, %f, 1000.0, 100, 0)",
+        PlayerDBID[playerid],
+        freeSlot + 1,
+        modelid,
+        ShopVehicleName[shopIndex],
+        x + 3.0,
+        y,
+        z,
+        a
+    );
+
+    mysql_tquery(g_SQL, query, "OnGarageVehicleBought", "iiii", playerid, freeSlot, modelid, price);
+    return 1;
+}
+
+stock ShowHouseInteractionDialog(playerid, houseIndex)
+{
+    if (!IsValidHouseIndex(houseIndex) || !IsPlayerNearHouse(playerid, houseIndex))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat rumah untuk membuka menu rumah.");
+        return 0;
+    }
+
+    PlayerDialogHouseIndex[playerid] = houseIndex;
+
+    new dialogText[256];
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "Info Rumah\nBeli Rumah\nRumah Saya\nKunci/Buka Rumah\nJual Rumah\nCancel"
+    );
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_HOUSE_MENU,
+        DIALOG_STYLE_LIST,
+        "House Interaction",
+        dialogText,
+        "Pilih",
+        "Tutup"
+    );
+    return 1;
+}
+
+stock ShowHouseInfoDialog(playerid, houseIndex)
+{
+    if (!IsValidHouseIndex(houseIndex))
+    {
+        return 0;
+    }
+
+    new dialogText[512];
+    new ownerStatus[64];
+
+    if (PlayerHouseDBID[playerid] > 0 && PlayerHouseIndex[playerid] == houseIndex)
+    {
+        format(ownerStatus, sizeof(ownerStatus), "Status: Rumah milikmu");
+    }
+    else
+    {
+        format(ownerStatus, sizeof(ownerStatus), "Status: Bisa dibeli jika kamu belum punya rumah");
+    }
+
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "House: %s\nPrice: $%d\nLocation: %.2f, %.2f, %.2f\n%s\n\nMasuk/keluar rumah memakai panah custom, bukan ALT.",
+        HouseName[houseIndex],
+        HousePrice[houseIndex],
+        HouseX[houseIndex],
+        HouseY[houseIndex],
+        HouseZ[houseIndex],
+        ownerStatus
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_HOUSE_INFO, DIALOG_STYLE_MSGBOX, "House Info", dialogText, "Back", "Tutup");
+    return 1;
+}
+
+stock ShowHouseBuyConfirmDialog(playerid, houseIndex)
+{
+    if (!IsValidHouseIndex(houseIndex))
+    {
+        return 0;
+    }
+
+    PlayerDialogHouseIndex[playerid] = houseIndex;
+
+    new dialogText[384];
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "House: %s\nPrice: $%d\n\nBeli rumah ini?",
+        HouseName[houseIndex],
+        HousePrice[houseIndex]
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_HOUSE_BUY_CONFIRM, DIALOG_STYLE_MSGBOX, "Confirm House Purchase", dialogText, "Buy", "Back");
+    return 1;
+}
+
+stock ProcessDialogHouseBuy(playerid, houseIndex)
+{
+    if (!IsValidHouseIndex(houseIndex) || !IsPlayerNearHouse(playerid, houseIndex))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat rumah tersebut untuk membelinya.");
+        return 0;
+    }
+
+    if (PlayerHouseDBID[playerid] > 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu sudah punya rumah. Jual rumah lama dulu jika ingin membeli rumah lain.");
+        return 0;
+    }
+
+    new price = HousePrice[houseIndex];
+
+    if (PlayerMoney[playerid] < price)
+    {
+        new msg[144];
+        format(msg, sizeof(msg), "Cash tidak cukup. Harga rumah ini $%d.", price);
+        SendClientMessage(playerid, COLOR_RED, msg);
+        return 0;
+    }
+
+    new query[512];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO player_houses (owner_id, house_index, house_name, price, locked, pos_x, pos_y, pos_z) VALUES (%d, %d, '%e', %d, 1, %f, %f, %f)",
+        PlayerDBID[playerid],
+        houseIndex,
+        HouseName[houseIndex],
+        price,
+        HouseX[houseIndex],
+        HouseY[houseIndex],
+        HouseZ[houseIndex]
+    );
+
+    mysql_tquery(g_SQL, query, "OnPlayerHouseBought", "iii", playerid, houseIndex, price);
+    return 1;
+}
+
+stock ShowHouseSellConfirmDialog(playerid)
+{
+    if (PlayerHouseDBID[playerid] <= 0 || PlayerHouseIndex[playerid] == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum punya rumah.");
+        return 0;
+    }
+
+    new houseIndex = PlayerHouseIndex[playerid];
+    new sellPrice = (HousePrice[houseIndex] * HOUSE_SELL_PERCENT) / 100;
+    new dialogText[384];
+
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "House: %s\nSell price: $%d\n\nJual rumah ini? Visitor di dalam rumah akan dikeluarkan.",
+        HouseName[houseIndex],
+        sellPrice
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_HOUSE_SELL_CONFIRM, DIALOG_STYLE_MSGBOX, "Confirm Sell House", dialogText, "Sell", "Back");
+    return 1;
+}
+
+stock ProcessDialogHouseSell(playerid)
+{
+    if (PlayerHouseDBID[playerid] <= 0 || PlayerHouseIndex[playerid] == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum punya rumah.");
+        return 0;
+    }
+
+    if (PlayerInsideHouse[playerid])
+    {
+        ExitPlayerHouse(playerid);
+    }
+
+    new houseIndex = PlayerHouseIndex[playerid];
+    new sellPrice = (HousePrice[houseIndex] * HOUSE_SELL_PERCENT) / 100;
+    new query[256];
+
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (IsPlayerConnected(i) && PlayerInsideHouse[i] && PlayerInsideHouseOwner[i] == playerid && i != playerid)
+        {
+            KickPlayerFromHouse(i);
+            SendClientMessage(i, COLOR_YELLOW, "Rumah dijual oleh owner. Kamu dikeluarkan dari rumah.");
+        }
+    }
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "DELETE FROM player_houses WHERE id=%d AND owner_id=%d LIMIT 1",
+        PlayerHouseDBID[playerid],
+        PlayerDBID[playerid]
+    );
+
+    mysql_tquery(g_SQL, query, "OnPlayerHouseSold", "ii", playerid, sellPrice);
+    return 1;
+}
+
+stock ShowBusinessInteractionDialog(playerid, businessIndex)
+{
+    if (!IsValidBusinessIndex(businessIndex) || !IsPlayerNearBusiness(playerid, businessIndex))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat business untuk membuka menu business.");
+        return 0;
+    }
+
+    PlayerDialogBusinessIndex[playerid] = businessIndex;
+
+    new dialogText[256];
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "Info Business\nBeli Business\nBusiness Saya\nCollect Income\nUpgrade Business\nJual Business\nCancel"
+    );
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_BUSINESS_MENU,
+        DIALOG_STYLE_LIST,
+        "Business Interaction",
+        dialogText,
+        "Pilih",
+        "Tutup"
+    );
+    return 1;
+}
+
+stock ShowBusinessInfoDialog(playerid, businessIndex)
+{
+    if (!IsValidBusinessIndex(businessIndex))
+    {
+        return 0;
+    }
+
+    new dialogText[512];
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "Business: %s\nPrice: $%d\nBase Income: $%d/min\nLocation: %.2f, %.2f, %.2f",
+        BusinessName[businessIndex],
+        BusinessPrice[businessIndex],
+        BusinessIncomePerMinute[businessIndex],
+        BusinessX[businessIndex],
+        BusinessY[businessIndex],
+        BusinessZ[businessIndex]
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_BUSINESS_INFO, DIALOG_STYLE_MSGBOX, "Business Info", dialogText, "Back", "Tutup");
+    return 1;
+}
+
+stock ShowMyBusinessDialog(playerid)
+{
+    if (PlayerBusinessDBID[playerid] <= 0 || PlayerBusinessIndex[playerid] == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum punya business.");
+        return 0;
+    }
+
+    new businessIndex = PlayerBusinessIndex[playerid];
+    new currentIncome = GetBusinessIncomePerMinute(businessIndex, PlayerBusinessLevel[playerid]);
+    new dialogText[512];
+
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "Business: %s\nLevel: %d/%d\nBase Income: $%d/min\nCurrent Income: $%d/min\nTotal Collected: $%d\nMax Collect: $%d",
+        BusinessName[businessIndex],
+        PlayerBusinessLevel[playerid],
+        BUSINESS_MAX_LEVEL,
+        BusinessIncomePerMinute[businessIndex],
+        currentIncome,
+        PlayerBusinessTotalCollected[playerid],
+        BUSINESS_MAX_COLLECT
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_BUSINESS_INFO, DIALOG_STYLE_MSGBOX, "My Business", dialogText, "Back", "Tutup");
+    return 1;
+}
+
+stock ShowBusinessBuyConfirmDialog(playerid, businessIndex)
+{
+    if (!IsValidBusinessIndex(businessIndex))
+    {
+        return 0;
+    }
+
+    PlayerDialogBusinessIndex[playerid] = businessIndex;
+
+    new dialogText[384];
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "Business: %s\nPrice: $%d\nIncome: $%d/min\n\nBeli business ini?",
+        BusinessName[businessIndex],
+        BusinessPrice[businessIndex],
+        BusinessIncomePerMinute[businessIndex]
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_BUSINESS_BUY_CONFIRM, DIALOG_STYLE_MSGBOX, "Confirm Business Purchase", dialogText, "Buy", "Back");
+    return 1;
+}
+
+stock ProcessDialogBusinessBuy(playerid, businessIndex)
+{
+    if (!IsValidBusinessIndex(businessIndex) || !IsPlayerNearBusiness(playerid, businessIndex))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat business tersebut untuk membelinya.");
+        return 0;
+    }
+
+    if (PlayerBusinessDBID[playerid] > 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu sudah punya business. Jual business lama dulu jika ingin membeli business lain.");
+        return 0;
+    }
+
+    new price = BusinessPrice[businessIndex];
+
+    if (PlayerMoney[playerid] < price)
+    {
+        new msg[144];
+        format(msg, sizeof(msg), "Cash tidak cukup. Harga business ini $%d.", price);
+        SendClientMessage(playerid, COLOR_RED, msg);
+        return 0;
+    }
+
+    new query[512];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO player_businesses (owner_id, business_index, business_name, price, income_per_minute, business_level, total_collected, pos_x, pos_y, pos_z, last_collected) VALUES (%d, %d, '%e', %d, %d, 1, 0, %f, %f, %f, NOW())",
+        PlayerDBID[playerid],
+        businessIndex,
+        BusinessName[businessIndex],
+        price,
+        BusinessIncomePerMinute[businessIndex],
+        BusinessX[businessIndex],
+        BusinessY[businessIndex],
+        BusinessZ[businessIndex]
+    );
+
+    mysql_tquery(g_SQL, query, "OnPlayerBusinessBought", "iii", playerid, businessIndex, price);
+    return 1;
+}
+
+stock ShowBusinessUpgradeConfirmDialog(playerid)
+{
+    if (!IsBusinessOwner(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum punya business.");
+        return 0;
+    }
+
+    if (PlayerBusinessLevel[playerid] >= BUSINESS_MAX_LEVEL)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Business kamu sudah level maksimal.");
+        return 0;
+    }
+
+    new cost = GetBusinessUpgradeCost(PlayerBusinessLevel[playerid]);
+    new newLevel = PlayerBusinessLevel[playerid] + 1;
+    new businessIndex = PlayerBusinessIndex[playerid];
+    new nextIncome = GetBusinessIncomePerMinute(businessIndex, newLevel);
+    new dialogText[384];
+
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "Business: %s\nUpgrade: Lv %d -> Lv %d\nCost: $%d\nNew Income: $%d/min\n\nLanjut upgrade?",
+        BusinessName[businessIndex],
+        PlayerBusinessLevel[playerid],
+        newLevel,
+        cost,
+        nextIncome
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_BUSINESS_UPGRADE_CONFIRM, DIALOG_STYLE_MSGBOX, "Confirm Business Upgrade", dialogText, "Upgrade", "Back");
+    return 1;
+}
+
+stock ProcessDialogBusinessUpgrade(playerid)
+{
+    if (!IsBusinessOwner(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum punya business.");
+        return 0;
+    }
+
+    if (PlayerBusinessLevel[playerid] >= BUSINESS_MAX_LEVEL)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Business kamu sudah level maksimal.");
+        return 0;
+    }
+
+    new cost = GetBusinessUpgradeCost(PlayerBusinessLevel[playerid]);
+    new newLevel = PlayerBusinessLevel[playerid] + 1;
+
+    if (PlayerMoney[playerid] < cost)
+    {
+        new msg[144];
+        format(msg, sizeof(msg), "Cash tidak cukup. Biaya upgrade: $%d.", cost);
+        SendClientMessage(playerid, COLOR_RED, msg);
+        return 0;
+    }
+
+    TakePlayerCash(playerid, cost);
+
+    new query[256];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "UPDATE player_businesses SET business_level=%d WHERE id=%d AND owner_id=%d LIMIT 1",
+        newLevel,
+        PlayerBusinessDBID[playerid],
+        PlayerDBID[playerid]
+    );
+
+    mysql_tquery(g_SQL, query, "OnBusinessUpgraded", "iii", playerid, newLevel, cost);
+    return 1;
+}
+
+stock ProcessDialogBusinessCollect(playerid)
+{
+    if (PlayerBusinessDBID[playerid] <= 0 || PlayerBusinessIndex[playerid] == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum punya business.");
+        return 0;
+    }
+
+    new query[512];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "SELECT business_index, income_per_minute, business_level, total_collected, TIMESTAMPDIFF(MINUTE, last_collected, NOW()) AS minutes_passed FROM player_businesses WHERE owner_id=%d LIMIT 1",
+        PlayerDBID[playerid]
+    );
+
+    mysql_tquery(g_SQL, query, "OnBusinessCollectLoaded", "i", playerid);
+    return 1;
+}
+
+stock ShowBusinessSellConfirmDialog(playerid)
+{
+    if (PlayerBusinessDBID[playerid] <= 0 || PlayerBusinessIndex[playerid] == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum punya business.");
+        return 0;
+    }
+
+    new businessIndex = PlayerBusinessIndex[playerid];
+    new sellPrice = (BusinessPrice[businessIndex] * BUSINESS_SELL_PERCENT) / 100;
+    new dialogText[384];
+
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "Business: %s\nSell price: $%d\n\nJual business ini?",
+        BusinessName[businessIndex],
+        sellPrice
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_BUSINESS_SELL_CONFIRM, DIALOG_STYLE_MSGBOX, "Confirm Sell Business", dialogText, "Sell", "Back");
+    return 1;
+}
+
+stock ProcessDialogBusinessSell(playerid)
+{
+    if (PlayerBusinessDBID[playerid] <= 0 || PlayerBusinessIndex[playerid] == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum punya business.");
+        return 0;
+    }
+
+    new businessIndex = PlayerBusinessIndex[playerid];
+    new sellPrice = (BusinessPrice[businessIndex] * BUSINESS_SELL_PERCENT) / 100;
+    new query[256];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "DELETE FROM player_businesses WHERE id=%d AND owner_id=%d LIMIT 1",
+        PlayerBusinessDBID[playerid],
+        PlayerDBID[playerid]
+    );
+
+    mysql_tquery(g_SQL, query, "OnPlayerBusinessSold", "ii", playerid, sellPrice);
+    return 1;
+}
+
 stock HandleWorldInteractKey(playerid)
 {
     if (!PlayerLoggedIn[playerid])
@@ -5293,10 +6200,7 @@ stock HandleWorldInteractKey(playerid)
 
     if (IsPlayerNearDealership(playerid))
     {
-        SendClientMessage(playerid, COLOR_YELLOW, "========== DEALERSHIP INTERACTION ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "Dealership terdeteksi.");
-        SendClientMessage(playerid, COLOR_CYAN, "ALT untuk dealer: gunakan /vehicleshop untuk lihat kendaraan dan /buyvehicle [id] untuk beli.");
-        SendClientMessage(playerid, COLOR_WHITE, "Nanti dealer akan memakai dialog UI penuh.");
+        ShowDealershipDialog(playerid);
         return 1;
     }
 
@@ -5304,12 +6208,7 @@ stock HandleWorldInteractKey(playerid)
 
     if (nearestHouse != -1 && IsPlayerNearHouse(playerid, nearestHouse))
     {
-        new msg[144];
-        format(msg, sizeof(msg), "Rumah terdekat: %s | Harga: $%d", HouseName[nearestHouse], HousePrice[nearestHouse]);
-        SendClientMessage(playerid, COLOR_YELLOW, "========== HOUSE INTERACTION ==========");
-        SendClientMessage(playerid, COLOR_WHITE, msg);
-        SendClientMessage(playerid, COLOR_CYAN, "ALT untuk rumah: /buyhouse [id], /myhouse, /lockhouse, atau /visithouse [ownerid].");
-        SendClientMessage(playerid, COLOR_WHITE, "Masuk/keluar rumah sekarang memakai panah custom, bukan ALT.");
+        ShowHouseInteractionDialog(playerid, nearestHouse);
         return 1;
     }
 
@@ -5317,12 +6216,7 @@ stock HandleWorldInteractKey(playerid)
 
     if (nearestBusiness != -1 && IsPlayerNearBusiness(playerid, nearestBusiness))
     {
-        new msg[144];
-        format(msg, sizeof(msg), "Business terdekat: %s | Harga: $%d", BusinessName[nearestBusiness], BusinessPrice[nearestBusiness]);
-        SendClientMessage(playerid, COLOR_YELLOW, "========== BUSINESS INTERACTION ==========");
-        SendClientMessage(playerid, COLOR_WHITE, msg);
-        SendClientMessage(playerid, COLOR_CYAN, "ALT untuk business: /buybiz [id], /mybiz, /collectbiz, atau /upgradebiz.");
-        SendClientMessage(playerid, COLOR_WHITE, "Nanti business akan memakai dialog UI penuh.");
+        ShowBusinessInteractionDialog(playerid, nearestBusiness);
         return 1;
     }
 
@@ -7327,7 +8221,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.17C ATM Dialog UI");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.17D Location Dialog Pack");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -7338,7 +8232,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D: Release polish, version, credits, staff, beta guide.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.17C: ATM memakai dialog UI; ALT dekat ATM membuka menu Balance/Deposit/Withdraw.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.17D: ATM, dealership, house, dan business memakai Dialog UI berbasis ALT.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.17B: house arrow enter/exit, ALT transaksi/menu, dan job vehicle grace timer.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16C: Admin beta dashboard dan monitoring reports/logs.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16B: Starter pack, bug report, suggestion, feedback handling.");
@@ -12004,7 +12898,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         SendClientMessage(playerid, COLOR_YELLOW, "========== CLOSED BETA STATUS ==========");
 
-        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.17C ATM Dialog");
+        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.17D Dialog Pack");
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         format(msg, sizeof(msg), "Uptime: %s", uptimeText);

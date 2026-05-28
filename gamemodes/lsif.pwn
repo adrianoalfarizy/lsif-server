@@ -73,6 +73,8 @@
 #define DIALOG_BETA_WLREMOVE_INPUT 1056
 #define DIALOG_BETA_WLCHECK_INPUT 1057
 #define DIALOG_BETA_WLCHECK_RESULT 1058
+#define DIALOG_JOB_GUIDE_MENU 1059
+#define DIALOG_JOB_GUIDE_DETAIL 1060
 
 #define STARTER_CASH 15000
 #define STARTER_BANK 5000
@@ -265,12 +267,16 @@
 #define MAPICON_BASE_BUSINESS 30
 #define MAPICON_BASE_DEALER 40
 #define MAPICON_BASE_RACE 50
+#define MAPICON_BASE_JOB 60
+#define MAPICON_BASE_BUS_STOP 70
 
 #define MAPICON_TYPE_ATM 52
 #define MAPICON_TYPE_HOUSE 31
 #define MAPICON_TYPE_BUSINESS 52
 #define MAPICON_TYPE_DEALER 55
 #define MAPICON_TYPE_RACE 53
+#define MAPICON_TYPE_JOB 51
+#define MAPICON_TYPE_BUS_STOP 55
 #if !defined MAPICON_LOCAL
 #define MAPICON_LOCAL 0
 #endif
@@ -827,6 +833,59 @@ new Text3D:BusinessLabel[MAX_BUSINESSES];
 new Text3D:HouseExteriorLabel[MAX_HOUSES];
 new RaceStartPickup;
 new Text3D:RaceStartLabel;
+
+#define MAX_JOB_WORLD_MARKERS 5
+
+new JobWorldPickup[MAX_JOB_WORLD_MARKERS];
+new Text3D:JobWorldLabel[MAX_JOB_WORLD_MARKERS];
+
+new BusStopPickup[MAX_BUS_STOPS];
+new Text3D:BusStopLabel[MAX_BUS_STOPS];
+
+new Float:JobWorldX[MAX_JOB_WORLD_MARKERS] =
+{
+    2112.8467, // Taxi / vehicle mission stand
+    2102.8870, // Courier depot
+    2460.3918, // Trucker cargo depot
+    1807.9344, // Bus terminal
+    1554.8425  // LSPD / Vigilante point
+};
+
+new Float:JobWorldY[MAX_JOB_WORLD_MARKERS] =
+{
+    -1788.3153,
+    -1806.4775,
+    -2114.8193,
+    -1908.1141,
+    -1675.6542
+};
+
+new Float:JobWorldZ[MAX_JOB_WORLD_MARKERS] =
+{
+    13.5547,
+    13.5547,
+    13.5469,
+    13.5781,
+    16.1953
+};
+
+new JobWorldName[MAX_JOB_WORLD_MARKERS][48] =
+{
+    "Taxi Mission Stand",
+    "Courier Depot",
+    "Trucker Cargo Depot",
+    "Bus Terminal",
+    "Police Vigilante HQ"
+};
+
+new JobWorldGuide[MAX_JOB_WORLD_MARKERS][96] =
+{
+    "Naik Taxi/Cabbie lalu tekan tombol 2 untuk Taxi Mission.",
+    "Naik Burrito/Boxville/Mule/Pony/Rumpo lalu tekan tombol 2 untuk Courier.",
+    "Naik truck valid lalu tekan tombol 2 untuk Trucker Mission.",
+    "Naik Bus/Coach lalu tekan tombol 2 untuk Bus Route.",
+    "Naik kendaraan polisi lalu tekan tombol 2 untuk Vigilante Mission."
+};
 
 new Float:DealershipX[MAX_DEALERSHIPS] =
 {
@@ -2377,6 +2436,7 @@ stock StartBusWork(playerid)
     PlayerBusStop[playerid] = 0;
     PlayerWorkExitTick[playerid] = 0;
     SetPlayerCheckpoint(playerid, BusStopX[0], BusStopY[0], BusStopZ[0], 7.0);
+    GameTextForPlayer(playerid, "~g~Bus Mission Started", 3000, 3);
     SendClientMessage(playerid, COLOR_GREEN, "Bus Mission dimulai. Ikuti checkpoint halte berurutan.");
     SendClientMessage(playerid, COLOR_WHITE, "Tetap gunakan kendaraan bus yang sama. Keluar terlalu lama akan membatalkan mission.");
     return 1;
@@ -2396,6 +2456,7 @@ stock CompleteBusWork(playerid)
     PlayerWorkPoint[playerid] = -1;
     PlayerLastWorkTick[playerid] = GetTickCount();
     ResetBusWorkData(playerid);
+    GameTextForPlayer(playerid, "~g~Bus Route Complete", 3500, 3);
     SendClientMessage(playerid, COLOR_GREEN, "Bus route selesai. Bonus route diberikan.");
     SavePlayerData(playerid);
     return 1;
@@ -2469,6 +2530,7 @@ stock StartPoliceWork(playerid)
     SetPlayerCheckpoint(playerid, PoliceTargetX[target], PoliceTargetY[target], PoliceTargetZ[target], 8.0);
     new msg[144];
     format(msg, sizeof(msg), "Vigilante Mission dimulai: menuju %s.", PoliceTargetName[target]);
+    GameTextForPlayer(playerid, "~b~Vigilante Mission", 3000, 3);
     SendClientMessage(playerid, COLOR_GREEN, msg);
     SendClientMessage(playerid, COLOR_WHITE, "Tahap basic: capai area suspect untuk menyelesaikan panggilan.");
     return 1;
@@ -2495,6 +2557,7 @@ stock HandlePoliceCheckpoint(playerid)
     ResetPoliceWorkData(playerid);
     new msg[144];
     format(msg, sizeof(msg), "Vigilante call selesai di %s. Reward: $%d dan %d XP.", PoliceTargetName[target], POLICE_BASE_REWARD, POLICE_BASE_XP);
+    GameTextForPlayer(playerid, "~g~Vigilante Complete", 3500, 3);
     SendClientMessage(playerid, COLOR_GREEN, msg);
     SavePlayerData(playerid);
     return 1;
@@ -2511,30 +2574,35 @@ stock SendVehicleMissionHint(playerid)
 
     if (IsTaxiVehicleModel(modelid))
     {
+        GameTextForPlayer(playerid, "~y~Tombol 2~w~: Taxi Mission", 3500, 3);
         SendClientMessage(playerid, COLOR_CYAN, "Vehicle Mission: tekan tombol 2 untuk mulai Taxi Mission.");
         return 1;
     }
 
     if (IsCourierVehicleModel(modelid))
     {
+        GameTextForPlayer(playerid, "~y~Tombol 2~w~: Courier Mission", 3500, 3);
         SendClientMessage(playerid, COLOR_CYAN, "Vehicle Mission: tekan tombol 2 untuk mulai Courier Mission.");
         return 1;
     }
 
     if (IsTruckerVehicleModel(modelid))
     {
+        GameTextForPlayer(playerid, "~y~Tombol 2~w~: Trucker Mission", 3500, 3);
         SendClientMessage(playerid, COLOR_CYAN, "Vehicle Mission: tekan tombol 2 untuk mulai Trucker Mission.");
         return 1;
     }
 
     if (IsBusVehicleModel(modelid))
     {
+        GameTextForPlayer(playerid, "~y~Tombol 2~w~: Bus Route", 3500, 3);
         SendClientMessage(playerid, COLOR_CYAN, "Vehicle Mission: tekan tombol 2 untuk mulai Bus Driver route.");
         return 1;
     }
 
     if (IsPoliceVehicleModel(modelid))
     {
+        GameTextForPlayer(playerid, "~y~Tombol 2~w~: Vigilante Mission", 3500, 3);
         SendClientMessage(playerid, COLOR_CYAN, "Vehicle Mission: tekan tombol 2 untuk mulai Police/Vigilante Mission.");
         return 1;
     }
@@ -5643,7 +5711,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.18A.1 Auth Fix");
+    SetGameModeText("LSIF Dev v0.18B Job World");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -5727,7 +5795,7 @@ public OnGameModeInit()
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
     print("[LSIF] Custom house arrow pickups aktif.");
     print("[LSIF] Map icons, 3D labels, and ALT world markers aktif.");
-    print("[LSIF] Gamemode v0.18A Offline-like Vehicle Mission Pack berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.18B Job Mission World Polish berhasil dijalankan.");
     return 1;
 }
 
@@ -5924,7 +5992,7 @@ public OnPlayerSpawn(playerid)
 
     SendClientMessage(playerid, COLOR_CYAN, "Kamu berhasil spawn di Los Santos.");
     SendClientMessage(playerid, COLOR_WHITE, "Closed Beta: gunakan /betaguide untuk alur awal dan /bugreport jika menemukan bug.");
-    SendClientMessage(playerid, COLOR_WHITE, "Command cepat: /help, /starterpack, /jobs, /maplegend. Cari marker [ALT] untuk interaksi dunia.");
+    SendClientMessage(playerid, COLOR_WHITE, "Command cepat: /help, /starterpack, /jobs, /jobguide, /maplegend. Cari marker [ALT] untuk interaksi dunia.");
 
     return 1;
 }
@@ -5995,7 +6063,7 @@ stock ShowBetaStatusDialog(playerid)
     format(
         dialogText,
         sizeof(dialogText),
-        "Gamemode: LSIF Dev v0.18A.1 Auth Fix\n\nUptime: %s\nPlayers Online: %d\nLogged Players: %d\nAdmins Online: %d\n\nClosed Beta: ACTIVE\nWhitelist: ENABLED after first active whitelist user\n\nMenu terkait:\n/adminmenu\n/betamenu",
+        "Gamemode: LSIF Dev v0.18B Job World\n\nUptime: %s\nPlayers Online: %d\nLogged Players: %d\nAdmins Online: %d\n\nClosed Beta: ACTIVE\nWhitelist: ENABLED after first active whitelist user\n\nMenu terkait:\n/adminmenu\n/betamenu",
         uptimeText,
         CountOnlinePlayers(),
         CountLoggedPlayers(),
@@ -6182,6 +6250,27 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 {
     if (dialogid == DIALOG_BETA_RULES || dialogid == DIALOG_BETA_MOTD || dialogid == DIALOG_FEEDBACK_LIST)
     {
+        return 1;
+    }
+
+    if (dialogid == DIALOG_JOB_GUIDE_MENU)
+    {
+        if (!response)
+        {
+            return 1;
+        }
+
+        ShowJobGuideDetail(playerid, listitem);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_JOB_GUIDE_DETAIL)
+    {
+        if (response)
+        {
+            ShowJobGuideMenu(playerid);
+        }
+
         return 1;
     }
 
@@ -7538,6 +7627,18 @@ stock InitWorldMarkerArrays()
         HouseExteriorLabel[i] = Text3D:INVALID_3DTEXT_ID;
     }
 
+    for (new i = 0; i < MAX_JOB_WORLD_MARKERS; i++)
+    {
+        JobWorldPickup[i] = -1;
+        JobWorldLabel[i] = Text3D:INVALID_3DTEXT_ID;
+    }
+
+    for (new i = 0; i < MAX_BUS_STOPS; i++)
+    {
+        BusStopPickup[i] = -1;
+        BusStopLabel[i] = Text3D:INVALID_3DTEXT_ID;
+    }
+
     RaceStartPickup = -1;
     RaceStartLabel = Text3D:INVALID_3DTEXT_ID;
     return 1;
@@ -7582,7 +7683,21 @@ stock CreateWorldInteractionMarkers()
     RaceStartPickup = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, RaceLSX[0], RaceLSY[0], RaceLSZ[0], 0);
     RaceStartLabel = Create3DTextLabel("[RACE] LS Intro\nGunakan /joinrace ls\nTombol 2 hanya untuk vehicle mission/job", COLOR_ORANGE, RaceLSX[0], RaceLSY[0], RaceLSZ[0] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
 
-    print("[LSIF] World interaction markers and 3D labels created.");
+    for (new i = 0; i < MAX_JOB_WORLD_MARKERS; i++)
+    {
+        JobWorldPickup[i] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, JobWorldX[i], JobWorldY[i], JobWorldZ[i], 0);
+        format(labelText, sizeof(labelText), "[JOB] %s\n%s", JobWorldName[i], JobWorldGuide[i]);
+        JobWorldLabel[i] = Create3DTextLabel(labelText, COLOR_CYAN, JobWorldX[i], JobWorldY[i], JobWorldZ[i] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
+    }
+
+    for (new i = 0; i < MAX_BUS_STOPS; i++)
+    {
+        BusStopPickup[i] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, BusStopX[i], BusStopY[i], BusStopZ[i], 0);
+        format(labelText, sizeof(labelText), "[BUS STOP] %s\nBus Mission checkpoint route", BusStopName[i]);
+        BusStopLabel[i] = Create3DTextLabel(labelText, COLOR_YELLOW, BusStopX[i], BusStopY[i], BusStopZ[i] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
+    }
+
+    print("[LSIF] World interaction markers, job markers, bus stops, and 3D labels created.");
     return 1;
 }
 
@@ -7642,6 +7757,36 @@ stock DestroyWorldInteractionMarkers()
         }
     }
 
+    for (new i = 0; i < MAX_JOB_WORLD_MARKERS; i++)
+    {
+        if (JobWorldPickup[i] != -1)
+        {
+            DestroyPickup(JobWorldPickup[i]);
+            JobWorldPickup[i] = -1;
+        }
+
+        if (JobWorldLabel[i] != Text3D:INVALID_3DTEXT_ID)
+        {
+            Delete3DTextLabel(JobWorldLabel[i]);
+            JobWorldLabel[i] = Text3D:INVALID_3DTEXT_ID;
+        }
+    }
+
+    for (new i = 0; i < MAX_BUS_STOPS; i++)
+    {
+        if (BusStopPickup[i] != -1)
+        {
+            DestroyPickup(BusStopPickup[i]);
+            BusStopPickup[i] = -1;
+        }
+
+        if (BusStopLabel[i] != Text3D:INVALID_3DTEXT_ID)
+        {
+            Delete3DTextLabel(BusStopLabel[i]);
+            BusStopLabel[i] = Text3D:INVALID_3DTEXT_ID;
+        }
+    }
+
     if (RaceStartPickup != -1)
     {
         DestroyPickup(RaceStartPickup);
@@ -7680,6 +7825,17 @@ stock ApplyLSIFMapIcons(playerid)
     }
 
     SetPlayerMapIcon(playerid, MAPICON_BASE_RACE, RaceLSX[0], RaceLSY[0], RaceLSZ[0], MAPICON_TYPE_RACE, COLOR_ORANGE, MAPICON_LOCAL);
+
+    for (new i = 0; i < MAX_JOB_WORLD_MARKERS; i++)
+    {
+        SetPlayerMapIcon(playerid, MAPICON_BASE_JOB + i, JobWorldX[i], JobWorldY[i], JobWorldZ[i], MAPICON_TYPE_JOB, COLOR_CYAN, MAPICON_LOCAL);
+    }
+
+    for (new i = 0; i < MAX_BUS_STOPS; i++)
+    {
+        SetPlayerMapIcon(playerid, MAPICON_BASE_BUS_STOP + i, BusStopX[i], BusStopY[i], BusStopZ[i], MAPICON_TYPE_BUS_STOP, COLOR_YELLOW, MAPICON_LOCAL);
+    }
+
     return 1;
 }
 
@@ -7706,6 +7862,66 @@ stock RemoveLSIFMapIcons(playerid)
     }
 
     RemovePlayerMapIcon(playerid, MAPICON_BASE_RACE);
+
+    for (new i = 0; i < MAX_JOB_WORLD_MARKERS; i++)
+    {
+        RemovePlayerMapIcon(playerid, MAPICON_BASE_JOB + i);
+    }
+
+    for (new i = 0; i < MAX_BUS_STOPS; i++)
+    {
+        RemovePlayerMapIcon(playerid, MAPICON_BASE_BUS_STOP + i);
+    }
+
+    return 1;
+}
+
+stock ShowJobGuideMenu(playerid)
+{
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_JOB_GUIDE_MENU,
+        DIALOG_STYLE_LIST,
+        "LSIF Job Guide",
+        "Taxi Mission\nCourier Mission\nTrucker Mission\nBus Driver Mission\nPolice / Vigilante Mission",
+        "Open",
+        "Close"
+    );
+    return 1;
+}
+
+stock ShowJobGuideDetail(playerid, jobIndex)
+{
+    new guideText[1024];
+    new title[64];
+
+    if (jobIndex == 0)
+    {
+        format(title, sizeof(title), "Taxi Mission Guide");
+        format(guideText, sizeof(guideText), "Cara mulai:\n1. Naik Taxi atau Cabbie sebagai driver.\n2. Tekan tombol 2 untuk mulai Taxi Mission.\n3. Ambil penumpang di checkpoint pickup.\n4. Antar ke checkpoint dropoff.\n\nReward dihitung berdasarkan jarak. Jika keluar kendaraan terlalu lama, mission batal.");
+    }
+    else if (jobIndex == 1)
+    {
+        format(title, sizeof(title), "Courier Mission Guide");
+        format(guideText, sizeof(guideText), "Cara mulai:\n1. Naik Burrito, Boxville, Mule, Pony, atau Rumpo.\n2. Tekan tombol 2 untuk mulai Courier Mission.\n3. Ikuti checkpoint delivery.\n\nCocok untuk income awal. Cari marker [JOB] Courier Depot sebagai titik panduan dunia.");
+    }
+    else if (jobIndex == 2)
+    {
+        format(title, sizeof(title), "Trucker Mission Guide");
+        format(guideText, sizeof(guideText), "Cara mulai:\n1. Naik truck valid: Linerunner, Tanker, Roadtrain, DFT-30, Flatbed, atau Yankee.\n2. Tekan tombol 2.\n3. Ambil cargo di pickup point.\n4. Kirim ke dropoff point.\n\nReward besar, jarak lebih jauh, cocok untuk player yang sudah punya truck.");
+    }
+    else if (jobIndex == 3)
+    {
+        format(title, sizeof(title), "Bus Driver Mission Guide");
+        format(guideText, sizeof(guideText), "Cara mulai:\n1. Naik Bus atau Coach sebagai driver.\n2. Tekan tombol 2.\n3. Ikuti halte bus berurutan.\n\nSetiap halte memberi reward, selesai route memberi bonus. Cari icon Bus Stop di radar/map.");
+    }
+    else
+    {
+        format(title, sizeof(title), "Police / Vigilante Guide");
+        format(guideText, sizeof(guideText), "Cara mulai:\n1. Naik police vehicle: Police Car, Ranger, Bike, atau Enforcer.\n2. Tekan tombol 2 untuk menerima call.\n3. Menuju suspect area checkpoint.\n\nTahap saat ini masih basic checkpoint. Nanti bisa dikembangkan menjadi chase/target system.");
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_JOB_GUIDE_DETAIL, DIALOG_STYLE_MSGBOX, title, guideText, "Back", "Close");
     return 1;
 }
 
@@ -7716,7 +7932,7 @@ stock ShowMapLegendDialog(playerid)
     format(
         dialogText,
         sizeof(dialogText),
-        "Radar/Map Icon LSIF:\n\nATM/Bank - transaksi bank, pakai ALT di marker ATM.\nHouse - rumah/interior; ALT untuk menu, panah untuk masuk/keluar.\nBusiness - beli/manage/collect business dengan ALT.\nDealership - vehicle shop dan garage service dengan ALT.\nRace - lokasi race/time trial.\n\nDi dunia, cari 3D label seperti [ALT] ATM atau [ALT] Dealership. Berdiri dekat marker lalu tekan ALT.\nTombol 2 hanya untuk start vehicle mission/job."
+        "Radar/Map Icon LSIF:\n\nATM/Bank - transaksi bank, pakai ALT di marker ATM.\nHouse - rumah/interior; ALT untuk menu, panah untuk masuk/keluar.\nBusiness - beli/manage/collect business dengan ALT.\nDealership - vehicle shop dan garage service dengan ALT.\nRace - lokasi race/time trial.\nJob Marker - titik panduan vehicle mission/job.\nBus Stop - rute Bus Driver Mission.\n\nDi dunia, cari 3D label seperti [ALT] ATM, [ALT] Dealership, atau [JOB] Bus Terminal.\nALT = menu/transaksi. Tombol 2 = start vehicle mission/job."
     );
 
     ShowPlayerDialog(playerid, DIALOG_BETA_MOTD, DIALOG_STYLE_MSGBOX, "LSIF Map Legend", dialogText, "OK", "Tutup");
@@ -11170,6 +11386,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/dv - Hapus kendaraan pribadi sementara");
         SendClientMessage(playerid, COLOR_ORANGE, "Admin dev: /goto [id], /gethere [id]");
         SendClientMessage(playerid, COLOR_WHITE, "/jobs - Melihat daftar job");
+        SendClientMessage(playerid, COLOR_WHITE, "/jobguide - Panduan job/vehicle mission");
         SendClientMessage(playerid, COLOR_WHITE, "/joinjob courier - Ambil job courier");
         SendClientMessage(playerid, COLOR_WHITE, "/joinjob taxi - Ambil job taxi");
         SendClientMessage(playerid, COLOR_WHITE, "/joinjob trucker - Ambil job trucker");
@@ -11847,6 +12064,12 @@ public OnPlayerCommandText(playerid, cmdtext[])
         format(msg, sizeof(msg), "Kamu menerima $%d dari player ID %d.", amount, playerid);
         SendClientMessage(targetid, COLOR_GREEN, msg);
 
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/jobguide", true))
+    {
+        ShowJobGuideMenu(playerid);
         return 1;
     }
 
@@ -16066,7 +16289,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         SendClientMessage(playerid, COLOR_YELLOW, "========== CLOSED BETA STATUS ==========");
 
-        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.18A.1 Auth Fix");
+        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.18B Job World");
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         format(msg, sizeof(msg), "Uptime: %s", uptimeText);

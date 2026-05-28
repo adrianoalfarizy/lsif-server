@@ -75,6 +75,9 @@
 #define DIALOG_BETA_WLCHECK_RESULT 1058
 #define DIALOG_JOB_GUIDE_MENU 1059
 #define DIALOG_JOB_GUIDE_DETAIL 1060
+#define DIALOG_WEAPON_SHOP 1061
+#define DIALOG_WEAPON_CONFIRM 1062
+#define DIALOG_WEAPON_INFO 1063
 
 #define STARTER_CASH 15000
 #define STARTER_BANK 5000
@@ -256,6 +259,10 @@
 #define MAX_DEALERSHIPS 3
 #define DEALERSHIP_ACCESS_RADIUS 8.0
 
+#define MAX_AMMUNATIONS 3
+#define AMMUNATION_ACCESS_RADIUS 7.0
+#define MAX_WEAPON_SHOP_ITEMS 9
+
 #define MAX_SHOP_VEHICLES 12
 
 #define WORLD_MARKER_PICKUP_MODEL 1239
@@ -269,6 +276,7 @@
 #define MAPICON_BASE_RACE 50
 #define MAPICON_BASE_JOB 60
 #define MAPICON_BASE_BUS_STOP 70
+#define MAPICON_BASE_AMMUNATION 80
 
 #define MAPICON_TYPE_ATM 52
 #define MAPICON_TYPE_HOUSE 31
@@ -277,6 +285,7 @@
 #define MAPICON_TYPE_RACE 53
 #define MAPICON_TYPE_JOB 51
 #define MAPICON_TYPE_BUS_STOP 55
+#define MAPICON_TYPE_AMMUNATION 6
 #if !defined MAPICON_LOCAL
 #define MAPICON_LOCAL 0
 #endif
@@ -373,12 +382,12 @@ new Float:BusStopX[MAX_BUS_STOPS] =
 new Float:BusStopY[MAX_BUS_STOPS] =
 {
     -1908.1141,
-    -1734.7712,
-    -1579.4437,
-    -1324.8833,
-    -1030.2186,
-    -1908.1141
-};
+        -1734.7712,
+        -1579.4437,
+        -1324.8833,
+        -1030.2186,
+        -1908.1141
+    };
 
 new Float:BusStopZ[MAX_BUS_STOPS] =
 {
@@ -413,12 +422,12 @@ new Float:PoliceTargetX[MAX_POLICE_TARGETS] =
 new Float:PoliceTargetY[MAX_POLICE_TARGETS] =
 {
     -1677.2144,
-    -2124.5295,
-    -1675.2481,
-    -1370.4922,
-    -1238.7169,
-    -1704.3347
-};
+        -2124.5295,
+        -1675.2481,
+        -1370.4922,
+        -1238.7169,
+        -1704.3347
+    };
 
 new Float:PoliceTargetZ[MAX_POLICE_TARGETS] =
 {
@@ -664,11 +673,11 @@ new Float:BankPointX[MAX_BANK_POINTS] =
 new Float:BankPointY[MAX_BANK_POINTS] =
 {
     -1842.4136,
-    -1758.2188,
-    -919.9146,
-    -1224.3597,
-    -1769.6847
-};
+        -1758.2188,
+        -919.9146,
+        -1224.3597,
+        -1769.6847
+    };
 
 new Float:BankPointZ[MAX_BANK_POINTS] =
 {
@@ -820,12 +829,16 @@ new PlayerDialogDealerVehicle[MAX_PLAYERS];
 new PlayerDialogHouseIndex[MAX_PLAYERS];
 new PlayerDialogBusinessIndex[MAX_PLAYERS];
 new PlayerDialogGarageSlot[MAX_PLAYERS];
+new PlayerDialogWeaponIndex[MAX_PLAYERS];
 
 new BankPointPickup[MAX_BANK_POINTS];
 new Text3D:BankPointLabel[MAX_BANK_POINTS];
 
 new DealershipPickup[MAX_DEALERSHIPS];
 new Text3D:DealershipLabel[MAX_DEALERSHIPS];
+
+new AmmuNationPickup[MAX_AMMUNATIONS];
+new Text3D:AmmuNationLabel[MAX_AMMUNATIONS];
 
 new BusinessPickup[MAX_BUSINESSES];
 new Text3D:BusinessLabel[MAX_BUSINESSES];
@@ -854,11 +867,11 @@ new Float:JobWorldX[MAX_JOB_WORLD_MARKERS] =
 new Float:JobWorldY[MAX_JOB_WORLD_MARKERS] =
 {
     -1788.3153,
-    -1806.4775,
-    -2114.8193,
-    -1908.1141,
-    -1675.6542
-};
+        -1806.4775,
+        -2114.8193,
+        -1908.1141,
+        -1675.6542
+    };
 
 new Float:JobWorldZ[MAX_JOB_WORLD_MARKERS] =
 {
@@ -913,6 +926,86 @@ new DealershipName[MAX_DEALERSHIPS][64] =
     "LS Grotti Dealership",
     "Market Budget Cars",
     "San Fierro Import Dealer"
+};
+
+new Float:AmmuNationX[MAX_AMMUNATIONS] =
+{
+    1368.7429, // Market Ammu-Nation
+    2400.4875, // Willowfield Ammu-Nation
+    242.0057   // Blueberry Ammu-Nation / fallback area
+};
+
+new Float:AmmuNationY[MAX_AMMUNATIONS] =
+{
+    -1279.8015,
+        -1981.9600,
+        -178.1069
+    };
+
+new Float:AmmuNationZ[MAX_AMMUNATIONS] =
+{
+    13.5469,
+    13.5469,
+    1.5781
+};
+
+new AmmuNationName[MAX_AMMUNATIONS][64] =
+{
+    "Market Ammu-Nation",
+    "Willowfield Ammu-Nation",
+    "Blueberry Ammu-Nation"
+};
+
+new WeaponShopWeaponID[MAX_WEAPON_SHOP_ITEMS] =
+{
+    22, // Colt 45
+    23, // Silenced Pistol
+    24, // Desert Eagle
+    25, // Shotgun
+    28, // Micro SMG
+    29, // MP5
+    30, // AK-47
+    31, // M4
+    33  // Rifle
+};
+
+new WeaponShopAmmo[MAX_WEAPON_SHOP_ITEMS] =
+{
+    60,
+    60,
+    35,
+    40,
+    150,
+    150,
+    180,
+    180,
+    40
+};
+
+new WeaponShopPrice[MAX_WEAPON_SHOP_ITEMS] =
+{
+    2500,
+    4500,
+    7000,
+    6000,
+    9000,
+    12000,
+    15000,
+    18000,
+    10000
+};
+
+new WeaponShopName[MAX_WEAPON_SHOP_ITEMS][32] =
+{
+    "Colt 45",
+    "Silenced Pistol",
+    "Desert Eagle",
+    "Shotgun",
+    "Micro SMG",
+    "MP5",
+    "AK-47",
+    "M4",
+    "Rifle"
 };
 
 new ShopVehicleModel[MAX_SHOP_VEHICLES] =
@@ -3774,13 +3867,13 @@ stock CreatePlayerHouseExitPickup(playerid, ownerid)
     DestroyPlayerHouseExitPickup(playerid);
 
     PlayerHouseExitPickup[playerid] = CreatePickup(
-        HOUSE_PICKUP_MODEL,
-        HOUSE_PICKUP_TYPE,
-        HOUSE_INT_X,
-        HOUSE_INT_Y + HOUSE_EXIT_PICKUP_Y_OFFSET,
-        HOUSE_INT_Z,
-        GetPlayerHouseVirtualWorld(ownerid)
-    );
+                                          HOUSE_PICKUP_MODEL,
+                                          HOUSE_PICKUP_TYPE,
+                                          HOUSE_INT_X,
+                                          HOUSE_INT_Y + HOUSE_EXIT_PICKUP_Y_OFFSET,
+                                          HOUSE_INT_Z,
+                                          GetPlayerHouseVirtualWorld(ownerid)
+                                      );
 
     return 1;
 }
@@ -3790,13 +3883,13 @@ stock CreateHouseExteriorPickups()
     for (new i = 0; i < MAX_HOUSES; i++)
     {
         HouseExteriorPickup[i] = CreatePickup(
-            HOUSE_PICKUP_MODEL,
-            HOUSE_PICKUP_TYPE,
-            HouseX[i],
-            HouseY[i],
-            HouseZ[i],
-            0
-        );
+                                     HOUSE_PICKUP_MODEL,
+                                     HOUSE_PICKUP_TYPE,
+                                     HouseX[i],
+                                     HouseY[i],
+                                     HouseZ[i],
+                                     0
+                                 );
     }
 
     return 1;
@@ -5711,7 +5804,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.18B Job World");
+    SetGameModeText("LSIF Dev v0.19A Ammu-Nation");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -5795,7 +5888,7 @@ public OnGameModeInit()
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
     print("[LSIF] Custom house arrow pickups aktif.");
     print("[LSIF] Map icons, 3D labels, and ALT world markers aktif.");
-    print("[LSIF] Gamemode v0.18B Job Mission World Polish berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.19A Ammu-Nation & Weapon Shop berhasil dijalankan.");
     return 1;
 }
 
@@ -6063,7 +6156,7 @@ stock ShowBetaStatusDialog(playerid)
     format(
         dialogText,
         sizeof(dialogText),
-        "Gamemode: LSIF Dev v0.18B Job World\n\nUptime: %s\nPlayers Online: %d\nLogged Players: %d\nAdmins Online: %d\n\nClosed Beta: ACTIVE\nWhitelist: ENABLED after first active whitelist user\n\nMenu terkait:\n/adminmenu\n/betamenu",
+        "Gamemode: LSIF Dev v0.19A Ammu-Nation\n\nUptime: %s\nPlayers Online: %d\nLogged Players: %d\nAdmins Online: %d\n\nClosed Beta: ACTIVE\nWhitelist: ENABLED after first active whitelist user\n\nMenu terkait:\n/adminmenu\n/betamenu",
         uptimeText,
         CountOnlinePlayers(),
         CountLoggedPlayers(),
@@ -6870,6 +6963,42 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 
 
 
+    if (dialogid == DIALOG_WEAPON_SHOP)
+    {
+        if (!response)
+        {
+            return 1;
+        }
+
+        if (!IsPlayerNearAmmuNation(playerid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu sudah tidak dekat Ammu-Nation.");
+            return 1;
+        }
+
+        ShowWeaponConfirmDialog(playerid, listitem);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_WEAPON_CONFIRM)
+    {
+        if (!response)
+        {
+            ShowWeaponShopDialog(playerid);
+            return 1;
+        }
+
+        ProcessWeaponPurchase(playerid, PlayerDialogWeaponIndex[playerid]);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_WEAPON_INFO)
+    {
+        return 1;
+    }
+
+
+
     if (dialogid == DIALOG_DEALER_MAIN)
     {
         if (!response)
@@ -7573,28 +7702,58 @@ stock HandleVehicleMissionKey(playerid)
     }
     if (IsPlayerInTaxiVehicle(playerid))
     {
-        if (PlayerJob[playerid] != JOB_TAXI) { PlayerJob[playerid] = JOB_TAXI; SavePlayerData(playerid); SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Taxi Driver."); }
-        StartTaxiWork(playerid); return 1;
+        if (PlayerJob[playerid] != JOB_TAXI)
+        {
+            PlayerJob[playerid] = JOB_TAXI;
+            SavePlayerData(playerid);
+            SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Taxi Driver.");
+        }
+        StartTaxiWork(playerid);
+        return 1;
     }
     if (IsPlayerInCourierVehicle(playerid))
     {
-        if (PlayerJob[playerid] != JOB_COURIER) { PlayerJob[playerid] = JOB_COURIER; SavePlayerData(playerid); SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Courier."); }
-        StartCourierWork(playerid); return 1;
+        if (PlayerJob[playerid] != JOB_COURIER)
+        {
+            PlayerJob[playerid] = JOB_COURIER;
+            SavePlayerData(playerid);
+            SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Courier.");
+        }
+        StartCourierWork(playerid);
+        return 1;
     }
     if (IsPlayerInTruckerVehicle(playerid))
     {
-        if (PlayerJob[playerid] != JOB_TRUCKER) { PlayerJob[playerid] = JOB_TRUCKER; SavePlayerData(playerid); SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Trucker."); }
-        StartTruckerWork(playerid); return 1;
+        if (PlayerJob[playerid] != JOB_TRUCKER)
+        {
+            PlayerJob[playerid] = JOB_TRUCKER;
+            SavePlayerData(playerid);
+            SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Trucker.");
+        }
+        StartTruckerWork(playerid);
+        return 1;
     }
     if (IsPlayerInBusVehicle(playerid))
     {
-        if (PlayerJob[playerid] != JOB_BUS) { PlayerJob[playerid] = JOB_BUS; SavePlayerData(playerid); SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Bus Driver."); }
-        StartBusWork(playerid); return 1;
+        if (PlayerJob[playerid] != JOB_BUS)
+        {
+            PlayerJob[playerid] = JOB_BUS;
+            SavePlayerData(playerid);
+            SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Bus Driver.");
+        }
+        StartBusWork(playerid);
+        return 1;
     }
     if (IsPlayerInPoliceVehicle(playerid))
     {
-        if (PlayerJob[playerid] != JOB_POLICE) { PlayerJob[playerid] = JOB_POLICE; SavePlayerData(playerid); SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Police / Vigilante."); }
-        StartPoliceWork(playerid); return 1;
+        if (PlayerJob[playerid] != JOB_POLICE)
+        {
+            PlayerJob[playerid] = JOB_POLICE;
+            SavePlayerData(playerid);
+            SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Police / Vigilante.");
+        }
+        StartPoliceWork(playerid);
+        return 1;
     }
     new msg[144];
     format(msg, sizeof(msg), "Model kendaraan %d belum punya vehicle mission. Tombol 2 khusus start job/mission kendaraan.", GetVehicleModel(GetPlayerVehicleID(playerid)));
@@ -7614,6 +7773,12 @@ stock InitWorldMarkerArrays()
     {
         DealershipPickup[i] = -1;
         DealershipLabel[i] = Text3D:INVALID_3DTEXT_ID;
+    }
+
+    for (new i = 0; i < MAX_AMMUNATIONS; i++)
+    {
+        AmmuNationPickup[i] = -1;
+        AmmuNationLabel[i] = Text3D:INVALID_3DTEXT_ID;
     }
 
     for (new i = 0; i < MAX_BUSINESSES; i++)
@@ -7664,6 +7829,14 @@ stock CreateWorldInteractionMarkers()
 
         format(labelText, sizeof(labelText), "[ALT] Dealership\n%s\nVehicle Shop / Garage Service", DealershipName[i]);
         DealershipLabel[i] = Create3DTextLabel(labelText, COLOR_GREEN, DealershipX[i], DealershipY[i], DealershipZ[i] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
+    }
+
+    for (new i = 0; i < MAX_AMMUNATIONS; i++)
+    {
+        AmmuNationPickup[i] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, AmmuNationX[i], AmmuNationY[i], AmmuNationZ[i], 0);
+
+        format(labelText, sizeof(labelText), "[ALT] Ammu-Nation\n%s\nWeapon Shop", AmmuNationName[i]);
+        AmmuNationLabel[i] = Create3DTextLabel(labelText, COLOR_ORANGE, AmmuNationX[i], AmmuNationY[i], AmmuNationZ[i] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
     }
 
     for (new i = 0; i < MAX_BUSINESSES; i++)
@@ -7730,6 +7903,21 @@ stock DestroyWorldInteractionMarkers()
         {
             Delete3DTextLabel(DealershipLabel[i]);
             DealershipLabel[i] = Text3D:INVALID_3DTEXT_ID;
+        }
+    }
+
+    for (new i = 0; i < MAX_AMMUNATIONS; i++)
+    {
+        if (AmmuNationPickup[i] != -1)
+        {
+            DestroyPickup(AmmuNationPickup[i]);
+            AmmuNationPickup[i] = -1;
+        }
+
+        if (AmmuNationLabel[i] != Text3D:INVALID_3DTEXT_ID)
+        {
+            Delete3DTextLabel(AmmuNationLabel[i]);
+            AmmuNationLabel[i] = Text3D:INVALID_3DTEXT_ID;
         }
     }
 
@@ -7824,6 +8012,11 @@ stock ApplyLSIFMapIcons(playerid)
         SetPlayerMapIcon(playerid, MAPICON_BASE_DEALER + i, DealershipX[i], DealershipY[i], DealershipZ[i], MAPICON_TYPE_DEALER, COLOR_GREEN, MAPICON_LOCAL);
     }
 
+    for (new i = 0; i < MAX_AMMUNATIONS; i++)
+    {
+        SetPlayerMapIcon(playerid, MAPICON_BASE_AMMUNATION + i, AmmuNationX[i], AmmuNationY[i], AmmuNationZ[i], MAPICON_TYPE_AMMUNATION, COLOR_ORANGE, MAPICON_LOCAL);
+    }
+
     SetPlayerMapIcon(playerid, MAPICON_BASE_RACE, RaceLSX[0], RaceLSY[0], RaceLSZ[0], MAPICON_TYPE_RACE, COLOR_ORANGE, MAPICON_LOCAL);
 
     for (new i = 0; i < MAX_JOB_WORLD_MARKERS; i++)
@@ -7859,6 +8052,11 @@ stock RemoveLSIFMapIcons(playerid)
     for (new i = 0; i < MAX_DEALERSHIPS; i++)
     {
         RemovePlayerMapIcon(playerid, MAPICON_BASE_DEALER + i);
+    }
+
+    for (new i = 0; i < MAX_AMMUNATIONS; i++)
+    {
+        RemovePlayerMapIcon(playerid, MAPICON_BASE_AMMUNATION + i);
     }
 
     RemovePlayerMapIcon(playerid, MAPICON_BASE_RACE);
@@ -7932,7 +8130,7 @@ stock ShowMapLegendDialog(playerid)
     format(
         dialogText,
         sizeof(dialogText),
-        "Radar/Map Icon LSIF:\n\nATM/Bank - transaksi bank, pakai ALT di marker ATM.\nHouse - rumah/interior; ALT untuk menu, panah untuk masuk/keluar.\nBusiness - beli/manage/collect business dengan ALT.\nDealership - vehicle shop dan garage service dengan ALT.\nRace - lokasi race/time trial.\nJob Marker - titik panduan vehicle mission/job.\nBus Stop - rute Bus Driver Mission.\n\nDi dunia, cari 3D label seperti [ALT] ATM, [ALT] Dealership, atau [JOB] Bus Terminal.\nALT = menu/transaksi. Tombol 2 = start vehicle mission/job."
+        "Radar/Map Icon LSIF:\n\nATM/Bank - transaksi bank, pakai ALT di marker ATM.\nHouse - rumah/interior; ALT untuk menu, panah untuk masuk/keluar.\nBusiness - beli/manage/collect business dengan ALT.\nDealership - vehicle shop dan garage service dengan ALT.\nAmmu-Nation - weapon shop dengan ALT.\nRace - lokasi race/time trial.\nJob Marker - titik panduan vehicle mission/job.\nBus Stop - rute Bus Driver Mission.\n\nDi dunia, cari 3D label seperti [ALT] ATM, [ALT] Dealership, [ALT] Ammu-Nation, atau [JOB] Bus Terminal.\nALT = menu/transaksi. Tombol 2 = start vehicle mission/job."
     );
 
     ShowPlayerDialog(playerid, DIALOG_BETA_MOTD, DIALOG_STYLE_MSGBOX, "LSIF Map Legend", dialogText, "OK", "Tutup");
@@ -7942,7 +8140,7 @@ stock ShowMapLegendDialog(playerid)
 stock ShowInteractionNoPoint(playerid)
 {
     SendClientMessage(playerid, COLOR_YELLOW, "Tidak ada interaksi dekatmu.");
-    SendClientMessage(playerid, COLOR_WHITE, "ALT dipakai di marker [ALT]: ATM, dealership, house, dan business.");
+    SendClientMessage(playerid, COLOR_WHITE, "ALT dipakai di marker [ALT]: ATM, dealership, Ammu-Nation, house, dan business.");
     SendClientMessage(playerid, COLOR_WHITE, "Tombol 2 khusus untuk start job/vehicle mission.");
     return 1;
 }
@@ -9318,6 +9516,140 @@ stock ProcessDialogBusinessSell(playerid)
     return 1;
 }
 
+stock GetNearestAmmuNation(playerid)
+{
+    new nearest = -1;
+    new Float:nearestDistance = 999999.0;
+
+    for (new i = 0; i < MAX_AMMUNATIONS; i++)
+    {
+        new Float:distance = GetPlayerDistanceFromPoint(playerid, AmmuNationX[i], AmmuNationY[i], AmmuNationZ[i]);
+
+        if (distance < nearestDistance)
+        {
+            nearestDistance = distance;
+            nearest = i;
+        }
+    }
+
+    return nearest;
+}
+
+stock IsPlayerNearAmmuNation(playerid)
+{
+    for (new i = 0; i < MAX_AMMUNATIONS; i++)
+    {
+        if (GetPlayerDistanceFromPoint(playerid, AmmuNationX[i], AmmuNationY[i], AmmuNationZ[i]) <= AMMUNATION_ACCESS_RADIUS)
+        {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+stock ShowWeaponShopDialog(playerid)
+{
+    if (!IsPlayerNearAmmuNation(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat Ammu-Nation untuk membuka weapon shop.");
+        SendClientMessage(playerid, COLOR_WHITE, "Cari icon Ammu-Nation di radar/map atau marker [ALT] Ammu-Nation.");
+        return 0;
+    }
+
+    new dialogText[768];
+    dialogText[0] = EOS;
+
+    for (new i = 0; i < MAX_WEAPON_SHOP_ITEMS; i++)
+    {
+        format(dialogText, sizeof(dialogText), "%s%s - $%d - Ammo %d\n", dialogText, WeaponShopName[i], WeaponShopPrice[i], WeaponShopAmmo[i]);
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_WEAPON_SHOP, DIALOG_STYLE_LIST, "Ammu-Nation Weapon Shop", dialogText, "Pilih", "Tutup");
+    return 1;
+}
+
+stock ShowWeaponInfoDialog(playerid)
+{
+    new dialogText[1024];
+    dialogText[0] = EOS;
+
+    for (new i = 0; i < MAX_WEAPON_SHOP_ITEMS; i++)
+    {
+        format(dialogText, sizeof(dialogText), "%s%d. %s | Weapon ID %d | Ammo %d | Price $%d\n", dialogText, i + 1, WeaponShopName[i], WeaponShopWeaponID[i], WeaponShopAmmo[i], WeaponShopPrice[i]);
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_WEAPON_INFO, DIALOG_STYLE_MSGBOX, "Weapon Shop Info", dialogText, "OK", "Tutup");
+    return 1;
+}
+
+stock ShowWeaponConfirmDialog(playerid, weaponIndex)
+{
+    if (!IsPlayerNearAmmuNation(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu sudah tidak dekat Ammu-Nation.");
+        return 0;
+    }
+
+    if (weaponIndex < 0 || weaponIndex >= MAX_WEAPON_SHOP_ITEMS)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Pilihan weapon tidak valid.");
+        return 0;
+    }
+
+    PlayerDialogWeaponIndex[playerid] = weaponIndex;
+
+    new dialogText[256];
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "Weapon: %s\nAmmo: %d\nPrice: $%d\n\nCash kamu: $%d\n\nBeli weapon ini?",
+        WeaponShopName[weaponIndex],
+        WeaponShopAmmo[weaponIndex],
+        WeaponShopPrice[weaponIndex],
+        PlayerMoney[playerid]
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_WEAPON_CONFIRM, DIALOG_STYLE_MSGBOX, "Confirm Weapon Purchase", dialogText, "Buy", "Back");
+    return 1;
+}
+
+stock ProcessWeaponPurchase(playerid, weaponIndex)
+{
+    if (!IsPlayerNearAmmuNation(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada dekat Ammu-Nation untuk membeli weapon.");
+        return 0;
+    }
+
+    if (weaponIndex < 0 || weaponIndex >= MAX_WEAPON_SHOP_ITEMS)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Pilihan weapon tidak valid.");
+        return 0;
+    }
+
+    new price = WeaponShopPrice[weaponIndex];
+
+    if (PlayerMoney[playerid] < price)
+    {
+        new msg[144];
+        format(msg, sizeof(msg), "Cash tidak cukup. Harga %s adalah $%d.", WeaponShopName[weaponIndex], price);
+        SendClientMessage(playerid, COLOR_RED, msg);
+        ShowWeaponShopDialog(playerid);
+        return 0;
+    }
+
+    TakePlayerCash(playerid, price);
+    GivePlayerWeapon(playerid, WeaponShopWeaponID[weaponIndex], WeaponShopAmmo[weaponIndex]);
+    SavePlayerData(playerid);
+
+    new msg[144];
+    format(msg, sizeof(msg), "Ammu-Nation: kamu membeli %s dengan ammo %d seharga $%d.", WeaponShopName[weaponIndex], WeaponShopAmmo[weaponIndex], price);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    SendClientMessage(playerid, COLOR_WHITE, "Catatan: v0.19A belum menyimpan loadout weapon ke database. Ini runtime weapon shop dulu.");
+    return 1;
+}
+
 stock HandleWorldInteractKey(playerid)
 {
     if (!PlayerLoggedIn[playerid])
@@ -9347,6 +9679,12 @@ stock HandleWorldInteractKey(playerid)
     if (IsPlayerNearDealership(playerid))
     {
         ShowDealershipMainDialog(playerid);
+        return 1;
+    }
+
+    if (IsPlayerNearAmmuNation(playerid))
+    {
+        ShowWeaponShopDialog(playerid);
         return 1;
     }
 
@@ -11353,6 +11691,18 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/weaponshop", true))
+    {
+        ShowWeaponShopDialog(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/weaponinfo", true))
+    {
+        ShowWeaponInfoDialog(playerid);
+        return 1;
+    }
+
 
     if (!strcmp(cmdtext, "/adminmenu", true))
     {
@@ -11374,6 +11724,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "Tombol 2 - Khusus start job/vehicle mission saat driver kendaraan job");
         SendClientMessage(playerid, COLOR_WHITE, "/maplegend - Penjelasan icon radar/map LSIF");
         SendClientMessage(playerid, COLOR_WHITE, "/refreshicons - Refresh icon radar/map LSIF");
+        SendClientMessage(playerid, COLOR_WHITE, "/weaponshop - Buka Ammu-Nation Weapon Shop, harus dekat Ammu-Nation");
+        SendClientMessage(playerid, COLOR_WHITE, "/weaponinfo - Lihat daftar weapon dan harga");
         SendClientMessage(playerid, COLOR_WHITE, "/stats - Melihat statistik player");
         SendClientMessage(playerid, COLOR_WHITE, "/money - Melihat uang kamu");
         SendClientMessage(playerid, COLOR_WHITE, "/givemoney - Dev test tambah uang");
@@ -11528,9 +11880,9 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D: Release polish, version, credits, staff, beta guide.");
-    	SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");
-    	SendClientMessage(playerid, COLOR_WHITE, "v0.17F: Organization info, members, bank, invite, rank, kick, leave, dan disband memakai Dialog UI.");
-    	SendClientMessage(playerid, COLOR_WHITE, "v0.17B: house arrow enter/exit, ALT transaksi/menu, dan job vehicle grace timer.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.17F: Organization info, members, bank, invite, rank, kick, leave, dan disband memakai Dialog UI.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.17B: house arrow enter/exit, ALT transaksi/menu, dan job vehicle grace timer.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16C: Admin beta dashboard dan monitoring reports/logs.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16B: Starter pack, bug report, suggestion, feedback handling.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16A: Whitelist, MOTD, rules, closed beta gate.");
@@ -16289,7 +16641,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         SendClientMessage(playerid, COLOR_YELLOW, "========== CLOSED BETA STATUS ==========");
 
-        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.18B Job World");
+        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.19A Ammu-Nation");
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         format(msg, sizeof(msg), "Uptime: %s", uptimeText);

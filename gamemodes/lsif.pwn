@@ -53,6 +53,8 @@
 #define WORK_TAXI       2
 #define WORK_TRUCKER    3
 
+#define JOB_VEHICLE_GRACE_SECONDS 30
+
 #define MAX_COURIER_POINTS 5
 #define MAX_TAXI_ROUTES 5
 
@@ -146,6 +148,10 @@
 #define HOUSE_INT_Y -1695.2382
 #define HOUSE_INT_Z 1014.7422
 #define HOUSE_INT_A 180.0000
+
+#define HOUSE_PICKUP_MODEL 1318
+#define HOUSE_PICKUP_TYPE 1
+#define HOUSE_EXIT_PICKUP_Y_OFFSET -2.0
 
 #define ORG_CREATE_PRICE 100000
 #define MAX_ORG_BANK_TRANSACTION 10000000
@@ -455,41 +461,42 @@ new Float:RaceLSZ[MAX_LS_RACE_POINTS] =
 new PlayerLastJobTopQuery[MAX_PLAYERS][32];
 
 new PlayerFindingBank[MAX_PLAYERS];
+new PlayerWorkExitTick[MAX_PLAYERS];
 
 new Float:BankPointX[MAX_BANK_POINTS] =
 {
-    1462.1489, // Pershing Square
-    1367.2457, // Market
-    1833.8134, // Idlewood
-    2421.5427, // East LS
-    1154.7312  // Santa Maria Beach
+    1833.8134, // Idlewood 24/7 / Supermarket
+    1352.4896, // Commerce / Market 24/7
+    1000.5822, // Vinewood shop area
+    2421.5427, // East LS store area
+    1154.7312  // Santa Maria beach shop area
 };
 
 new Float:BankPointY[MAX_BANK_POINTS] =
 {
-    -1012.3848,
-        -1279.8615,
-        -1842.4136,
-        -1224.3597,
-        -1769.6847
-    };
+    -1842.4136,
+    -1758.2188,
+    -919.9146,
+    -1224.3597,
+    -1769.6847
+};
 
 new Float:BankPointZ[MAX_BANK_POINTS] =
 {
-    26.8438,
-    13.5469,
     13.5781,
+    13.5078,
+    42.3281,
     25.3828,
     16.5938
 };
 
 new BankPointName[MAX_BANK_POINTS][32] =
 {
-    "Pershing Square Bank",
-    "Market ATM",
-    "Idlewood ATM",
-    "East LS Bank",
-    "Santa Maria ATM"
+    "Idlewood 24/7 ATM",
+    "Commerce 24/7 ATM",
+    "Vinewood Store ATM",
+    "East LS Market ATM",
+    "Santa Maria Shop ATM"
 };
 
 new PlayerHouseDBID[MAX_PLAYERS];
@@ -501,6 +508,8 @@ new PlayerInsideHouseOwner[MAX_PLAYERS];
 new PlayerHouseInvite[MAX_PLAYERS];
 new PlayerFindingHouse[MAX_PLAYERS];
 new PlayerFindingHouseIndex[MAX_PLAYERS];
+new HouseExteriorPickup[MAX_HOUSES];
+new PlayerHouseExitPickup[MAX_PLAYERS];
 
 new Float:HouseX[MAX_HOUSES] =
 {
@@ -1071,8 +1080,10 @@ stock ResetPlayerAccountData(playerid)
     PlayerJob[playerid] = JOB_NONE;
     PlayerWorking[playerid] = 0;
     PlayerWorkType[playerid] = WORK_NONE;
+    PlayerWorkExitTick[playerid] = 0;
     PlayerWorkPoint[playerid] = -1;
     PlayerLastWorkTick[playerid] = 0;
+    PlayerWorkExitTick[playerid] = 0;
     ResetTaxiWorkData(playerid);
     ResetTruckerWorkData(playerid);
 
@@ -1652,6 +1663,7 @@ stock StartCourierWork(playerid)
     new point = random(MAX_COURIER_POINTS);
 
     PlayerWorking[playerid] = 1;
+    PlayerWorkExitTick[playerid] = 0;
     PlayerWorkType[playerid] = WORK_COURIER;
     PlayerWorkPoint[playerid] = point;
 
@@ -1741,6 +1753,7 @@ stock StartTaxiWork(playerid)
     new route = random(MAX_TAXI_ROUTES);
 
     PlayerWorking[playerid] = 1;
+    PlayerWorkExitTick[playerid] = 0;
     PlayerWorkType[playerid] = WORK_TAXI;
     PlayerWorkPoint[playerid] = route;
 
@@ -1920,6 +1933,7 @@ stock StartTruckerWork(playerid)
     new route = random(MAX_TRUCKER_ROUTES);
 
     PlayerWorking[playerid] = 1;
+    PlayerWorkExitTick[playerid] = 0;
     PlayerWorkType[playerid] = WORK_TRUCKER;
     PlayerWorkPoint[playerid] = route;
 
@@ -2038,6 +2052,111 @@ stock CompleteTruckerWork(playerid)
     SendClientMessage(playerid, COLOR_WHITE, "Gunakan /work lagi setelah cooldown untuk mengambil muatan berikutnya.");
 
     SavePlayerData(playerid);
+    return 1;
+}
+
+stock IsCurrentWorkVehicleValid(playerid)
+{
+    if (!PlayerWorking[playerid])
+    {
+        return 1;
+    }
+
+    if (PlayerWorkType[playerid] == WORK_TAXI)
+    {
+        return IsPlayerInTaxiVehicle(playerid);
+    }
+
+    if (PlayerWorkType[playerid] == WORK_TRUCKER)
+    {
+        return IsPlayerInTruckerVehicle(playerid);
+    }
+
+    if (PlayerWorkType[playerid] == WORK_COURIER)
+    {
+        return IsPlayerInCourierVehicle(playerid);
+    }
+
+    return 1;
+}
+
+stock GetWorkVehicleGraceLeft(playerid)
+{
+    if (PlayerWorkExitTick[playerid] == 0)
+    {
+        return 0;
+    }
+
+    new elapsed = (GetTickCount() - PlayerWorkExitTick[playerid]) / 1000;
+
+    if (elapsed >= JOB_VEHICLE_GRACE_SECONDS)
+    {
+        return 0;
+    }
+
+    return JOB_VEHICLE_GRACE_SECONDS - elapsed;
+}
+
+stock StartWorkVehicleGrace(playerid)
+{
+    if (!PlayerWorking[playerid])
+    {
+        return 0;
+    }
+
+    if (PlayerWorkExitTick[playerid] == 0)
+    {
+        PlayerWorkExitTick[playerid] = GetTickCount();
+
+        new msg[144];
+        format(msg, sizeof(msg), "Kamu keluar dari kendaraan job. Kembali dalam %d detik atau job dibatalkan.", JOB_VEHICLE_GRACE_SECONDS);
+        SendClientMessage(playerid, COLOR_YELLOW, msg);
+    }
+
+    return 1;
+}
+
+stock ClearWorkVehicleGrace(playerid)
+{
+    if (PlayerWorkExitTick[playerid] != 0)
+    {
+        PlayerWorkExitTick[playerid] = 0;
+        SendClientMessage(playerid, COLOR_GREEN, "Kamu kembali ke kendaraan job. Countdown cancel dibatalkan.");
+    }
+
+    return 1;
+}
+
+stock CheckWorkVehicleGrace(playerid)
+{
+    if (!PlayerWorking[playerid])
+    {
+        PlayerWorkExitTick[playerid] = 0;
+        return 1;
+    }
+
+    if (IsCurrentWorkVehicleValid(playerid))
+    {
+        ClearWorkVehicleGrace(playerid);
+        return 1;
+    }
+
+    if (PlayerWorkExitTick[playerid] == 0)
+    {
+        StartWorkVehicleGrace(playerid);
+        return 1;
+    }
+
+    new elapsed = (GetTickCount() - PlayerWorkExitTick[playerid]) / 1000;
+
+    if (elapsed >= JOB_VEHICLE_GRACE_SECONDS)
+    {
+        PlayerWorkExitTick[playerid] = 0;
+        CancelPlayerWork(playerid);
+        SendClientMessage(playerid, COLOR_RED, "Job otomatis dibatalkan karena kamu terlalu lama keluar dari kendaraan job.");
+        return 1;
+    }
+
     return 1;
 }
 
@@ -3021,8 +3140,53 @@ stock ResetPlayerHouseData(playerid)
     PlayerInsideHouse[playerid] = 0;
     PlayerInsideHouseOwner[playerid] = INVALID_PLAYER_ID;
     PlayerHouseInvite[playerid] = INVALID_PLAYER_ID;
+    PlayerHouseExitPickup[playerid] = -1;
     PlayerFindingHouse[playerid] = 0;
     PlayerFindingHouseIndex[playerid] = -1;
+    return 1;
+}
+
+stock DestroyPlayerHouseExitPickup(playerid)
+{
+    if (PlayerHouseExitPickup[playerid] != -1)
+    {
+        DestroyPickup(PlayerHouseExitPickup[playerid]);
+        PlayerHouseExitPickup[playerid] = -1;
+    }
+
+    return 1;
+}
+
+stock CreatePlayerHouseExitPickup(playerid, ownerid)
+{
+    DestroyPlayerHouseExitPickup(playerid);
+
+    PlayerHouseExitPickup[playerid] = CreatePickup(
+        HOUSE_PICKUP_MODEL,
+        HOUSE_PICKUP_TYPE,
+        HOUSE_INT_X,
+        HOUSE_INT_Y + HOUSE_EXIT_PICKUP_Y_OFFSET,
+        HOUSE_INT_Z,
+        GetPlayerHouseVirtualWorld(ownerid)
+    );
+
+    return 1;
+}
+
+stock CreateHouseExteriorPickups()
+{
+    for (new i = 0; i < MAX_HOUSES; i++)
+    {
+        HouseExteriorPickup[i] = CreatePickup(
+            HOUSE_PICKUP_MODEL,
+            HOUSE_PICKUP_TYPE,
+            HouseX[i],
+            HouseY[i],
+            HouseZ[i],
+            0
+        );
+    }
+
     return 1;
 }
 
@@ -3212,6 +3376,7 @@ stock EnterHouseAsVisitor(playerid, ownerid)
     SetPlayerVirtualWorld(playerid, GetPlayerHouseVirtualWorld(ownerid));
     SetPlayerPos(playerid, HOUSE_INT_X, HOUSE_INT_Y, HOUSE_INT_Z);
     SetPlayerFacingAngle(playerid, HOUSE_INT_A);
+    CreatePlayerHouseExitPickup(playerid, ownerid);
 
     if (playerid != ownerid && PlayerHouseInvite[playerid] == ownerid)
     {
@@ -3234,7 +3399,7 @@ stock EnterHouseAsVisitor(playerid, ownerid)
         SendClientMessage(playerid, COLOR_GREEN, msg);
     }
 
-    SendClientMessage(playerid, COLOR_WHITE, "Gunakan /exithouse untuk keluar.");
+    SendClientMessage(playerid, COLOR_WHITE, "Sentuh panah keluar di dalam rumah, atau gunakan /exithouse sebagai fallback.");
 
     return 1;
 }
@@ -3250,6 +3415,7 @@ stock KickPlayerFromHouse(playerid)
 
     if (ownerid == INVALID_PLAYER_ID || !IsPlayerConnected(ownerid) || PlayerHouseIndex[ownerid] == -1)
     {
+        DestroyPlayerHouseExitPickup(playerid);
         PlayerInsideHouse[playerid] = 0;
         PlayerInsideHouseOwner[playerid] = INVALID_PLAYER_ID;
 
@@ -3262,6 +3428,7 @@ stock KickPlayerFromHouse(playerid)
 
     new houseIndex = PlayerHouseIndex[ownerid];
 
+    DestroyPlayerHouseExitPickup(playerid);
     PlayerInsideHouse[playerid] = 0;
     PlayerInsideHouseOwner[playerid] = INVALID_PLAYER_ID;
 
@@ -4193,7 +4360,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.17A Interaction");
+    SetGameModeText("LSIF Dev v0.17B Offline UI");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -4220,6 +4387,8 @@ public OnGameModeInit()
         WEAPON:WEAPON_FIST, 0,
         WEAPON:WEAPON_FIST, 0
     );
+
+    CreateHouseExteriorPickups();
 
     for (new i = 0; i < MAX_PLAYERS; i++)
     {
@@ -4248,6 +4417,8 @@ public OnGameModeInit()
         PlayerWorkType[i] = WORK_NONE;
         PlayerWorkPoint[i] = -1;
         PlayerLastWorkTick[i] = 0;
+        PlayerWorkExitTick[i] = 0;
+        PlayerHouseExitPickup[i] = -1;
 
         PlayerLastX[i] = SPAWN_X;
         PlayerLastY[i] = SPAWN_Y;
@@ -4268,7 +4439,8 @@ public OnGameModeInit()
     print("[LSIF] Closed beta whitelist system aktif.");
     print("[LSIF] Manual vehicle engine mode aktif.");
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
-    print("[LSIF] Gamemode v0.17A Interaction Foundation berhasil dijalankan.");
+    print("[LSIF] Custom house arrow pickups aktif.");
+    print("[LSIF] Gamemode v0.17B Offline-like Interaction berhasil dijalankan.");
     return 1;
 }
 
@@ -4293,6 +4465,15 @@ public OnGameModeExit()
     {
         KillTimer(g_FuelTimer);
         g_FuelTimer = 0;
+    }
+
+    for (new i = 0; i < MAX_HOUSES; i++)
+    {
+        if (HouseExteriorPickup[i] != -1)
+        {
+            DestroyPickup(HouseExteriorPickup[i]);
+            HouseExteriorPickup[i] = -1;
+        }
     }
 
     mysql_close(g_SQL);
@@ -4325,6 +4506,7 @@ public OnPlayerDisconnect(playerid, reason)
 {
     SavePlayerData(playerid);
     SaveOwnedVehicle(playerid);
+    DestroyPlayerHouseExitPickup(playerid);
     if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
     {
         DestroyOwnedVehicleLabel(playerid);
@@ -4339,6 +4521,7 @@ public OnPlayerDisconnect(playerid, reason)
     PlayerWorking[playerid] = 0;
     PlayerWorkType[playerid] = WORK_NONE;
     PlayerWorkPoint[playerid] = -1;
+    PlayerWorkExitTick[playerid] = 0;
 
     PlayerLoggedIn[playerid] = 0;
     PlayerDBID[playerid] = 0;
@@ -4748,7 +4931,7 @@ stock HandleVehicleMissionKey(playerid)
 stock ShowInteractionNoPoint(playerid)
 {
     SendClientMessage(playerid, COLOR_YELLOW, "Tidak ada interaksi dekatmu.");
-    SendClientMessage(playerid, COLOR_WHITE, "ALT dipakai untuk interaksi dunia: ATM, dealership, rumah, business, dan interior.");
+    SendClientMessage(playerid, COLOR_WHITE, "ALT dipakai untuk interaksi dunia: ATM, dealership, beli rumah, dan business.");
     SendClientMessage(playerid, COLOR_WHITE, "Tombol 2 khusus untuk start job/vehicle mission.");
     return 1;
 }
@@ -4762,7 +4945,8 @@ stock HandleWorldInteractKey(playerid)
 
     if (PlayerInsideHouse[playerid])
     {
-        ExitPlayerHouse(playerid);
+        SendClientMessage(playerid, COLOR_YELLOW, "Kamu sedang berada di dalam rumah.");
+        SendClientMessage(playerid, COLOR_WHITE, "Untuk keluar ruangan, sentuh panah keluar. /exithouse tetap tersedia sebagai fallback.");
         return 1;
     }
 
@@ -4772,23 +4956,14 @@ stock HandleWorldInteractKey(playerid)
         return 1;
     }
 
-    if (PlayerHouseDBID[playerid] > 0 && PlayerHouseIndex[playerid] != -1 && IsPlayerNearHouse(playerid, PlayerHouseIndex[playerid]))
-    {
-        SendClientMessage(playerid, COLOR_YELLOW, "========== HOUSE INTERACTION ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "ALT mendeteksi rumah pribadi kamu.");
-        SendClientMessage(playerid, COLOR_CYAN, "Aksi cepat: kamu masuk ke rumah. Gunakan /lockhouse untuk kunci/buka rumah.");
-        EnterPlayerHouse(playerid);
-        return 1;
-    }
-
     if (IsPlayerNearBankPoint(playerid))
     {
         new msg[144];
         format(msg, sizeof(msg), "ATM/Bank terdeteksi. Cash: $%d | Bank: $%d", PlayerMoney[playerid], PlayerBankMoney[playerid]);
         SendClientMessage(playerid, COLOR_YELLOW, "========== ATM INTERACTION ==========");
         SendClientMessage(playerid, COLOR_WHITE, msg);
-        SendClientMessage(playerid, COLOR_CYAN, "Gunakan /balance, /deposit [amount/all], atau /withdraw [amount/all].");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.17B akan mengubah ini menjadi dialog ATM penuh.");
+        SendClientMessage(playerid, COLOR_CYAN, "ALT untuk ATM: gunakan /balance, /deposit [amount/all], atau /withdraw [amount/all].");
+        SendClientMessage(playerid, COLOR_WHITE, "Lokasi ATM diarahkan ke area supermarket/market agar lebih terasa seperti offline mode.");
         return 1;
     }
 
@@ -4796,8 +4971,8 @@ stock HandleWorldInteractKey(playerid)
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== DEALERSHIP INTERACTION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Dealership terdeteksi.");
-        SendClientMessage(playerid, COLOR_CYAN, "Gunakan /vehicleshop untuk lihat kendaraan dan /buyvehicle [id] untuk beli.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.17C akan mengubah dealership menjadi dialog vehicle shop.");
+        SendClientMessage(playerid, COLOR_CYAN, "ALT untuk dealer: gunakan /vehicleshop untuk lihat kendaraan dan /buyvehicle [id] untuk beli.");
+        SendClientMessage(playerid, COLOR_WHITE, "Nanti dealer akan memakai dialog UI penuh.");
         return 1;
     }
 
@@ -4809,8 +4984,8 @@ stock HandleWorldInteractKey(playerid)
         format(msg, sizeof(msg), "Rumah terdekat: %s | Harga: $%d", HouseName[nearestHouse], HousePrice[nearestHouse]);
         SendClientMessage(playerid, COLOR_YELLOW, "========== HOUSE INTERACTION ==========");
         SendClientMessage(playerid, COLOR_WHITE, msg);
-        SendClientMessage(playerid, COLOR_CYAN, "Gunakan /buyhouse [id] jika ingin membeli atau /visithouse [ownerid] jika ingin berkunjung.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.17D akan mengubah rumah menjadi dialog house menu.");
+        SendClientMessage(playerid, COLOR_CYAN, "ALT untuk rumah: /buyhouse [id], /myhouse, /lockhouse, atau /visithouse [ownerid].");
+        SendClientMessage(playerid, COLOR_WHITE, "Masuk/keluar rumah sekarang memakai panah custom, bukan ALT.");
         return 1;
     }
 
@@ -4822,12 +4997,50 @@ stock HandleWorldInteractKey(playerid)
         format(msg, sizeof(msg), "Business terdekat: %s | Harga: $%d", BusinessName[nearestBusiness], BusinessPrice[nearestBusiness]);
         SendClientMessage(playerid, COLOR_YELLOW, "========== BUSINESS INTERACTION ==========");
         SendClientMessage(playerid, COLOR_WHITE, msg);
-        SendClientMessage(playerid, COLOR_CYAN, "Gunakan /buybiz [id], /mybiz, /collectbiz, atau /upgradebiz.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.17E akan mengubah business menjadi dialog business menu.");
+        SendClientMessage(playerid, COLOR_CYAN, "ALT untuk business: /buybiz [id], /mybiz, /collectbiz, atau /upgradebiz.");
+        SendClientMessage(playerid, COLOR_WHITE, "Nanti business akan memakai dialog UI penuh.");
         return 1;
     }
 
     ShowInteractionNoPoint(playerid);
+    return 1;
+}
+
+public OnPlayerPickUpPickup(playerid, pickupid)
+{
+    if (!PlayerLoggedIn[playerid])
+    {
+        return 1;
+    }
+
+    if (PlayerHouseExitPickup[playerid] != -1 && pickupid == PlayerHouseExitPickup[playerid])
+    {
+        ExitPlayerHouse(playerid);
+        return 1;
+    }
+
+    for (new i = 0; i < MAX_HOUSES; i++)
+    {
+        if (pickupid == HouseExteriorPickup[i])
+        {
+            if (PlayerWorking[playerid] || PlayerRace[playerid] != RACE_NONE)
+            {
+                SendClientMessage(playerid, COLOR_RED, "Tidak bisa masuk rumah saat job/race aktif.");
+                return 1;
+            }
+
+            if (PlayerHouseDBID[playerid] > 0 && PlayerHouseIndex[playerid] == i)
+            {
+                EnterPlayerHouse(playerid);
+                return 1;
+            }
+
+            SendClientMessage(playerid, COLOR_YELLOW, "Panah rumah terdeteksi.");
+            SendClientMessage(playerid, COLOR_WHITE, "Jika ini rumahmu, gunakan /gohome atau /myhouse. Jika ingin membeli, tekan ALT untuk info lalu /buyhouse [id].");
+            return 1;
+        }
+    }
+
     return 1;
 }
 
@@ -5097,6 +5310,22 @@ public OnPlayerStateChange(playerid, PLAYER_STATE:newstate, PLAYER_STATE:oldstat
             {
                 OwnedVehicleFuel[playerid] = 0;
                 StopVehicleEngineDueFuel(playerid);
+            }
+        }
+    }
+
+    if (PlayerWorking[playerid])
+    {
+        if ((oldstate == PLAYER_STATE_DRIVER || oldstate == PLAYER_STATE_PASSENGER) && newstate == PLAYER_STATE_ONFOOT)
+        {
+            StartWorkVehicleGrace(playerid);
+        }
+
+        if (newstate == PLAYER_STATE_DRIVER || newstate == PLAYER_STATE_PASSENGER)
+        {
+            if (IsCurrentWorkVehicleValid(playerid))
+            {
+                ClearWorkVehicleGrace(playerid);
             }
         }
     }
@@ -5639,31 +5868,13 @@ public AntiCheatCheck()
             }
         }
 
-        if (PlayerWorking[i] && PlayerWorkType[i] == WORK_TAXI)
+        if (PlayerWorking[i] && !IsCurrentWorkVehicleValid(i))
         {
-            if (!IsPlayerInTaxiVehicle(i))
-            {
-                CancelPlayerWork(i);
-                ReportSuspiciousActivity(i, "Taxi job cancelled by anti-cheat: invalid taxi vehicle.");
-            }
+            CheckWorkVehicleGrace(i);
         }
-
-        if (PlayerWorking[i] && PlayerWorkType[i] == WORK_TRUCKER)
+        else if (PlayerWorking[i])
         {
-            if (!IsPlayerInTruckerVehicle(i))
-            {
-                CancelPlayerWork(i);
-                ReportSuspiciousActivity(i, "Trucker job cancelled by anti-cheat: invalid truck vehicle.");
-            }
-        }
-
-        if (PlayerWorking[i] && PlayerWorkType[i] == WORK_COURIER)
-        {
-            if (!IsPlayerInCourierVehicle(i))
-            {
-                CancelPlayerWork(i);
-                ReportSuspiciousActivity(i, "Courier job cancelled by anti-cheat: invalid courier vehicle.");
-            }
+            ClearWorkVehicleGrace(i);
         }
     }
 
@@ -6642,8 +6853,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF HELP ==========");
         SendClientMessage(playerid, COLOR_WHITE, "/help - Menampilkan bantuan");
-        SendClientMessage(playerid, COLOR_WHITE, "ALT - Interaksi dunia terdekat, /interact sebagai fallback");
-        SendClientMessage(playerid, COLOR_WHITE, "Tombol 2 - Start job/vehicle mission saat driver kendaraan job");
+        SendClientMessage(playerid, COLOR_WHITE, "ALT - Interaksi transaksi/menu dunia, /interact sebagai fallback");
+        SendClientMessage(playerid, COLOR_WHITE, "Tombol 2 - Khusus start job/vehicle mission saat driver kendaraan job");
         SendClientMessage(playerid, COLOR_WHITE, "/stats - Melihat statistik player");
         SendClientMessage(playerid, COLOR_WHITE, "/money - Melihat uang kamu");
         SendClientMessage(playerid, COLOR_WHITE, "/givemoney - Dev test tambah uang");
@@ -6782,7 +6993,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.17A Interaction Foundation");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.17B Offline-like Interaction");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -6793,7 +7004,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D: Release polish, version, credits, staff, beta guide.");
     	SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");
-    	SendClientMessage(playerid, COLOR_WHITE, "v0.17A: ALT world interaction foundation + tombol 2 vehicle mission starter.");
+    	SendClientMessage(playerid, COLOR_WHITE, "v0.17B: house arrow enter/exit, ALT transaksi/menu, dan job vehicle grace timer.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16C: Admin beta dashboard dan monitoring reports/logs.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16B: Starter pack, bug report, suggestion, feedback handling.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16A: Whitelist, MOTD, rules, closed beta gate.");
@@ -11458,7 +11669,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         SendClientMessage(playerid, COLOR_YELLOW, "========== CLOSED BETA STATUS ==========");
 
-        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.17A Interaction");
+        format(msg, sizeof(msg), "Gamemode: LSIF Dev v0.17B Offline UI");
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         format(msg, sizeof(msg), "Uptime: %s", uptimeText);

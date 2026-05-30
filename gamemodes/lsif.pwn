@@ -278,6 +278,7 @@
 
 #define MAX_TERRITORIES 6
 #define TERRITORY_ACCESS_RADIUS 80.0
+#define TERRITORY_ZONE_ALPHA 0x55
 #define DEFAULT_GANG_COLOR 0xFFFFFFFF
 #define MAX_GANG_COLOR_PRESETS 8
 #define MAX_PRESET_GANGS 4
@@ -833,6 +834,7 @@ new Text3D:GangHQLabel[MAX_PRESET_GANGS];
 
 new TerritoryPickup[MAX_TERRITORIES];
 new Text3D:TerritoryLabel[MAX_TERRITORIES];
+new TerritoryZone[MAX_TERRITORIES];
 new TerritoryOwnerGangID[MAX_TERRITORIES];
 new TerritoryOwnerColor[MAX_TERRITORIES];
 new TerritoryOwnerName[MAX_TERRITORIES][64];
@@ -4858,6 +4860,119 @@ stock IsValidTerritoryIndex(territoryIndex)
     return 1;
 }
 
+stock GetTerritoryZoneColor(territoryIndex)
+{
+    if (!IsValidTerritoryIndex(territoryIndex))
+    {
+        return 0x77777755;
+    }
+
+    new color = TerritoryOwnerColor[territoryIndex];
+
+    if (TerritoryOwnerGangID[territoryIndex] <= 0)
+    {
+        color = 0x777777FF;
+    }
+
+    // LSIF colors use RGBA format. Keep RGB, replace alpha with a transparent value.
+    return (color & 0xFFFFFF00) | TERRITORY_ZONE_ALPHA;
+}
+
+stock CreateTerritoryGangZones()
+{
+    for (new i = 0; i < MAX_TERRITORIES; i++)
+    {
+        if (TerritoryZone[i] != -1)
+        {
+            GangZoneDestroy(TerritoryZone[i]);
+            TerritoryZone[i] = -1;
+        }
+
+        new Float:minX = TerritoryX[i] - TerritoryRadius[i];
+        new Float:minY = TerritoryY[i] - TerritoryRadius[i];
+        new Float:maxX = TerritoryX[i] + TerritoryRadius[i];
+        new Float:maxY = TerritoryY[i] + TerritoryRadius[i];
+
+        TerritoryZone[i] = GangZoneCreate(minX, minY, maxX, maxY);
+    }
+
+    print("[LSIF] Territory colored GangZones created from territory center/radius.");
+    return 1;
+}
+
+stock DestroyTerritoryGangZones()
+{
+    for (new i = 0; i < MAX_TERRITORIES; i++)
+    {
+        if (TerritoryZone[i] != -1)
+        {
+            GangZoneDestroy(TerritoryZone[i]);
+            TerritoryZone[i] = -1;
+        }
+    }
+
+    return 1;
+}
+
+stock ApplyTerritoryZones(playerid)
+{
+    for (new i = 0; i < MAX_TERRITORIES; i++)
+    {
+        if (TerritoryZone[i] != -1)
+        {
+            GangZoneShowForPlayer(playerid, TerritoryZone[i], GetTerritoryZoneColor(i));
+        }
+    }
+
+    return 1;
+}
+
+stock HideTerritoryZones(playerid)
+{
+    for (new i = 0; i < MAX_TERRITORIES; i++)
+    {
+        if (TerritoryZone[i] != -1)
+        {
+            GangZoneHideForPlayer(playerid, TerritoryZone[i]);
+        }
+    }
+
+    return 1;
+}
+
+stock RefreshTerritoryZoneForAll(territoryIndex)
+{
+    if (!IsValidTerritoryIndex(territoryIndex))
+    {
+        return 0;
+    }
+
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (IsPlayerConnected(i) && TerritoryZone[territoryIndex] != -1)
+        {
+            GangZoneHideForPlayer(i, TerritoryZone[territoryIndex]);
+            GangZoneShowForPlayer(i, TerritoryZone[territoryIndex], GetTerritoryZoneColor(territoryIndex));
+        }
+    }
+
+    return 1;
+}
+
+stock RefreshAllPlayerTerritoryZones()
+{
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (IsPlayerConnected(i))
+        {
+            HideTerritoryZones(i);
+            ApplyTerritoryZones(i);
+        }
+    }
+
+    return 1;
+}
+
 stock GetGangColorIndexByValue(color)
 {
     for (new i = 0; i < MAX_GANG_COLOR_PRESETS; i++)
@@ -6784,7 +6899,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.20A.2.2 Nearby ALT");
+    SetGameModeText("LSIF Dev v0.20A.3 Turf Zones");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -6870,8 +6985,8 @@ public OnGameModeInit()
     print("[LSIF] Manual vehicle engine mode aktif.");
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
     print("[LSIF] Custom house arrow pickups aktif.");
-    print("[LSIF] Map icons, 3D labels, ALT world markers, and turf markers aktif.");
-    print("[LSIF] Gamemode v0.20A.2.2 Nearby Interaction Menu berhasil dijalankan.");
+    print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
+    print("[LSIF] Gamemode v0.20A.3 Territory Colored Zone Map berhasil dijalankan.");
     return 1;
 }
 
@@ -9069,6 +9184,7 @@ stock InitWorldMarkerArrays()
     {
         TerritoryPickup[i] = -1;
         TerritoryLabel[i] = Text3D:INVALID_3DTEXT_ID;
+        TerritoryZone[i] = -1;
     }
 
     for (new i = 0; i < MAX_PRESET_GANGS; i++)
@@ -9085,6 +9201,7 @@ stock InitWorldMarkerArrays()
 stock CreateWorldInteractionMarkers()
 {
     InitWorldMarkerArrays();
+    CreateTerritoryGangZones();
 
     new labelText[144];
 
@@ -9164,6 +9281,8 @@ stock CreateWorldInteractionMarkers()
 
 stock DestroyWorldInteractionMarkers()
 {
+    DestroyTerritoryGangZones();
+
     for (new i = 0; i < MAX_BANK_POINTS; i++)
     {
         if (BankPointPickup[i] != -1)
@@ -9310,6 +9429,8 @@ stock DestroyWorldInteractionMarkers()
 
 stock ApplyLSIFMapIcons(playerid)
 {
+    ApplyTerritoryZones(playerid);
+
     for (new i = 0; i < MAX_BANK_POINTS; i++)
     {
         SetPlayerMapIcon(playerid, MAPICON_BASE_ATM + i, BankPointX[i], BankPointY[i], BankPointZ[i], MAPICON_TYPE_ATM, COLOR_CYAN, MAPICON_LOCAL);
@@ -9362,6 +9483,8 @@ stock ApplyLSIFMapIcons(playerid)
 
 stock RemoveLSIFMapIcons(playerid)
 {
+    HideTerritoryZones(playerid);
+
     for (new i = 0; i < MAX_BANK_POINTS; i++)
     {
         RemovePlayerMapIcon(playerid, MAPICON_BASE_ATM + i);
@@ -9468,7 +9591,7 @@ stock ShowMapLegendDialog(playerid)
     format(
         dialogText,
         sizeof(dialogText),
-        "Radar/Map Icon LSIF:\n\nATM/Bank - transaksi bank, pakai ALT di marker ATM.\nHouse - rumah/interior; ALT untuk menu, panah untuk masuk/keluar.\nBusiness - beli/manage/collect business dengan ALT.\nDealership - vehicle shop dan garage service dengan ALT.\nAmmu-Nation - weapon shop dengan ALT.\nTerritory/Turf - area gang, bukan organization. Lihat /turfmap.\nGang HQ - markas gang preset; tekan ALT untuk join/menu gang. Jika satu titik punya beberapa fungsi, ALT membuka Nearby Interaction Menu.\nRace - lokasi race/time trial.\nJob Marker - titik panduan vehicle mission/job.\nBus Stop - rute Bus Driver Mission.\n\nDi dunia, cari 3D label seperti [ALT] ATM, [ALT] Dealership, [ALT] Ammu-Nation, [ALT] Grove/Ballas/Vagos/Aztecas HQ, atau [JOB] Bus Terminal.\nALT = menu/transaksi. Tombol 2 = start vehicle mission/job. Turf map = /gangmenu atau /turfmap. Organization tetap untuk ekonomi/bisnis."
+        "Radar/Map Icon LSIF:\n\nATM/Bank - transaksi bank, pakai ALT di marker ATM.\nHouse - rumah/interior; ALT untuk menu, panah untuk masuk/keluar.\nBusiness - beli/manage/collect business dengan ALT.\nDealership - vehicle shop dan garage service dengan ALT.\nAmmu-Nation - weapon shop dengan ALT.\nTerritory/Turf - blok warna transparan di map sesuai owner gang. Lihat /turfmap atau /refreshzones.\nGang HQ - markas gang preset; tekan ALT untuk join/menu gang. Jika satu titik punya beberapa fungsi, ALT membuka Nearby Interaction Menu.\nRace - lokasi race/time trial.\nJob Marker - titik panduan vehicle mission/job.\nBus Stop - rute Bus Driver Mission.\n\nDi dunia, cari 3D label seperti [ALT] ATM, [ALT] Dealership, [ALT] Ammu-Nation, [ALT] Grove/Ballas/Vagos/Aztecas HQ, atau [JOB] Bus Terminal.\nALT = menu/transaksi. Tombol 2 = start vehicle mission/job. Turf map = /gangmenu atau /turfmap. Organization tetap untuk ekonomi/bisnis."
     );
 
     ShowPlayerDialog(playerid, DIALOG_BETA_MOTD, DIALOG_STYLE_MSGBOX, "LSIF Map Legend", dialogText, "OK", "Tutup");
@@ -12443,7 +12566,8 @@ public OnGangTerritoriesLoaded()
 
     RefreshAllTerritoryLabels();
     RefreshAllPlayerMapIcons();
-    print("[LSIF] Gang territories ownership loaded.");
+    RefreshAllPlayerTerritoryZones();
+    print("[LSIF] Gang territories ownership loaded and colored zones refreshed.");
     return 1;
 }
 
@@ -12498,6 +12622,7 @@ public OnGangTerritoryGangLookup(playerid, territoryIndex, gangid)
     mysql_tquery(g_SQL, query);
 
     UpdateTerritoryMarkerLabel(territoryIndex);
+    RefreshTerritoryZoneForAll(territoryIndex);
     RefreshAllPlayerMapIcons();
 
     new msg[144];
@@ -13656,7 +13781,15 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/refreshicons", true))
     {
         ApplyLSIFMapIcons(playerid);
-        SendClientMessage(playerid, COLOR_GREEN, "Map icon LSIF sudah direfresh.");
+        SendClientMessage(playerid, COLOR_GREEN, "Map icon dan territory zone LSIF sudah direfresh.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/refreshzones", true))
+    {
+        HideTerritoryZones(playerid);
+        ApplyTerritoryZones(playerid);
+        SendClientMessage(playerid, COLOR_GREEN, "Territory colored zones sudah direfresh.");
         return 1;
     }
 
@@ -13927,6 +14060,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "Tombol 2 - Khusus start job/vehicle mission saat driver kendaraan job");
         SendClientMessage(playerid, COLOR_WHITE, "/maplegend - Penjelasan icon radar/map LSIF");
         SendClientMessage(playerid, COLOR_WHITE, "/refreshicons - Refresh icon radar/map LSIF");
+        SendClientMessage(playerid, COLOR_WHITE, "/refreshzones - Refresh blok warna territory/turf");
         SendClientMessage(playerid, COLOR_WHITE, "/weaponshop - Buka Ammu-Nation Weapon Shop, harus dekat Ammu-Nation");
         SendClientMessage(playerid, COLOR_WHITE, "/weaponinfo - Lihat daftar weapon dan harga");
         SendClientMessage(playerid, COLOR_WHITE, "/weaponlicense - Cek status weapon license");
@@ -14083,7 +14217,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.20A.2.2 Nearby Interaction Menu");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.20A.3 Territory Colored Zone Map");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -14092,7 +14226,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.20A.2.2: ALT di lokasi bertumpuk membuka Nearby Interaction Menu; gang HQ icon/label tetap dirapikan.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.20A.3: Territory tampil sebagai blok warna transparan di map/radar memakai GangZone; /refreshzones ditambahkan.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.19B: Weapon license dan saved loadout persistence.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D: Release polish, version, credits, staff, beta guide.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");

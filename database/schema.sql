@@ -480,4 +480,12 @@ CREATE TABLE IF NOT EXISTS world_locations (
     INDEX idx_location_key (location_key)
 );
 
+ALTER TABLE world_locations
+ADD COLUMN IF NOT EXISTS object_model INT NOT NULL DEFAULT 0
+AFTER pickup_model;
+
+-- v0.21A.1 uses pickup_model for scripted pickup markers and object_model for non-disappearing visual objects.
+-- Existing dynamic locations can optionally be given a visual object:
+-- UPDATE world_locations SET object_model = 1239 WHERE object_model = 0 AND enabled = 1;
+
 

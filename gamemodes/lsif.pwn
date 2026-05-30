@@ -96,6 +96,16 @@
 #define DIALOG_GANG_KICK_INPUT 1077
 #define DIALOG_GANG_KICK_CONFIRM 1078
 #define DIALOG_GANG_SETRANK_INPUT 1079
+#define DIALOG_NEARBY_INTERACTION 1080
+
+
+#define MAX_NEARBY_INTERACTIONS 8
+#define INTERACT_TYPE_ATM 1
+#define INTERACT_TYPE_DEALERSHIP 2
+#define INTERACT_TYPE_AMMUNATION 3
+#define INTERACT_TYPE_GANG_HQ 4
+#define INTERACT_TYPE_HOUSE 5
+#define INTERACT_TYPE_BUSINESS 6
 
 
 #define STARTER_CASH 15000
@@ -813,6 +823,10 @@ new PlayerGangColor[MAX_PLAYERS];
 new PlayerSelectedGangTarget[MAX_PLAYERS];
 new PlayerDialogTerritoryIndex[MAX_PLAYERS];
 new PlayerDialogGangID[MAX_PLAYERS];
+new PlayerNearbyInteractionCount[MAX_PLAYERS];
+new PlayerNearbyInteractionType[MAX_PLAYERS][MAX_NEARBY_INTERACTIONS];
+new PlayerNearbyInteractionParam[MAX_PLAYERS][MAX_NEARBY_INTERACTIONS];
+new PlayerNearbyInteractionLabel[MAX_PLAYERS][MAX_NEARBY_INTERACTIONS][64];
 
 new GangHQPickup[MAX_PRESET_GANGS];
 new Text3D:GangHQLabel[MAX_PRESET_GANGS];
@@ -6770,7 +6784,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.20A.2.1 Gang HQ Fix");
+    SetGameModeText("LSIF Dev v0.20A.2.2 Nearby ALT");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -6857,7 +6871,7 @@ public OnGameModeInit()
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
     print("[LSIF] Custom house arrow pickups aktif.");
     print("[LSIF] Map icons, 3D labels, ALT world markers, and turf markers aktif.");
-    print("[LSIF] Gamemode v0.20A.2.1 Gang HQ Icon/Label Hotfix berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.20A.2.2 Nearby Interaction Menu berhasil dijalankan.");
     return 1;
 }
 
@@ -7314,6 +7328,17 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 {
     if (dialogid == DIALOG_BETA_RULES || dialogid == DIALOG_BETA_MOTD || dialogid == DIALOG_FEEDBACK_LIST)
     {
+        return 1;
+    }
+
+    if (dialogid == DIALOG_NEARBY_INTERACTION)
+    {
+        if (!response)
+        {
+            return 1;
+        }
+
+        ExecuteNearbyInteraction(playerid, listitem);
         return 1;
     }
 
@@ -9443,7 +9468,7 @@ stock ShowMapLegendDialog(playerid)
     format(
         dialogText,
         sizeof(dialogText),
-        "Radar/Map Icon LSIF:\n\nATM/Bank - transaksi bank, pakai ALT di marker ATM.\nHouse - rumah/interior; ALT untuk menu, panah untuk masuk/keluar.\nBusiness - beli/manage/collect business dengan ALT.\nDealership - vehicle shop dan garage service dengan ALT.\nAmmu-Nation - weapon shop dengan ALT.\nTerritory/Turf - area gang, bukan organization. Lihat /turfmap.\nGang HQ - markas gang preset; tekan ALT untuk join/menu gang.\nRace - lokasi race/time trial.\nJob Marker - titik panduan vehicle mission/job.\nBus Stop - rute Bus Driver Mission.\n\nDi dunia, cari 3D label seperti [ALT] ATM, [ALT] Dealership, [ALT] Ammu-Nation, [ALT] Grove/Ballas/Vagos/Aztecas HQ, atau [JOB] Bus Terminal.\nALT = menu/transaksi. Tombol 2 = start vehicle mission/job. Turf map = /gangmenu atau /turfmap. Organization tetap untuk ekonomi/bisnis."
+        "Radar/Map Icon LSIF:\n\nATM/Bank - transaksi bank, pakai ALT di marker ATM.\nHouse - rumah/interior; ALT untuk menu, panah untuk masuk/keluar.\nBusiness - beli/manage/collect business dengan ALT.\nDealership - vehicle shop dan garage service dengan ALT.\nAmmu-Nation - weapon shop dengan ALT.\nTerritory/Turf - area gang, bukan organization. Lihat /turfmap.\nGang HQ - markas gang preset; tekan ALT untuk join/menu gang. Jika satu titik punya beberapa fungsi, ALT membuka Nearby Interaction Menu.\nRace - lokasi race/time trial.\nJob Marker - titik panduan vehicle mission/job.\nBus Stop - rute Bus Driver Mission.\n\nDi dunia, cari 3D label seperti [ALT] ATM, [ALT] Dealership, [ALT] Ammu-Nation, [ALT] Grove/Ballas/Vagos/Aztecas HQ, atau [JOB] Bus Terminal.\nALT = menu/transaksi. Tombol 2 = start vehicle mission/job. Turf map = /gangmenu atau /turfmap. Organization tetap untuk ekonomi/bisnis."
     );
 
     ShowPlayerDialog(playerid, DIALOG_BETA_MOTD, DIALOG_STYLE_MSGBOX, "LSIF Map Legend", dialogText, "OK", "Tutup");
@@ -11146,6 +11171,148 @@ stock ProcessWeaponPurchase(playerid, weaponIndex)
     return 1;
 }
 
+stock ResetNearbyInteractions(playerid)
+{
+    PlayerNearbyInteractionCount[playerid] = 0;
+
+    for (new i = 0; i < MAX_NEARBY_INTERACTIONS; i++)
+    {
+        PlayerNearbyInteractionType[playerid][i] = 0;
+        PlayerNearbyInteractionParam[playerid][i] = -1;
+        format(PlayerNearbyInteractionLabel[playerid][i], 64, "");
+    }
+
+    return 1;
+}
+
+stock AddNearbyInteraction(playerid, interactionType, interactionParam, const interactionLabel[])
+{
+    new index = PlayerNearbyInteractionCount[playerid];
+
+    if (index < 0 || index >= MAX_NEARBY_INTERACTIONS)
+    {
+        return 0;
+    }
+
+    PlayerNearbyInteractionType[playerid][index] = interactionType;
+    PlayerNearbyInteractionParam[playerid][index] = interactionParam;
+    format(PlayerNearbyInteractionLabel[playerid][index], 64, "%s", interactionLabel);
+
+    PlayerNearbyInteractionCount[playerid]++;
+    return 1;
+}
+
+stock ExecuteNearbyInteraction(playerid, index)
+{
+    if (index < 0 || index >= PlayerNearbyInteractionCount[playerid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Pilihan interaksi tidak valid.");
+        return 0;
+    }
+
+    new interactionType = PlayerNearbyInteractionType[playerid][index];
+    new interactionParam = PlayerNearbyInteractionParam[playerid][index];
+
+    if (interactionType == INTERACT_TYPE_ATM)
+    {
+        if (!IsPlayerNearBankPoint(playerid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu sudah terlalu jauh dari ATM.");
+            return 0;
+        }
+
+        ShowATMDialog(playerid);
+        return 1;
+    }
+
+    if (interactionType == INTERACT_TYPE_DEALERSHIP)
+    {
+        if (!IsPlayerNearDealership(playerid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu sudah terlalu jauh dari dealership.");
+            return 0;
+        }
+
+        ShowDealershipMainDialog(playerid);
+        return 1;
+    }
+
+    if (interactionType == INTERACT_TYPE_AMMUNATION)
+    {
+        if (!IsPlayerNearAmmuNation(playerid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu sudah terlalu jauh dari Ammu-Nation.");
+            return 0;
+        }
+
+        ShowWeaponShopDialog(playerid);
+        return 1;
+    }
+
+    if (interactionType == INTERACT_TYPE_GANG_HQ)
+    {
+        ShowGangHQDialog(playerid, interactionParam);
+        return 1;
+    }
+
+    if (interactionType == INTERACT_TYPE_HOUSE)
+    {
+        if (!IsValidHouseIndex(interactionParam) || !IsPlayerNearHouse(playerid, interactionParam))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu sudah terlalu jauh dari rumah tersebut.");
+            return 0;
+        }
+
+        ShowHouseInteractionDialog(playerid, interactionParam);
+        return 1;
+    }
+
+    if (interactionType == INTERACT_TYPE_BUSINESS)
+    {
+        if (!IsValidBusinessIndex(interactionParam) || !IsPlayerNearBusiness(playerid, interactionParam))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu sudah terlalu jauh dari business tersebut.");
+            return 0;
+        }
+
+        ShowBusinessInteractionDialog(playerid, interactionParam);
+        return 1;
+    }
+
+    SendClientMessage(playerid, COLOR_RED, "Interaksi belum tersedia.");
+    return 0;
+}
+
+stock ShowNearbyInteractionDialog(playerid)
+{
+    new count = PlayerNearbyInteractionCount[playerid];
+
+    if (count <= 0)
+    {
+        ShowInteractionNoPoint(playerid);
+        return 0;
+    }
+
+    if (count == 1)
+    {
+        return ExecuteNearbyInteraction(playerid, 0);
+    }
+
+    new body[512];
+    new line[96];
+
+    body[0] = EOS;
+
+    for (new i = 0; i < count; i++)
+    {
+        format(line, sizeof(line), "%s\n", PlayerNearbyInteractionLabel[playerid][i]);
+        strcat(body, line);
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_NEARBY_INTERACTION, DIALOG_STYLE_LIST, "Nearby Interaction", body, "Select", "Close");
+    return 1;
+}
+
 stock HandleWorldInteractKey(playerid)
 {
     if (!PlayerLoggedIn[playerid])
@@ -11166,50 +11333,51 @@ stock HandleWorldInteractKey(playerid)
         return 1;
     }
 
+    ResetNearbyInteractions(playerid);
+
     if (IsPlayerNearBankPoint(playerid))
     {
-        ShowATMDialog(playerid);
-        return 1;
+        AddNearbyInteraction(playerid, INTERACT_TYPE_ATM, -1, "ATM / Bank");
     }
 
     if (IsPlayerNearDealership(playerid))
     {
-        ShowDealershipMainDialog(playerid);
-        return 1;
+        AddNearbyInteraction(playerid, INTERACT_TYPE_DEALERSHIP, -1, "Dealership / Garage Service");
     }
 
     if (IsPlayerNearAmmuNation(playerid))
     {
-        ShowWeaponShopDialog(playerid);
-        return 1;
+        AddNearbyInteraction(playerid, INTERACT_TYPE_AMMUNATION, -1, "Ammu-Nation / Weapon Shop");
     }
 
     new nearestGangHQ = GetNearestGangHQ(playerid);
 
     if (nearestGangHQ != -1 && IsPlayerNearGangHQ(playerid, nearestGangHQ))
     {
-        ShowGangHQDialog(playerid, PresetGangID[nearestGangHQ]);
-        return 1;
+        new gangLabel[64];
+        format(gangLabel, sizeof(gangLabel), "Gang HQ: %s", PresetGangShortName[nearestGangHQ]);
+        AddNearbyInteraction(playerid, INTERACT_TYPE_GANG_HQ, PresetGangID[nearestGangHQ], gangLabel);
     }
 
     new nearestHouse = GetNearestHouse(playerid);
 
     if (nearestHouse != -1 && IsPlayerNearHouse(playerid, nearestHouse))
     {
-        ShowHouseInteractionDialog(playerid, nearestHouse);
-        return 1;
+        new houseLabel[64];
+        format(houseLabel, sizeof(houseLabel), "House: %s", HouseName[nearestHouse]);
+        AddNearbyInteraction(playerid, INTERACT_TYPE_HOUSE, nearestHouse, houseLabel);
     }
 
     new nearestBusiness = GetNearestBusiness(playerid);
 
     if (nearestBusiness != -1 && IsPlayerNearBusiness(playerid, nearestBusiness))
     {
-        ShowBusinessInteractionDialog(playerid, nearestBusiness);
-        return 1;
+        new businessLabel[64];
+        format(businessLabel, sizeof(businessLabel), "Business: %s", BusinessName[nearestBusiness]);
+        AddNearbyInteraction(playerid, INTERACT_TYPE_BUSINESS, nearestBusiness, businessLabel);
     }
 
-    ShowInteractionNoPoint(playerid);
-    return 1;
+    return ShowNearbyInteractionDialog(playerid);
 }
 
 public OnPlayerPickUpPickup(playerid, pickupid)
@@ -13915,7 +14083,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.20A.2.1 Gang HQ Icon/Label Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.20A.2.2 Nearby Interaction Menu");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -13924,7 +14092,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.20A.2.1: gang HQ radar icon slot fixed, label dibuat lebih tinggi agar tidak tumpuk.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.20A.2.2: ALT di lokasi bertumpuk membuka Nearby Interaction Menu; gang HQ icon/label tetap dirapikan.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.19B: Weapon license dan saved loadout persistence.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D: Release polish, version, credits, staff, beta guide.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");

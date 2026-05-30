@@ -452,3 +452,32 @@ WHERE owner_gang_id NOT IN (0, 1, 2, 3, 4);
 -- Opsional: custom gang lama tidak dihapus otomatis agar tidak menghilangkan data tanpa sengaja.
 -- Script v0.20A.2 hanya menampilkan/mengizinkan gang ID 1-4 sebagai gang resmi.
 
+CREATE TABLE IF NOT EXISTS world_locations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    location_key VARCHAR(64) NOT NULL,
+    location_type VARCHAR(24) NOT NULL,
+    display_name VARCHAR(64) NOT NULL,
+
+    pos_x FLOAT NOT NULL,
+    pos_y FLOAT NOT NULL,
+    pos_z FLOAT NOT NULL,
+    pos_a FLOAT NOT NULL DEFAULT 0,
+
+    interior INT NOT NULL DEFAULT 0,
+    virtual_world INT NOT NULL DEFAULT 0,
+
+    map_icon INT NOT NULL DEFAULT 51,
+    pickup_model INT NOT NULL DEFAULT 1239,
+    label_text VARCHAR(96) NULL,
+    interaction_radius FLOAT NOT NULL DEFAULT 3.0,
+
+    enabled TINYINT NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+
+    INDEX idx_location_type (location_type),
+    INDEX idx_enabled (enabled),
+    INDEX idx_location_key (location_key)
+);
+
+

@@ -337,6 +337,12 @@
 #define MAPICON_TYPE_AMMUNATION 6
 #define MAPICON_TYPE_TERRITORY 19
 #define MAPICON_TYPE_GANG_HQ 19
+
+#define MAX_DYNAMIC_LOCATIONS 15
+#define MAPICON_BASE_DYNAMIC 80
+#define LOC_TYPE_SIZE 24
+#define LOC_NAME_SIZE 64
+#define LOC_LABEL_SIZE 96
 #if !defined MAPICON_LOCAL
 #define MAPICON_LOCAL 0
 #endif
@@ -985,6 +991,24 @@ new GangHQName[MAX_PRESET_GANGS][64] =
     "Varrios Los Aztecas HQ"
 };
 
+new DynamicLocationCount;
+new DynamicLocationDBID[MAX_DYNAMIC_LOCATIONS];
+new DynamicLocationEnabled[MAX_DYNAMIC_LOCATIONS];
+new DynamicLocationMapIcon[MAX_DYNAMIC_LOCATIONS];
+new DynamicLocationPickupModel[MAX_DYNAMIC_LOCATIONS];
+new DynamicLocationInterior[MAX_DYNAMIC_LOCATIONS];
+new DynamicLocationVirtualWorld[MAX_DYNAMIC_LOCATIONS];
+new Float:DynamicLocationX[MAX_DYNAMIC_LOCATIONS];
+new Float:DynamicLocationY[MAX_DYNAMIC_LOCATIONS];
+new Float:DynamicLocationZ[MAX_DYNAMIC_LOCATIONS];
+new Float:DynamicLocationA[MAX_DYNAMIC_LOCATIONS];
+new Float:DynamicLocationRadius[MAX_DYNAMIC_LOCATIONS];
+new DynamicLocationType[MAX_DYNAMIC_LOCATIONS][LOC_TYPE_SIZE];
+new DynamicLocationName[MAX_DYNAMIC_LOCATIONS][LOC_NAME_SIZE];
+new DynamicLocationLabelText[MAX_DYNAMIC_LOCATIONS][LOC_LABEL_SIZE];
+new DynamicLocationPickup[MAX_DYNAMIC_LOCATIONS];
+new Text3D:DynamicLocation3DLabel[MAX_DYNAMIC_LOCATIONS];
+
 new PlayerBusinessDBID[MAX_PLAYERS];
 new PlayerBusinessIndex[MAX_PLAYERS];
 new PlayerBusinessLevel[MAX_PLAYERS];
@@ -1510,6 +1534,10 @@ forward OnGangCreated(playerid);
 forward OnGangInviteAccepted(playerid);
 forward OnGangMembersLoaded(playerid);
 forward OnGangListLoaded(playerid);
+forward OnDynamicLocationsLoaded();
+forward OnDynamicLocationCreated(playerid);
+forward OnDynamicLocationUpdated(playerid);
+forward OnDynamicLocationDeleted(playerid);
 
 
 
@@ -6899,7 +6927,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.20A.3 Turf Zones");
+    SetGameModeText("LSIF Dev v0.21A Dynamic World");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -6931,6 +6959,7 @@ public OnGameModeInit()
     CreateHouseExteriorPickups();
     CreateWorldInteractionMarkers();
     LoadGangTerritories();
+    LoadDynamicLocations();
 
     for (new i = 0; i < MAX_PLAYERS; i++)
     {
@@ -6986,7 +7015,8 @@ public OnGameModeInit()
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
     print("[LSIF] Custom house arrow pickups aktif.");
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
-    print("[LSIF] Gamemode v0.20A.3 Territory Colored Zone Map berhasil dijalankan.");
+    print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
+    print("[LSIF] Gamemode v0.21A Dynamic World Location Core berhasil dijalankan.");
     return 1;
 }
 
@@ -9137,6 +9167,299 @@ stock HandleVehicleMissionKey(playerid)
     return 1;
 }
 
+
+stock ResetDynamicLocationArrays()
+{
+    DynamicLocationCount = 0;
+
+    for (new i = 0; i < MAX_DYNAMIC_LOCATIONS; i++)
+    {
+        DynamicLocationDBID[i] = 0;
+        DynamicLocationEnabled[i] = 0;
+        DynamicLocationMapIcon[i] = 0;
+        DynamicLocationPickupModel[i] = WORLD_MARKER_PICKUP_MODEL;
+        DynamicLocationInterior[i] = 0;
+        DynamicLocationVirtualWorld[i] = 0;
+        DynamicLocationX[i] = 0.0;
+        DynamicLocationY[i] = 0.0;
+        DynamicLocationZ[i] = 0.0;
+        DynamicLocationA[i] = 0.0;
+        DynamicLocationRadius[i] = 3.0;
+        format(DynamicLocationType[i], LOC_TYPE_SIZE, "none");
+        format(DynamicLocationName[i], LOC_NAME_SIZE, "None");
+        format(DynamicLocationLabelText[i], LOC_LABEL_SIZE, "");
+        DynamicLocationPickup[i] = -1;
+        DynamicLocation3DLabel[i] = Text3D:INVALID_3DTEXT_ID;
+    }
+
+    return 1;
+}
+
+stock GetDynamicLocationColor(const locationType[])
+{
+    if (!strcmp(locationType, "atm", true)) return COLOR_CYAN;
+    if (!strcmp(locationType, "dealer", true)) return COLOR_GREEN;
+    if (!strcmp(locationType, "dealership", true)) return COLOR_GREEN;
+    if (!strcmp(locationType, "ammunation", true)) return COLOR_ORANGE;
+    if (!strcmp(locationType, "house", true)) return COLOR_WHITE;
+    if (!strcmp(locationType, "business", true)) return COLOR_YELLOW;
+    if (!strcmp(locationType, "gang_hq", true)) return COLOR_PURPLE;
+    if (!strcmp(locationType, "job", true)) return COLOR_CYAN;
+    if (!strcmp(locationType, "race", true)) return COLOR_ORANGE;
+    if (!strcmp(locationType, "interior", true)) return COLOR_WHITE;
+    return COLOR_GRAY;
+}
+
+stock FindDynamicLocationIndexByDBID(dbid)
+{
+    for (new i = 0; i < DynamicLocationCount; i++)
+    {
+        if (DynamicLocationDBID[i] == dbid)
+        {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+stock DestroyDynamicLocationMarkers()
+{
+    for (new i = 0; i < MAX_DYNAMIC_LOCATIONS; i++)
+    {
+        if (DynamicLocationPickup[i] != -1)
+        {
+            DestroyPickup(DynamicLocationPickup[i]);
+            DynamicLocationPickup[i] = -1;
+        }
+
+        if (DynamicLocation3DLabel[i] != Text3D:INVALID_3DTEXT_ID)
+        {
+            Delete3DTextLabel(DynamicLocation3DLabel[i]);
+            DynamicLocation3DLabel[i] = Text3D:INVALID_3DTEXT_ID;
+        }
+    }
+
+    return 1;
+}
+
+stock CreateDynamicLocationMarker(locationIndex)
+{
+    if (locationIndex < 0 || locationIndex >= DynamicLocationCount)
+    {
+        return 0;
+    }
+
+    if (!DynamicLocationEnabled[locationIndex])
+    {
+        return 0;
+    }
+
+    new labelText[144];
+    new color = GetDynamicLocationColor(DynamicLocationType[locationIndex]);
+
+    if (strlen(DynamicLocationLabelText[locationIndex]) > 0)
+    {
+        format(labelText, sizeof(labelText), "%s", DynamicLocationLabelText[locationIndex]);
+    }
+    else
+    {
+        format(labelText, sizeof(labelText), "[ALT] %s\n%s", DynamicLocationType[locationIndex], DynamicLocationName[locationIndex]);
+    }
+
+    if (DynamicLocationPickupModel[locationIndex] > 0)
+    {
+        DynamicLocationPickup[locationIndex] = CreatePickup(
+                DynamicLocationPickupModel[locationIndex],
+                WORLD_MARKER_PICKUP_TYPE,
+                DynamicLocationX[locationIndex],
+                DynamicLocationY[locationIndex],
+                DynamicLocationZ[locationIndex],
+                DynamicLocationVirtualWorld[locationIndex]
+                                               );
+    }
+
+    DynamicLocation3DLabel[locationIndex] = Create3DTextLabel(
+            labelText,
+            color,
+            DynamicLocationX[locationIndex],
+            DynamicLocationY[locationIndex],
+            DynamicLocationZ[locationIndex] + 0.9,
+            WORLD_LABEL_DRAW_DISTANCE,
+            DynamicLocationVirtualWorld[locationIndex],
+            true
+                                            );
+
+    return 1;
+}
+
+stock CreateDynamicLocationMarkers()
+{
+    for (new i = 0; i < DynamicLocationCount; i++)
+    {
+        CreateDynamicLocationMarker(i);
+    }
+
+    return 1;
+}
+
+stock ApplyDynamicLocationIcons(playerid)
+{
+    for (new i = 0; i < DynamicLocationCount; i++)
+    {
+        if (!DynamicLocationEnabled[i])
+        {
+            continue;
+        }
+
+        if (DynamicLocationMapIcon[i] <= 0)
+        {
+            continue;
+        }
+
+        SetPlayerMapIcon(
+            playerid,
+            MAPICON_BASE_DYNAMIC + i,
+            DynamicLocationX[i],
+            DynamicLocationY[i],
+            DynamicLocationZ[i],
+            DynamicLocationMapIcon[i],
+            GetDynamicLocationColor(DynamicLocationType[i]),
+            MAPICON_LOCAL
+        );
+    }
+
+    return 1;
+}
+
+stock RemoveDynamicLocationIcons(playerid)
+{
+    for (new i = 0; i < MAX_DYNAMIC_LOCATIONS; i++)
+    {
+        RemovePlayerMapIcon(playerid, MAPICON_BASE_DYNAMIC + i);
+    }
+
+    return 1;
+}
+
+stock RefreshAllDynamicLocationIcons()
+{
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (IsPlayerConnected(i))
+        {
+            RemoveDynamicLocationIcons(i);
+            ApplyDynamicLocationIcons(i);
+        }
+    }
+
+    return 1;
+}
+
+stock LoadDynamicLocations()
+{
+    DestroyDynamicLocationMarkers();
+    ResetDynamicLocationArrays();
+
+    mysql_tquery(
+        g_SQL,
+        "SELECT id, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, label_text, interaction_radius, enabled FROM world_locations WHERE enabled=1 ORDER BY id ASC LIMIT 15",
+        "OnDynamicLocationsLoaded"
+    );
+    return 1;
+}
+
+public OnDynamicLocationsLoaded()
+{
+    new rows = cache_num_rows();
+    new limit = rows;
+
+    if (limit > MAX_DYNAMIC_LOCATIONS)
+    {
+        limit = MAX_DYNAMIC_LOCATIONS;
+    }
+
+    DynamicLocationCount = limit;
+
+    for (new i = 0; i < limit; i++)
+    {
+        cache_get_value_name_int(i, "id", DynamicLocationDBID[i]);
+        cache_get_value_name(i, "location_type", DynamicLocationType[i], LOC_TYPE_SIZE);
+        cache_get_value_name(i, "display_name", DynamicLocationName[i], LOC_NAME_SIZE);
+        cache_get_value_name_float(i, "pos_x", DynamicLocationX[i]);
+        cache_get_value_name_float(i, "pos_y", DynamicLocationY[i]);
+        cache_get_value_name_float(i, "pos_z", DynamicLocationZ[i]);
+        cache_get_value_name_float(i, "pos_a", DynamicLocationA[i]);
+        cache_get_value_name_int(i, "interior", DynamicLocationInterior[i]);
+        cache_get_value_name_int(i, "virtual_world", DynamicLocationVirtualWorld[i]);
+        cache_get_value_name_int(i, "map_icon", DynamicLocationMapIcon[i]);
+        cache_get_value_name_int(i, "pickup_model", DynamicLocationPickupModel[i]);
+        cache_get_value_name(i, "label_text", DynamicLocationLabelText[i], LOC_LABEL_SIZE);
+        cache_get_value_name_float(i, "interaction_radius", DynamicLocationRadius[i]);
+        cache_get_value_name_int(i, "enabled", DynamicLocationEnabled[i]);
+    }
+
+    CreateDynamicLocationMarkers();
+    RefreshAllDynamicLocationIcons();
+
+    new msg[144];
+    format(msg, sizeof(msg), "[LSIF] Dynamic world locations loaded: %d.", DynamicLocationCount);
+    print(msg);
+    return 1;
+}
+
+public OnDynamicLocationCreated(playerid)
+{
+    if (IsPlayerConnected(playerid))
+    {
+        new insertId = cache_insert_id();
+        new msg[144];
+        format(msg, sizeof(msg), "Dynamic location berhasil dibuat. ID: %d. Reloading locations...", insertId);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+    }
+
+    LoadDynamicLocations();
+    return 1;
+}
+
+public OnDynamicLocationUpdated(playerid)
+{
+    if (IsPlayerConnected(playerid))
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "Dynamic location berhasil diupdate. Reloading locations...");
+    }
+
+    LoadDynamicLocations();
+    return 1;
+}
+
+public OnDynamicLocationDeleted(playerid)
+{
+    if (IsPlayerConnected(playerid))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Dynamic location dinonaktifkan. Reloading locations...");
+    }
+
+    LoadDynamicLocations();
+    return 1;
+}
+
+stock ShowDynamicLocationHelp(playerid)
+{
+    SendClientMessage(playerid, COLOR_YELLOW, "========== DYNAMIC WORLD LOCATION EDITOR ==========");
+    SendClientMessage(playerid, COLOR_WHITE, "/loccreate [type] [name] - Buat lokasi di posisi admin");
+    SendClientMessage(playerid, COLOR_WHITE, "/loclist [type] - Lihat lokasi aktif, type opsional");
+    SendClientMessage(playerid, COLOR_WHITE, "/locinfo [id] - Detail lokasi aktif");
+    SendClientMessage(playerid, COLOR_WHITE, "/locmove [id] - Pindahkan lokasi ke posisi admin");
+    SendClientMessage(playerid, COLOR_WHITE, "/loclabel [id] [text] - Ubah 3D label");
+    SendClientMessage(playerid, COLOR_WHITE, "/locicon [id] [icon] - Ubah radar/map icon");
+    SendClientMessage(playerid, COLOR_WHITE, "/locpickup [id] [model] - Ubah pickup model");
+    SendClientMessage(playerid, COLOR_WHITE, "/locradius [id] [radius] - Ubah interaction radius");
+    SendClientMessage(playerid, COLOR_WHITE, "/locgoto [id], /locdisable [id], /locenable [id], /locreload");
+    SendClientMessage(playerid, COLOR_CYAN, "Type awal: atm, dealer, ammunation, gang_hq, job, race, business, house, interior.");
+    return 1;
+}
+
 stock InitWorldMarkerArrays()
 {
     for (new i = 0; i < MAX_BANK_POINTS; i++)
@@ -9192,6 +9515,8 @@ stock InitWorldMarkerArrays()
         GangHQPickup[i] = -1;
         GangHQLabel[i] = Text3D:INVALID_3DTEXT_ID;
     }
+
+    ResetDynamicLocationArrays();
 
     RaceStartPickup = -1;
     RaceStartLabel = Text3D:INVALID_3DTEXT_ID;
@@ -9424,6 +9749,8 @@ stock DestroyWorldInteractionMarkers()
         RaceStartLabel = Text3D:INVALID_3DTEXT_ID;
     }
 
+    DestroyDynamicLocationMarkers();
+
     return 1;
 }
 
@@ -9478,6 +9805,8 @@ stock ApplyLSIFMapIcons(playerid)
         SetPlayerMapIcon(playerid, MAPICON_BASE_GANG_HQ + i, GangHQX[i], GangHQY[i], GangHQZ[i], MAPICON_TYPE_GANG_HQ, PresetGangColor[i], MAPICON_LOCAL);
     }
 
+    ApplyDynamicLocationIcons(playerid);
+
     return 1;
 }
 
@@ -9531,6 +9860,8 @@ stock RemoveLSIFMapIcons(playerid)
     {
         RemovePlayerMapIcon(playerid, MAPICON_BASE_GANG_HQ + i);
     }
+
+    RemoveDynamicLocationIcons(playerid);
 
     return 1;
 }
@@ -14217,7 +14548,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.20A.3 Territory Colored Zone Map");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.21A Dynamic World Location Core (SAIF candidate)");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -14226,7 +14557,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.20A.3: Territory tampil sebagai blok warna transparan di map/radar memakai GangZone; /refreshzones ditambahkan.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.21A: Dynamic World Location Core, admin bisa create/move/edit lokasi, radar icon, pickup, dan 3D label dari database.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.19B: Weapon license dan saved loadout persistence.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D: Release polish, version, credits, staff, beta guide.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");
@@ -19118,6 +19449,365 @@ public OnPlayerCommandText(playerid, cmdtext[])
         }
 
         mysql_tquery(g_SQL, "SELECT id, admin_name, target_name, action, detail FROM admin_logs ORDER BY id DESC LIMIT 5", "OnRecentLogsLoaded", "i", playerid);
+        return 1;
+    }
+
+
+    if (!strcmp(cmdtext, "/locmenu", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka Dynamic Location Editor.");
+            return 1;
+        }
+
+        ShowDynamicLocationHelp(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/locreload", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa reload dynamic locations.");
+            return 1;
+        }
+
+        LoadDynamicLocations();
+        SendClientMessage(playerid, COLOR_GREEN, "Dynamic locations sedang direload dari database.");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/loccreate ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuat dynamic location.");
+            return 1;
+        }
+
+        new locType[LOC_TYPE_SIZE];
+        new locName[LOC_NAME_SIZE];
+
+        if (!GetFirstParamAndRest(cmdtext[11], locType, sizeof(locType), locName, sizeof(locName)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /loccreate [type] [name]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /loccreate atm Idlewood 24/7 ATM");
+            return 1;
+        }
+
+        new Float:x, Float:y, Float:z, Float:a;
+        new query[1024];
+        new labelText[LOC_LABEL_SIZE];
+
+        GetPlayerPos(playerid, x, y, z);
+        GetPlayerFacingAngle(playerid, a);
+        format(labelText, sizeof(labelText), "[ALT] %s\n%s", locType, locName);
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "INSERT INTO world_locations (location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, label_text, interaction_radius, enabled) VALUES ('%e', '%e', '%e', %f, %f, %f, %f, %d, %d, %d, %d, '%e', 3.0, 1)",
+            locName,
+            locType,
+            locName,
+            x,
+            y,
+            z,
+            a,
+            GetPlayerInterior(playerid),
+            GetPlayerVirtualWorld(playerid),
+            MAPICON_TYPE_JOB,
+            WORLD_MARKER_PICKUP_MODEL,
+            labelText
+        );
+
+        mysql_tquery(g_SQL, query, "OnDynamicLocationCreated", "i", playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/loccreate", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /loccreate [type] [name]");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/loclist", true) || strfind(cmdtext, "/loclist ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa melihat dynamic locations.");
+            return 1;
+        }
+
+        new filterType[LOC_TYPE_SIZE];
+        new useFilter = 0;
+        new msg[144];
+        new found = 0;
+
+        if (strfind(cmdtext, "/loclist ", true) == 0)
+        {
+            format(filterType, sizeof(filterType), "%s", cmdtext[9]);
+            useFilter = 1;
+        }
+
+        SendClientMessage(playerid, COLOR_YELLOW, "========== DYNAMIC LOCATIONS ==========");
+
+        for (new i = 0; i < DynamicLocationCount; i++)
+        {
+            if (useFilter && strcmp(DynamicLocationType[i], filterType, true))
+            {
+                continue;
+            }
+
+            format(msg, sizeof(msg), "ID %d | %s | %s | Icon %d | VW %d", DynamicLocationDBID[i], DynamicLocationType[i], DynamicLocationName[i], DynamicLocationMapIcon[i], DynamicLocationVirtualWorld[i]);
+            SendClientMessage(playerid, COLOR_WHITE, msg);
+            found++;
+        }
+
+        if (!found)
+        {
+            SendClientMessage(playerid, COLOR_WHITE, "Tidak ada dynamic location aktif untuk filter tersebut.");
+        }
+
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/locinfo ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa melihat detail dynamic location.");
+            return 1;
+        }
+
+        new idStr[16];
+        if (!GetOneParam(cmdtext[9], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /locinfo [id]");
+            return 1;
+        }
+
+        new dbid = strval(idStr);
+        new locIndex = FindDynamicLocationIndexByDBID(dbid);
+
+        if (locIndex == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Dynamic location tidak ditemukan/aktif. Gunakan /loclist.");
+            return 1;
+        }
+
+        new msg[144];
+        SendClientMessage(playerid, COLOR_YELLOW, "========== LOCATION INFO ==========");
+        format(msg, sizeof(msg), "ID %d | Type: %s | Name: %s", DynamicLocationDBID[locIndex], DynamicLocationType[locIndex], DynamicLocationName[locIndex]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+        format(msg, sizeof(msg), "Pos: %.2f, %.2f, %.2f | A %.2f", DynamicLocationX[locIndex], DynamicLocationY[locIndex], DynamicLocationZ[locIndex], DynamicLocationA[locIndex]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+        format(msg, sizeof(msg), "Interior: %d | VW: %d | Icon: %d | Pickup: %d | Radius: %.1f", DynamicLocationInterior[locIndex], DynamicLocationVirtualWorld[locIndex], DynamicLocationMapIcon[locIndex], DynamicLocationPickupModel[locIndex], DynamicLocationRadius[locIndex]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+        format(msg, sizeof(msg), "Label: %s", DynamicLocationLabelText[locIndex]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/locmove ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa memindahkan dynamic location.");
+            return 1;
+        }
+
+        new idStr[16];
+        if (!GetOneParam(cmdtext[9], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /locmove [id]");
+            return 1;
+        }
+
+        new Float:x, Float:y, Float:z, Float:a;
+        new query[512];
+        GetPlayerPos(playerid, x, y, z);
+        GetPlayerFacingAngle(playerid, a);
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "UPDATE world_locations SET pos_x=%f, pos_y=%f, pos_z=%f, pos_a=%f, interior=%d, virtual_world=%d WHERE id=%d LIMIT 1",
+            x,
+            y,
+            z,
+            a,
+            GetPlayerInterior(playerid),
+            GetPlayerVirtualWorld(playerid),
+            strval(idStr)
+        );
+        mysql_tquery(g_SQL, query, "OnDynamicLocationUpdated", "i", playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/locgoto ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa teleport ke dynamic location.");
+            return 1;
+        }
+
+        new idStr[16];
+        if (!GetOneParam(cmdtext[9], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /locgoto [id]");
+            return 1;
+        }
+
+        new locIndex = FindDynamicLocationIndexByDBID(strval(idStr));
+        if (locIndex == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Dynamic location tidak ditemukan/aktif. Gunakan /loclist.");
+            return 1;
+        }
+
+        SetPlayerInterior(playerid, DynamicLocationInterior[locIndex]);
+        SetPlayerVirtualWorld(playerid, DynamicLocationVirtualWorld[locIndex]);
+        SetPlayerPos(playerid, DynamicLocationX[locIndex], DynamicLocationY[locIndex], DynamicLocationZ[locIndex] + 1.0);
+        SetPlayerFacingAngle(playerid, DynamicLocationA[locIndex]);
+        SendClientMessage(playerid, COLOR_GREEN, "Teleport ke dynamic location berhasil.");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/locdisable ", true) == 0 || strfind(cmdtext, "/locdelete ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa disable dynamic location.");
+            return 1;
+        }
+
+        new idStr[16];
+        new startIndex = 12;
+        if (strfind(cmdtext, "/locdelete ", true) == 0) startIndex = 11;
+
+        if (!GetOneParam(cmdtext[startIndex], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /locdisable [id] atau /locdelete [id]");
+            return 1;
+        }
+
+        new query[256];
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE world_locations SET enabled=0 WHERE id=%d LIMIT 1", strval(idStr));
+        mysql_tquery(g_SQL, query, "OnDynamicLocationDeleted", "i", playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/locenable ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa enable dynamic location.");
+            return 1;
+        }
+
+        new idStr[16];
+        if (!GetOneParam(cmdtext[11], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /locenable [id]");
+            return 1;
+        }
+
+        new query[256];
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE world_locations SET enabled=1 WHERE id=%d LIMIT 1", strval(idStr));
+        mysql_tquery(g_SQL, query, "OnDynamicLocationUpdated", "i", playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/locicon ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa ubah radar icon dynamic location.");
+            return 1;
+        }
+
+        new idStr[16];
+        new iconStr[16];
+        if (!GetTwoParams(cmdtext[9], idStr, sizeof(idStr), iconStr, sizeof(iconStr)) || !IsNumericString(idStr) || !IsNumericString(iconStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /locicon [id] [icon]");
+            return 1;
+        }
+
+        new query[256];
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE world_locations SET map_icon=%d WHERE id=%d LIMIT 1", strval(iconStr), strval(idStr));
+        mysql_tquery(g_SQL, query, "OnDynamicLocationUpdated", "i", playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/locpickup ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa ubah pickup dynamic location.");
+            return 1;
+        }
+
+        new idStr[16];
+        new pickupStr[16];
+        if (!GetTwoParams(cmdtext[11], idStr, sizeof(idStr), pickupStr, sizeof(pickupStr)) || !IsNumericString(idStr) || !IsNumericString(pickupStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /locpickup [id] [modelid]");
+            return 1;
+        }
+
+        new query[256];
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE world_locations SET pickup_model=%d WHERE id=%d LIMIT 1", strval(pickupStr), strval(idStr));
+        mysql_tquery(g_SQL, query, "OnDynamicLocationUpdated", "i", playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/locradius ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa ubah radius dynamic location.");
+            return 1;
+        }
+
+        new idStr[16];
+        new radiusStr[16];
+        if (!GetTwoParams(cmdtext[11], idStr, sizeof(idStr), radiusStr, sizeof(radiusStr)) || !IsNumericString(idStr) || !IsNumericString(radiusStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /locradius [id] [radius]");
+            return 1;
+        }
+
+        new query[256];
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE world_locations SET interaction_radius=%d WHERE id=%d LIMIT 1", strval(radiusStr), strval(idStr));
+        mysql_tquery(g_SQL, query, "OnDynamicLocationUpdated", "i", playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/loclabel ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa ubah label dynamic location.");
+            return 1;
+        }
+
+        new idStr[16];
+        new labelText[LOC_LABEL_SIZE];
+        if (!GetFirstParamAndRest(cmdtext[10], idStr, sizeof(idStr), labelText, sizeof(labelText)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /loclabel [id] [text]");
+            return 1;
+        }
+
+        new query[512];
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE world_locations SET label_text='%e' WHERE id=%d LIMIT 1", labelText, strval(idStr));
+        mysql_tquery(g_SQL, query, "OnDynamicLocationUpdated", "i", playerid);
         return 1;
     }
 

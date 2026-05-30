@@ -305,16 +305,16 @@
 #define WORLD_MARKER_PICKUP_TYPE 1
 #define WORLD_LABEL_DRAW_DISTANCE 22.0
 
-#define MAPICON_BASE_ATM 10
-#define MAPICON_BASE_HOUSE 20
-#define MAPICON_BASE_BUSINESS 30
-#define MAPICON_BASE_DEALER 40
-#define MAPICON_BASE_RACE 50
-#define MAPICON_BASE_JOB 60
-#define MAPICON_BASE_BUS_STOP 70
-#define MAPICON_BASE_AMMUNATION 80
-#define MAPICON_BASE_TERRITORY 90
-#define MAPICON_BASE_GANG_HQ 100
+#define MAPICON_BASE_ATM 0
+#define MAPICON_BASE_HOUSE 8
+#define MAPICON_BASE_BUSINESS 16
+#define MAPICON_BASE_DEALER 24
+#define MAPICON_BASE_RACE 35
+#define MAPICON_BASE_JOB 40
+#define MAPICON_BASE_BUS_STOP 48
+#define MAPICON_BASE_AMMUNATION 30
+#define MAPICON_BASE_TERRITORY 58
+#define MAPICON_BASE_GANG_HQ 70
 
 #define MAPICON_TYPE_ATM 52
 #define MAPICON_TYPE_HOUSE 31
@@ -6770,7 +6770,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.20A.2 Preset Gang HQ");
+    SetGameModeText("LSIF Dev v0.20A.2.1 Gang HQ Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -6857,7 +6857,7 @@ public OnGameModeInit()
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
     print("[LSIF] Custom house arrow pickups aktif.");
     print("[LSIF] Map icons, 3D labels, ALT world markers, and turf markers aktif.");
-    print("[LSIF] Gamemode v0.20A.2 Predefined Gang HQ Join berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.20A.2.1 Gang HQ Icon/Label Hotfix berhasil dijalankan.");
     return 1;
 }
 
@@ -9127,11 +9127,13 @@ stock CreateWorldInteractionMarkers()
     for (new i = 0; i < MAX_PRESET_GANGS; i++)
     {
         GangHQPickup[i] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, GangHQX[i], GangHQY[i], GangHQZ[i], 0);
-        format(labelText, sizeof(labelText), "[ALT] %s\n%s\nJoin / Gang Menu", PresetGangShortName[i], GangHQName[i]);
-        GangHQLabel[i] = Create3DTextLabel(labelText, PresetGangColor[i], GangHQX[i], GangHQY[i], GangHQZ[i] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
+        format(labelText, sizeof(labelText), "[GANG HQ] %s\nALT: Join / Gang Menu", PresetGangShortName[i]);
+        // Offset lebih tinggi agar tidak tumpuk dengan marker/label ALT lain di lokasi yang berdekatan.
+        GangHQLabel[i] = Create3DTextLabel(labelText, PresetGangColor[i], GangHQX[i], GangHQY[i], GangHQZ[i] + 2.2, 16.0, 0, true);
     }
 
     print("[LSIF] World interaction markers, job markers, bus stops, territories, gang HQ, and 3D labels created.");
+    print("[LSIF] Gang HQ labels use higher offset to avoid overlapping ALT labels.");
     return 1;
 }
 
@@ -13913,7 +13915,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.20A.2 Predefined Gang HQ Join");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.20A.2.1 Gang HQ Icon/Label Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -13922,7 +13924,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.20A.2: gang preset offline-like, join via HQ+ALT, no create/invite/disband.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.20A.2.1: gang HQ radar icon slot fixed, label dibuat lebih tinggi agar tidak tumpuk.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.19B: Weapon license dan saved loadout persistence.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D: Release polish, version, credits, staff, beta guide.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");

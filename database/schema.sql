@@ -451,3 +451,4 @@ WHERE owner_gang_id NOT IN (0, 1, 2, 3, 4);
 
 -- Opsional: custom gang lama tidak dihapus otomatis agar tidak menghilangkan data tanpa sengaja.
 -- Script v0.20A.2 hanya menampilkan/mengizinkan gang ID 1-4 sebagai gang resmi.
+

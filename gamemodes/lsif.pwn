@@ -7030,7 +7030,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.21C.1 Object Fix");
+    SetGameModeText("SAIF Dev v0.21C.2 Obj-Loc Helper");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -7121,7 +7121,7 @@ public OnGameModeInit()
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
-    print("[SAIF] Gamemode v0.21C.1 Dynamic Object Runtime Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.21C.2 Object to Location Helper berhasil dijalankan.");
     return 1;
 }
 
@@ -10319,8 +10319,10 @@ stock ShowDynamicObjectHelp(playerid)
     SendClientMessage(playerid, COLOR_WHITE, "/objrot [id] [rx] [ry] [rz] - Ubah rotasi object");
     SendClientMessage(playerid, COLOR_WHITE, "/objgoto [id] - Teleport ke object");
     SendClientMessage(playerid, COLOR_WHITE, "/objdelete [id] - Hapus object dari database");
+    SendClientMessage(playerid, COLOR_WHITE, "/objtoloc [objid] [type] [name] - Jadikan object sebagai titik ALT/location");
+    SendClientMessage(playerid, COLOR_WHITE, "/locwithobject [type] [modelid] [name] - Buat location + object fisik sekaligus");
     SendClientMessage(playerid, COLOR_WHITE, "/objreload - Reload object tanpa restart");
-    SendClientMessage(playerid, COLOR_CYAN, "Catatan: v0.21C masih foundation global object. Interior/VW metadata disimpan untuk integrasi editor lanjut.");
+    SendClientMessage(playerid, COLOR_CYAN, "Catatan: object = fisik/dekorasi; location = ALT/radar/label. /objtoloc menghubungkan keduanya secara praktis.");
     return 1;
 }
 
@@ -10362,6 +10364,143 @@ stock CreateDynamicObjectAtPlayer(playerid, modelid)
     );
 
     mysql_tquery(g_SQL, query, "OnDynamicObjectCreated", "i", playerid);
+    return 1;
+}
+
+
+stock CreateDynamicLocationAtCoords(playerid, const locType[], const locName[], Float:x, Float:y, Float:z, Float:a, interior, virtualWorld)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuat dynamic location.");
+        return 0;
+    }
+
+    new query[1200];
+    new labelText[LOC_LABEL_SIZE];
+    new defaultIcon = GetDefaultDynamicLocationIcon(locType);
+    new defaultPickup = WORLD_MARKER_PICKUP_MODEL;
+
+    format(labelText, sizeof(labelText), "[ALT] %s\n%s", locType, locName);
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO world_locations (location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, label_text, interaction_radius, enabled) VALUES ('%e', '%e', '%e', %f, %f, %f, %f, %d, %d, %d, %d, 0, '%e', 3.0, 1)",
+        locName,
+        locType,
+        locName,
+        x,
+        y,
+        z,
+        a,
+        interior,
+        virtualWorld,
+        defaultIcon,
+        defaultPickup,
+        labelText
+    );
+
+    mysql_tquery(g_SQL, query, "OnDynamicLocationCreated", "i", playerid);
+    return 1;
+}
+
+stock CreateDynamicObjectAtCoords(playerid, modelid, const objectName[], Float:x, Float:y, Float:z, Float:a, interior, virtualWorld)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuat dynamic object.");
+        return 0;
+    }
+
+    if (modelid <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Model ID object tidak valid.");
+        return 0;
+    }
+
+    new query[768];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO world_objects (object_name, model_id, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z, interior, virtual_world, enabled) VALUES ('%e', %d, %f, %f, %f, 0.0, 0.0, %f, %d, %d, 1)",
+        objectName,
+        modelid,
+        x,
+        y,
+        z,
+        a,
+        interior,
+        virtualWorld
+    );
+
+    mysql_tquery(g_SQL, query, "OnDynamicObjectCreated", "i", playerid);
+    return 1;
+}
+
+stock CreateDynamicLocationWithObjectAtPlayer(playerid, const locType[], modelid, const locName[])
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuat location + object.");
+        return 0;
+    }
+
+    if (modelid <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Model ID object tidak valid.");
+        return 0;
+    }
+
+    new Float:x, Float:y, Float:z, Float:a;
+    new objectName[DYN_OBJECT_NAME_SIZE];
+
+    GetPlayerPos(playerid, x, y, z);
+    GetPlayerFacingAngle(playerid, a);
+
+    format(objectName, sizeof(objectName), "%s_obj", locName);
+
+    CreateDynamicObjectAtCoords(playerid, modelid, objectName, x, y, z, a, GetPlayerInterior(playerid), GetPlayerVirtualWorld(playerid));
+    CreateDynamicLocationAtCoords(playerid, locType, locName, x, y, z, a, GetPlayerInterior(playerid), GetPlayerVirtualWorld(playerid));
+
+    SendClientMessage(playerid, COLOR_GREEN, "Location + object dibuat. Gunakan /objlist dan /loclist untuk melihat ID masing-masing.");
+    SendClientMessage(playerid, COLOR_WHITE, "Catatan: rotate object pakai /objrot [object_id]. Location hanya titik ALT/radar/label.");
+    return 1;
+}
+
+stock CreateLocationFromDynamicObject(playerid, objectDbid, const locType[], const locName[])
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa menjadikan object sebagai location.");
+        return 0;
+    }
+
+    new idx = GetDynamicObjectIndexByDBID(objectDbid);
+
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic object ID tidak ditemukan. Gunakan /objlist.");
+        return 0;
+    }
+
+    CreateDynamicLocationAtCoords(
+        playerid,
+        locType,
+        locName,
+        DynamicObjectX[idx],
+        DynamicObjectY[idx],
+        DynamicObjectZ[idx],
+        DynamicObjectRZ[idx],
+        DynamicObjectInterior[idx],
+        DynamicObjectVirtualWorld[idx]
+    );
+
+    SendClientMessage(playerid, COLOR_GREEN, "Dynamic location dibuat di posisi object tersebut.");
+    SendClientMessage(playerid, COLOR_WHITE, "Object tetap bisa dirotasi/dipindah dengan /objrot atau /objmove. Location tetap bisa diatur dengan /locmove, /locicon, /loclabel.");
     return 1;
 }
 
@@ -10536,7 +10675,8 @@ stock ShowDynamicLocationHelp(playerid)
     SendClientMessage(playerid, COLOR_WHITE, "/loclabel [id] [text/off/auto] - Ubah/sembunyikan 3D label");
     SendClientMessage(playerid, COLOR_WHITE, "/locicon [id] [icon] - Ubah radar/map icon");
     SendClientMessage(playerid, COLOR_WHITE, "/locpickup [id] [model] - Ubah marker/pickup visual, 0 untuk hapus");
-    SendClientMessage(playerid, COLOR_WHITE, "/locobject [id] [model] - Object mapping solid/visual opsional, 0 untuk hapus");
+    SendClientMessage(playerid, COLOR_WHITE, "/locobject [id] [model] - Object visual opsional di location, 0 untuk hapus");
+    SendClientMessage(playerid, COLOR_WHITE, "/locwithobject [type] [modelid] [name] - Buat location + object fisik sekaligus");
     SendClientMessage(playerid, COLOR_WHITE, "/lociconlist - Lihat preset icon radar/map");
     SendClientMessage(playerid, COLOR_WHITE, "/locradius [id] [radius] - Ubah radius ALT dynamic location");
     SendClientMessage(playerid, COLOR_WHITE, "/locgoto [id], /locdisable [id], /locenable [id], /locreload");
@@ -15507,6 +15647,77 @@ public OnPlayerCommandText(playerid, cmdtext[])
         new query[256];
         mysql_format(g_SQL, query, sizeof(query), "DELETE FROM world_objects WHERE id=%d LIMIT 1", strval(idStr));
         mysql_tquery(g_SQL, query, "OnDynamicObjectDeleted", "i", playerid);
+        return 1;
+    }
+
+
+    if (strfind(cmdtext, "/objtoloc ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuat location dari object.");
+            return 1;
+        }
+
+        new idStr[16];
+        new locType[LOC_TYPE_SIZE];
+        new locName[LOC_NAME_SIZE];
+
+        if (!GetThreeParams(cmdtext[10], idStr, sizeof(idStr), locType, sizeof(locType), locName, sizeof(locName)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /objtoloc [object_id] [type] [name]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /objtoloc 12 atm Idlewood_ATM");
+            return 1;
+        }
+
+        if (!IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Object ID harus angka.");
+            return 1;
+        }
+
+        CreateLocationFromDynamicObject(playerid, strval(idStr), locType, locName);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/objtoloc", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /objtoloc [object_id] [type] [name]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/locwithobject ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuat location + object.");
+            return 1;
+        }
+
+        new locType[LOC_TYPE_SIZE];
+        new modelStr[16];
+        new locName[LOC_NAME_SIZE];
+
+        if (!GetThreeParams(cmdtext[15], locType, sizeof(locType), modelStr, sizeof(modelStr), locName, sizeof(locName)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /locwithobject [type] [object_modelid] [name]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /locwithobject atm 2942 Idlewood_ATM");
+            return 1;
+        }
+
+        if (!IsNumericString(modelStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Object model ID harus angka.");
+            return 1;
+        }
+
+        CreateDynamicLocationWithObjectAtPlayer(playerid, locType, strval(modelStr), locName);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/locwithobject", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /locwithobject [type] [object_modelid] [name]");
         return 1;
     }
 

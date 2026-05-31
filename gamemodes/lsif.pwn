@@ -6939,7 +6939,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.21A.4 Location Remove");
+    SetGameModeText("SAIF Dev v0.21B Dynamic Integration");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -7028,7 +7028,7 @@ public OnGameModeInit()
     print("[LSIF] Custom house arrow pickups aktif.");
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
-    print("[SAIF] Gamemode v0.21A.4 Location Remove/Purge berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.21B Dynamic Location Integration berhasil dijalankan.");
     return 1;
 }
 
@@ -9369,6 +9369,122 @@ stock IsPlayerNearDynamicLocationIndex(playerid, locationIndex)
     return 0;
 }
 
+
+stock GetDynamicLocationGangID(locationIndex)
+{
+    if (locationIndex < 0 || locationIndex >= DynamicLocationCount)
+    {
+        return 0;
+    }
+
+    for (new i = 0; i < MAX_PRESET_GANGS; i++)
+    {
+        if (strfind(DynamicLocationName[locationIndex], PresetGangShortName[i], true) != -1)
+        {
+            return PresetGangID[i];
+        }
+
+        if (strfind(DynamicLocationName[locationIndex], PresetGangName[i], true) != -1)
+        {
+            return PresetGangID[i];
+        }
+    }
+
+    return 0;
+}
+
+stock ExecuteDynamicLocationFunction(playerid, locationIndex)
+{
+    if (locationIndex < 0 || locationIndex >= DynamicLocationCount)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic location tidak valid.");
+        return 0;
+    }
+
+    if (!IsPlayerNearDynamicLocationIndex(playerid, locationIndex))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu sudah terlalu jauh dari dynamic location tersebut.");
+        return 0;
+    }
+
+    if (!strcmp(DynamicLocationType[locationIndex], "atm", true) || !strcmp(DynamicLocationType[locationIndex], "bank", true))
+    {
+        ShowATMDialog(playerid);
+        return 1;
+    }
+
+    if (!strcmp(DynamicLocationType[locationIndex], "dealer", true) || !strcmp(DynamicLocationType[locationIndex], "dealership", true))
+    {
+        ShowDealershipMainDialog(playerid);
+        return 1;
+    }
+
+    if (!strcmp(DynamicLocationType[locationIndex], "ammunation", true) || !strcmp(DynamicLocationType[locationIndex], "weaponshop", true))
+    {
+        ShowWeaponShopDialog(playerid);
+        return 1;
+    }
+
+    if (!strcmp(DynamicLocationType[locationIndex], "gang_hq", true) || !strcmp(DynamicLocationType[locationIndex], "gang", true))
+    {
+        new gangid = GetDynamicLocationGangID(locationIndex);
+
+        if (gangid > 0)
+        {
+            ShowGangHQDialog(playerid, gangid);
+            return 1;
+        }
+
+        SendClientMessage(playerid, COLOR_YELLOW, "Dynamic Gang HQ belum terhubung ke gang preset.");
+        SendClientMessage(playerid, COLOR_WHITE, "Tips: gunakan nama yang memuat Grove, Ballas, Vagos, atau Aztecas.");
+        ShowGangMenuDialog(playerid);
+        return 1;
+    }
+
+    if (!strcmp(DynamicLocationType[locationIndex], "house", true))
+    {
+        new nearestHouse = GetNearestHouse(playerid);
+
+        if (nearestHouse != -1 && IsPlayerNearHouse(playerid, nearestHouse))
+        {
+            ShowHouseInteractionDialog(playerid, nearestHouse);
+            return 1;
+        }
+
+        ShowDynamicLocationInfoDialog(playerid, locationIndex);
+        return 1;
+    }
+
+    if (!strcmp(DynamicLocationType[locationIndex], "business", true) || !strcmp(DynamicLocationType[locationIndex], "biz", true))
+    {
+        new nearestBusiness = GetNearestBusiness(playerid);
+
+        if (nearestBusiness != -1 && IsPlayerNearBusiness(playerid, nearestBusiness))
+        {
+            ShowBusinessInteractionDialog(playerid, nearestBusiness);
+            return 1;
+        }
+
+        ShowDynamicLocationInfoDialog(playerid, locationIndex);
+        return 1;
+    }
+
+    if (!strcmp(DynamicLocationType[locationIndex], "job", true))
+    {
+        ShowJobGuideMenu(playerid);
+        return 1;
+    }
+
+    if (!strcmp(DynamicLocationType[locationIndex], "race", true))
+    {
+        SendClientMessage(playerid, COLOR_CYAN, "Race marker dynamic terdeteksi. Gunakan /races atau /joinrace ls sebagai fallback.");
+        return 1;
+    }
+
+    ShowDynamicLocationInfoDialog(playerid, locationIndex);
+    return 1;
+}
+
 stock ShowDynamicLocationInfoDialog(playerid, locationIndex)
 {
     if (locationIndex < 0 || locationIndex >= DynamicLocationCount)
@@ -9381,7 +9497,7 @@ stock ShowDynamicLocationInfoDialog(playerid, locationIndex)
     format(
         body,
         sizeof(body),
-        "ID: %d\nType: %s\nName: %s\n\nPos: %.2f, %.2f, %.2f\nInterior: %d | VW: %d\nRadius ALT: %.1f\nMap Icon: %d\nPickup Model: %d\nObject Model: %d\n\nCatatan: v0.21A.1 masih generic dynamic location. Integrasi fungsi ATM/dealer/Ammu-Nation dari DB masuk v0.21B.",
+        "ID: %d\nType: %s\nName: %s\n\nPos: %.2f, %.2f, %.2f\nInterior: %d | VW: %d\nRadius ALT: %.1f\nMap Icon: %d\nPickup Model: %d\nObject Model: %d\n\nCatatan: v0.21B sudah mengintegrasikan type atm/dealer/ammunation/gang_hq ke dialog asli saat ALT.",
         DynamicLocationDBID[locationIndex],
         DynamicLocationType[locationIndex],
         DynamicLocationName[locationIndex],
@@ -12108,14 +12224,7 @@ stock ExecuteNearbyInteraction(playerid, index)
 
     if (interactionType == INTERACT_TYPE_DYNAMIC_LOCATION)
     {
-        if (!IsPlayerNearDynamicLocationIndex(playerid, interactionParam))
-        {
-            SendClientMessage(playerid, COLOR_RED, "Kamu sudah terlalu jauh dari dynamic location tersebut.");
-            return 0;
-        }
-
-        ShowDynamicLocationInfoDialog(playerid, interactionParam);
-        return 1;
+        return ExecuteDynamicLocationFunction(playerid, interactionParam);
     }
 
     SendClientMessage(playerid, COLOR_RED, "Interaksi belum tersedia.");
@@ -12221,7 +12330,36 @@ stock HandleWorldInteractKey(playerid)
         if (IsPlayerNearDynamicLocationIndex(playerid, d))
         {
             new dynLabel[64];
-            format(dynLabel, sizeof(dynLabel), "Dynamic: %s (%s)", DynamicLocationName[d], DynamicLocationType[d]);
+
+            if (!strcmp(DynamicLocationType[d], "atm", true) || !strcmp(DynamicLocationType[d], "bank", true))
+            {
+                format(dynLabel, sizeof(dynLabel), "ATM: %s", DynamicLocationName[d]);
+            }
+            else if (!strcmp(DynamicLocationType[d], "dealer", true) || !strcmp(DynamicLocationType[d], "dealership", true))
+            {
+                format(dynLabel, sizeof(dynLabel), "Dealership: %s", DynamicLocationName[d]);
+            }
+            else if (!strcmp(DynamicLocationType[d], "ammunation", true) || !strcmp(DynamicLocationType[d], "weaponshop", true))
+            {
+                format(dynLabel, sizeof(dynLabel), "Ammu-Nation: %s", DynamicLocationName[d]);
+            }
+            else if (!strcmp(DynamicLocationType[d], "gang_hq", true) || !strcmp(DynamicLocationType[d], "gang", true))
+            {
+                format(dynLabel, sizeof(dynLabel), "Gang HQ: %s", DynamicLocationName[d]);
+            }
+            else if (!strcmp(DynamicLocationType[d], "job", true))
+            {
+                format(dynLabel, sizeof(dynLabel), "Job Marker: %s", DynamicLocationName[d]);
+            }
+            else if (!strcmp(DynamicLocationType[d], "race", true))
+            {
+                format(dynLabel, sizeof(dynLabel), "Race Marker: %s", DynamicLocationName[d]);
+            }
+            else
+            {
+                format(dynLabel, sizeof(dynLabel), "Dynamic: %s (%s)", DynamicLocationName[d], DynamicLocationType[d]);
+            }
+
             AddNearbyInteraction(playerid, INTERACT_TYPE_DYNAMIC_LOCATION, d, dynLabel);
         }
     }
@@ -14943,7 +15081,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.21A.4 Location Remove/Purge (SAIF candidate)");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.21B Dynamic Location Integration (SAIF candidate)");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -14952,7 +15090,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.21A.4: Dynamic location remove/purge commands, /locremove alias, dan help Git/deploy flow dirapikan.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.21B: Dynamic location type terintegrasi dengan ALT dialog ATM, dealer, Ammu-Nation, gang HQ, house/business nearest fallback.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.19B: Weapon license dan saved loadout persistence.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D: Release polish, version, credits, staff, beta guide.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");

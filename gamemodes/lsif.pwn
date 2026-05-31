@@ -7005,7 +7005,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.21B.2 Dynamic Proximity");
+    SetGameModeText("SAIF Dev v0.21B.3 Dynamic Dedup");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -7094,7 +7094,7 @@ public OnGameModeInit()
     print("[LSIF] Custom house arrow pickups aktif.");
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
-    print("[SAIF] Gamemode v0.21B.2 Dynamic Proximity Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.21B.3 Dynamic Dedup Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -12457,6 +12457,46 @@ stock ShowNearbyInteractionDialog(playerid)
     return 1;
 }
 
+
+stock IsPlayerNearStaticBankPoint(playerid)
+{
+    for (new i = 0; i < MAX_BANK_POINTS; i++)
+    {
+        if (GetPlayerDistanceFromPoint(playerid, BankPointX[i], BankPointY[i], BankPointZ[i]) <= BANK_ACCESS_RADIUS)
+        {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+stock IsPlayerNearStaticDealership(playerid)
+{
+    for (new i = 0; i < MAX_DEALERSHIPS; i++)
+    {
+        if (GetPlayerDistanceFromPoint(playerid, DealershipX[i], DealershipY[i], DealershipZ[i]) <= DEALERSHIP_ACCESS_RADIUS)
+        {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+stock IsPlayerNearStaticAmmuNation(playerid)
+{
+    for (new i = 0; i < MAX_AMMUNATIONS; i++)
+    {
+        if (GetPlayerDistanceFromPoint(playerid, AmmuNationX[i], AmmuNationY[i], AmmuNationZ[i]) <= AMMUNATION_ACCESS_RADIUS)
+        {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 stock HandleWorldInteractKey(playerid)
 {
     if (!PlayerLoggedIn[playerid])
@@ -12479,17 +12519,17 @@ stock HandleWorldInteractKey(playerid)
 
     ResetNearbyInteractions(playerid);
 
-    if (IsPlayerNearBankPoint(playerid))
+    if (IsPlayerNearStaticBankPoint(playerid))
     {
         AddNearbyInteraction(playerid, INTERACT_TYPE_ATM, -1, "ATM / Bank");
     }
 
-    if (IsPlayerNearDealership(playerid))
+    if (IsPlayerNearStaticDealership(playerid))
     {
         AddNearbyInteraction(playerid, INTERACT_TYPE_DEALERSHIP, -1, "Dealership / Garage Service");
     }
 
-    if (IsPlayerNearAmmuNation(playerid))
+    if (IsPlayerNearStaticAmmuNation(playerid))
     {
         AddNearbyInteraction(playerid, INTERACT_TYPE_AMMUNATION, -1, "Ammu-Nation / Weapon Shop");
     }
@@ -15285,7 +15325,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.21B.2 Dynamic Proximity Fix (SAIF candidate)");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.21B.3 Dynamic Dedup Fix (SAIF candidate)");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -15294,7 +15334,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.21B.2: Dynamic location proximity sekarang ikut dianggap valid oleh ATM, dealer, dan Ammu-Nation dialog.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.21B.3: Nearby Interaction tidak lagi double antara static dan dynamic location.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.19B: Weapon license dan saved loadout persistence.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D: Release polish, version, credits, staff, beta guide.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");

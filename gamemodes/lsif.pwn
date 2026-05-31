@@ -1585,6 +1585,7 @@ forward OnDynamicObjectsLoaded();
 forward OnDynamicObjectCreated(playerid);
 forward OnDynamicObjectUpdated(playerid);
 forward OnDynamicObjectDeleted(playerid);
+forward OnDynamicObjectPurgeLocationsDeleted(playerid, objectId);
 
 
 
@@ -7040,7 +7041,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.21C.4 Obj Purge");
+    SetGameModeText("SAIF Dev v0.21C.5 Obj Purge Chain");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -7131,7 +7132,7 @@ public OnGameModeInit()
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
-    print("[SAIF] Gamemode v0.21C.4 Object Purge/Delete Helper berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.21C.5 Object Purge Chain Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -9959,6 +9960,50 @@ stock RefreshAllDynamicLocationIcons()
     return 1;
 }
 
+
+stock DestroyRuntimeLocationsLinkedToObject(objectId)
+{
+    for (new i = 0; i < DynamicLocationCount; i++)
+    {
+        if (DynamicLocationLinkedObjectDBID[i] != objectId)
+        {
+            continue;
+        }
+
+        if (DynamicLocationPickup[i] != -1)
+        {
+            DestroyPickup(DynamicLocationPickup[i]);
+            DynamicLocationPickup[i] = -1;
+        }
+
+        if (DynamicLocationObjectID[i] != -1)
+        {
+            DestroyObject(DynamicLocationObjectID[i]);
+            DynamicLocationObjectID[i] = -1;
+        }
+
+        if (DynamicLocation3DLabel[i] != Text3D:INVALID_3DTEXT_ID)
+        {
+            Delete3DTextLabel(DynamicLocation3DLabel[i]);
+            DynamicLocation3DLabel[i] = Text3D:INVALID_3DTEXT_ID;
+        }
+
+        for (new p = 0; p < MAX_PLAYERS; p++)
+        {
+            if (IsPlayerConnected(p))
+            {
+                RemovePlayerMapIcon(p, MAPICON_BASE_DYNAMIC + i);
+            }
+        }
+
+        DynamicLocationEnabled[i] = 0;
+        DynamicLocationDBID[i] = 0;
+        DynamicLocationLinkedObjectDBID[i] = 0;
+    }
+
+    return 1;
+}
+
 stock LoadDynamicLocations()
 {
     DestroyDynamicLocationMarkers();
@@ -10283,6 +10328,21 @@ public OnDynamicObjectDeleted(playerid)
 
     LoadDynamicObjects();
     LoadDynamicLocations();
+    return 1;
+}
+
+
+public OnDynamicObjectPurgeLocationsDeleted(playerid, objectId)
+{
+    new objQuery[256];
+    mysql_format(g_SQL, objQuery, sizeof(objQuery), "DELETE FROM world_objects WHERE id=%d LIMIT 1", objectId);
+    mysql_tquery(g_SQL, objQuery, "OnDynamicObjectDeleted", "i", playerid);
+
+    if (IsPlayerConnected(playerid))
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "Linked location sudah dihapus dari database. Menghapus object fisik...");
+    }
+
     return 1;
 }
 
@@ -15758,15 +15818,13 @@ public OnPlayerCommandText(playerid, cmdtext[])
             return 1;
         }
 
+        DestroyRuntimeLocationsLinkedToObject(objectId);
+
         new locQuery[256];
         mysql_format(g_SQL, locQuery, sizeof(locQuery), "DELETE FROM world_locations WHERE linked_object_id=%d", objectId);
-        mysql_tquery(g_SQL, locQuery);
+        mysql_tquery(g_SQL, locQuery, "OnDynamicObjectPurgeLocationsDeleted", "ii", playerid, objectId);
 
-        new objQuery[256];
-        mysql_format(g_SQL, objQuery, sizeof(objQuery), "DELETE FROM world_objects WHERE id=%d LIMIT 1", objectId);
-        mysql_tquery(g_SQL, objQuery, "OnDynamicObjectDeleted", "i", playerid);
-
-        SendClientMessage(playerid, COLOR_YELLOW, "Object dipurge bersama linked location. Runtime akan direload.");
+        SendClientMessage(playerid, COLOR_YELLOW, "Object purge diproses: linked location runtime langsung dibersihkan.");
         return 1;
     }
 

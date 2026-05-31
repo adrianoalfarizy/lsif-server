@@ -7030,7 +7030,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.21C Dynamic Objects");
+    SetGameModeText("SAIF Dev v0.21C.1 Object Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -7121,7 +7121,7 @@ public OnGameModeInit()
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
-    print("[SAIF] Gamemode v0.21C Dynamic Object System berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.21C.1 Dynamic Object Runtime Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -10165,6 +10165,10 @@ stock GetDynamicObjectIndexByDBID(dbid)
 
 stock LoadDynamicObjects()
 {
+    // Penting: destroy runtime object dulu sebelum array di-reset.
+    // Kalau array di-reset dulu, object lama kehilangan ID runtime dan tidak bisa dihancurkan,
+    // sehingga /objrot, /objmove, /objdelete, dan /objreload terlihat seperti cloning.
+    DestroyDynamicWorldObjects();
     ResetDynamicObjectArrays();
 
     mysql_tquery(
@@ -10229,7 +10233,7 @@ public OnDynamicObjectUpdated(playerid)
 {
     if (IsPlayerConnected(playerid))
     {
-        SendClientMessage(playerid, COLOR_GREEN, "Dynamic object berhasil diupdate. Reloading objects...");
+        SendClientMessage(playerid, COLOR_GREEN, "Dynamic object berhasil diupdate. Runtime object direfresh...");
     }
 
     LoadDynamicObjects();
@@ -10240,7 +10244,7 @@ public OnDynamicObjectDeleted(playerid)
 {
     if (IsPlayerConnected(playerid))
     {
-        SendClientMessage(playerid, COLOR_RED, "Dynamic object dihapus dari database. Reloading objects...");
+        SendClientMessage(playerid, COLOR_RED, "Dynamic object dihapus dari database dan runtime object dibersihkan. Reloading objects...");
     }
 
     LoadDynamicObjects();

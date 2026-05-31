@@ -7040,7 +7040,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.21C.3 Linked Obj-Loc");
+    SetGameModeText("SAIF Dev v0.21C.4 Obj Purge");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -7131,7 +7131,7 @@ public OnGameModeInit()
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
-    print("[SAIF] Gamemode v0.21C.2 Object to Location Helper berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.21C.4 Object Purge/Delete Helper berhasil dijalankan.");
     return 1;
 }
 
@@ -10353,7 +10353,9 @@ stock ShowDynamicObjectHelp(playerid)
     SendClientMessage(playerid, COLOR_WHITE, "/objmove [id] - Pindah object ke posisi admin");
     SendClientMessage(playerid, COLOR_WHITE, "/objrot [id] [rx] [ry] [rz] - Ubah rotasi object");
     SendClientMessage(playerid, COLOR_WHITE, "/objgoto [id] - Teleport ke object");
-    SendClientMessage(playerid, COLOR_WHITE, "/objdelete [id] - Hapus object dari database");
+    SendClientMessage(playerid, COLOR_WHITE, "/objdelete [id] - Hapus object saja, linked location tetap ada");
+    SendClientMessage(playerid, COLOR_WHITE, "/objpurge [id] - Hapus object + semua linked location/ALT/label");
+    SendClientMessage(playerid, COLOR_WHITE, "/objdeletefull [id] - Alias /objpurge");
     SendClientMessage(playerid, COLOR_WHITE, "/objtoloc [objid] [type] [name] - Tautkan object menjadi titik ALT/location");
     SendClientMessage(playerid, COLOR_WHITE, "/locwithobject [type] [modelid] [name] - Buat object + location tertaut sekaligus");
     SendClientMessage(playerid, COLOR_WHITE, "/objreload - Reload object tanpa restart");
@@ -15722,6 +15724,49 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SetPlayerVirtualWorld(playerid, DynamicObjectVirtualWorld[idx]);
         SetPlayerPos(playerid, DynamicObjectX[idx] + 1.0, DynamicObjectY[idx], DynamicObjectZ[idx] + 1.0);
         SendClientMessage(playerid, COLOR_GREEN, "Teleport ke dynamic object berhasil.");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/objpurge ", true) == 0 || strfind(cmdtext, "/objdeletefull ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa purge dynamic object.");
+            return 1;
+        }
+
+        new start = 10;
+        if (strfind(cmdtext, "/objdeletefull ", true) == 0) start = 15;
+
+        new idStr[16];
+        if (!GetOneParam(cmdtext[start], idStr, sizeof(idStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /objpurge [object_id]");
+            SendClientMessage(playerid, COLOR_WHITE, "Catatan: ini menghapus object + linked location/ALT/radar/label.");
+            return 1;
+        }
+        if (!IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Object ID harus angka.");
+            return 1;
+        }
+
+        new objectId = strval(idStr);
+        if (GetDynamicObjectIndexByDBID(objectId) == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Dynamic object ID tidak ditemukan.");
+            return 1;
+        }
+
+        new locQuery[256];
+        mysql_format(g_SQL, locQuery, sizeof(locQuery), "DELETE FROM world_locations WHERE linked_object_id=%d", objectId);
+        mysql_tquery(g_SQL, locQuery);
+
+        new objQuery[256];
+        mysql_format(g_SQL, objQuery, sizeof(objQuery), "DELETE FROM world_objects WHERE id=%d LIMIT 1", objectId);
+        mysql_tquery(g_SQL, objQuery, "OnDynamicObjectDeleted", "i", playerid);
+
+        SendClientMessage(playerid, COLOR_YELLOW, "Object dipurge bersama linked location. Runtime akan direload.");
         return 1;
     }
 

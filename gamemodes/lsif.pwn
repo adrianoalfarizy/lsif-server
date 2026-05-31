@@ -103,6 +103,10 @@
 #define DIALOG_LOC_LIST 1084
 #define DIALOG_LOC_ICON_PRESETS 1085
 #define DIALOG_DYNAMIC_LOCATION_INFO 1086
+#define DIALOG_OBJ_MENU 1087
+#define DIALOG_OBJ_CREATE_INPUT 1088
+#define DIALOG_OBJ_LIST 1089
+#define DIALOG_OBJ_INFO 1090
 
 
 #define MAX_NEARBY_INTERACTIONS 8
@@ -346,6 +350,8 @@
 #define MAPICON_TYPE_GANG_HQ 19
 
 #define MAX_DYNAMIC_LOCATIONS 15
+#define MAX_DYNAMIC_OBJECTS 300
+#define DYN_OBJECT_NAME_SIZE 64
 #define MAPICON_BASE_DYNAMIC 80
 #define LOC_TYPE_SIZE 24
 #define LOC_NAME_SIZE 64
@@ -1017,6 +1023,21 @@ new DynamicLocationPickup[MAX_DYNAMIC_LOCATIONS];
 new DynamicLocationObjectModel[MAX_DYNAMIC_LOCATIONS];
 new DynamicLocationObjectID[MAX_DYNAMIC_LOCATIONS];
 new Text3D:DynamicLocation3DLabel[MAX_DYNAMIC_LOCATIONS];
+new DynamicObjectCount;
+new DynamicObjectDBID[MAX_DYNAMIC_OBJECTS];
+new DynamicObjectEnabled[MAX_DYNAMIC_OBJECTS];
+new DynamicObjectModel[MAX_DYNAMIC_OBJECTS];
+new DynamicObjectInterior[MAX_DYNAMIC_OBJECTS];
+new DynamicObjectVirtualWorld[MAX_DYNAMIC_OBJECTS];
+new DynamicObjectObjectID[MAX_DYNAMIC_OBJECTS];
+new Float:DynamicObjectX[MAX_DYNAMIC_OBJECTS];
+new Float:DynamicObjectY[MAX_DYNAMIC_OBJECTS];
+new Float:DynamicObjectZ[MAX_DYNAMIC_OBJECTS];
+new Float:DynamicObjectRX[MAX_DYNAMIC_OBJECTS];
+new Float:DynamicObjectRY[MAX_DYNAMIC_OBJECTS];
+new Float:DynamicObjectRZ[MAX_DYNAMIC_OBJECTS];
+new DynamicObjectName[MAX_DYNAMIC_OBJECTS][DYN_OBJECT_NAME_SIZE];
+
 
 new PlayerPendingLocCreateType[MAX_PLAYERS][LOC_TYPE_SIZE];
 
@@ -1550,6 +1571,10 @@ forward OnDynamicLocationCreated(playerid);
 forward OnDynamicLocationUpdated(playerid);
 forward OnDynamicLocationDeleted(playerid);
 forward OnDynamicLocationPurged(playerid);
+forward OnDynamicObjectsLoaded();
+forward OnDynamicObjectCreated(playerid);
+forward OnDynamicObjectUpdated(playerid);
+forward OnDynamicObjectDeleted(playerid);
 
 
 
@@ -7005,7 +7030,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.21B.3 Dynamic Dedup");
+    SetGameModeText("SAIF Dev v0.21C Dynamic Objects");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -7038,6 +7063,7 @@ public OnGameModeInit()
     CreateWorldInteractionMarkers();
     LoadGangTerritories();
     LoadDynamicLocations();
+    LoadDynamicObjects();
 
     for (new i = 0; i < MAX_PLAYERS; i++)
     {
@@ -7094,7 +7120,8 @@ public OnGameModeInit()
     print("[LSIF] Custom house arrow pickups aktif.");
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
-    print("[SAIF] Gamemode v0.21B.3 Dynamic Dedup Fix berhasil dijalankan.");
+    print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
+    print("[SAIF] Gamemode v0.21C Dynamic Object System berhasil dijalankan.");
     return 1;
 }
 
@@ -7121,6 +7148,7 @@ public OnGameModeExit()
         g_FuelTimer = 0;
     }
 
+    DestroyDynamicWorldObjects();
     DestroyWorldInteractionMarkers();
 
     for (new i = 0; i < MAX_HOUSES; i++)
@@ -7565,6 +7593,55 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         return 1;
     }
 
+
+    if (dialogid == DIALOG_OBJ_MENU)
+    {
+        if (!response)
+        {
+            return 1;
+        }
+
+        switch (listitem)
+        {
+            case 0: ShowDynamicObjectCreateInput(playerid);
+            case 1: ShowDynamicObjectListDialog(playerid);
+            case 2:
+            {
+                LoadDynamicObjects();
+                SendClientMessage(playerid, COLOR_GREEN, "Dynamic objects sedang direload dari database.");
+            }
+            case 3: ShowDynamicObjectHelp(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OBJ_CREATE_INPUT)
+    {
+        if (!response)
+        {
+            ShowDynamicObjectMenu(playerid);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Model ID harus angka.");
+            ShowDynamicObjectCreateInput(playerid);
+            return 1;
+        }
+
+        CreateDynamicObjectAtPlayer(playerid, strval(inputtext));
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OBJ_LIST || dialogid == DIALOG_OBJ_INFO)
+    {
+        if (response)
+        {
+            ShowDynamicObjectMenu(playerid);
+        }
+        return 1;
+    }
 
     if (dialogid == DIALOG_LOC_MENU)
     {
@@ -9973,6 +10050,359 @@ public OnDynamicLocationPurged(playerid)
 }
 
 
+
+
+stock GetFourParams(const input[], p1[], s1, p2[], s2, p3[], s3, p4[], s4)
+{
+    new rest1[128];
+    new rest2[96];
+    new rest3[64];
+
+    if (!GetFirstParamAndRest(input, p1, s1, rest1, sizeof(rest1)))
+    {
+        return 0;
+    }
+
+    if (!GetFirstParamAndRest(rest1, p2, s2, rest2, sizeof(rest2)))
+    {
+        return 0;
+    }
+
+    if (!GetFirstParamAndRest(rest2, p3, s3, rest3, sizeof(rest3)))
+    {
+        return 0;
+    }
+
+    if (!GetOneParam(rest3, p4, s4))
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+stock ResetDynamicObjectArrays()
+{
+    DynamicObjectCount = 0;
+
+    for (new i = 0; i < MAX_DYNAMIC_OBJECTS; i++)
+    {
+        DynamicObjectDBID[i] = 0;
+        DynamicObjectEnabled[i] = 0;
+        DynamicObjectModel[i] = 0;
+        DynamicObjectInterior[i] = 0;
+        DynamicObjectVirtualWorld[i] = 0;
+        DynamicObjectObjectID[i] = -1;
+        DynamicObjectX[i] = 0.0;
+        DynamicObjectY[i] = 0.0;
+        DynamicObjectZ[i] = 0.0;
+        DynamicObjectRX[i] = 0.0;
+        DynamicObjectRY[i] = 0.0;
+        DynamicObjectRZ[i] = 0.0;
+        format(DynamicObjectName[i], DYN_OBJECT_NAME_SIZE, "Object");
+    }
+
+    return 1;
+}
+
+stock DestroyDynamicWorldObjects()
+{
+    for (new i = 0; i < MAX_DYNAMIC_OBJECTS; i++)
+    {
+        if (DynamicObjectObjectID[i] != -1)
+        {
+            DestroyObject(DynamicObjectObjectID[i]);
+            DynamicObjectObjectID[i] = -1;
+        }
+    }
+
+    return 1;
+}
+
+stock CreateDynamicWorldObjects()
+{
+    DestroyDynamicWorldObjects();
+
+    for (new i = 0; i < DynamicObjectCount; i++)
+    {
+        if (!DynamicObjectEnabled[i])
+        {
+            continue;
+        }
+
+        if (DynamicObjectModel[i] <= 0)
+        {
+            continue;
+        }
+
+        DynamicObjectObjectID[i] = CreateObject(
+                                       DynamicObjectModel[i],
+                                       DynamicObjectX[i],
+                                       DynamicObjectY[i],
+                                       DynamicObjectZ[i],
+                                       DynamicObjectRX[i],
+                                       DynamicObjectRY[i],
+                                       DynamicObjectRZ[i],
+                                       200.0
+                                   );
+    }
+
+    return 1;
+}
+
+stock GetDynamicObjectIndexByDBID(dbid)
+{
+    for (new i = 0; i < DynamicObjectCount; i++)
+    {
+        if (DynamicObjectDBID[i] == dbid)
+        {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+stock LoadDynamicObjects()
+{
+    ResetDynamicObjectArrays();
+
+    mysql_tquery(
+        g_SQL,
+        "SELECT id, object_name, model_id, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z, interior, virtual_world, enabled FROM world_objects WHERE enabled=1 ORDER BY id ASC LIMIT 300",
+        "OnDynamicObjectsLoaded"
+    );
+    return 1;
+}
+
+public OnDynamicObjectsLoaded()
+{
+    new rows = cache_num_rows();
+    new limit = rows;
+
+    if (limit > MAX_DYNAMIC_OBJECTS)
+    {
+        limit = MAX_DYNAMIC_OBJECTS;
+    }
+
+    DynamicObjectCount = limit;
+
+    for (new i = 0; i < limit; i++)
+    {
+        cache_get_value_name_int(i, "id", DynamicObjectDBID[i]);
+        cache_get_value_name(i, "object_name", DynamicObjectName[i], DYN_OBJECT_NAME_SIZE);
+        cache_get_value_name_int(i, "model_id", DynamicObjectModel[i]);
+        cache_get_value_name_float(i, "pos_x", DynamicObjectX[i]);
+        cache_get_value_name_float(i, "pos_y", DynamicObjectY[i]);
+        cache_get_value_name_float(i, "pos_z", DynamicObjectZ[i]);
+        cache_get_value_name_float(i, "rot_x", DynamicObjectRX[i]);
+        cache_get_value_name_float(i, "rot_y", DynamicObjectRY[i]);
+        cache_get_value_name_float(i, "rot_z", DynamicObjectRZ[i]);
+        cache_get_value_name_int(i, "interior", DynamicObjectInterior[i]);
+        cache_get_value_name_int(i, "virtual_world", DynamicObjectVirtualWorld[i]);
+        cache_get_value_name_int(i, "enabled", DynamicObjectEnabled[i]);
+    }
+
+    CreateDynamicWorldObjects();
+
+    new msg[144];
+    format(msg, sizeof(msg), "[SAIF] Dynamic world objects loaded: %d.", DynamicObjectCount);
+    print(msg);
+    return 1;
+}
+
+public OnDynamicObjectCreated(playerid)
+{
+    if (IsPlayerConnected(playerid))
+    {
+        new insertId = cache_insert_id();
+        new msg[144];
+        format(msg, sizeof(msg), "Dynamic object berhasil dibuat. ID: %d. Reloading objects...", insertId);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+    }
+
+    LoadDynamicObjects();
+    return 1;
+}
+
+public OnDynamicObjectUpdated(playerid)
+{
+    if (IsPlayerConnected(playerid))
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "Dynamic object berhasil diupdate. Reloading objects...");
+    }
+
+    LoadDynamicObjects();
+    return 1;
+}
+
+public OnDynamicObjectDeleted(playerid)
+{
+    if (IsPlayerConnected(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic object dihapus dari database. Reloading objects...");
+    }
+
+    LoadDynamicObjects();
+    return 1;
+}
+
+stock ShowDynamicObjectMenu(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka Dynamic Object Editor.");
+        return 0;
+    }
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_OBJ_MENU,
+        DIALOG_STYLE_LIST,
+        "Dynamic Object Editor",
+        "Create Object\nList Objects\nReload Objects\nCommand Help",
+        "Select",
+        "Close"
+    );
+    return 1;
+}
+
+stock ShowDynamicObjectCreateInput(playerid)
+{
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_OBJ_CREATE_INPUT,
+        DIALOG_STYLE_INPUT,
+        "Create Dynamic Object",
+        "Masukkan model ID object.\n\nObject akan dibuat di posisi kamu sekarang dan tersimpan permanen ke database.\nContoh: 2942 untuk ATM object.",
+        "Create",
+        "Back"
+    );
+    return 1;
+}
+
+stock ShowDynamicObjectListDialog(playerid)
+{
+    new body[2048];
+    new line[160];
+
+    format(body, sizeof(body), "ID\tModel\tName\n");
+
+    if (DynamicObjectCount == 0)
+    {
+        ShowPlayerDialog(playerid, DIALOG_OBJ_LIST, DIALOG_STYLE_MSGBOX, "Dynamic Objects", "Belum ada dynamic object aktif.", "Back", "Close");
+        return 1;
+    }
+
+    for (new i = 0; i < DynamicObjectCount; i++)
+    {
+        format(line, sizeof(line), "%d\t%d\t%s\n", DynamicObjectDBID[i], DynamicObjectModel[i], DynamicObjectName[i]);
+        strcat(body, line, sizeof(body));
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_OBJ_LIST, DIALOG_STYLE_TABLIST_HEADERS, "Dynamic Objects", body, "Back", "Close");
+    return 1;
+}
+
+stock ShowDynamicObjectHelp(playerid)
+{
+    SendClientMessage(playerid, COLOR_YELLOW, "========== DYNAMIC OBJECT EDITOR ==========");
+    SendClientMessage(playerid, COLOR_WHITE, "/objmenu - Dialog editor object");
+    SendClientMessage(playerid, COLOR_WHITE, "/objcreate [modelid] - Buat object permanen di posisi admin");
+    SendClientMessage(playerid, COLOR_WHITE, "/objlist - Lihat object aktif");
+    SendClientMessage(playerid, COLOR_WHITE, "/objinfo [id] - Detail object");
+    SendClientMessage(playerid, COLOR_WHITE, "/objmove [id] - Pindah object ke posisi admin");
+    SendClientMessage(playerid, COLOR_WHITE, "/objrot [id] [rx] [ry] [rz] - Ubah rotasi object");
+    SendClientMessage(playerid, COLOR_WHITE, "/objgoto [id] - Teleport ke object");
+    SendClientMessage(playerid, COLOR_WHITE, "/objdelete [id] - Hapus object dari database");
+    SendClientMessage(playerid, COLOR_WHITE, "/objreload - Reload object tanpa restart");
+    SendClientMessage(playerid, COLOR_CYAN, "Catatan: v0.21C masih foundation global object. Interior/VW metadata disimpan untuk integrasi editor lanjut.");
+    return 1;
+}
+
+stock CreateDynamicObjectAtPlayer(playerid, modelid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuat dynamic object.");
+        return 0;
+    }
+
+    if (modelid <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Model ID object tidak valid.");
+        return 0;
+    }
+
+    new Float:x, Float:y, Float:z, Float:a;
+    new query[768];
+    new objectName[DYN_OBJECT_NAME_SIZE];
+
+    GetPlayerPos(playerid, x, y, z);
+    GetPlayerFacingAngle(playerid, a);
+    format(objectName, sizeof(objectName), "Object_%d", modelid);
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO world_objects (object_name, model_id, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z, interior, virtual_world, enabled) VALUES ('%e', %d, %f, %f, %f, 0.0, 0.0, %f, %d, %d, 1)",
+        objectName,
+        modelid,
+        x,
+        y,
+        z,
+        a,
+        GetPlayerInterior(playerid),
+        GetPlayerVirtualWorld(playerid)
+    );
+
+    mysql_tquery(g_SQL, query, "OnDynamicObjectCreated", "i", playerid);
+    return 1;
+}
+
+stock ListDynamicObjectsToChat(playerid)
+{
+    if (DynamicObjectCount == 0)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Belum ada dynamic object aktif.");
+        return 1;
+    }
+
+    SendClientMessage(playerid, COLOR_YELLOW, "========== DYNAMIC OBJECTS ==========");
+
+    new msg[160];
+    for (new i = 0; i < DynamicObjectCount; i++)
+    {
+        format(msg, sizeof(msg), "ID %d | Model %d | %s", DynamicObjectDBID[i], DynamicObjectModel[i], DynamicObjectName[i]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+    }
+
+    return 1;
+}
+
+stock ShowDynamicObjectInfo(playerid, dbid)
+{
+    new idx = GetDynamicObjectIndexByDBID(dbid);
+
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic object ID tidak ditemukan atau nonaktif.");
+        return 0;
+    }
+
+    new msg[180];
+    SendClientMessage(playerid, COLOR_YELLOW, "========== DYNAMIC OBJECT INFO ==========");
+    format(msg, sizeof(msg), "ID: %d | Model: %d | Name: %s", DynamicObjectDBID[idx], DynamicObjectModel[idx], DynamicObjectName[idx]);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+    format(msg, sizeof(msg), "Pos: %.2f, %.2f, %.2f", DynamicObjectX[idx], DynamicObjectY[idx], DynamicObjectZ[idx]);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+    format(msg, sizeof(msg), "Rot: %.2f, %.2f, %.2f", DynamicObjectRX[idx], DynamicObjectRY[idx], DynamicObjectRZ[idx]);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+    format(msg, sizeof(msg), "Interior: %d | VW: %d", DynamicObjectInterior[idx], DynamicObjectVirtualWorld[idx]);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+    return 1;
+}
 stock ShowDynamicLocationEditorMenu(playerid)
 {
     if (!IsAdminLevel(playerid, ADMIN_OWNER))
@@ -14874,6 +15304,221 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_RED, "Kamu harus login/register terlebih dahulu.");
         return 1;
     }
+    if (!strcmp(cmdtext, "/objmenu", true))
+    {
+        ShowDynamicObjectMenu(playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/objcreate ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuat dynamic object.");
+            return 1;
+        }
+
+        new modelStr[16];
+        if (!GetOneParam(cmdtext[11], modelStr, sizeof(modelStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /objcreate [modelid]");
+            return 1;
+        }
+
+        if (!IsNumericString(modelStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Model ID harus angka.");
+            return 1;
+        }
+
+        CreateDynamicObjectAtPlayer(playerid, strval(modelStr));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/objlist", true))
+    {
+        ListDynamicObjectsToChat(playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/objinfo ", true) == 0)
+    {
+        new idStr[16];
+        if (!GetOneParam(cmdtext[9], idStr, sizeof(idStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /objinfo [id]");
+            return 1;
+        }
+        if (!IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Object ID harus angka.");
+            return 1;
+        }
+        ShowDynamicObjectInfo(playerid, strval(idStr));
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/objmove ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa memindahkan dynamic object.");
+            return 1;
+        }
+
+        new idStr[16];
+        if (!GetOneParam(cmdtext[9], idStr, sizeof(idStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /objmove [id]");
+            return 1;
+        }
+        if (!IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Object ID harus angka.");
+            return 1;
+        }
+
+        new dbid = strval(idStr);
+        new idx = GetDynamicObjectIndexByDBID(dbid);
+        if (idx == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Dynamic object ID tidak ditemukan.");
+            return 1;
+        }
+
+        new Float:x, Float:y, Float:z;
+        new query[512];
+        GetPlayerPos(playerid, x, y, z);
+
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "UPDATE world_objects SET pos_x=%f, pos_y=%f, pos_z=%f, interior=%d, virtual_world=%d WHERE id=%d LIMIT 1",
+            x,
+            y,
+            z,
+            GetPlayerInterior(playerid),
+            GetPlayerVirtualWorld(playerid),
+            dbid
+        );
+        mysql_tquery(g_SQL, query, "OnDynamicObjectUpdated", "i", playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/objrot ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa mengubah rotasi dynamic object.");
+            return 1;
+        }
+
+        new idStr[16], rxStr[24], ryStr[24], rzStr[24];
+        if (!GetFourParams(cmdtext[8], idStr, sizeof(idStr), rxStr, sizeof(rxStr), ryStr, sizeof(ryStr), rzStr, sizeof(rzStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /objrot [id] [rx] [ry] [rz]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /objrot 3 0.0 0.0 90.0");
+            return 1;
+        }
+
+        if (!IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Object ID harus angka.");
+            return 1;
+        }
+
+        new dbid = strval(idStr);
+        if (GetDynamicObjectIndexByDBID(dbid) == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Dynamic object ID tidak ditemukan.");
+            return 1;
+        }
+
+        new query[512];
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "UPDATE world_objects SET rot_x=%f, rot_y=%f, rot_z=%f WHERE id=%d LIMIT 1",
+            floatstr(rxStr),
+            floatstr(ryStr),
+            floatstr(rzStr),
+            dbid
+        );
+        mysql_tquery(g_SQL, query, "OnDynamicObjectUpdated", "i", playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/objgoto ", true) == 0)
+    {
+        new idStr[16];
+        if (!GetOneParam(cmdtext[9], idStr, sizeof(idStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /objgoto [id]");
+            return 1;
+        }
+        if (!IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Object ID harus angka.");
+            return 1;
+        }
+
+        new idx = GetDynamicObjectIndexByDBID(strval(idStr));
+        if (idx == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Dynamic object ID tidak ditemukan.");
+            return 1;
+        }
+
+        SetPlayerInterior(playerid, DynamicObjectInterior[idx]);
+        SetPlayerVirtualWorld(playerid, DynamicObjectVirtualWorld[idx]);
+        SetPlayerPos(playerid, DynamicObjectX[idx] + 1.0, DynamicObjectY[idx], DynamicObjectZ[idx] + 1.0);
+        SendClientMessage(playerid, COLOR_GREEN, "Teleport ke dynamic object berhasil.");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/objdelete ", true) == 0 || strfind(cmdtext, "/objremove ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa menghapus dynamic object.");
+            return 1;
+        }
+
+        new start = 11;
+        if (strfind(cmdtext, "/objremove ", true) == 0) start = 11;
+        new idStr[16];
+        if (!GetOneParam(cmdtext[start], idStr, sizeof(idStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /objdelete [id]");
+            return 1;
+        }
+        if (!IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Object ID harus angka.");
+            return 1;
+        }
+
+        new query[256];
+        mysql_format(g_SQL, query, sizeof(query), "DELETE FROM world_objects WHERE id=%d LIMIT 1", strval(idStr));
+        mysql_tquery(g_SQL, query, "OnDynamicObjectDeleted", "i", playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/objreload", true))
+    {
+        LoadDynamicObjects();
+        SendClientMessage(playerid, COLOR_GREEN, "Dynamic objects sedang direload dari database.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/objhelp", true))
+    {
+        ShowDynamicObjectHelp(playerid);
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/interact", true))
     {
         HandleWorldInteractKey(playerid);
@@ -15325,7 +15970,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.21B.3 Dynamic Dedup Fix (SAIF candidate)");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.21C Dynamic Object System (SAIF candidate)");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -15334,7 +15979,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.21B.3: Nearby Interaction tidak lagi double antara static dan dynamic location.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.21C: Dynamic object system untuk persistent custom mapping awal.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.19B: Weapon license dan saved loadout persistence.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D: Release polish, version, credits, staff, beta guide.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");

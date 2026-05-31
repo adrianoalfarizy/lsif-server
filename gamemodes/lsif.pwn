@@ -1022,6 +1022,7 @@ new DynamicLocationLabelText[MAX_DYNAMIC_LOCATIONS][LOC_LABEL_SIZE];
 new DynamicLocationPickup[MAX_DYNAMIC_LOCATIONS];
 new DynamicLocationObjectModel[MAX_DYNAMIC_LOCATIONS];
 new DynamicLocationObjectID[MAX_DYNAMIC_LOCATIONS];
+new DynamicLocationLinkedObjectDBID[MAX_DYNAMIC_LOCATIONS];
 new Text3D:DynamicLocation3DLabel[MAX_DYNAMIC_LOCATIONS];
 new DynamicObjectCount;
 new DynamicObjectDBID[MAX_DYNAMIC_OBJECTS];
@@ -1040,6 +1041,15 @@ new DynamicObjectName[MAX_DYNAMIC_OBJECTS][DYN_OBJECT_NAME_SIZE];
 
 
 new PlayerPendingLocCreateType[MAX_PLAYERS][LOC_TYPE_SIZE];
+new PlayerPendingObjLocCreate[MAX_PLAYERS];
+new PlayerPendingObjLocType[MAX_PLAYERS][LOC_TYPE_SIZE];
+new PlayerPendingObjLocName[MAX_PLAYERS][LOC_NAME_SIZE];
+new Float:PlayerPendingObjLocX[MAX_PLAYERS];
+new Float:PlayerPendingObjLocY[MAX_PLAYERS];
+new Float:PlayerPendingObjLocZ[MAX_PLAYERS];
+new Float:PlayerPendingObjLocA[MAX_PLAYERS];
+new PlayerPendingObjLocInterior[MAX_PLAYERS];
+new PlayerPendingObjLocVirtualWorld[MAX_PLAYERS];
 
 new PlayerBusinessDBID[MAX_PLAYERS];
 new PlayerBusinessIndex[MAX_PLAYERS];
@@ -7030,7 +7040,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.21C.2 Obj-Loc Helper");
+    SetGameModeText("SAIF Dev v0.21C.3 Linked Obj-Loc");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -9423,6 +9433,7 @@ stock ResetDynamicLocationArrays()
         DynamicLocationPickupModel[i] = WORLD_MARKER_PICKUP_MODEL;
         DynamicLocationObjectModel[i] = 0;
         DynamicLocationObjectID[i] = -1;
+        DynamicLocationLinkedObjectDBID[i] = 0;
         DynamicLocationInterior[i] = 0;
         DynamicLocationVirtualWorld[i] = 0;
         DynamicLocationX[i] = 0.0;
@@ -9955,7 +9966,7 @@ stock LoadDynamicLocations()
 
     mysql_tquery(
         g_SQL,
-        "SELECT id, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, label_text, interaction_radius, enabled FROM world_locations WHERE enabled=1 ORDER BY id ASC LIMIT 15",
+        "SELECT id, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled FROM world_locations WHERE enabled=1 ORDER BY id ASC LIMIT 15",
         "OnDynamicLocationsLoaded"
     );
     return 1;
@@ -9987,6 +9998,7 @@ public OnDynamicLocationsLoaded()
         cache_get_value_name_int(i, "map_icon", DynamicLocationMapIcon[i]);
         cache_get_value_name_int(i, "pickup_model", DynamicLocationPickupModel[i]);
         cache_get_value_name_int(i, "object_model", DynamicLocationObjectModel[i]);
+        cache_get_value_name_int(i, "linked_object_id", DynamicLocationLinkedObjectDBID[i]);
         cache_get_value_name(i, "label_text", DynamicLocationLabelText[i], LOC_LABEL_SIZE);
         cache_get_value_name_float(i, "interaction_radius", DynamicLocationRadius[i]);
         cache_get_value_name_int(i, "enabled", DynamicLocationEnabled[i]);
@@ -10217,15 +10229,36 @@ public OnDynamicObjectsLoaded()
 
 public OnDynamicObjectCreated(playerid)
 {
+    new insertId = cache_insert_id();
+
     if (IsPlayerConnected(playerid))
     {
-        new insertId = cache_insert_id();
         new msg[144];
         format(msg, sizeof(msg), "Dynamic object berhasil dibuat. ID: %d. Reloading objects...", insertId);
         SendClientMessage(playerid, COLOR_GREEN, msg);
+
+        if (insertId > 0 && PlayerPendingObjLocCreate[playerid])
+        {
+            CreateDynamicLocationAtCoordsLinked(
+                playerid,
+                PlayerPendingObjLocType[playerid],
+                PlayerPendingObjLocName[playerid],
+                PlayerPendingObjLocX[playerid],
+                PlayerPendingObjLocY[playerid],
+                PlayerPendingObjLocZ[playerid],
+                PlayerPendingObjLocA[playerid],
+                PlayerPendingObjLocInterior[playerid],
+                PlayerPendingObjLocVirtualWorld[playerid],
+                insertId
+            );
+
+            PlayerPendingObjLocCreate[playerid] = 0;
+            SendClientMessage(playerid, COLOR_CYAN, "Location berhasil dibuat dan ditautkan ke object baru.");
+        }
     }
 
     LoadDynamicObjects();
+    LoadDynamicLocations();
     return 1;
 }
 
@@ -10237,6 +10270,7 @@ public OnDynamicObjectUpdated(playerid)
     }
 
     LoadDynamicObjects();
+    LoadDynamicLocations();
     return 1;
 }
 
@@ -10248,6 +10282,7 @@ public OnDynamicObjectDeleted(playerid)
     }
 
     LoadDynamicObjects();
+    LoadDynamicLocations();
     return 1;
 }
 
@@ -10319,10 +10354,10 @@ stock ShowDynamicObjectHelp(playerid)
     SendClientMessage(playerid, COLOR_WHITE, "/objrot [id] [rx] [ry] [rz] - Ubah rotasi object");
     SendClientMessage(playerid, COLOR_WHITE, "/objgoto [id] - Teleport ke object");
     SendClientMessage(playerid, COLOR_WHITE, "/objdelete [id] - Hapus object dari database");
-    SendClientMessage(playerid, COLOR_WHITE, "/objtoloc [objid] [type] [name] - Jadikan object sebagai titik ALT/location");
-    SendClientMessage(playerid, COLOR_WHITE, "/locwithobject [type] [modelid] [name] - Buat location + object fisik sekaligus");
+    SendClientMessage(playerid, COLOR_WHITE, "/objtoloc [objid] [type] [name] - Tautkan object menjadi titik ALT/location");
+    SendClientMessage(playerid, COLOR_WHITE, "/locwithobject [type] [modelid] [name] - Buat object + location tertaut sekaligus");
     SendClientMessage(playerid, COLOR_WHITE, "/objreload - Reload object tanpa restart");
-    SendClientMessage(playerid, COLOR_CYAN, "Catatan: object = fisik/dekorasi; location = ALT/radar/label. /objtoloc menghubungkan keduanya secara praktis.");
+    SendClientMessage(playerid, COLOR_CYAN, "Catatan: object = fisik/rotasi; location = ALT/radar/label. Object tertaut akan menggerakkan location saat /objmove.");
     return 1;
 }
 
@@ -10367,6 +10402,59 @@ stock CreateDynamicObjectAtPlayer(playerid, modelid)
     return 1;
 }
 
+
+stock CreateDynamicLocationAtCoordsLinked(playerid, const locType[], const locName[], Float:x, Float:y, Float:z, Float:a, interior, virtualWorld, linkedObjectId)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuat dynamic location.");
+        return 0;
+    }
+
+    new query[1200];
+    new labelText[LOC_LABEL_SIZE];
+    new defaultIcon = GetDefaultDynamicLocationIcon(locType);
+
+    format(labelText, sizeof(labelText), "[ALT] %s\n%s", locType, locName);
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO world_locations (location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled) VALUES ('%e', '%e', '%e', %f, %f, %f, %f, %d, %d, %d, 0, 0, %d, '%e', 3.0, 1)",
+        locName,
+        locType,
+        locName,
+        x,
+        y,
+        z,
+        a,
+        interior,
+        virtualWorld,
+        defaultIcon,
+        linkedObjectId,
+        labelText
+    );
+
+    mysql_tquery(g_SQL, query, "OnDynamicLocationCreated", "i", playerid);
+    return 1;
+}
+
+stock SyncLinkedLocationsForObject(objectDbid, Float:x, Float:y, Float:z, Float:a, interior, virtualWorld)
+{
+    if (objectDbid <= 0) return 0;
+
+    new query[512];
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "UPDATE world_locations SET pos_x=%f, pos_y=%f, pos_z=%f, pos_a=%f, interior=%d, virtual_world=%d WHERE linked_object_id=%d",
+        x, y, z, a, interior, virtualWorld, objectDbid
+    );
+    mysql_tquery(g_SQL, query);
+    return 1;
+}
 
 stock CreateDynamicLocationAtCoords(playerid, const locType[], const locName[], Float:x, Float:y, Float:z, Float:a, interior, virtualWorld)
 {
@@ -10463,11 +10551,20 @@ stock CreateDynamicLocationWithObjectAtPlayer(playerid, const locType[], modelid
 
     format(objectName, sizeof(objectName), "%s_obj", locName);
 
-    CreateDynamicObjectAtCoords(playerid, modelid, objectName, x, y, z, a, GetPlayerInterior(playerid), GetPlayerVirtualWorld(playerid));
-    CreateDynamicLocationAtCoords(playerid, locType, locName, x, y, z, a, GetPlayerInterior(playerid), GetPlayerVirtualWorld(playerid));
+    PlayerPendingObjLocCreate[playerid] = 1;
+    format(PlayerPendingObjLocType[playerid], LOC_TYPE_SIZE, "%s", locType);
+    format(PlayerPendingObjLocName[playerid], LOC_NAME_SIZE, "%s", locName);
+    PlayerPendingObjLocX[playerid] = x;
+    PlayerPendingObjLocY[playerid] = y;
+    PlayerPendingObjLocZ[playerid] = z;
+    PlayerPendingObjLocA[playerid] = a;
+    PlayerPendingObjLocInterior[playerid] = GetPlayerInterior(playerid);
+    PlayerPendingObjLocVirtualWorld[playerid] = GetPlayerVirtualWorld(playerid);
 
-    SendClientMessage(playerid, COLOR_GREEN, "Location + object dibuat. Gunakan /objlist dan /loclist untuk melihat ID masing-masing.");
-    SendClientMessage(playerid, COLOR_WHITE, "Catatan: rotate object pakai /objrot [object_id]. Location hanya titik ALT/radar/label.");
+    CreateDynamicObjectAtCoords(playerid, modelid, objectName, x, y, z, a, PlayerPendingObjLocInterior[playerid], PlayerPendingObjLocVirtualWorld[playerid]);
+
+    SendClientMessage(playerid, COLOR_GREEN, "Object sedang dibuat. Location akan otomatis dibuat dan ditautkan setelah object masuk database.");
+    SendClientMessage(playerid, COLOR_WHITE, "Object fisik bisa dirotasi/dipindah. Location ALT/radar/label akan ikut posisi object saat /objmove.");
     return 1;
 }
 
@@ -10487,7 +10584,7 @@ stock CreateLocationFromDynamicObject(playerid, objectDbid, const locType[], con
         return 0;
     }
 
-    CreateDynamicLocationAtCoords(
+    CreateDynamicLocationAtCoordsLinked(
         playerid,
         locType,
         locName,
@@ -10496,11 +10593,12 @@ stock CreateLocationFromDynamicObject(playerid, objectDbid, const locType[], con
         DynamicObjectZ[idx],
         DynamicObjectRZ[idx],
         DynamicObjectInterior[idx],
-        DynamicObjectVirtualWorld[idx]
+        DynamicObjectVirtualWorld[idx],
+        objectDbid
     );
 
-    SendClientMessage(playerid, COLOR_GREEN, "Dynamic location dibuat di posisi object tersebut.");
-    SendClientMessage(playerid, COLOR_WHITE, "Object tetap bisa dirotasi/dipindah dengan /objrot atau /objmove. Location tetap bisa diatur dengan /locmove, /locicon, /loclabel.");
+    SendClientMessage(playerid, COLOR_GREEN, "Dynamic location dibuat dan ditautkan ke object tersebut.");
+    SendClientMessage(playerid, COLOR_WHITE, "Jika object dipindah dengan /objmove, location ALT/radar/label ikut pindah. Rotasi tetap gunakan /objrot.");
     return 1;
 }
 
@@ -10676,7 +10774,7 @@ stock ShowDynamicLocationHelp(playerid)
     SendClientMessage(playerid, COLOR_WHITE, "/locicon [id] [icon] - Ubah radar/map icon");
     SendClientMessage(playerid, COLOR_WHITE, "/locpickup [id] [model] - Ubah marker/pickup visual, 0 untuk hapus");
     SendClientMessage(playerid, COLOR_WHITE, "/locobject [id] [model] - Object visual opsional di location, 0 untuk hapus");
-    SendClientMessage(playerid, COLOR_WHITE, "/locwithobject [type] [modelid] [name] - Buat location + object fisik sekaligus");
+    SendClientMessage(playerid, COLOR_WHITE, "/locwithobject [type] [modelid] [name] - Buat object + location tertaut sekaligus");
     SendClientMessage(playerid, COLOR_WHITE, "/lociconlist - Lihat preset icon radar/map");
     SendClientMessage(playerid, COLOR_WHITE, "/locradius [id] [radius] - Ubah radius ALT dynamic location");
     SendClientMessage(playerid, COLOR_WHITE, "/locgoto [id], /locdisable [id], /locenable [id], /locreload");
@@ -15547,6 +15645,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
             dbid
         );
         mysql_tquery(g_SQL, query, "OnDynamicObjectUpdated", "i", playerid);
+        SyncLinkedLocationsForObject(dbid, x, y, z, DynamicObjectRZ[idx], GetPlayerInterior(playerid), GetPlayerVirtualWorld(playerid));
         return 1;
     }
 
@@ -15591,6 +15690,10 @@ public OnPlayerCommandText(playerid, cmdtext[])
             dbid
         );
         mysql_tquery(g_SQL, query, "OnDynamicObjectUpdated", "i", playerid);
+
+        new locQuery[256];
+        mysql_format(g_SQL, locQuery, sizeof(locQuery), "UPDATE world_locations SET pos_a=%f WHERE linked_object_id=%d", floatstr(rzStr), dbid);
+        mysql_tquery(g_SQL, locQuery);
         return 1;
     }
 
@@ -15644,8 +15747,13 @@ public OnPlayerCommandText(playerid, cmdtext[])
             return 1;
         }
 
+        new objectId = strval(idStr);
+        new unlinkQuery[256];
+        mysql_format(g_SQL, unlinkQuery, sizeof(unlinkQuery), "UPDATE world_locations SET linked_object_id=0 WHERE linked_object_id=%d", objectId);
+        mysql_tquery(g_SQL, unlinkQuery);
+
         new query[256];
-        mysql_format(g_SQL, query, sizeof(query), "DELETE FROM world_objects WHERE id=%d LIMIT 1", strval(idStr));
+        mysql_format(g_SQL, query, sizeof(query), "DELETE FROM world_objects WHERE id=%d LIMIT 1", objectId);
         mysql_tquery(g_SQL, query, "OnDynamicObjectDeleted", "i", playerid);
         return 1;
     }
@@ -21253,7 +21361,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, msg);
         format(msg, sizeof(msg), "Pos: %.2f, %.2f, %.2f | A %.2f", DynamicLocationX[locIndex], DynamicLocationY[locIndex], DynamicLocationZ[locIndex], DynamicLocationA[locIndex]);
         SendClientMessage(playerid, COLOR_WHITE, msg);
-        format(msg, sizeof(msg), "Interior: %d | VW: %d | Icon: %d | Pickup: %d | Object: %d | Radius: %.1f", DynamicLocationInterior[locIndex], DynamicLocationVirtualWorld[locIndex], DynamicLocationMapIcon[locIndex], DynamicLocationPickupModel[locIndex], DynamicLocationObjectModel[locIndex], DynamicLocationRadius[locIndex]);
+        format(msg, sizeof(msg), "Interior: %d | VW: %d | Icon: %d | Pickup: %d | Object: %d | LinkedObj: %d | Radius: %.1f", DynamicLocationInterior[locIndex], DynamicLocationVirtualWorld[locIndex], DynamicLocationMapIcon[locIndex], DynamicLocationPickupModel[locIndex], DynamicLocationObjectModel[locIndex], DynamicLocationLinkedObjectDBID[locIndex], DynamicLocationRadius[locIndex]);
         SendClientMessage(playerid, COLOR_WHITE, msg);
         format(msg, sizeof(msg), "Label: %s", DynamicLocationLabelText[locIndex]);
         SendClientMessage(playerid, COLOR_WHITE, msg);

@@ -488,4 +488,36 @@ AFTER pickup_model;
 -- Existing dynamic locations can optionally be given a visual object:
 -- UPDATE world_locations SET object_model = 1239 WHERE object_model = 0 AND enabled = 1;
 
+CREATE TABLE IF NOT EXISTS world_objects (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    object_name VARCHAR(64) NOT NULL DEFAULT 'Object',
+    model_id INT NOT NULL,
+
+    pos_x FLOAT NOT NULL,
+    pos_y FLOAT NOT NULL,
+    pos_z FLOAT NOT NULL,
+
+    rot_x FLOAT NOT NULL DEFAULT 0,
+    rot_y FLOAT NOT NULL DEFAULT 0,
+    rot_z FLOAT NOT NULL DEFAULT 0,
+
+    interior INT NOT NULL DEFAULT 0,
+    virtual_world INT NOT NULL DEFAULT 0,
+    enabled TINYINT NOT NULL DEFAULT 1,
+
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+
+    INDEX idx_model_id (model_id),
+    INDEX idx_enabled (enabled),
+    INDEX idx_world_interior (virtual_world, interior)
+);
+
+ALTER TABLE world_locations
+ADD COLUMN IF NOT EXISTS linked_object_id INT NOT NULL DEFAULT 0
+AFTER object_model;
+
+CREATE INDEX IF NOT EXISTS idx_world_locations_linked_object_id
+ON world_locations (linked_object_id);
+
 

@@ -6938,7 +6938,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("LSIF Dev v0.21A.1 World Editor");
+    SetGameModeText("LSIF Dev v0.21A.2 Location Markers");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -7027,7 +7027,7 @@ public OnGameModeInit()
     print("[LSIF] Custom house arrow pickups aktif.");
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
-    print("[LSIF] Gamemode v0.21A.1 World Editor Polish berhasil dijalankan.");
+    print("[LSIF] Gamemode v0.21A.2 Location Marker Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -9462,7 +9462,7 @@ stock CreateDynamicLocationMarker(locationIndex)
                 WORLD_MARKER_PICKUP_TYPE,
                 DynamicLocationX[locationIndex],
                 DynamicLocationY[locationIndex],
-                DynamicLocationZ[locationIndex],
+                DynamicLocationZ[locationIndex] + 0.15,
                 DynamicLocationVirtualWorld[locationIndex]
                                                );
     }
@@ -9473,7 +9473,7 @@ stock CreateDynamicLocationMarker(locationIndex)
                     DynamicLocationObjectModel[locationIndex],
                     DynamicLocationX[locationIndex],
                     DynamicLocationY[locationIndex],
-                    DynamicLocationZ[locationIndex] - 0.8,
+                    DynamicLocationZ[locationIndex],
                     0.0,
                     0.0,
                     DynamicLocationA[locationIndex]
@@ -9695,7 +9695,10 @@ stock CreateDynamicLocationAtPlayer(playerid, const locType[], const locName[])
     new query[1200];
     new labelText[LOC_LABEL_SIZE];
     new defaultIcon = GetDefaultDynamicLocationIcon(locType);
-    new defaultObject = GetDefaultDynamicLocationObject(locType);
+    new defaultPickup = WORLD_MARKER_PICKUP_MODEL;
+
+    // v0.21A.2: lokasi dynamic default-nya adalah marker/pickup non-solid.
+    // Object visual permanen dipisah lewat /locobject agar tidak mengganggu movement/player collision.
 
     GetPlayerPos(playerid, x, y, z);
     GetPlayerFacingAngle(playerid, a);
@@ -9705,7 +9708,7 @@ stock CreateDynamicLocationAtPlayer(playerid, const locType[], const locName[])
         g_SQL,
         query,
         sizeof(query),
-        "INSERT INTO world_locations (location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, label_text, interaction_radius, enabled) VALUES ('%e', '%e', '%e', %f, %f, %f, %f, %d, %d, %d, 0, %d, '%e', 3.0, 1)",
+        "INSERT INTO world_locations (location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, label_text, interaction_radius, enabled) VALUES ('%e', '%e', '%e', %f, %f, %f, %f, %d, %d, %d, %d, 0, '%e', 3.0, 1)",
         locName,
         locType,
         locName,
@@ -9716,7 +9719,7 @@ stock CreateDynamicLocationAtPlayer(playerid, const locType[], const locName[])
         GetPlayerInterior(playerid),
         GetPlayerVirtualWorld(playerid),
         defaultIcon,
-        defaultObject,
+        defaultPickup,
         labelText
     );
 
@@ -9772,8 +9775,8 @@ stock ShowDynamicLocationHelp(playerid)
     SendClientMessage(playerid, COLOR_WHITE, "/locmove [id] - Pindahkan lokasi ke posisi admin");
     SendClientMessage(playerid, COLOR_WHITE, "/loclabel [id] [text] - Ubah 3D label");
     SendClientMessage(playerid, COLOR_WHITE, "/locicon [id] [icon] - Ubah radar/map icon");
-    SendClientMessage(playerid, COLOR_WHITE, "/locpickup [id] [model] - Ubah pickup model, 0 untuk hapus");
-    SendClientMessage(playerid, COLOR_WHITE, "/locobject [id] [model] - Ubah object visual, 0 untuk hapus");
+    SendClientMessage(playerid, COLOR_WHITE, "/locpickup [id] [model] - Ubah marker/pickup visual, 0 untuk hapus");
+    SendClientMessage(playerid, COLOR_WHITE, "/locobject [id] [model] - Object mapping solid/visual opsional, 0 untuk hapus");
     SendClientMessage(playerid, COLOR_WHITE, "/lociconlist - Lihat preset icon radar/map");
     SendClientMessage(playerid, COLOR_WHITE, "/locradius [id] [radius] - Ubah radius ALT dynamic location");
     SendClientMessage(playerid, COLOR_WHITE, "/locgoto [id], /locdisable [id], /locenable [id], /locreload");
@@ -14891,7 +14894,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.21A.1 World Editor Polish (SAIF candidate)");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.21A.2 Location Marker Fix (SAIF candidate)");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -14900,7 +14903,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.21A.1: Dynamic World Editor Polish, /locmenu dialog, icon preset, dynamic ALT radius, dan object visual location.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.21A.2: Dynamic location marker/pickup fix, icon slot refresh, dan object visual dipisah dari marker ALT.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.19B: Weapon license dan saved loadout persistence.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D: Release polish, version, credits, staff, beta guide.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");
@@ -20079,6 +20082,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         if (!GetTwoParams(cmdtext[11], idStr, sizeof(idStr), pickupStr, sizeof(pickupStr)) || !IsNumericString(idStr) || !IsNumericString(pickupStr))
         {
             SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /locpickup [id] [modelid]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh marker: /locpickup 1 1239. Gunakan 0 untuk hapus marker.");
             return 1;
         }
 
@@ -20101,7 +20105,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         if (!GetTwoParams(cmdtext[11], idStr, sizeof(idStr), objectStr, sizeof(objectStr)) || !IsNumericString(idStr) || !IsNumericString(objectStr))
         {
             SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /locobject [id] [object_modelid]");
-            SendClientMessage(playerid, COLOR_WHITE, "Gunakan 0 untuk hapus object visual. Contoh: /locobject 1 2942");
+            SendClientMessage(playerid, COLOR_WHITE, "Gunakan 0 untuk hapus object. Contoh object ATM: /locobject 1 2942");
             return 1;
         }
 

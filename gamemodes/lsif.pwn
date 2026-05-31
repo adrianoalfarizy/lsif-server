@@ -4077,6 +4077,38 @@ stock IsPlayerNearBankPoint(playerid)
         }
     }
 
+    // Dynamic location support: atm / bank locations created from /loccreate
+    for (new d = 0; d < DynamicLocationCount; d++)
+    {
+        if (!DynamicLocationEnabled[d])
+        {
+            continue;
+        }
+
+        if (DynamicLocationInterior[d] != GetPlayerInterior(playerid))
+        {
+            continue;
+        }
+
+        if (DynamicLocationVirtualWorld[d] != -1 && DynamicLocationVirtualWorld[d] != GetPlayerVirtualWorld(playerid))
+        {
+            continue;
+        }
+
+        if (strfind(DynamicLocationType[d], "atm", true) == -1 &&
+                strfind(DynamicLocationType[d], "bank", true) == -1 &&
+                strfind(DynamicLocationName[d], "atm", true) == -1 &&
+                strfind(DynamicLocationName[d], "bank", true) == -1)
+        {
+            continue;
+        }
+
+        if (GetPlayerDistanceFromPoint(playerid, DynamicLocationX[d], DynamicLocationY[d], DynamicLocationZ[d]) <= DynamicLocationRadius[d])
+        {
+            return 1;
+        }
+    }
+
     return 0;
 }
 
@@ -6081,6 +6113,40 @@ stock IsPlayerNearDealership(playerid)
         }
     }
 
+    // Dynamic location support: dealer / dealership / vehicle locations created from /loccreate
+    for (new d = 0; d < DynamicLocationCount; d++)
+    {
+        if (!DynamicLocationEnabled[d])
+        {
+            continue;
+        }
+
+        if (DynamicLocationInterior[d] != GetPlayerInterior(playerid))
+        {
+            continue;
+        }
+
+        if (DynamicLocationVirtualWorld[d] != -1 && DynamicLocationVirtualWorld[d] != GetPlayerVirtualWorld(playerid))
+        {
+            continue;
+        }
+
+        if (strfind(DynamicLocationType[d], "dealer", true) == -1 &&
+                strfind(DynamicLocationType[d], "dealership", true) == -1 &&
+                strfind(DynamicLocationType[d], "vehicle", true) == -1 &&
+                strfind(DynamicLocationName[d], "dealer", true) == -1 &&
+                strfind(DynamicLocationName[d], "dealership", true) == -1 &&
+                strfind(DynamicLocationName[d], "vehicle", true) == -1)
+        {
+            continue;
+        }
+
+        if (GetPlayerDistanceFromPoint(playerid, DynamicLocationX[d], DynamicLocationY[d], DynamicLocationZ[d]) <= DynamicLocationRadius[d])
+        {
+            return 1;
+        }
+    }
+
     return 0;
 }
 
@@ -6939,7 +7005,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.21B.1 Dynamic Fix");
+    SetGameModeText("SAIF Dev v0.21B.2 Dynamic Proximity");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -7028,7 +7094,7 @@ public OnGameModeInit()
     print("[LSIF] Custom house arrow pickups aktif.");
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
-    print("[SAIF] Gamemode v0.21B.1 Dynamic Location Integration Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.21B.2 Dynamic Proximity Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -9593,7 +9659,7 @@ stock ShowDynamicLocationInfoDialog(playerid, locationIndex)
     format(
         body,
         sizeof(body),
-        "ID: %d\nType: %s\nName: %s\n\nPos: %.2f, %.2f, %.2f\nInterior: %d | VW: %d\nRadius ALT: %.1f\nMap Icon: %d\nPickup Model: %d\nObject Model: %d\n\nCatatan: v0.21B.1 membaca type/name dynamic location secara fleksibel untuk membuka dialog asli saat ALT.",
+        "ID: %d\nType: %s\nName: %s\n\nPos: %.2f, %.2f, %.2f\nInterior: %d | VW: %d\nRadius ALT: %.1f\nMap Icon: %d\nPickup Model: %d\nObject Model: %d\n\nCatatan: v0.21B.2 dynamic location sudah dianggap sebagai lokasi valid oleh dialog sesuai type.",
         DynamicLocationDBID[locationIndex],
         DynamicLocationType[locationIndex],
         DynamicLocationName[locationIndex],
@@ -12088,6 +12154,40 @@ stock IsPlayerNearAmmuNation(playerid)
     for (new i = 0; i < MAX_AMMUNATIONS; i++)
     {
         if (GetPlayerDistanceFromPoint(playerid, AmmuNationX[i], AmmuNationY[i], AmmuNationZ[i]) <= AMMUNATION_ACCESS_RADIUS)
+        {
+            return 1;
+        }
+    }
+
+    // Dynamic location support: ammu / ammunation / weapon locations created from /loccreate
+    for (new d = 0; d < DynamicLocationCount; d++)
+    {
+        if (!DynamicLocationEnabled[d])
+        {
+            continue;
+        }
+
+        if (DynamicLocationInterior[d] != GetPlayerInterior(playerid))
+        {
+            continue;
+        }
+
+        if (DynamicLocationVirtualWorld[d] != -1 && DynamicLocationVirtualWorld[d] != GetPlayerVirtualWorld(playerid))
+        {
+            continue;
+        }
+
+        if (strfind(DynamicLocationType[d], "ammu", true) == -1 &&
+                strfind(DynamicLocationType[d], "ammunation", true) == -1 &&
+                strfind(DynamicLocationType[d], "weapon", true) == -1 &&
+                strfind(DynamicLocationName[d], "ammu", true) == -1 &&
+                strfind(DynamicLocationName[d], "ammunation", true) == -1 &&
+                strfind(DynamicLocationName[d], "weapon", true) == -1)
+        {
+            continue;
+        }
+
+        if (GetPlayerDistanceFromPoint(playerid, DynamicLocationX[d], DynamicLocationY[d], DynamicLocationZ[d]) <= DynamicLocationRadius[d])
         {
             return 1;
         }
@@ -15185,7 +15285,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.21B.1 Dynamic Location Integration Fix (SAIF candidate)");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.21B.2 Dynamic Proximity Fix (SAIF candidate)");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -15194,7 +15294,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.21B.1: Dynamic location integration diperbaiki; type/name kini dibaca lebih fleksibel untuk ATM, dealer, Ammu-Nation, gang HQ, job, race, house, business.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.21B.2: Dynamic location proximity sekarang ikut dianggap valid oleh ATM, dealer, dan Ammu-Nation dialog.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.19B: Weapon license dan saved loadout persistence.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D: Release polish, version, credits, staff, beta guide.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");

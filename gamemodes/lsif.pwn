@@ -114,6 +114,14 @@
 #define DIALOG_OBJ_LINK_NAME_INPUT 1095
 #define DIALOG_OBJ_DELETE_CONFIRM 1096
 #define DIALOG_OBJ_PURGE_CONFIRM 1097
+#define DIALOG_TURF_MENU 1098
+#define DIALOG_TURF_CREATE_INPUT 1099
+#define DIALOG_TURF_LIST 1100
+#define DIALOG_TURF_ACTION_MENU 1101
+#define DIALOG_TURF_INFO 1102
+#define DIALOG_TURF_OWNER_INPUT 1103
+#define DIALOG_TURF_DELETE_CONFIRM 1104
+#define DIALOG_TURF_RENAME_INPUT 1105
 
 
 
@@ -295,7 +303,8 @@
 #define ORG_RANK_ADMIN  3
 #define ORG_RANK_OWNER  5
 
-#define MAX_TERRITORIES 6
+#define MAX_TERRITORIES 32
+#define MAX_DEFAULT_TERRITORIES 6
 #define TERRITORY_ACCESS_RADIUS 80.0
 #define TERRITORY_ZONE_ALPHA 0x55
 #define DEFAULT_GANG_COLOR 0xFFFFFFFF
@@ -851,6 +860,7 @@ new PlayerGangColor[MAX_PLAYERS];
 new PlayerSelectedGangTarget[MAX_PLAYERS];
 new PlayerDialogTerritoryIndex[MAX_PLAYERS];
 new PlayerDialogGangID[MAX_PLAYERS];
+new PlayerSelectedTurfIndex[MAX_PLAYERS];
 new PlayerNearbyInteractionCount[MAX_PLAYERS];
 new PlayerNearbyInteractionType[MAX_PLAYERS][MAX_NEARBY_INTERACTIONS];
 new PlayerNearbyInteractionParam[MAX_PLAYERS][MAX_NEARBY_INTERACTIONS];
@@ -865,6 +875,11 @@ new TerritoryZone[MAX_TERRITORIES];
 new TerritoryOwnerGangID[MAX_TERRITORIES];
 new TerritoryOwnerColor[MAX_TERRITORIES];
 new TerritoryOwnerName[MAX_TERRITORIES][64];
+new TerritoryEnabled[MAX_TERRITORIES];
+new Float:TerritoryMinX[MAX_TERRITORIES];
+new Float:TerritoryMinY[MAX_TERRITORIES];
+new Float:TerritoryMaxX[MAX_TERRITORIES];
+new Float:TerritoryMaxY[MAX_TERRITORIES];
 
 new Float:TerritoryX[MAX_TERRITORIES] =
 {
@@ -913,7 +928,33 @@ new TerritoryName[MAX_TERRITORIES][64] =
     "Market Strip",
     "East Los Santos",
     "Vinewood Hills",
-    "Pershing Square"
+    "Pershing Square",
+    "Empty Territory",
+    "Empty Territory",
+    "Empty Territory",
+    "Empty Territory",
+    "Empty Territory",
+    "Empty Territory",
+    "Empty Territory",
+    "Empty Territory",
+    "Empty Territory",
+    "Empty Territory",
+    "Empty Territory",
+    "Empty Territory",
+    "Empty Territory",
+    "Empty Territory",
+    "Empty Territory",
+    "Empty Territory",
+    "Empty Territory",
+    "Empty Territory",
+    "Empty Territory",
+    "Empty Territory",
+    "Empty Territory",
+    "Empty Territory",
+    "Empty Territory",
+    "Empty Territory",
+    "Empty Territory",
+    "Empty Territory"
 };
 
 new GangColorValue[MAX_GANG_COLOR_PRESETS] =
@@ -1598,6 +1639,7 @@ forward OnDynamicObjectCreated(playerid);
 forward OnDynamicObjectUpdated(playerid);
 forward OnDynamicObjectDeleted(playerid);
 forward OnDynamicObjectPurgeLocationsDeleted(playerid, objectId);
+forward ReloadDynamicLocationsDelayed(playerid);
 
 
 
@@ -4962,9 +5004,32 @@ stock ResetGangTerritoryData()
     {
         TerritoryPickup[i] = -1;
         TerritoryLabel[i] = Text3D:INVALID_3DTEXT_ID;
+        TerritoryZone[i] = -1;
         TerritoryOwnerGangID[i] = 0;
         TerritoryOwnerColor[i] = COLOR_GRAY;
         format(TerritoryOwnerName[i], 64, "Neutral");
+
+        if (i < MAX_DEFAULT_TERRITORIES)
+        {
+            TerritoryEnabled[i] = 1;
+            TerritoryMinX[i] = TerritoryX[i] - TerritoryRadius[i];
+            TerritoryMinY[i] = TerritoryY[i] - TerritoryRadius[i];
+            TerritoryMaxX[i] = TerritoryX[i] + TerritoryRadius[i];
+            TerritoryMaxY[i] = TerritoryY[i] + TerritoryRadius[i];
+        }
+        else
+        {
+            TerritoryEnabled[i] = 0;
+            TerritoryX[i] = 0.0;
+            TerritoryY[i] = 0.0;
+            TerritoryZ[i] = 0.0;
+            TerritoryRadius[i] = 0.0;
+            TerritoryMinX[i] = 0.0;
+            TerritoryMinY[i] = 0.0;
+            TerritoryMaxX[i] = 0.0;
+            TerritoryMaxY[i] = 0.0;
+            format(TerritoryName[i], 64, "Empty Territory");
+        }
     }
 
     return 1;
@@ -5008,15 +5073,15 @@ stock CreateTerritoryGangZones()
             TerritoryZone[i] = -1;
         }
 
-        new Float:minX = TerritoryX[i] - TerritoryRadius[i];
-        new Float:minY = TerritoryY[i] - TerritoryRadius[i];
-        new Float:maxX = TerritoryX[i] + TerritoryRadius[i];
-        new Float:maxY = TerritoryY[i] + TerritoryRadius[i];
+        if (!TerritoryEnabled[i])
+        {
+            continue;
+        }
 
-        TerritoryZone[i] = GangZoneCreate(minX, minY, maxX, maxY);
+        TerritoryZone[i] = GangZoneCreate(TerritoryMinX[i], TerritoryMinY[i], TerritoryMaxX[i], TerritoryMaxY[i]);
     }
 
-    print("[LSIF] Territory colored GangZones created from territory center/radius.");
+    print("[SAIF] Dynamic territory GangZones created from DB rectangle/corners.");
     return 1;
 }
 
@@ -5128,6 +5193,16 @@ stock UpdateTerritoryMarkerLabel(territoryIndex)
         return 0;
     }
 
+    if (!TerritoryEnabled[territoryIndex])
+    {
+        if (TerritoryLabel[territoryIndex] != Text3D:INVALID_3DTEXT_ID)
+        {
+            Delete3DTextLabel(TerritoryLabel[territoryIndex]);
+            TerritoryLabel[territoryIndex] = Text3D:INVALID_3DTEXT_ID;
+        }
+        return 1;
+    }
+
     if (TerritoryLabel[territoryIndex] != Text3D:INVALID_3DTEXT_ID)
     {
         Delete3DTextLabel(TerritoryLabel[territoryIndex]);
@@ -5184,7 +5259,336 @@ stock RefreshAllPlayerMapIcons()
 stock LoadGangTerritories()
 {
     ResetGangTerritoryData();
-    mysql_tquery(g_SQL, "SELECT territory_index, owner_gang_id, owner_gang_name, owner_color FROM gang_territories ORDER BY territory_index ASC", "OnGangTerritoriesLoaded");
+    mysql_tquery(g_SQL, "SELECT territory_index, territory_name, owner_gang_id, owner_gang_name, owner_color, center_x, center_y, center_z, radius, min_x, min_y, max_x, max_y, enabled FROM gang_territories ORDER BY territory_index ASC", "OnGangTerritoriesLoaded");
+    return 1;
+}
+
+
+stock GetFreeTerritoryIndex()
+{
+    for (new i = 0; i < MAX_TERRITORIES; i++)
+    {
+        if (!TerritoryEnabled[i])
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+stock NormalizeTerritoryCorners(territoryIndex)
+{
+    if (!IsValidTerritoryIndex(territoryIndex)) return 0;
+
+    new Float:minX = TerritoryMinX[territoryIndex];
+    new Float:minY = TerritoryMinY[territoryIndex];
+    new Float:maxX = TerritoryMaxX[territoryIndex];
+    new Float:maxY = TerritoryMaxY[territoryIndex];
+
+    if (minX > maxX)
+    {
+        TerritoryMinX[territoryIndex] = maxX;
+        TerritoryMaxX[territoryIndex] = minX;
+    }
+
+    if (minY > maxY)
+    {
+        TerritoryMinY[territoryIndex] = maxY;
+        TerritoryMaxY[territoryIndex] = minY;
+    }
+
+    TerritoryX[territoryIndex] = (TerritoryMinX[territoryIndex] + TerritoryMaxX[territoryIndex]) / 2.0;
+    TerritoryY[territoryIndex] = (TerritoryMinY[territoryIndex] + TerritoryMaxY[territoryIndex]) / 2.0;
+
+    new Float:width = floatsqroot(floatpower(TerritoryMaxX[territoryIndex] - TerritoryMinX[territoryIndex], 2.0));
+    new Float:height = floatsqroot(floatpower(TerritoryMaxY[territoryIndex] - TerritoryMinY[territoryIndex], 2.0));
+    TerritoryRadius[territoryIndex] = (width > height) ? (width / 2.0) : (height / 2.0);
+    return 1;
+}
+
+stock SaveTerritoryGeometry(territoryIndex)
+{
+    if (!IsValidTerritoryIndex(territoryIndex)) return 0;
+
+    NormalizeTerritoryCorners(territoryIndex);
+
+    new query[768];
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "UPDATE gang_territories SET territory_name='%e', center_x=%f, center_y=%f, center_z=%f, radius=%f, min_x=%f, min_y=%f, max_x=%f, max_y=%f, enabled=%d, updated_at=NOW() WHERE territory_index=%d LIMIT 1",
+        TerritoryName[territoryIndex],
+        TerritoryX[territoryIndex],
+        TerritoryY[territoryIndex],
+        TerritoryZ[territoryIndex],
+        TerritoryRadius[territoryIndex],
+        TerritoryMinX[territoryIndex],
+        TerritoryMinY[territoryIndex],
+        TerritoryMaxX[territoryIndex],
+        TerritoryMaxY[territoryIndex],
+        TerritoryEnabled[territoryIndex],
+        territoryIndex + 1
+    );
+    mysql_tquery(g_SQL, query);
+    return 1;
+}
+
+stock RebuildTerritoryZone(territoryIndex)
+{
+    if (!IsValidTerritoryIndex(territoryIndex)) return 0;
+
+    if (TerritoryZone[territoryIndex] != -1)
+    {
+        for (new i = 0; i < MAX_PLAYERS; i++)
+        {
+            if (IsPlayerConnected(i))
+            {
+                GangZoneHideForPlayer(i, TerritoryZone[territoryIndex]);
+            }
+        }
+        GangZoneDestroy(TerritoryZone[territoryIndex]);
+        TerritoryZone[territoryIndex] = -1;
+    }
+
+    if (TerritoryEnabled[territoryIndex])
+    {
+        NormalizeTerritoryCorners(territoryIndex);
+        TerritoryZone[territoryIndex] = GangZoneCreate(TerritoryMinX[territoryIndex], TerritoryMinY[territoryIndex], TerritoryMaxX[territoryIndex], TerritoryMaxY[territoryIndex]);
+        RefreshTerritoryZoneForAll(territoryIndex);
+        UpdateTerritoryMarkerLabel(territoryIndex);
+        RefreshAllPlayerMapIcons();
+    }
+    else
+    {
+        UpdateTerritoryMarkerLabel(territoryIndex);
+        RefreshAllPlayerMapIcons();
+    }
+
+    return 1;
+}
+
+stock ShowTurfEditorMenu(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka Turf Zone Editor.");
+        return 0;
+    }
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_TURF_MENU,
+        DIALOG_STYLE_LIST,
+        "SAIF Turf Zone Editor",
+        "Create Turf\nList / Select Turf\nSelect Turf by ID\nReload Turf Zones\nRefresh Zones\nTurf Map",
+        "Select",
+        "Close"
+    );
+    return 1;
+}
+
+stock ShowTurfCreateDialog(playerid)
+{
+    ShowPlayerDialog(playerid, DIALOG_TURF_CREATE_INPUT, DIALOG_STYLE_INPUT, "Create Turf Zone", "Masukkan nama turf baru.\n\nTurf akan dibuat sebagai kotak kecil di posisi kamu.\nSetelah itu gunakan Corner 1 dan Corner 2.", "Create", "Back");
+    return 1;
+}
+
+stock ShowTurfListDialog(playerid)
+{
+    new body[2048];
+    new line[160];
+    format(body, sizeof(body), "ID\tName\tOwner\n");
+
+    for (new i = 0; i < MAX_TERRITORIES; i++)
+    {
+        if (!TerritoryEnabled[i]) continue;
+        format(line, sizeof(line), "%d\t%s\t%s\n", i + 1, TerritoryName[i], TerritoryOwnerName[i]);
+        strcat(body, line);
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_TURF_LIST, DIALOG_STYLE_TABLIST_HEADERS, "Dynamic Turf Zones", body, "Select", "Back");
+    return 1;
+}
+
+stock ShowTurfSelectInput(playerid)
+{
+    ShowPlayerDialog(playerid, DIALOG_TURF_INFO, DIALOG_STYLE_INPUT, "Select Turf by ID", "Masukkan ID turf yang ingin diedit.", "Select", "Back");
+    return 1;
+}
+
+stock ShowTurfActionDialog(playerid, territoryIndex)
+{
+    if (!IsValidTerritoryIndex(territoryIndex) || !TerritoryEnabled[territoryIndex])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Turf ID tidak valid / tidak aktif.");
+        return 0;
+    }
+
+    PlayerSelectedTurfIndex[playerid] = territoryIndex;
+
+    new title[96];
+    format(title, sizeof(title), "Turf Editor: %d - %s", territoryIndex + 1, TerritoryName[territoryIndex]);
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_TURF_ACTION_MENU,
+        DIALOG_STYLE_LIST,
+        title,
+        "Info\nSet Corner 1 to My Position\nSet Corner 2 to My Position\nGoto Center\nSet Owner Gang\nRename Turf\nDelete Turf\nReload Turf Zones",
+        "Select",
+        "Back"
+    );
+    return 1;
+}
+
+stock ShowTurfInfoDialog(playerid, territoryIndex)
+{
+    if (!IsValidTerritoryIndex(territoryIndex)) return 0;
+
+    new body[1024];
+    format(
+        body,
+        sizeof(body),
+        "ID: %d\nName: %s\nOwner: %s\nEnabled: %d\n\nCenter: %.2f, %.2f, %.2f\nRadius: %.2f\n\nCorner 1: %.2f, %.2f\nCorner 2: %.2f, %.2f\n\nGunakan Corner 1 dan Corner 2 untuk menggambar kotak turf.",
+        territoryIndex + 1,
+        TerritoryName[territoryIndex],
+        TerritoryOwnerName[territoryIndex],
+        TerritoryEnabled[territoryIndex],
+        TerritoryX[territoryIndex],
+        TerritoryY[territoryIndex],
+        TerritoryZ[territoryIndex],
+        TerritoryRadius[territoryIndex],
+        TerritoryMinX[territoryIndex],
+        TerritoryMinY[territoryIndex],
+        TerritoryMaxX[territoryIndex],
+        TerritoryMaxY[territoryIndex]
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_TURF_INFO, DIALOG_STYLE_MSGBOX, "Turf Zone Info", body, "Back", "Close");
+    return 1;
+}
+
+stock CreateTurfAtPlayer(playerid, const turfName[])
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuat turf zone.");
+        return 0;
+    }
+
+    new territoryIndex = GetFreeTerritoryIndex();
+    if (territoryIndex == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Slot territory penuh. Naikkan MAX_TERRITORIES jika perlu.");
+        return 0;
+    }
+
+    new Float:x, Float:y, Float:z;
+    GetPlayerPos(playerid, x, y, z);
+
+    TerritoryEnabled[territoryIndex] = 1;
+    format(TerritoryName[territoryIndex], 64, "%s", turfName);
+    TerritoryX[territoryIndex] = x;
+    TerritoryY[territoryIndex] = y;
+    TerritoryZ[territoryIndex] = z;
+    TerritoryRadius[territoryIndex] = 25.0;
+    TerritoryMinX[territoryIndex] = x - 25.0;
+    TerritoryMinY[territoryIndex] = y - 25.0;
+    TerritoryMaxX[territoryIndex] = x + 25.0;
+    TerritoryMaxY[territoryIndex] = y + 25.0;
+    TerritoryOwnerGangID[territoryIndex] = 0;
+    TerritoryOwnerColor[territoryIndex] = COLOR_GRAY;
+    format(TerritoryOwnerName[territoryIndex], 64, "Neutral");
+
+    new query[1024];
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO gang_territories (territory_index, territory_name, owner_gang_id, owner_gang_name, owner_color, center_x, center_y, center_z, radius, min_x, min_y, max_x, max_y, enabled) VALUES (%d, '%e', 0, 'Neutral', %d, %f, %f, %f, %f, %f, %f, %f, %f, 1) ON DUPLICATE KEY UPDATE territory_name=VALUES(territory_name), center_x=VALUES(center_x), center_y=VALUES(center_y), center_z=VALUES(center_z), radius=VALUES(radius), min_x=VALUES(min_x), min_y=VALUES(min_y), max_x=VALUES(max_x), max_y=VALUES(max_y), enabled=1, updated_at=NOW()",
+        territoryIndex + 1,
+        turfName,
+        COLOR_GRAY,
+        TerritoryX[territoryIndex],
+        TerritoryY[territoryIndex],
+        TerritoryZ[territoryIndex],
+        TerritoryRadius[territoryIndex],
+        TerritoryMinX[territoryIndex],
+        TerritoryMinY[territoryIndex],
+        TerritoryMaxX[territoryIndex],
+        TerritoryMaxY[territoryIndex]
+    );
+    mysql_tquery(g_SQL, query);
+
+    RebuildTerritoryZone(territoryIndex);
+
+    new msg[144];
+    format(msg, sizeof(msg), "Turf zone dibuat: ID %d - %s. Set corner 1/2 untuk menggambar area.", territoryIndex + 1, turfName);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    return 1;
+}
+
+stock SetTurfCornerFromPlayer(playerid, territoryIndex, corner)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa edit turf zone.");
+        return 0;
+    }
+
+    if (!IsValidTerritoryIndex(territoryIndex) || !TerritoryEnabled[territoryIndex])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Turf ID tidak valid.");
+        return 0;
+    }
+
+    new Float:x, Float:y, Float:z;
+    GetPlayerPos(playerid, x, y, z);
+
+    if (corner == 1)
+    {
+        TerritoryMinX[territoryIndex] = x;
+        TerritoryMinY[territoryIndex] = y;
+    }
+    else
+    {
+        TerritoryMaxX[territoryIndex] = x;
+        TerritoryMaxY[territoryIndex] = y;
+    }
+
+    TerritoryZ[territoryIndex] = z;
+    SaveTerritoryGeometry(territoryIndex);
+    RebuildTerritoryZone(territoryIndex);
+
+    new msg[144];
+    format(msg, sizeof(msg), "Corner %d turf %s diset ke posisi kamu.", corner, TerritoryName[territoryIndex]);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    return 1;
+}
+
+stock DeleteTurfZone(playerid, territoryIndex)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa delete turf zone.");
+        return 0;
+    }
+
+    if (!IsValidTerritoryIndex(territoryIndex) || !TerritoryEnabled[territoryIndex])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Turf ID tidak valid.");
+        return 0;
+    }
+
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE gang_territories SET enabled=0, updated_at=NOW() WHERE territory_index=%d LIMIT 1", territoryIndex + 1);
+    mysql_tquery(g_SQL, query);
+
+    TerritoryEnabled[territoryIndex] = 0;
+    RebuildTerritoryZone(territoryIndex);
+
+    SendClientMessage(playerid, COLOR_GREEN, "Turf zone dinonaktifkan/dihapus dari map.");
     return 1;
 }
 
@@ -7053,7 +7457,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.21D Object Editor UI");
+    SetGameModeText("SAIF Dev v0.21E.1 Turf Compile");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -7144,7 +7548,7 @@ public OnGameModeInit()
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
-    print("[SAIF] Gamemode v0.21D Dynamic Object Editor UI berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.21E Dynamic Turf Zone Editor berhasil dijalankan.");
     return 1;
 }
 
@@ -7617,6 +8021,199 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
     }
 
 
+
+    if (dialogid == DIALOG_TURF_MENU)
+    {
+        if (!response) return 1;
+
+        switch (listitem)
+        {
+            case 0: ShowTurfCreateDialog(playerid);
+            case 1: ShowTurfListDialog(playerid);
+            case 2: ShowTurfSelectInput(playerid);
+            case 3:
+            {
+                LoadGangTerritories();
+                SendClientMessage(playerid, COLOR_GREEN, "Turf zones direload dari database.");
+            }
+            case 4:
+            {
+                RefreshAllPlayerTerritoryZones();
+                SendClientMessage(playerid, COLOR_GREEN, "Turf colored zones direfresh untuk semua player.");
+            }
+            case 5: ShowTurfMapDialog(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_TURF_CREATE_INPUT)
+    {
+        if (!response)
+        {
+            ShowTurfEditorMenu(playerid);
+            return 1;
+        }
+
+        if (strlen(inputtext) < 3)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Nama turf minimal 3 karakter.");
+            ShowTurfCreateDialog(playerid);
+            return 1;
+        }
+
+        CreateTurfAtPlayer(playerid, inputtext);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_TURF_LIST)
+    {
+        if (!response)
+        {
+            ShowTurfEditorMenu(playerid);
+            return 1;
+        }
+
+        new count = 0;
+        for (new i = 0; i < MAX_TERRITORIES; i++)
+        {
+            if (!TerritoryEnabled[i]) continue;
+            if (count == listitem)
+            {
+                ShowTurfActionDialog(playerid, i);
+                return 1;
+            }
+            count++;
+        }
+
+        SendClientMessage(playerid, COLOR_RED, "Turf tidak ditemukan.");
+        return 1;
+    }
+
+    if (dialogid == DIALOG_TURF_INFO && response && strlen(inputtext) > 0)
+    {
+        if (IsNumericString(inputtext))
+        {
+            new territoryIndex = strval(inputtext) - 1;
+            ShowTurfActionDialog(playerid, territoryIndex);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_TURF_ACTION_MENU)
+    {
+        if (!response)
+        {
+            ShowTurfListDialog(playerid);
+            return 1;
+        }
+
+        new territoryIndex = PlayerSelectedTurfIndex[playerid];
+        if (!IsValidTerritoryIndex(territoryIndex))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Tidak ada turf yang dipilih.");
+            return 1;
+        }
+
+        switch (listitem)
+        {
+            case 0: ShowTurfInfoDialog(playerid, territoryIndex);
+            case 1: SetTurfCornerFromPlayer(playerid, territoryIndex, 1);
+            case 2: SetTurfCornerFromPlayer(playerid, territoryIndex, 2);
+            case 3: SetPlayerPos(playerid, TerritoryX[territoryIndex], TerritoryY[territoryIndex], TerritoryZ[territoryIndex] + 1.0);
+            case 4: ShowPlayerDialog(playerid, DIALOG_TURF_OWNER_INPUT, DIALOG_STYLE_INPUT, "Set Turf Owner", "Masukkan gang_id owner turf.\n0 = Neutral.\nLihat preset gang: /gangs", "Set", "Back");
+            case 5: ShowPlayerDialog(playerid, DIALOG_TURF_RENAME_INPUT, DIALOG_STYLE_INPUT, "Rename Turf", "Masukkan nama turf baru.", "Rename", "Back");
+            case 6: ShowPlayerDialog(playerid, DIALOG_TURF_DELETE_CONFIRM, DIALOG_STYLE_MSGBOX, "Delete Turf Zone", "Yakin ingin menonaktifkan turf ini dari map?", "Delete", "Back");
+            case 7:
+            {
+                LoadGangTerritories();
+                SendClientMessage(playerid, COLOR_GREEN, "Turf zones direload dari database.");
+            }
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_TURF_OWNER_INPUT)
+    {
+        if (!response)
+        {
+            ShowTurfActionDialog(playerid, PlayerSelectedTurfIndex[playerid]);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Gang ID harus angka.");
+            return 1;
+        }
+
+        new territoryIndex = PlayerSelectedTurfIndex[playerid];
+        new gangid = strval(inputtext);
+
+        if (!IsValidTerritoryIndex(territoryIndex)) return 1;
+
+        if (gangid <= 0)
+        {
+            TerritoryOwnerGangID[territoryIndex] = 0;
+            TerritoryOwnerColor[territoryIndex] = COLOR_GRAY;
+            format(TerritoryOwnerName[territoryIndex], 64, "Neutral");
+
+            new query[256];
+            mysql_format(g_SQL, query, sizeof(query), "UPDATE gang_territories SET owner_gang_id=0, owner_gang_name='Neutral', owner_color=%d, updated_at=NOW() WHERE territory_index=%d LIMIT 1", COLOR_GRAY, territoryIndex + 1);
+            mysql_tquery(g_SQL, query);
+            RefreshTerritoryZoneForAll(territoryIndex);
+            UpdateTerritoryMarkerLabel(territoryIndex);
+            SendClientMessage(playerid, COLOR_GREEN, "Turf owner diset ke Neutral.");
+            return 1;
+        }
+
+        if (!IsPresetGangID(gangid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Gang ID harus preset gang. Lihat /gangs.");
+            return 1;
+        }
+
+        new query[256];
+        mysql_format(g_SQL, query, sizeof(query), "SELECT name, gang_color FROM gangs WHERE id=%d LIMIT 1", gangid);
+        mysql_tquery(g_SQL, query, "OnGangTerritoryGangLookup", "iii", playerid, territoryIndex, gangid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_TURF_RENAME_INPUT)
+    {
+        if (!response)
+        {
+            ShowTurfActionDialog(playerid, PlayerSelectedTurfIndex[playerid]);
+            return 1;
+        }
+
+        if (strlen(inputtext) < 3)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Nama turf minimal 3 karakter.");
+            return 1;
+        }
+
+        new territoryIndex = PlayerSelectedTurfIndex[playerid];
+        if (!IsValidTerritoryIndex(territoryIndex)) return 1;
+
+        format(TerritoryName[territoryIndex], 64, "%s", inputtext);
+        SaveTerritoryGeometry(territoryIndex);
+        UpdateTerritoryMarkerLabel(territoryIndex);
+        SendClientMessage(playerid, COLOR_GREEN, "Nama turf berhasil diubah.");
+        return 1;
+    }
+
+    if (dialogid == DIALOG_TURF_DELETE_CONFIRM)
+    {
+        if (!response)
+        {
+            ShowTurfActionDialog(playerid, PlayerSelectedTurfIndex[playerid]);
+            return 1;
+        }
+
+        DeleteTurfZone(playerid, PlayerSelectedTurfIndex[playerid]);
+        return 1;
+    }
+
     if (dialogid == DIALOG_OBJ_MENU)
     {
         if (!response)
@@ -7823,9 +8420,19 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 
         format(PlayerPendingObjectLinkName[playerid], LOC_NAME_SIZE, "%s", inputtext);
 
-        new cmd[192];
-        format(cmd, sizeof(cmd), "/objtoloc %d %s %s", PlayerEditingObjectID[playerid], PlayerPendingObjectLinkType[playerid], PlayerPendingObjectLinkName[playerid]);
-        OnPlayerCommandText(playerid, cmd);
+        // Jangan lewat fake command, karena dialog async kadang tidak langsung
+        // menaruh location ke runtime. Panggil fungsi link langsung lalu lakukan
+        // delayed reload sebagai safety.
+        CreateLocationFromDynamicObject(
+            playerid,
+            PlayerEditingObjectID[playerid],
+            PlayerPendingObjectLinkType[playerid],
+            PlayerPendingObjectLinkName[playerid]
+        );
+
+        SetTimerEx("ReloadDynamicLocationsDelayed", 1000, false, "i", playerid);
+
+        SendClientMessage(playerid, COLOR_WHITE, "Tunggu 1 detik, lalu tekan ALT di dekat object/location tersebut.");
         ShowDynamicObjectActionMenu(playerid, PlayerEditingObjectID[playerid]);
         return 1;
     }
@@ -10347,6 +10954,22 @@ public OnDynamicLocationCreated(playerid)
     }
 
     LoadDynamicLocations();
+
+    // Safety reload: memastikan location hasil dialog/link async sudah masuk runtime
+    // sebelum dipakai ALT/Nearby Interaction.
+    SetTimerEx("ReloadDynamicLocationsDelayed", 700, false, "i", playerid);
+    return 1;
+}
+
+public ReloadDynamicLocationsDelayed(playerid)
+{
+    LoadDynamicLocations();
+
+    if (IsPlayerConnected(playerid))
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "Dynamic locations sudah disinkron ulang. Coba ALT di titik location.");
+    }
+
     return 1;
 }
 
@@ -14862,19 +15485,57 @@ public OnGangTerritoriesLoaded()
     new ownerGangID;
     new ownerColor;
     new ownerName[64];
+    new territoryName[64];
+    new enabled;
+    new Float:centerX, Float:centerY, Float:centerZ, Float:radius;
+    new Float:minX, Float:minY, Float:maxX, Float:maxY;
+
+    ResetGangTerritoryData();
 
     for (new i = 0; i < rows; i++)
     {
         cache_get_value_name_int(i, "territory_index", territoryIndex);
+        cache_get_value_name(i, "territory_name", territoryName, sizeof(territoryName));
         cache_get_value_name_int(i, "owner_gang_id", ownerGangID);
         cache_get_value_name(i, "owner_gang_name", ownerName, sizeof(ownerName));
         cache_get_value_name_int(i, "owner_color", ownerColor);
+        cache_get_value_name_float(i, "center_x", centerX);
+        cache_get_value_name_float(i, "center_y", centerY);
+        cache_get_value_name_float(i, "center_z", centerZ);
+        cache_get_value_name_float(i, "radius", radius);
+        cache_get_value_name_float(i, "min_x", minX);
+        cache_get_value_name_float(i, "min_y", minY);
+        cache_get_value_name_float(i, "max_x", maxX);
+        cache_get_value_name_float(i, "max_y", maxY);
+        cache_get_value_name_int(i, "enabled", enabled);
 
         territoryIndex--;
 
         if (!IsValidTerritoryIndex(territoryIndex))
         {
             continue;
+        }
+
+        TerritoryEnabled[territoryIndex] = enabled;
+        format(TerritoryName[territoryIndex], 64, "%s", territoryName);
+        TerritoryX[territoryIndex] = centerX;
+        TerritoryY[territoryIndex] = centerY;
+        TerritoryZ[territoryIndex] = centerZ;
+        TerritoryRadius[territoryIndex] = radius;
+
+        if (minX == 0.0 && minY == 0.0 && maxX == 0.0 && maxY == 0.0)
+        {
+            TerritoryMinX[territoryIndex] = centerX - radius;
+            TerritoryMinY[territoryIndex] = centerY - radius;
+            TerritoryMaxX[territoryIndex] = centerX + radius;
+            TerritoryMaxY[territoryIndex] = centerY + radius;
+        }
+        else
+        {
+            TerritoryMinX[territoryIndex] = minX;
+            TerritoryMinY[territoryIndex] = minY;
+            TerritoryMaxX[territoryIndex] = maxX;
+            TerritoryMaxY[territoryIndex] = maxY;
         }
 
         TerritoryOwnerGangID[territoryIndex] = ownerGangID;
@@ -14888,10 +15549,12 @@ public OnGangTerritoriesLoaded()
         }
     }
 
+    DestroyTerritoryGangZones();
+    CreateTerritoryGangZones();
     RefreshAllTerritoryLabels();
     RefreshAllPlayerMapIcons();
     RefreshAllPlayerTerritoryZones();
-    print("[LSIF] Gang territories ownership loaded and colored zones refreshed.");
+    print("[SAIF] Dynamic gang territories loaded and colored zones refreshed.");
     return 1;
 }
 
@@ -16384,6 +17047,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         }
 
         CreateLocationFromDynamicObject(playerid, strval(idStr), locType, locName);
+        SetTimerEx("ReloadDynamicLocationsDelayed", 1000, false, "i", playerid);
         return 1;
     }
 
@@ -16551,6 +17215,150 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+
+
+    if (!strcmp(cmdtext, "/turfmenu", true))
+    {
+        ShowTurfEditorMenu(playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/turfcreate ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuat turf zone.");
+            return 1;
+        }
+        CreateTurfAtPlayer(playerid, cmdtext[12]);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/turflist", true))
+    {
+        ShowTurfListDialog(playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/turfinfo ", true) == 0)
+    {
+        new idStr[16];
+        if (!GetOneParam(cmdtext[10], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /turfinfo [id]");
+            return 1;
+        }
+        ShowTurfInfoDialog(playerid, strval(idStr) - 1);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/turfsetcorner1 ", true) == 0)
+    {
+        new idStr[16];
+        if (!GetOneParam(cmdtext[16], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /turfsetcorner1 [id]");
+            return 1;
+        }
+        SetTurfCornerFromPlayer(playerid, strval(idStr) - 1, 1);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/turfsetcorner2 ", true) == 0)
+    {
+        new idStr[16];
+        if (!GetOneParam(cmdtext[16], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /turfsetcorner2 [id]");
+            return 1;
+        }
+        SetTurfCornerFromPlayer(playerid, strval(idStr) - 1, 2);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/turfgoto ", true) == 0)
+    {
+        new idStr[16];
+        if (!GetOneParam(cmdtext[10], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /turfgoto [id]");
+            return 1;
+        }
+        new territoryIndex = strval(idStr) - 1;
+        if (!IsValidTerritoryIndex(territoryIndex) || !TerritoryEnabled[territoryIndex])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Turf ID tidak valid.");
+            return 1;
+        }
+        SetPlayerPos(playerid, TerritoryX[territoryIndex], TerritoryY[territoryIndex], TerritoryZ[territoryIndex] + 1.0);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/turfowner ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner server yang bisa set turf owner.");
+            return 1;
+        }
+
+        new turfStr[16], gangStr[16];
+        if (!GetTwoParams(cmdtext[11], turfStr, sizeof(turfStr), gangStr, sizeof(gangStr)) || !IsNumericString(turfStr) || !IsNumericString(gangStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /turfowner [territory_id] [gang_id]");
+            return 1;
+        }
+
+        new territoryIndex = strval(turfStr) - 1;
+        new gangid = strval(gangStr);
+        if (!IsValidTerritoryIndex(territoryIndex))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Turf ID tidak valid.");
+            return 1;
+        }
+
+        if (gangid <= 0)
+        {
+            TerritoryOwnerGangID[territoryIndex] = 0;
+            TerritoryOwnerColor[territoryIndex] = COLOR_GRAY;
+            format(TerritoryOwnerName[territoryIndex], 64, "Neutral");
+            new query[256];
+            mysql_format(g_SQL, query, sizeof(query), "UPDATE gang_territories SET owner_gang_id=0, owner_gang_name='Neutral', owner_color=%d, updated_at=NOW() WHERE territory_index=%d LIMIT 1", COLOR_GRAY, territoryIndex + 1);
+            mysql_tquery(g_SQL, query);
+            RefreshTerritoryZoneForAll(territoryIndex);
+            UpdateTerritoryMarkerLabel(territoryIndex);
+            return 1;
+        }
+
+        if (!IsPresetGangID(gangid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Gang ID harus preset gang. Lihat /gangs.");
+            return 1;
+        }
+        new query[256];
+        mysql_format(g_SQL, query, sizeof(query), "SELECT name, gang_color FROM gangs WHERE id=%d LIMIT 1", gangid);
+        mysql_tquery(g_SQL, query, "OnGangTerritoryGangLookup", "iii", playerid, territoryIndex, gangid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/turfdelete ", true) == 0)
+    {
+        new idStr[16];
+        if (!GetOneParam(cmdtext[12], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /turfdelete [id]");
+            return 1;
+        }
+        DeleteTurfZone(playerid, strval(idStr) - 1);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/turfreload", true))
+    {
+        LoadGangTerritories();
+        SendClientMessage(playerid, COLOR_GREEN, "Turf zones direload dari database.");
+        return 1;
+    }
 
     if (!strcmp(cmdtext, "/gangmenu", true))
     {

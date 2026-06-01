@@ -320,6 +320,24 @@
 #define GANG_RANK_UNDERBOSS 4
 #define GANG_RANK_LEADER    5
 
+#define TURF_WAR_STATE_NONE            0
+#define TURF_WAR_STATE_CAPTURING       1
+#define TURF_WAR_STATE_CONTESTED       2
+#define TURF_WAR_STATE_ATTACKER_GRACE  3
+#define TURF_WAR_STATE_FINAL_CONTEST   4
+
+#define TURF_HOLD_SECONDS              5
+#define TURF_CAPTURE_SECONDS           180
+#define TURF_ATTACKER_GRACE_SECONDS    30
+#define TURF_WAR_TICK_INTERVAL         1000
+#define TURF_CAPTURE_PLAYER_REWARD     5000
+#define TURF_DEFEND_PLAYER_REWARD      3000
+#define TURF_CAPTURE_GANG_REWARD       15000
+#define TURF_DEFEND_GANG_REWARD        8000
+#define TURF_CAPTURE_XP                50
+#define TURF_DEFEND_XP                 30
+#define TURF_COOLDOWN_SECONDS          900
+
 #define MAX_BUSINESSES 5
 #define BUSINESS_ACCESS_RADIUS 5.0
 #define BUSINESS_SELL_PERCENT 70
@@ -391,6 +409,7 @@ new g_AutosaveTimer;
 
 new g_AntiCheatTimer;
 new g_FuelTimer;
+new g_TurfWarTimer;
 
 new g_ServerStartTick;
 
@@ -956,6 +975,18 @@ new TerritoryName[MAX_TERRITORIES][64] =
     "Empty Territory",
     "Empty Territory"
 };
+
+new TurfWarState[MAX_TERRITORIES];
+new TurfWarAttackerGangID[MAX_TERRITORIES];
+new TurfWarDefenderGangID[MAX_TERRITORIES];
+new TurfWarCaptureSecondsLeft[MAX_TERRITORIES];
+new TurfWarGraceSecondsLeft[MAX_TERRITORIES];
+new TurfWarCooldownUntil[MAX_TERRITORIES];
+
+new PlayerTurfHoldTerritory[MAX_PLAYERS];
+new PlayerTurfHoldGang[MAX_PLAYERS];
+new PlayerTurfHoldActive[MAX_PLAYERS];
+new PlayerTurfHoldStarted[MAX_PLAYERS];
 
 new GangColorValue[MAX_GANG_COLOR_PRESETS] =
 {
@@ -1624,6 +1655,8 @@ forward ApplySavedWeaponLoadout(playerid);
 forward OnGangTerritoriesLoaded();
 forward OnGangTerritoryGangLookup(playerid, territoryIndex, gangid);
 forward DelayedRefreshAllPlayerTerritoryZones();
+forward CompleteTurfChallengeHold(playerid, territoryIndex, gangid, startTick);
+forward TurfWarTick();
 forward OnGangColorUpdated(playerid, colorIndex);
 forward OnPlayerGangLoaded(playerid);
 forward OnGangCreated(playerid);
@@ -5431,6 +5464,404 @@ stock RebuildTerritoryZone(territoryIndex)
     return 1;
 }
 
+
+stock ResetTurfWarData()
+{
+    for (new i = 0; i < MAX_TERRITORIES; i++)
+    {
+        TurfWarState[i] = TURF_WAR_STATE_NONE;
+        TurfWarAttackerGangID[i] = 0;
+        TurfWarDefenderGangID[i] = 0;
+        TurfWarCaptureSecondsLeft[i] = 0;
+        TurfWarGraceSecondsLeft[i] = 0;
+        TurfWarCooldownUntil[i] = 0;
+    }
+
+    for (new p = 0; p < MAX_PLAYERS; p++)
+    {
+        PlayerTurfHoldTerritory[p] = -1;
+        PlayerTurfHoldGang[p] = 0;
+        PlayerTurfHoldActive[p] = 0;
+        PlayerTurfHoldStarted[p] = 0;
+    }
+
+    return 1;
+}
+
+stock IsPlayerInsideTerritory(playerid, territoryIndex)
+{
+    if (!IsPlayerConnected(playerid) || !IsValidTerritoryIndex(territoryIndex) || !TerritoryEnabled[territoryIndex]) return 0;
+
+    new Float:x, Float:y, Float:z;
+    GetPlayerPos(playerid, x, y, z);
+    NormalizeTerritoryCorners(territoryIndex);
+
+    if (x >= TerritoryMinX[territoryIndex] && x <= TerritoryMaxX[territoryIndex] && y >= TerritoryMinY[territoryIndex] && y <= TerritoryMaxY[territoryIndex]) return 1;
+    return 0;
+}
+
+stock GetPlayerCurrentTerritory(playerid)
+{
+    for (new i = 0; i < MAX_TERRITORIES; i++)
+    {
+        if (IsPlayerInsideTerritory(playerid, i)) return i;
+    }
+    return -1;
+}
+
+stock CountGangMembersInsideTerritory(gangid, territoryIndex)
+{
+    if (gangid <= 0) return 0;
+    new count = 0;
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!IsPlayerConnected(i) || !PlayerLoggedIn[i]) continue;
+        if (PlayerGangID[i] != gangid) continue;
+        if (IsPlayerInsideTerritory(i, territoryIndex)) count++;
+    }
+    return count;
+}
+
+stock SendTurfWarMessage(territoryIndex, color, const message[])
+{
+    if (!IsValidTerritoryIndex(territoryIndex)) return 0;
+    new attacker = TurfWarAttackerGangID[territoryIndex];
+    new defender = TurfWarDefenderGangID[territoryIndex];
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!IsPlayerConnected(i) || !PlayerLoggedIn[i]) continue;
+        if (PlayerGangID[i] == attacker || PlayerGangID[i] == defender) SendClientMessage(i, color, message);
+    }
+    return 1;
+}
+
+stock GetGangNameByID(gangid, gangName[], size)
+{
+    new gangIndex = GetPresetGangIndexByID(gangid);
+    if (gangIndex == -1)
+    {
+        format(gangName, size, "Neutral");
+        return 0;
+    }
+    format(gangName, size, "%s", PresetGangName[gangIndex]);
+    return 1;
+}
+
+stock CanPlayerChallengeTurf(playerid, territoryIndex)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid]) return 0;
+    if (PlayerGangID[playerid] <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus tergabung dalam gang untuk menantang turf.");
+        return 0;
+    }
+    if (!IsValidTerritoryIndex(territoryIndex) || !TerritoryEnabled[territoryIndex])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak berada di area turf yang valid.");
+        return 0;
+    }
+    if (!IsPlayerInsideTerritory(playerid, territoryIndex))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada di dalam area turf untuk challenge.");
+        return 0;
+    }
+    if (TerritoryOwnerGangID[territoryIndex] == PlayerGangID[playerid])
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Turf ini sudah dimiliki gang kamu.");
+        return 0;
+    }
+    if (TurfWarState[territoryIndex] != TURF_WAR_STATE_NONE)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Turf ini sedang dalam war.");
+        return 0;
+    }
+    if (TurfWarCooldownUntil[territoryIndex] > gettime())
+    {
+        new left = TurfWarCooldownUntil[territoryIndex] - gettime();
+        new msg[144];
+        format(msg, sizeof(msg), "Turf ini cooldown. Tunggu %d detik lagi.", left);
+        SendClientMessage(playerid, COLOR_YELLOW, msg);
+        return 0;
+    }
+    return 1;
+}
+
+stock CancelPlayerTurfHold(playerid, const reason[] = "")
+{
+    if (PlayerTurfHoldActive[playerid])
+    {
+        PlayerTurfHoldActive[playerid] = 0;
+        PlayerTurfHoldTerritory[playerid] = -1;
+        PlayerTurfHoldGang[playerid] = 0;
+        PlayerTurfHoldStarted[playerid] = 0;
+        if (strlen(reason) > 0) SendClientMessage(playerid, COLOR_YELLOW, reason);
+    }
+    return 1;
+}
+
+stock TryStartTurfChallengeHold(playerid)
+{
+    new territoryIndex = GetPlayerCurrentTerritory(playerid);
+    if (territoryIndex == -1) return 0;
+    if (!CanPlayerChallengeTurf(playerid, territoryIndex)) return 0;
+
+    PlayerTurfHoldActive[playerid] = 1;
+    PlayerTurfHoldTerritory[playerid] = territoryIndex;
+    PlayerTurfHoldGang[playerid] = PlayerGangID[playerid];
+    PlayerTurfHoldStarted[playerid] = GetTickCount();
+
+    GameTextForPlayer(playerid, "~r~Challenging Turf~n~~w~Hold ALT 5 seconds", 2500, 3);
+    SendClientMessage(playerid, COLOR_ORANGE, "Tahan ALT selama 5 detik untuk memulai turf war. Lepas ALT untuk batal.");
+    SetTimerEx("CompleteTurfChallengeHold", TURF_HOLD_SECONDS * 1000, false, "iiii", playerid, territoryIndex, PlayerGangID[playerid], PlayerTurfHoldStarted[playerid]);
+    return 1;
+}
+
+public CompleteTurfChallengeHold(playerid, territoryIndex, gangid, startTick)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid]) return 1;
+    if (!PlayerTurfHoldActive[playerid] || PlayerTurfHoldTerritory[playerid] != territoryIndex || PlayerTurfHoldGang[playerid] != gangid || PlayerTurfHoldStarted[playerid] != startTick) return 1;
+
+    new t_KEY:keys;
+    new updown;
+    new leftright;
+
+    GetPlayerKeys(playerid, keys, updown, leftright);
+    if (!(keys & KEY_WALK))
+    {
+        CancelPlayerTurfHold(playerid, "Challenge turf dibatalkan karena ALT dilepas.");
+        return 1;
+    }
+    if (!IsPlayerInsideTerritory(playerid, territoryIndex))
+    {
+        CancelPlayerTurfHold(playerid, "Challenge turf dibatalkan karena kamu keluar area.");
+        return 1;
+    }
+
+    PlayerTurfHoldActive[playerid] = 0;
+    StartTurfWar(playerid, territoryIndex);
+    return 1;
+}
+
+stock StartTurfWar(playerid, territoryIndex)
+{
+    if (!CanPlayerChallengeTurf(playerid, territoryIndex)) return 0;
+    TurfWarState[territoryIndex] = TURF_WAR_STATE_CAPTURING;
+    TurfWarAttackerGangID[territoryIndex] = PlayerGangID[playerid];
+    TurfWarDefenderGangID[territoryIndex] = TerritoryOwnerGangID[territoryIndex];
+    TurfWarCaptureSecondsLeft[territoryIndex] = TURF_CAPTURE_SECONDS;
+    TurfWarGraceSecondsLeft[territoryIndex] = 0;
+
+    new msg[192];
+    format(msg, sizeof(msg), "[TURF WAR] %s diserang oleh %s! Timer capture: %d detik.", TerritoryName[territoryIndex], PlayerGangName[playerid], TURF_CAPTURE_SECONDS);
+    SendClientMessageToAll(COLOR_ORANGE, msg);
+    GameTextForPlayer(playerid, "~r~TURF WAR STARTED", 3000, 3);
+
+    if (TerritoryZone[territoryIndex] != -1)
+    {
+        new flashColor = (PlayerGangColor[playerid] & 0xFFFFFF00) | 0x99;
+        for (new i = 0; i < MAX_PLAYERS; i++)
+        {
+            if (IsPlayerConnected(i)) GangZoneFlashForPlayer(i, TerritoryZone[territoryIndex], flashColor);
+        }
+    }
+    return 1;
+}
+
+stock StopTurfWarFlash(territoryIndex)
+{
+    if (!IsValidTerritoryIndex(territoryIndex) || TerritoryZone[territoryIndex] == -1) return 0;
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (IsPlayerConnected(i)) GangZoneStopFlashForPlayer(i, TerritoryZone[territoryIndex]);
+    }
+    return 1;
+}
+
+stock ResetTurfWarState(territoryIndex)
+{
+    if (!IsValidTerritoryIndex(territoryIndex)) return 0;
+    StopTurfWarFlash(territoryIndex);
+    TurfWarState[territoryIndex] = TURF_WAR_STATE_NONE;
+    TurfWarAttackerGangID[territoryIndex] = 0;
+    TurfWarDefenderGangID[territoryIndex] = 0;
+    TurfWarCaptureSecondsLeft[territoryIndex] = 0;
+    TurfWarGraceSecondsLeft[territoryIndex] = 0;
+    RefreshTerritoryZoneForAll(territoryIndex);
+    return 1;
+}
+
+stock SetTerritoryOwnerFromGang(territoryIndex, gangid)
+{
+    if (!IsValidTerritoryIndex(territoryIndex) || !IsPresetGangID(gangid)) return 0;
+    new gangIndex = GetPresetGangIndexByID(gangid);
+    TerritoryOwnerGangID[territoryIndex] = gangid;
+    TerritoryOwnerColor[territoryIndex] = PresetGangColor[gangIndex];
+    format(TerritoryOwnerName[territoryIndex], 64, "%s", PresetGangName[gangIndex]);
+
+    new query[512];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE gang_territories SET owner_gang_id=%d, owner_gang_name='%e', owner_color=%d, updated_at=NOW() WHERE territory_index=%d LIMIT 1", gangid, TerritoryOwnerName[territoryIndex], TerritoryOwnerColor[territoryIndex], territoryIndex + 1);
+    mysql_tquery(g_SQL, query);
+    RebuildTerritoryZone(territoryIndex);
+    return 1;
+}
+
+stock RewardGangTurf(gangid, reward, reputation)
+{
+    if (gangid <= 0) return 0;
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE gangs SET bank_money=bank_money+%d, reputation=reputation+%d WHERE id=%d LIMIT 1", reward, reputation, gangid);
+    mysql_tquery(g_SQL, query);
+    return 1;
+}
+
+stock RewardGangMembersInside(gangid, territoryIndex, cash, xp)
+{
+    if (gangid <= 0) return 0;
+    new msg[144];
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!IsPlayerConnected(i) || !PlayerLoggedIn[i]) continue;
+        if (PlayerGangID[i] != gangid) continue;
+        if (!IsPlayerInsideTerritory(i, territoryIndex)) continue;
+        GivePlayerCash(i, cash);
+        GivePlayerXPEx(i, xp);
+        SavePlayerData(i);
+        format(msg, sizeof(msg), "Turf reward: +$%d +%d XP.", cash, xp);
+        SendClientMessage(i, COLOR_GREEN, msg);
+    }
+    return 1;
+}
+
+stock CompleteTurfCapture(territoryIndex)
+{
+    new attacker = TurfWarAttackerGangID[territoryIndex];
+    if (attacker <= 0) return 0;
+    new attackerName[64];
+    GetGangNameByID(attacker, attackerName, sizeof(attackerName));
+    SetTerritoryOwnerFromGang(territoryIndex, attacker);
+    RewardGangTurf(attacker, TURF_CAPTURE_GANG_REWARD, 10);
+    RewardGangMembersInside(attacker, territoryIndex, TURF_CAPTURE_PLAYER_REWARD, TURF_CAPTURE_XP);
+    new msg[192];
+    format(msg, sizeof(msg), "[TURF CAPTURED] %s berhasil dikuasai oleh %s.", TerritoryName[territoryIndex], attackerName);
+    SendClientMessageToAll(COLOR_GREEN, msg);
+    LogAdminAction(INVALID_PLAYER_ID, INVALID_PLAYER_ID, "TURF_CAPTURE", msg);
+    TurfWarCooldownUntil[territoryIndex] = gettime() + TURF_COOLDOWN_SECONDS;
+    ResetTurfWarState(territoryIndex);
+    return 1;
+}
+
+stock CompleteTurfDefend(territoryIndex)
+{
+    new defender = TurfWarDefenderGangID[territoryIndex];
+    if (defender <= 0)
+    {
+        new msgNeutral[160];
+        format(msgNeutral, sizeof(msgNeutral), "[TURF CANCELLED] %s tetap Neutral karena attacker gagal bertahan.", TerritoryName[territoryIndex]);
+        SendClientMessageToAll(COLOR_YELLOW, msgNeutral);
+        TurfWarCooldownUntil[territoryIndex] = gettime() + 180;
+        ResetTurfWarState(territoryIndex);
+        return 1;
+    }
+    RewardGangTurf(defender, TURF_DEFEND_GANG_REWARD, 5);
+    RewardGangMembersInside(defender, territoryIndex, TURF_DEFEND_PLAYER_REWARD, TURF_DEFEND_XP);
+    new defenderName[64];
+    GetGangNameByID(defender, defenderName, sizeof(defenderName));
+    new msg[192];
+    format(msg, sizeof(msg), "[TURF DEFENDED] %s berhasil dipertahankan oleh %s.", TerritoryName[territoryIndex], defenderName);
+    SendClientMessageToAll(COLOR_CYAN, msg);
+    LogAdminAction(INVALID_PLAYER_ID, INVALID_PLAYER_ID, "TURF_DEFEND", msg);
+    TurfWarCooldownUntil[territoryIndex] = gettime() + TURF_COOLDOWN_SECONDS;
+    ResetTurfWarState(territoryIndex);
+    return 1;
+}
+
+stock CancelTurfWar(territoryIndex, const reason[])
+{
+    if (!IsValidTerritoryIndex(territoryIndex) || TurfWarState[territoryIndex] == TURF_WAR_STATE_NONE) return 0;
+    new msg[192];
+    format(msg, sizeof(msg), "[TURF CANCELLED] %s: %s", TerritoryName[territoryIndex], reason);
+    SendClientMessageToAll(COLOR_YELLOW, msg);
+    LogAdminAction(INVALID_PLAYER_ID, INVALID_PLAYER_ID, "TURF_CANCEL", msg);
+    TurfWarCooldownUntil[territoryIndex] = gettime() + 180;
+    ResetTurfWarState(territoryIndex);
+    return 1;
+}
+
+public TurfWarTick()
+{
+    for (new t = 0; t < MAX_TERRITORIES; t++)
+    {
+        if (!TerritoryEnabled[t] || TurfWarState[t] == TURF_WAR_STATE_NONE) continue;
+        new attacker = TurfWarAttackerGangID[t];
+        new defender = TurfWarDefenderGangID[t];
+        new attackerCount = CountGangMembersInsideTerritory(attacker, t);
+        new defenderCount = CountGangMembersInsideTerritory(defender, t);
+
+        if (attackerCount <= 0)
+        {
+            if (TurfWarState[t] != TURF_WAR_STATE_ATTACKER_GRACE)
+            {
+                TurfWarState[t] = TURF_WAR_STATE_ATTACKER_GRACE;
+                TurfWarGraceSecondsLeft[t] = TURF_ATTACKER_GRACE_SECONDS;
+                new msg[160];
+                format(msg, sizeof(msg), "[TURF] Tidak ada attacker di %s. Kembali dalam %d detik atau turf defended.", TerritoryName[t], TURF_ATTACKER_GRACE_SECONDS);
+                SendTurfWarMessage(t, COLOR_YELLOW, msg);
+            }
+            else
+            {
+                TurfWarGraceSecondsLeft[t]--;
+                if (TurfWarGraceSecondsLeft[t] <= 0) CompleteTurfDefend(t);
+            }
+            continue;
+        }
+
+        if (TurfWarState[t] == TURF_WAR_STATE_ATTACKER_GRACE)
+        {
+            TurfWarState[t] = TURF_WAR_STATE_CAPTURING;
+            TurfWarGraceSecondsLeft[t] = 0;
+            SendTurfWarMessage(t, COLOR_GREEN, "[TURF] Attacker kembali ke area. Capture dilanjutkan.");
+        }
+
+        if (TurfWarCaptureSecondsLeft[t] > 0)
+        {
+            TurfWarCaptureSecondsLeft[t]--;
+            TurfWarState[t] = (defenderCount > 0) ? TURF_WAR_STATE_CONTESTED : TURF_WAR_STATE_CAPTURING;
+            if (TurfWarCaptureSecondsLeft[t] == 120 || TurfWarCaptureSecondsLeft[t] == 60 || TurfWarCaptureSecondsLeft[t] == 30 || TurfWarCaptureSecondsLeft[t] == 10)
+            {
+                new msg[160];
+                format(msg, sizeof(msg), "[TURF] %s capture time left: %d detik. Attacker: %d | Defender: %d", TerritoryName[t], TurfWarCaptureSecondsLeft[t], attackerCount, defenderCount);
+                SendTurfWarMessage(t, COLOR_ORANGE, msg);
+            }
+            continue;
+        }
+
+        if (defenderCount > 0)
+        {
+            TurfWarState[t] = TURF_WAR_STATE_FINAL_CONTEST;
+            GameTextForAll("~r~TURF CONTESTED", 1200, 3);
+            continue;
+        }
+        CompleteTurfCapture(t);
+    }
+    return 1;
+}
+
+stock ShowTurfStatus(playerid)
+{
+    SendClientMessage(playerid, COLOR_YELLOW, "========== TURF WAR STATUS ==========");
+    new found = 0;
+    new msg[192];
+    for (new t = 0; t < MAX_TERRITORIES; t++)
+    {
+        if (TurfWarState[t] == TURF_WAR_STATE_NONE) continue;
+        found = 1;
+        format(msg, sizeof(msg), "%d. %s | State %d | Attacker %d | Defender %d | Timer %d | Grace %d", t + 1, TerritoryName[t], TurfWarState[t], TurfWarAttackerGangID[t], TurfWarDefenderGangID[t], TurfWarCaptureSecondsLeft[t], TurfWarGraceSecondsLeft[t]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+    }
+    if (!found) SendClientMessage(playerid, COLOR_WHITE, "Tidak ada turf war aktif.");
+    return 1;
+}
+
 stock ShowTurfEditorMenu(playerid)
 {
     if (!IsAdminLevel(playerid, ADMIN_OWNER))
@@ -7560,7 +7991,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.21E.3 Turf Zone Fix");
+    SetGameModeText("SAIF Dev v0.22A Turf War");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -7640,10 +8071,13 @@ public OnGameModeInit()
     g_AutosaveTimer = SetTimer("AutoSavePlayers", AUTOSAVE_INTERVAL, true);
     g_AntiCheatTimer = SetTimer("AntiCheatCheck", ANTICHEAT_INTERVAL, true);
     g_FuelTimer = SetTimer("FuelSystemTick", FUEL_TIMER_INTERVAL, true);
+    ResetTurfWarData();
+    g_TurfWarTimer = SetTimer("TurfWarTick", TURF_WAR_TICK_INTERVAL, true);
 
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
     print("[LSIF] Anti-cheat timer aktif setiap 10 detik.");
     print("[LSIF] Fuel system timer aktif setiap 60 detik.");
+    print("[SAIF] Turf war timer aktif setiap 1 detik.");
     print("[LSIF] Closed beta whitelist system aktif.");
     print("[LSIF] Manual vehicle engine mode aktif.");
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
@@ -7651,7 +8085,7 @@ public OnGameModeInit()
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
-    print("[SAIF] Gamemode v0.21E.3 Turf Zone Fix Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.22A Turf War Basic berhasil dijalankan.");
     return 1;
 }
 
@@ -7676,6 +8110,12 @@ public OnGameModeExit()
     {
         KillTimer(g_FuelTimer);
         g_FuelTimer = 0;
+    }
+
+    if (g_TurfWarTimer)
+    {
+        KillTimer(g_TurfWarTimer);
+        g_TurfWarTimer = 0;
     }
 
     DestroyDynamicWorldObjects();
@@ -7720,6 +8160,7 @@ public OnPlayerConnect(playerid)
 
 public OnPlayerDisconnect(playerid, reason)
 {
+    CancelPlayerTurfHold(playerid);
     SavePlayerData(playerid);
     SaveOwnedVehicle(playerid);
     RemoveLSIFMapIcons(playerid);
@@ -16835,7 +17276,18 @@ public OnPlayerKeyStateChange(playerid, KEY:newkeys, KEY:oldkeys)
 
     if ((newkeys & KEY_WALK) && !(oldkeys & KEY_WALK))
     {
+        if (TryStartTurfChallengeHold(playerid))
+        {
+            return 1;
+        }
+
         HandleWorldInteractKey(playerid);
+        return 1;
+    }
+
+    if (!(newkeys & KEY_WALK) && (oldkeys & KEY_WALK))
+    {
+        CancelPlayerTurfHold(playerid, "Challenge turf dibatalkan karena ALT dilepas.");
         return 1;
     }
 
@@ -17217,6 +17669,51 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         ApplyLSIFMapIcons(playerid);
         SendClientMessage(playerid, COLOR_GREEN, "Map icon dan territory zone LSIF sudah direfresh.");
+        return 1;
+    }
+
+
+    if (!strcmp(cmdtext, "/turfstatus", true))
+    {
+        ShowTurfStatus(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/challengeturf", true))
+    {
+        new territoryIndex = GetPlayerCurrentTerritory(playerid);
+        if (territoryIndex == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu tidak berada di area turf.");
+            return 1;
+        }
+
+        StartTurfWar(playerid, territoryIndex);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/cancelturfwar ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa cancel turf war.");
+            return 1;
+        }
+
+        new idStr[16];
+        if (!GetOneParam(cmdtext[15], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /cancelturfwar [turf_id]");
+            return 1;
+        }
+
+        CancelTurfWar(strval(idStr) - 1, "Cancelled by Owner.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/cancelturfwar", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /cancelturfwar [turf_id]");
         return 1;
     }
 
@@ -17683,6 +18180,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/maplegend - Penjelasan icon radar/map LSIF");
         SendClientMessage(playerid, COLOR_WHITE, "/refreshicons - Refresh icon radar/map LSIF");
         SendClientMessage(playerid, COLOR_WHITE, "/refreshzones - Refresh blok warna territory/turf");
+        SendClientMessage(playerid, COLOR_WHITE, "/turfstatus - Lihat turf war aktif");
+        SendClientMessage(playerid, COLOR_WHITE, "/challengeturf - Fallback start turf war");
         SendClientMessage(playerid, COLOR_WHITE, "/weaponshop - Buka Ammu-Nation Weapon Shop, harus dekat Ammu-Nation");
         SendClientMessage(playerid, COLOR_WHITE, "/weaponinfo - Lihat daftar weapon dan harga");
         SendClientMessage(playerid, COLOR_WHITE, "/weaponlicense - Cek status weapon license");

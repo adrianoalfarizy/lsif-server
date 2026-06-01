@@ -8200,7 +8200,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.22A.4 Help Dialog");
+    SetGameModeText("SAIF Dev v0.22A.5 Help Role");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -8294,7 +8294,7 @@ public OnGameModeInit()
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
-    print("[SAIF] Gamemode v0.22A.4 Help Dialog berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.22A.5 Help Role berhasil dijalankan.");
     return 1;
 }
 
@@ -8774,9 +8774,13 @@ stock ShowHelpMenu(playerid)
     strcat(menu, "Gang & Turf War\n", sizeof(menu));
     strcat(menu, "Weapon & Ammu-Nation\n", sizeof(menu));
     strcat(menu, "Race\n", sizeof(menu));
-    strcat(menu, "Beta & Feedback\n", sizeof(menu));
-    strcat(menu, "Map / World Editor\n", sizeof(menu));
-    strcat(menu, "Admin Tools", sizeof(menu));
+    strcat(menu, "Beta & Feedback", sizeof(menu));
+
+    if (IsAdminLevel(playerid, ADMIN_HELPER))
+    {
+        strcat(menu, "\nMap / World Editor", sizeof(menu));
+        strcat(menu, "\nAdmin Tools", sizeof(menu));
+    }
 
     ShowPlayerDialog(playerid, DIALOG_HELP_MENU, DIALOG_STYLE_LIST, "SAIF Help - Pilih Kategori", menu, "Buka", "Tutup");
     return 1;
@@ -8928,6 +8932,12 @@ stock ShowHelpCategory(playerid, category)
         }
         case 11:
         {
+            if (!IsAdminLevel(playerid, ADMIN_HELPER))
+            {
+                SendClientMessage(playerid, COLOR_RED, "Kategori ini hanya untuk admin.");
+                ShowHelpMenu(playerid);
+                return 1;
+            }
             format(title, sizeof(title), "Help - Map / World Editor");
             strcat(body, "Owner/Admin world tools.\n", sizeof(body));
             strcat(body, "/locmenu: dynamic location editor.\n", sizeof(body));
@@ -8943,6 +8953,12 @@ stock ShowHelpCategory(playerid, category)
         }
         case 12:
         {
+            if (!IsAdminLevel(playerid, ADMIN_HELPER))
+            {
+                SendClientMessage(playerid, COLOR_RED, "Kategori ini hanya untuk admin.");
+                ShowHelpMenu(playerid);
+                return 1;
+            }
             format(title, sizeof(title), "Help - Admin Tools");
             strcat(body, "/admins: admin online.\n", sizeof(body));
             strcat(body, "/ahelp: command admin lengkap.\n", sizeof(body));
@@ -18742,7 +18758,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.22A.4 Help Dialog (SAIF candidate)");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.22A.5 Help Role (SAIF candidate)");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -18751,7 +18767,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.22A.4: /help menjadi Dialog UI berkategori.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.22A.5: /help menyembunyikan kategori admin dari non-admin.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A.3: Runtime turf war config untuk balancing/testing.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A.2: Turf HUD compact menggunakan TextDraw kecil.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A: Basic turf war system.");

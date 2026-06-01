@@ -5099,6 +5099,37 @@ stock DestroyTerritoryGangZones()
     return 1;
 }
 
+stock DestroyTerritoryRuntime()
+{
+    for (new i = 0; i < MAX_TERRITORIES; i++)
+    {
+        if (TerritoryLabel[i] != Text3D:INVALID_3DTEXT_ID)
+        {
+            Delete3DTextLabel(TerritoryLabel[i]);
+            TerritoryLabel[i] = Text3D:INVALID_3DTEXT_ID;
+        }
+
+        if (TerritoryPickup[i] != -1)
+        {
+            DestroyPickup(TerritoryPickup[i]);
+            TerritoryPickup[i] = -1;
+        }
+    }
+
+    DestroyTerritoryGangZones();
+    return 1;
+}
+
+stock RefreshAllTerritoryRuntime()
+{
+    DestroyTerritoryGangZones();
+    CreateTerritoryGangZones();
+    RefreshAllTerritoryLabels();
+    RefreshAllPlayerTerritoryZones();
+    RefreshAllPlayerMapIcons();
+    return 1;
+}
+
 stock ApplyTerritoryZones(playerid)
 {
     for (new i = 0; i < MAX_TERRITORIES; i++)
@@ -5258,6 +5289,8 @@ stock RefreshAllPlayerMapIcons()
 
 stock LoadGangTerritories()
 {
+    // Runtime must be destroyed BEFORE reset, otherwise old 3D label / GangZone handles are lost.
+    DestroyTerritoryRuntime();
     ResetGangTerritoryData();
     mysql_tquery(g_SQL, "SELECT territory_index, territory_name, owner_gang_id, owner_gang_name, owner_color, center_x, center_y, center_z, radius, min_x, min_y, max_x, max_y, enabled FROM gang_territories ORDER BY territory_index ASC", "OnGangTerritoriesLoaded");
     return 1;
@@ -5351,20 +5384,29 @@ stock RebuildTerritoryZone(territoryIndex)
         TerritoryZone[territoryIndex] = -1;
     }
 
+    if (TerritoryLabel[territoryIndex] != Text3D:INVALID_3DTEXT_ID)
+    {
+        Delete3DTextLabel(TerritoryLabel[territoryIndex]);
+        TerritoryLabel[territoryIndex] = Text3D:INVALID_3DTEXT_ID;
+    }
+
+    if (TerritoryPickup[territoryIndex] != -1)
+    {
+        DestroyPickup(TerritoryPickup[territoryIndex]);
+        TerritoryPickup[territoryIndex] = -1;
+    }
+
     if (TerritoryEnabled[territoryIndex])
     {
         NormalizeTerritoryCorners(territoryIndex);
         TerritoryZone[territoryIndex] = GangZoneCreate(TerritoryMinX[territoryIndex], TerritoryMinY[territoryIndex], TerritoryMaxX[territoryIndex], TerritoryMaxY[territoryIndex]);
-        RefreshTerritoryZoneForAll(territoryIndex);
         UpdateTerritoryMarkerLabel(territoryIndex);
-        RefreshAllPlayerMapIcons();
-    }
-    else
-    {
-        UpdateTerritoryMarkerLabel(territoryIndex);
-        RefreshAllPlayerMapIcons();
     }
 
+    // Full refresh is intentionally used here. GangZone visibility is per player, and a full refresh
+    // avoids missing colored blocks after corner/owner/delete edits.
+    RefreshAllPlayerTerritoryZones();
+    RefreshAllPlayerMapIcons();
     return 1;
 }
 
@@ -5581,12 +5623,43 @@ stock DeleteTurfZone(playerid, territoryIndex)
         return 0;
     }
 
-    new query[256];
-    mysql_format(g_SQL, query, sizeof(query), "UPDATE gang_territories SET enabled=0, updated_at=NOW() WHERE territory_index=%d LIMIT 1", territoryIndex + 1);
-    mysql_tquery(g_SQL, query);
+    // Clean runtime FIRST so 3D label / zone does not become orphan.
+    if (TerritoryZone[territoryIndex] != -1)
+    {
+        for (new i = 0; i < MAX_PLAYERS; i++)
+        {
+            if (IsPlayerConnected(i))
+            {
+                GangZoneHideForPlayer(i, TerritoryZone[territoryIndex]);
+            }
+        }
+        GangZoneDestroy(TerritoryZone[territoryIndex]);
+        TerritoryZone[territoryIndex] = -1;
+    }
+
+    if (TerritoryLabel[territoryIndex] != Text3D:INVALID_3DTEXT_ID)
+    {
+        Delete3DTextLabel(TerritoryLabel[territoryIndex]);
+        TerritoryLabel[territoryIndex] = Text3D:INVALID_3DTEXT_ID;
+    }
+
+    if (TerritoryPickup[territoryIndex] != -1)
+    {
+        DestroyPickup(TerritoryPickup[territoryIndex]);
+        TerritoryPickup[territoryIndex] = -1;
+    }
 
     TerritoryEnabled[territoryIndex] = 0;
-    RebuildTerritoryZone(territoryIndex);
+    TerritoryOwnerGangID[territoryIndex] = 0;
+    TerritoryOwnerColor[territoryIndex] = COLOR_GRAY;
+    format(TerritoryOwnerName[territoryIndex], 64, "Neutral");
+
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE gang_territories SET enabled=0, owner_gang_id=0, owner_gang_name='Neutral', owner_color=%d, updated_at=NOW() WHERE territory_index=%d LIMIT 1", COLOR_GRAY, territoryIndex + 1);
+    mysql_tquery(g_SQL, query);
+
+    RefreshAllPlayerTerritoryZones();
+    RefreshAllPlayerMapIcons();
 
     SendClientMessage(playerid, COLOR_GREEN, "Turf zone dinonaktifkan/dihapus dari map.");
     return 1;
@@ -7457,7 +7530,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.21E.1 Turf Compile");
+    SetGameModeText("SAIF Dev v0.21E.2 Turf Runtime");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -7548,7 +7621,7 @@ public OnGameModeInit()
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
-    print("[SAIF] Gamemode v0.21E Dynamic Turf Zone Editor berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.21E.2 Turf Runtime Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -15490,6 +15563,7 @@ public OnGangTerritoriesLoaded()
     new Float:centerX, Float:centerY, Float:centerZ, Float:radius;
     new Float:minX, Float:minY, Float:maxX, Float:maxY;
 
+    DestroyTerritoryRuntime();
     ResetGangTerritoryData();
 
     for (new i = 0; i < rows; i++)
@@ -15549,11 +15623,7 @@ public OnGangTerritoriesLoaded()
         }
     }
 
-    DestroyTerritoryGangZones();
-    CreateTerritoryGangZones();
-    RefreshAllTerritoryLabels();
-    RefreshAllPlayerMapIcons();
-    RefreshAllPlayerTerritoryZones();
+    RefreshAllTerritoryRuntime();
     print("[SAIF] Dynamic gang territories loaded and colored zones refreshed.");
     return 1;
 }
@@ -15608,9 +15678,7 @@ public OnGangTerritoryGangLookup(playerid, territoryIndex, gangid)
     );
     mysql_tquery(g_SQL, query);
 
-    UpdateTerritoryMarkerLabel(territoryIndex);
-    RefreshTerritoryZoneForAll(territoryIndex);
-    RefreshAllPlayerMapIcons();
+    RebuildTerritoryZone(territoryIndex);
 
     new msg[144];
     format(msg, sizeof(msg), "Territory %s sekarang dimiliki gang %s.", TerritoryName[territoryIndex], gangName);
@@ -17325,8 +17393,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
             new query[256];
             mysql_format(g_SQL, query, sizeof(query), "UPDATE gang_territories SET owner_gang_id=0, owner_gang_name='Neutral', owner_color=%d, updated_at=NOW() WHERE territory_index=%d LIMIT 1", COLOR_GRAY, territoryIndex + 1);
             mysql_tquery(g_SQL, query);
-            RefreshTerritoryZoneForAll(territoryIndex);
-            UpdateTerritoryMarkerLabel(territoryIndex);
+            RebuildTerritoryZone(territoryIndex);
             return 1;
         }
 
@@ -17357,6 +17424,19 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         LoadGangTerritories();
         SendClientMessage(playerid, COLOR_GREEN, "Turf zones direload dari database.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/turfclean", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa clean turf runtime.");
+            return 1;
+        }
+        DestroyTerritoryRuntime();
+        LoadGangTerritories();
+        SendClientMessage(playerid, COLOR_GREEN, "Turf runtime dibersihkan dan direload dari database.");
         return 1;
     }
 

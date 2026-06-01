@@ -419,6 +419,10 @@ new PlayerLastACWarningTick[MAX_PLAYERS];
 new PlayerLastWhitelistQuery[MAX_PLAYERS][24];
 new PlayerStarterPackClaimed[MAX_PLAYERS];
 
+new PlayerText:TurfHudTextDraw[MAX_PLAYERS];
+new PlayerTurfHudCreated[MAX_PLAYERS];
+new PlayerTurfHudVisible[MAX_PLAYERS];
+
 new PlayerDBID[MAX_PLAYERS];
 new PlayerLoggedIn[MAX_PLAYERS];
 new PlayerAuthDialogShown[MAX_PLAYERS];
@@ -1864,6 +1868,7 @@ stock ResetPlayerAccountData(playerid)
     PlayerLastACWarningTick[playerid] = 0;
     format(PlayerLastWhitelistQuery[playerid], 24, "-");
     PlayerStarterPackClaimed[playerid] = 0;
+    PlayerTurfHudVisible[playerid] = 0;
     PlayerWeaponLicense[playerid] = DEFAULT_WEAPON_LICENSE;
     ResetPlayerWeaponLoadoutData(playerid);
 
@@ -5700,6 +5705,8 @@ stock ResetTurfWarState(territoryIndex)
 {
     if (!IsValidTerritoryIndex(territoryIndex)) return 0;
     StopTurfWarFlash(territoryIndex);
+    HideTurfHudForGang(TurfWarAttackerGangID[territoryIndex]);
+    HideTurfHudForGang(TurfWarDefenderGangID[territoryIndex]);
     TurfWarState[territoryIndex] = TURF_WAR_STATE_NONE;
     TurfWarAttackerGangID[territoryIndex] = 0;
     TurfWarDefenderGangID[territoryIndex] = 0;
@@ -5806,6 +5813,108 @@ stock CancelTurfWar(territoryIndex, const reason[])
     return 1;
 }
 
+stock FormatTurfHudTime(seconds, output[], size)
+{
+    if (seconds < 0)
+    {
+        seconds = 0;
+    }
+
+    new minutes = seconds / 60;
+    new secs = seconds % 60;
+
+    format(output, size, "%02d:%02d", minutes, secs);
+    return 1;
+}
+
+stock CreatePlayerTurfHud(playerid)
+{
+    if (PlayerTurfHudCreated[playerid])
+    {
+        return 1;
+    }
+
+    TurfHudTextDraw[playerid] = CreatePlayerTextDraw(playerid, 506.0, 104.0, "~r~TURF ~w~00:00~n~~w~A:0 D:0");
+    PlayerTextDrawLetterSize(playerid, TurfHudTextDraw[playerid], 0.205, 0.880);
+    PlayerTextDrawTextSize(playerid, TurfHudTextDraw[playerid], 635.0, 0.0);
+    PlayerTextDrawAlignment(playerid, TurfHudTextDraw[playerid], t_TEXT_DRAW_ALIGN:1);
+    PlayerTextDrawColour(playerid, TurfHudTextDraw[playerid], 0xFFFFFFFF);
+    PlayerTextDrawUseBox(playerid, TurfHudTextDraw[playerid], true);
+    PlayerTextDrawBoxColour(playerid, TurfHudTextDraw[playerid], 0x00000066);
+    PlayerTextDrawSetShadow(playerid, TurfHudTextDraw[playerid], 1);
+    PlayerTextDrawSetOutline(playerid, TurfHudTextDraw[playerid], 1);
+    PlayerTextDrawBackgroundColour(playerid, TurfHudTextDraw[playerid], 0x000000AA);
+    PlayerTextDrawFont(playerid, TurfHudTextDraw[playerid], t_TEXT_DRAW_FONT:1);
+    PlayerTextDrawSetProportional(playerid, TurfHudTextDraw[playerid], true);
+
+    PlayerTurfHudCreated[playerid] = 1;
+    PlayerTurfHudVisible[playerid] = 0;
+    return 1;
+}
+
+stock ShowPlayerTurfHud(playerid, const hudText[])
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 0;
+    }
+
+    if (!PlayerTurfHudCreated[playerid])
+    {
+        CreatePlayerTurfHud(playerid);
+    }
+
+    PlayerTextDrawSetString(playerid, TurfHudTextDraw[playerid], hudText);
+    PlayerTextDrawShow(playerid, TurfHudTextDraw[playerid]);
+    PlayerTurfHudVisible[playerid] = 1;
+    return 1;
+}
+
+stock HidePlayerTurfHud(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 0;
+    }
+
+    if (PlayerTurfHudCreated[playerid] && PlayerTurfHudVisible[playerid])
+    {
+        PlayerTextDrawHide(playerid, TurfHudTextDraw[playerid]);
+        PlayerTurfHudVisible[playerid] = 0;
+    }
+
+    return 1;
+}
+
+stock DestroyPlayerTurfHud(playerid)
+{
+    if (PlayerTurfHudCreated[playerid])
+    {
+        PlayerTextDrawDestroy(playerid, TurfHudTextDraw[playerid]);
+        PlayerTurfHudCreated[playerid] = 0;
+        PlayerTurfHudVisible[playerid] = 0;
+    }
+
+    return 1;
+}
+
+stock HideTurfHudForGang(gangid)
+{
+    if (gangid <= 0)
+    {
+        return 0;
+    }
+
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!IsPlayerConnected(i) || !PlayerLoggedIn[i]) continue;
+        if (PlayerGangID[i] != gangid) continue;
+        HidePlayerTurfHud(i);
+    }
+
+    return 1;
+}
+
 stock SendTurfHudToGang(gangid, const hudText[])
 {
     if (gangid <= 0)
@@ -5817,7 +5926,7 @@ stock SendTurfHudToGang(gangid, const hudText[])
     {
         if (!IsPlayerConnected(i) || !PlayerLoggedIn[i]) continue;
         if (PlayerGangID[i] != gangid) continue;
-        GameTextForPlayer(i, hudText, 1200, 3);
+        ShowPlayerTurfHud(i, hudText);
     }
 
     return 1;
@@ -5832,28 +5941,32 @@ stock UpdateTurfWarHUD(territoryIndex, attackerCount, defenderCount)
 
     new attacker = TurfWarAttackerGangID[territoryIndex];
     new defender = TurfWarDefenderGangID[territoryIndex];
-    new attackerHud[144];
-    new defenderHud[144];
+    new attackerHud[96];
+    new defenderHud[96];
+    new timeText[8];
 
     if (TurfWarState[territoryIndex] == TURF_WAR_STATE_ATTACKER_GRACE)
     {
-        format(attackerHud, sizeof(attackerHud), "~r~TURF WAR~n~~w~%s~n~~y~RETURN: %d sec~n~~w~A:%d D:%d", TerritoryName[territoryIndex], TurfWarGraceSecondsLeft[territoryIndex], attackerCount, defenderCount);
-        format(defenderHud, sizeof(defenderHud), "~g~DEFEND TURF~n~~w~%s~n~~y~DEFEND IN: %d sec~n~~w~A:%d D:%d", TerritoryName[territoryIndex], TurfWarGraceSecondsLeft[territoryIndex], attackerCount, defenderCount);
+        FormatTurfHudTime(TurfWarGraceSecondsLeft[territoryIndex], timeText, sizeof(timeText));
+        format(attackerHud, sizeof(attackerHud), "~r~RETURN ~w~%s~n~~w~A:%d D:%d", timeText, attackerCount, defenderCount);
+        format(defenderHud, sizeof(defenderHud), "~g~DEFEND ~w~%s~n~~w~A:%d D:%d", timeText, attackerCount, defenderCount);
     }
     else if (TurfWarCaptureSecondsLeft[territoryIndex] <= 0 && defenderCount > 0)
     {
-        format(attackerHud, sizeof(attackerHud), "~r~FINAL CONTEST~n~~w~%s~n~~y~CLEAR DEFENDERS~n~~w~A:%d D:%d", TerritoryName[territoryIndex], attackerCount, defenderCount);
-        format(defenderHud, sizeof(defenderHud), "~r~FINAL CONTEST~n~~w~%s~n~~y~PUSH ATTACKERS OUT~n~~w~A:%d D:%d", TerritoryName[territoryIndex], attackerCount, defenderCount);
+        format(attackerHud, sizeof(attackerHud), "~r~FINAL CONTEST~n~~w~A:%d D:%d", attackerCount, defenderCount);
+        format(defenderHud, sizeof(defenderHud), "~g~FINAL DEFEND~n~~w~A:%d D:%d", attackerCount, defenderCount);
     }
     else if (defenderCount > 0)
     {
-        format(attackerHud, sizeof(attackerHud), "~r~TURF CONTESTED~n~~w~%s~n~~y~CAPTURE: %d sec~n~~w~A:%d D:%d", TerritoryName[territoryIndex], TurfWarCaptureSecondsLeft[territoryIndex], attackerCount, defenderCount);
-        format(defenderHud, sizeof(defenderHud), "~r~DEFEND TURF~n~~w~%s~n~~y~CAPTURE: %d sec~n~~w~A:%d D:%d", TerritoryName[territoryIndex], TurfWarCaptureSecondsLeft[territoryIndex], attackerCount, defenderCount);
+        FormatTurfHudTime(TurfWarCaptureSecondsLeft[territoryIndex], timeText, sizeof(timeText));
+        format(attackerHud, sizeof(attackerHud), "~r~CONTEST ~w~%s~n~~w~A:%d D:%d", timeText, attackerCount, defenderCount);
+        format(defenderHud, sizeof(defenderHud), "~g~DEFEND ~w~%s~n~~w~A:%d D:%d", timeText, attackerCount, defenderCount);
     }
     else
     {
-        format(attackerHud, sizeof(attackerHud), "~r~CAPTURING TURF~n~~w~%s~n~~y~TIME: %d sec~n~~w~A:%d D:%d", TerritoryName[territoryIndex], TurfWarCaptureSecondsLeft[territoryIndex], attackerCount, defenderCount);
-        format(defenderHud, sizeof(defenderHud), "~r~TURF UNDER ATTACK~n~~w~%s~n~~y~TIME: %d sec~n~~w~A:%d D:%d", TerritoryName[territoryIndex], TurfWarCaptureSecondsLeft[territoryIndex], attackerCount, defenderCount);
+        FormatTurfHudTime(TurfWarCaptureSecondsLeft[territoryIndex], timeText, sizeof(timeText));
+        format(attackerHud, sizeof(attackerHud), "~r~CAPTURE ~w~%s~n~~w~A:%d D:%d", timeText, attackerCount, defenderCount);
+        format(defenderHud, sizeof(defenderHud), "~r~ATTACK ~w~%s~n~~w~A:%d D:%d", timeText, attackerCount, defenderCount);
     }
 
     SendTurfHudToGang(attacker, attackerHud);
@@ -8074,7 +8187,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.22A.1 Turf HUD");
+    SetGameModeText("SAIF Dev v0.22A.2 HUD Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -8168,7 +8281,7 @@ public OnGameModeInit()
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
-    print("[SAIF] Gamemode v0.22A.1 Turf HUD berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.22A.2 Compact Turf HUD berhasil dijalankan.");
     return 1;
 }
 
@@ -8223,6 +8336,7 @@ public OnGameModeExit()
 public OnPlayerConnect(playerid)
 {
     ResetPlayerAccountData(playerid);
+    CreatePlayerTurfHud(playerid);
 
     // Sembunyikan class selection/pilih skin sebelum login.
     TogglePlayerSpectating(playerid, true);
@@ -8244,6 +8358,8 @@ public OnPlayerConnect(playerid)
 public OnPlayerDisconnect(playerid, reason)
 {
     CancelPlayerTurfHold(playerid);
+    HidePlayerTurfHud(playerid);
+    DestroyPlayerTurfHud(playerid);
     SavePlayerData(playerid);
     SaveOwnedVehicle(playerid);
     RemoveLSIFMapIcons(playerid);

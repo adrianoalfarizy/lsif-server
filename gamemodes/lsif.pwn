@@ -107,6 +107,14 @@
 #define DIALOG_OBJ_CREATE_INPUT 1088
 #define DIALOG_OBJ_LIST 1089
 #define DIALOG_OBJ_INFO 1090
+#define DIALOG_OBJ_SELECT_INPUT 1091
+#define DIALOG_OBJ_ACTION_MENU 1092
+#define DIALOG_OBJ_ROT_INPUT 1093
+#define DIALOG_OBJ_LINK_TYPE_INPUT 1094
+#define DIALOG_OBJ_LINK_NAME_INPUT 1095
+#define DIALOG_OBJ_DELETE_CONFIRM 1096
+#define DIALOG_OBJ_PURGE_CONFIRM 1097
+
 
 
 #define MAX_NEARBY_INTERACTIONS 8
@@ -1050,6 +1058,10 @@ new Float:PlayerPendingObjLocZ[MAX_PLAYERS];
 new Float:PlayerPendingObjLocA[MAX_PLAYERS];
 new PlayerPendingObjLocInterior[MAX_PLAYERS];
 new PlayerPendingObjLocVirtualWorld[MAX_PLAYERS];
+new PlayerEditingObjectID[MAX_PLAYERS];
+new PlayerPendingObjectLinkType[MAX_PLAYERS][LOC_TYPE_SIZE];
+new PlayerPendingObjectLinkName[MAX_PLAYERS][LOC_NAME_SIZE];
+
 
 new PlayerBusinessDBID[MAX_PLAYERS];
 new PlayerBusinessIndex[MAX_PLAYERS];
@@ -7041,7 +7053,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.21C.7 Obj-Loc Clean");
+    SetGameModeText("SAIF Dev v0.21D Object Editor UI");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -7132,7 +7144,7 @@ public OnGameModeInit()
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
-    print("[SAIF] Gamemode v0.21C.7 Object-Location Orphan Prevention berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.21D Dynamic Object Editor UI berhasil dijalankan.");
     return 1;
 }
 
@@ -7616,12 +7628,13 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         {
             case 0: ShowDynamicObjectCreateInput(playerid);
             case 1: ShowDynamicObjectListDialog(playerid);
-            case 2:
+            case 2: ShowDynamicObjectSelectInput(playerid);
+            case 3:
             {
                 LoadDynamicObjects();
                 SendClientMessage(playerid, COLOR_GREEN, "Dynamic objects sedang direload dari database.");
             }
-            case 3: ShowDynamicObjectHelp(playerid);
+            case 4: ShowDynamicObjectHelp(playerid);
         }
         return 1;
     }
@@ -7645,12 +7658,203 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         return 1;
     }
 
-    if (dialogid == DIALOG_OBJ_LIST || dialogid == DIALOG_OBJ_INFO)
+    if (dialogid == DIALOG_OBJ_SELECT_INPUT)
+    {
+        if (!response)
+        {
+            ShowDynamicObjectMenu(playerid);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Object ID harus angka.");
+            ShowDynamicObjectSelectInput(playerid);
+            return 1;
+        }
+
+        new objectId = strval(inputtext);
+        if (GetDynamicObjectIndexByDBID(objectId) == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Dynamic object ID tidak ditemukan.");
+            ShowDynamicObjectSelectInput(playerid);
+            return 1;
+        }
+
+        PlayerEditingObjectID[playerid] = objectId;
+        ShowDynamicObjectActionMenu(playerid, objectId);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OBJ_LIST)
+    {
+        if (!response)
+        {
+            ShowDynamicObjectMenu(playerid);
+            return 1;
+        }
+
+        if (listitem < 0 || listitem >= DynamicObjectCount)
+        {
+            ShowDynamicObjectMenu(playerid);
+            return 1;
+        }
+
+        PlayerEditingObjectID[playerid] = DynamicObjectDBID[listitem];
+        ShowDynamicObjectActionMenu(playerid, PlayerEditingObjectID[playerid]);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OBJ_INFO)
     {
         if (response)
         {
+            ShowDynamicObjectActionMenu(playerid, PlayerEditingObjectID[playerid]);
+        }
+        else
+        {
             ShowDynamicObjectMenu(playerid);
         }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OBJ_ACTION_MENU)
+    {
+        if (!response)
+        {
+            ShowDynamicObjectMenu(playerid);
+            return 1;
+        }
+
+        new objectId = PlayerEditingObjectID[playerid];
+        if (GetDynamicObjectIndexByDBID(objectId) == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Object yang dipilih sudah tidak ditemukan. Reload/list ulang object.");
+            ShowDynamicObjectMenu(playerid);
+            return 1;
+        }
+
+        new cmd[160];
+        switch (listitem)
+        {
+            case 0: ShowDynamicObjectInfoDialog(playerid, objectId);
+            case 1:
+            {
+                format(cmd, sizeof(cmd), "/objmove %d", objectId);
+                OnPlayerCommandText(playerid, cmd);
+                ShowDynamicObjectActionMenu(playerid, objectId);
+            }
+            case 2: ShowDynamicObjectRotateInput(playerid, objectId);
+            case 3:
+            {
+                format(cmd, sizeof(cmd), "/objgoto %d", objectId);
+                OnPlayerCommandText(playerid, cmd);
+                ShowDynamicObjectActionMenu(playerid, objectId);
+            }
+            case 4: ShowDynamicObjectLinkTypeInput(playerid, objectId);
+            case 5: ShowDynamicObjectDeleteConfirm(playerid, objectId);
+            case 6: ShowDynamicObjectPurgeConfirm(playerid, objectId);
+            case 7:
+            {
+                LoadDynamicObjects();
+                SendClientMessage(playerid, COLOR_GREEN, "Dynamic objects sedang direload dari database.");
+            }
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OBJ_ROT_INPUT)
+    {
+        if (!response)
+        {
+            ShowDynamicObjectActionMenu(playerid, PlayerEditingObjectID[playerid]);
+            return 1;
+        }
+
+        new rxStr[24], ryStr[24], rzStr[24];
+        if (!GetThreeParams(inputtext, rxStr, sizeof(rxStr), ryStr, sizeof(ryStr), rzStr, sizeof(rzStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Format rotasi: rx ry rz. Contoh: 0 0 90");
+            ShowDynamicObjectRotateInput(playerid, PlayerEditingObjectID[playerid]);
+            return 1;
+        }
+
+        new cmd[160];
+        format(cmd, sizeof(cmd), "/objrot %d %s %s %s", PlayerEditingObjectID[playerid], rxStr, ryStr, rzStr);
+        OnPlayerCommandText(playerid, cmd);
+        ShowDynamicObjectActionMenu(playerid, PlayerEditingObjectID[playerid]);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OBJ_LINK_TYPE_INPUT)
+    {
+        if (!response)
+        {
+            ShowDynamicObjectActionMenu(playerid, PlayerEditingObjectID[playerid]);
+            return 1;
+        }
+
+        if (strlen(inputtext) < 2)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Type location minimal 2 karakter. Contoh: atm, dealer, ammunation, gang_hq, job.");
+            ShowDynamicObjectLinkTypeInput(playerid, PlayerEditingObjectID[playerid]);
+            return 1;
+        }
+
+        format(PlayerPendingObjectLinkType[playerid], LOC_TYPE_SIZE, "%s", inputtext);
+        ShowDynamicObjectLinkNameInput(playerid, PlayerEditingObjectID[playerid]);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OBJ_LINK_NAME_INPUT)
+    {
+        if (!response)
+        {
+            ShowDynamicObjectActionMenu(playerid, PlayerEditingObjectID[playerid]);
+            return 1;
+        }
+
+        if (strlen(inputtext) < 2)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Nama location minimal 2 karakter.");
+            ShowDynamicObjectLinkNameInput(playerid, PlayerEditingObjectID[playerid]);
+            return 1;
+        }
+
+        format(PlayerPendingObjectLinkName[playerid], LOC_NAME_SIZE, "%s", inputtext);
+
+        new cmd[192];
+        format(cmd, sizeof(cmd), "/objtoloc %d %s %s", PlayerEditingObjectID[playerid], PlayerPendingObjectLinkType[playerid], PlayerPendingObjectLinkName[playerid]);
+        OnPlayerCommandText(playerid, cmd);
+        ShowDynamicObjectActionMenu(playerid, PlayerEditingObjectID[playerid]);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OBJ_DELETE_CONFIRM)
+    {
+        if (!response)
+        {
+            ShowDynamicObjectActionMenu(playerid, PlayerEditingObjectID[playerid]);
+            return 1;
+        }
+
+        new cmd[64];
+        format(cmd, sizeof(cmd), "/objdelete %d", PlayerEditingObjectID[playerid]);
+        OnPlayerCommandText(playerid, cmd);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OBJ_PURGE_CONFIRM)
+    {
+        if (!response)
+        {
+            ShowDynamicObjectActionMenu(playerid, PlayerEditingObjectID[playerid]);
+            return 1;
+        }
+
+        new cmd[64];
+        format(cmd, sizeof(cmd), "/objpurge %d", PlayerEditingObjectID[playerid]);
+        OnPlayerCommandText(playerid, cmd);
         return 1;
     }
 
@@ -10443,7 +10647,7 @@ stock ShowDynamicObjectMenu(playerid)
         DIALOG_OBJ_MENU,
         DIALOG_STYLE_LIST,
         "Dynamic Object Editor",
-        "Create Object\nList Objects\nReload Objects\nCommand Help",
+        "Create Object\nList / Select Object\nSelect Object by ID\nReload Objects\nCommand Help",
         "Select",
         "Close"
     );
@@ -10483,14 +10687,207 @@ stock ShowDynamicObjectListDialog(playerid)
         strcat(body, line, sizeof(body));
     }
 
-    ShowPlayerDialog(playerid, DIALOG_OBJ_LIST, DIALOG_STYLE_TABLIST_HEADERS, "Dynamic Objects", body, "Back", "Close");
+    ShowPlayerDialog(playerid, DIALOG_OBJ_LIST, DIALOG_STYLE_TABLIST_HEADERS, "Dynamic Objects", body, "Select", "Back");
+    return 1;
+}
+
+stock ShowDynamicObjectSelectInput(playerid)
+{
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_OBJ_SELECT_INPUT,
+        DIALOG_STYLE_INPUT,
+        "Select Dynamic Object",
+        "Masukkan ID object yang ingin diedit.\n\nTip: gunakan /objlist atau menu List Objects untuk melihat ID.",
+        "Select",
+        "Back"
+    );
+    return 1;
+}
+
+stock ShowDynamicObjectActionMenu(playerid, objectId)
+{
+    new idx = GetDynamicObjectIndexByDBID(objectId);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic object ID tidak ditemukan.");
+        ShowDynamicObjectMenu(playerid);
+        return 0;
+    }
+
+    PlayerEditingObjectID[playerid] = objectId;
+
+    new title[96];
+    new body[512];
+
+    format(title, sizeof(title), "Object Editor: ID %d", objectId);
+    format(
+        body,
+        sizeof(body),
+        "Object Info\nMove to My Position\nRotate Object\nGoto Object\nLink to Location\nDelete Object Only\nPurge Object + Location\nReload Objects"
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_OBJ_ACTION_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Back");
+    return 1;
+}
+
+stock ShowDynamicObjectInfoDialog(playerid, objectId)
+{
+    new idx = GetDynamicObjectIndexByDBID(objectId);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic object ID tidak ditemukan.");
+        ShowDynamicObjectMenu(playerid);
+        return 0;
+    }
+
+    PlayerEditingObjectID[playerid] = objectId;
+
+    new body[768];
+    format(
+        body,
+        sizeof(body),
+        "ID: %d\nModel: %d\nName: %s\n\nPos: %.2f, %.2f, %.2f\nRot: %.2f, %.2f, %.2f\nInterior: %d\nVirtual World: %d\nEnabled: %d\n\nGunakan menu aksi untuk move, rotate, link, delete, atau purge.",
+        DynamicObjectDBID[idx],
+        DynamicObjectModel[idx],
+        DynamicObjectName[idx],
+        DynamicObjectX[idx],
+        DynamicObjectY[idx],
+        DynamicObjectZ[idx],
+        DynamicObjectRX[idx],
+        DynamicObjectRY[idx],
+        DynamicObjectRZ[idx],
+        DynamicObjectInterior[idx],
+        DynamicObjectVirtualWorld[idx],
+        DynamicObjectEnabled[idx]
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_OBJ_INFO, DIALOG_STYLE_MSGBOX, "Dynamic Object Info", body, "Back", "Close");
+    return 1;
+}
+
+stock ShowDynamicObjectRotateInput(playerid, objectId)
+{
+    new idx = GetDynamicObjectIndexByDBID(objectId);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic object ID tidak ditemukan.");
+        ShowDynamicObjectMenu(playerid);
+        return 0;
+    }
+
+    PlayerEditingObjectID[playerid] = objectId;
+
+    new body[384];
+    format(
+        body,
+        sizeof(body),
+        "Masukkan rotasi object dengan format:\nrx ry rz\n\nRotasi sekarang:\n%.2f %.2f %.2f\n\nContoh:\n0 0 90",
+        DynamicObjectRX[idx],
+        DynamicObjectRY[idx],
+        DynamicObjectRZ[idx]
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_OBJ_ROT_INPUT, DIALOG_STYLE_INPUT, "Rotate Dynamic Object", body, "Apply", "Back");
+    return 1;
+}
+
+stock ShowDynamicObjectLinkTypeInput(playerid, objectId)
+{
+    if (GetDynamicObjectIndexByDBID(objectId) == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic object ID tidak ditemukan.");
+        ShowDynamicObjectMenu(playerid);
+        return 0;
+    }
+
+    PlayerEditingObjectID[playerid] = objectId;
+
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_OBJ_LINK_TYPE_INPUT,
+        DIALOG_STYLE_INPUT,
+        "Link Object to Location",
+        "Masukkan type location untuk object ini.\n\nContoh type:\natm\ndealer\nammunation\ngang_hq\njob\nrace\n\nSetelah itu kamu akan diminta nama location.",
+        "Next",
+        "Back"
+    );
+    return 1;
+}
+
+stock ShowDynamicObjectLinkNameInput(playerid, objectId)
+{
+    if (GetDynamicObjectIndexByDBID(objectId) == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic object ID tidak ditemukan.");
+        ShowDynamicObjectMenu(playerid);
+        return 0;
+    }
+
+    PlayerEditingObjectID[playerid] = objectId;
+
+    new body[384];
+    format(body, sizeof(body), "Type: %s\n\nMasukkan nama location.\nContoh: Idlewood_ATM atau Grove_HQ", PlayerPendingObjectLinkType[playerid]);
+    ShowPlayerDialog(playerid, DIALOG_OBJ_LINK_NAME_INPUT, DIALOG_STYLE_INPUT, "Location Name", body, "Create", "Back");
+    return 1;
+}
+
+stock ShowDynamicObjectDeleteConfirm(playerid, objectId)
+{
+    new idx = GetDynamicObjectIndexByDBID(objectId);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic object ID tidak ditemukan.");
+        ShowDynamicObjectMenu(playerid);
+        return 0;
+    }
+
+    PlayerEditingObjectID[playerid] = objectId;
+
+    new body[512];
+    format(
+        body,
+        sizeof(body),
+        "Hapus object ID %d saja?\n\nModel: %d\nName: %s\n\nCatatan:\nLinked location/ALT/radar/3D label TIDAK ikut dihapus.\nGunakan Purge kalau ingin hapus satu paket.",
+        objectId,
+        DynamicObjectModel[idx],
+        DynamicObjectName[idx]
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_OBJ_DELETE_CONFIRM, DIALOG_STYLE_MSGBOX, "Delete Object Only", body, "Delete", "Back");
+    return 1;
+}
+
+stock ShowDynamicObjectPurgeConfirm(playerid, objectId)
+{
+    new idx = GetDynamicObjectIndexByDBID(objectId);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic object ID tidak ditemukan.");
+        ShowDynamicObjectMenu(playerid);
+        return 0;
+    }
+
+    PlayerEditingObjectID[playerid] = objectId;
+
+    new body[512];
+    format(
+        body,
+        sizeof(body),
+        "PURGE object ID %d?\n\nModel: %d\nName: %s\n\nIni akan menghapus:\n- Object fisik\n- Linked location\n- ALT interaction\n- Radar icon\n- 3D label\n\nAksi ini tidak bisa dibatalkan.",
+        objectId,
+        DynamicObjectModel[idx],
+        DynamicObjectName[idx]
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_OBJ_PURGE_CONFIRM, DIALOG_STYLE_MSGBOX, "Purge Object + Location", body, "Purge", "Back");
     return 1;
 }
 
 stock ShowDynamicObjectHelp(playerid)
 {
     SendClientMessage(playerid, COLOR_YELLOW, "========== DYNAMIC OBJECT EDITOR ==========");
-    SendClientMessage(playerid, COLOR_WHITE, "/objmenu - Dialog editor object");
+    SendClientMessage(playerid, COLOR_WHITE, "/objmenu - Dialog editor object lengkap");
     SendClientMessage(playerid, COLOR_WHITE, "/objcreate [modelid] - Buat object permanen di posisi admin");
     SendClientMessage(playerid, COLOR_WHITE, "/objlist - Lihat object aktif");
     SendClientMessage(playerid, COLOR_WHITE, "/objinfo [id] - Detail object");

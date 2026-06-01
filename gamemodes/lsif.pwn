@@ -7041,7 +7041,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.21C.5 Obj Purge Chain");
+    SetGameModeText("SAIF Dev v0.21C.6 Obj Purge Deep");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -7132,7 +7132,7 @@ public OnGameModeInit()
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
-    print("[SAIF] Gamemode v0.21C.5 Object Purge Chain Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.21C.6 Object Purge Deep Clean berhasil dijalankan.");
     return 1;
 }
 
@@ -9999,6 +9999,80 @@ stock DestroyRuntimeLocationsLinkedToObject(objectId)
         DynamicLocationEnabled[i] = 0;
         DynamicLocationDBID[i] = 0;
         DynamicLocationLinkedObjectDBID[i] = 0;
+    }
+
+    return 1;
+}
+
+
+stock IsDynamicLocationLinkedOrNearObject(locationIndex, objectId, Float:x, Float:y, Float:z)
+{
+    if (locationIndex < 0 || locationIndex >= DynamicLocationCount)
+    {
+        return 0;
+    }
+
+    if (!DynamicLocationEnabled[locationIndex])
+    {
+        return 0;
+    }
+
+    if (DynamicLocationLinkedObjectDBID[locationIndex] == objectId)
+    {
+        return 1;
+    }
+
+    // Fallback untuk location lama yang dibuat sebelum linked_object_id benar-benar tersimpan.
+    // Jika posisinya sangat dekat dengan object yang dipurge, anggap sebagai pasangan object-location.
+    if (floatabs(DynamicLocationX[locationIndex] - x) <= 2.0 &&
+            floatabs(DynamicLocationY[locationIndex] - y) <= 2.0 &&
+            floatabs(DynamicLocationZ[locationIndex] - z) <= 4.0)
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
+stock DestroyRuntimeLocationsLinkedOrNearObject(objectId, Float:x, Float:y, Float:z)
+{
+    for (new i = 0; i < DynamicLocationCount; i++)
+    {
+        if (!IsDynamicLocationLinkedOrNearObject(i, objectId, x, y, z))
+        {
+            continue;
+        }
+
+        if (DynamicLocationPickup[i] != -1)
+        {
+            DestroyPickup(DynamicLocationPickup[i]);
+            DynamicLocationPickup[i] = -1;
+        }
+
+        if (DynamicLocationObjectID[i] != -1)
+        {
+            DestroyObject(DynamicLocationObjectID[i]);
+            DynamicLocationObjectID[i] = -1;
+        }
+
+        if (DynamicLocation3DLabel[i] != Text3D:INVALID_3DTEXT_ID)
+        {
+            Delete3DTextLabel(DynamicLocation3DLabel[i]);
+            DynamicLocation3DLabel[i] = Text3D:INVALID_3DTEXT_ID;
+        }
+
+        for (new p = 0; p < MAX_PLAYERS; p++)
+        {
+            if (IsPlayerConnected(p))
+            {
+                RemovePlayerMapIcon(p, MAPICON_BASE_DYNAMIC + i);
+            }
+        }
+
+        DynamicLocationEnabled[i] = 0;
+        DynamicLocationDBID[i] = 0;
+        DynamicLocationLinkedObjectDBID[i] = 0;
+        DynamicLocationRadius[i] = 0.0;
     }
 
     return 1;
@@ -15812,19 +15886,33 @@ public OnPlayerCommandText(playerid, cmdtext[])
         }
 
         new objectId = strval(idStr);
-        if (GetDynamicObjectIndexByDBID(objectId) == -1)
+        new objIndex = GetDynamicObjectIndexByDBID(objectId);
+        if (objIndex == -1)
         {
             SendClientMessage(playerid, COLOR_RED, "Dynamic object ID tidak ditemukan.");
             return 1;
         }
 
-        DestroyRuntimeLocationsLinkedToObject(objectId);
+        new Float:purgeX = DynamicObjectX[objIndex];
+        new Float:purgeY = DynamicObjectY[objIndex];
+        new Float:purgeZ = DynamicObjectZ[objIndex];
 
-        new locQuery[256];
-        mysql_format(g_SQL, locQuery, sizeof(locQuery), "DELETE FROM world_locations WHERE linked_object_id=%d", objectId);
+        DestroyRuntimeLocationsLinkedOrNearObject(objectId, purgeX, purgeY, purgeZ);
+
+        new locQuery[512];
+        mysql_format(
+            g_SQL,
+            locQuery,
+            sizeof(locQuery),
+            "DELETE FROM world_locations WHERE linked_object_id=%d OR (ABS(pos_x - %f) <= 2.0 AND ABS(pos_y - %f) <= 2.0 AND ABS(pos_z - %f) <= 4.0)",
+            objectId,
+            purgeX,
+            purgeY,
+            purgeZ
+        );
         mysql_tquery(g_SQL, locQuery, "OnDynamicObjectPurgeLocationsDeleted", "ii", playerid, objectId);
 
-        SendClientMessage(playerid, COLOR_YELLOW, "Object purge diproses: linked location runtime langsung dibersihkan.");
+        SendClientMessage(playerid, COLOR_YELLOW, "Object purge deep-clean diproses: linked/nearby location runtime langsung dibersihkan.");
         return 1;
     }
 

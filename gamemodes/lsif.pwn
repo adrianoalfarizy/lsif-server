@@ -122,6 +122,8 @@
 #define DIALOG_TURF_OWNER_INPUT 1103
 #define DIALOG_TURF_DELETE_CONFIRM 1104
 #define DIALOG_TURF_RENAME_INPUT 1105
+#define DIALOG_HELP_MENU 1106
+#define DIALOG_HELP_DETAIL 1107
 
 
 
@@ -8198,7 +8200,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.22A.3 Turf Config");
+    SetGameModeText("SAIF Dev v0.22A.4 Help Dialog");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -8292,7 +8294,7 @@ public OnGameModeInit()
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
-    print("[SAIF] Gamemode v0.22A.3 Turf Config berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.22A.4 Help Dialog berhasil dijalankan.");
     return 1;
 }
 
@@ -8756,10 +8758,235 @@ stock OpenWhitelistListDialog(playerid)
     return 1;
 }
 
+
+stock ShowHelpMenu(playerid)
+{
+    new menu[768];
+    menu[0] = EOS;
+
+    strcat(menu, "Interaksi & Dunia\n", sizeof(menu));
+    strcat(menu, "Account & Player\n", sizeof(menu));
+    strcat(menu, "Job & Vehicle Mission\n", sizeof(menu));
+    strcat(menu, "Bank & Economy\n", sizeof(menu));
+    strcat(menu, "Vehicle & Garage\n", sizeof(menu));
+    strcat(menu, "House & Business\n", sizeof(menu));
+    strcat(menu, "Organization\n", sizeof(menu));
+    strcat(menu, "Gang & Turf War\n", sizeof(menu));
+    strcat(menu, "Weapon & Ammu-Nation\n", sizeof(menu));
+    strcat(menu, "Race\n", sizeof(menu));
+    strcat(menu, "Beta & Feedback\n", sizeof(menu));
+    strcat(menu, "Map / World Editor\n", sizeof(menu));
+    strcat(menu, "Admin Tools", sizeof(menu));
+
+    ShowPlayerDialog(playerid, DIALOG_HELP_MENU, DIALOG_STYLE_LIST, "SAIF Help - Pilih Kategori", menu, "Buka", "Tutup");
+    return 1;
+}
+
+stock ShowHelpCategory(playerid, category)
+{
+    new title[64];
+    new body[3200];
+    body[0] = EOS;
+
+    switch (category)
+    {
+        case 0:
+        {
+            format(title, sizeof(title), "Help - Interaksi & Dunia");
+            strcat(body, "ALT: interaksi dunia di titik marker/label.\n", sizeof(body));
+            strcat(body, "Tombol 2: start vehicle mission/job saat driver kendaraan sesuai.\n", sizeof(body));
+            strcat(body, "/interact: fallback ALT.\n", sizeof(body));
+            strcat(body, "/maplegend: arti icon radar/map dan turf color.\n", sizeof(body));
+            strcat(body, "/refreshicons: refresh radar/map icon.\n", sizeof(body));
+            strcat(body, "/refreshzones: refresh blok warna turf.\n", sizeof(body));
+            strcat(body, "/version, /changelog, /credits, /staff.\n\n", sizeof(body));
+            strcat(body, "Catatan: public interior pakai shared virtual world; rumah pribadi memakai virtual world khusus.", sizeof(body));
+        }
+        case 1:
+        {
+            format(title, sizeof(title), "Help - Account & Player");
+            strcat(body, "/stats: statistik player.\n", sizeof(body));
+            strcat(body, "/account: info akun lengkap.\n", sizeof(body));
+            strcat(body, "/money: cek cash.\n", sizeof(body));
+            strcat(body, "/savedata: simpan data manual.\n", sizeof(body));
+            strcat(body, "/spawn: kembali ke spawn utama.\n", sizeof(body));
+            strcat(body, "/kill: respawn test.\n", sizeof(body));
+            strcat(body, "/whereami: cek posisi/interior/virtual world.\n", sizeof(body));
+            strcat(body, "/starterpack: klaim starter pack beta sekali.\n", sizeof(body));
+            strcat(body, "/pay [id] [amount]: kirim uang ke player lain.", sizeof(body));
+        }
+        case 2:
+        {
+            format(title, sizeof(title), "Help - Job & Vehicle Mission");
+            strcat(body, "/jobs: daftar job.\n", sizeof(body));
+            strcat(body, "/jobguide: panduan job dialog.\n", sizeof(body));
+            strcat(body, "/joinjob courier|taxi|trucker|bus|police.\n", sizeof(body));
+            strcat(body, "/jobinfo: status job aktif.\n", sizeof(body));
+            strcat(body, "/jobstats: statistik job kamu.\n", sizeof(body));
+            strcat(body, "/jobtop [job]: leaderboard job.\n", sizeof(body));
+            strcat(body, "/work: fallback mulai kerja.\n", sizeof(body));
+            strcat(body, "/cancelwork: batalkan kerja aktif.\n", sizeof(body));
+            strcat(body, "/leavejob: keluar dari job.\n", sizeof(body));
+            strcat(body, "/taxifare, /truckerfare.\n\n", sizeof(body));
+            strcat(body, "Offline-like: naik kendaraan job lalu tekan Tombol 2.", sizeof(body));
+        }
+        case 3:
+        {
+            format(title, sizeof(title), "Help - Bank & Economy");
+            strcat(body, "ALT dekat ATM: buka ATM Dialog.\n", sizeof(body));
+            strcat(body, "/balance atau /bank: cek cash/bank/total.\n", sizeof(body));
+            strcat(body, "/banks: daftar bank/ATM.\n", sizeof(body));
+            strcat(body, "/findbank: cari ATM terdekat.\n", sizeof(body));
+            strcat(body, "/cancelbank: hapus checkpoint ATM.\n", sizeof(body));
+            strcat(body, "/deposit [amount/all]: simpan cash ke bank.\n", sizeof(body));
+            strcat(body, "/withdraw [amount/all]: ambil dari bank.\n", sizeof(body));
+            strcat(body, "/businesses, /mybiz, /collectbiz, /upgradebiz, /biztop.", sizeof(body));
+        }
+        case 4:
+        {
+            format(title, sizeof(title), "Help - Vehicle & Garage");
+            strcat(body, "ALT dekat dealership: Vehicle Shop / Garage Service.\n", sizeof(body));
+            strcat(body, "/dealerships, /finddealer, /vehicleshop.\n", sizeof(body));
+            strcat(body, "/buyvehicle [id]: beli kendaraan fallback.\n", sizeof(body));
+            strcat(body, "/garage: lihat slot kendaraan.\n", sizeof(body));
+            strcat(body, "/myveh [slot]: spawn kendaraan.\n", sizeof(body));
+            strcat(body, "/sellveh [slot]: jual kendaraan.\n", sizeof(body));
+            strcat(body, "/park: simpan posisi kendaraan aktif.\n", sizeof(body));
+            strcat(body, "/lock: kunci/buka kendaraan.\n", sizeof(body));
+            strcat(body, "/vehstatus, /vehinfo, /fuelinfo.\n", sizeof(body));
+            strcat(body, "/renameveh [slot] [name].\n", sizeof(body));
+            strcat(body, "/repairveh, /refuelveh.\n", sizeof(body));
+            strcat(body, "/veh [modelid], /fixveh, /dv: dev/fallback.", sizeof(body));
+        }
+        case 5:
+        {
+            format(title, sizeof(title), "Help - House & Business");
+            strcat(body, "House: ALT membuka house menu; panah/pickup untuk enter/exit.\n", sizeof(body));
+            strcat(body, "/houses, /findhouse [id], /buyhouse [id].\n", sizeof(body));
+            strcat(body, "/myhouse, /houseinfo, /lockhouse.\n", sizeof(body));
+            strcat(body, "/gohome, /setspawn house|default, /sellhouse.\n", sizeof(body));
+            strcat(body, "/visithouse [id], /invitehouse [id], /kickhouse [id], /housevisitors.\n\n", sizeof(body));
+            strcat(body, "Business: ALT membuka business menu.\n", sizeof(body));
+            strcat(body, "/businesses, /findbiz [id], /buybiz [id].\n", sizeof(body));
+            strcat(body, "/mybiz, /collectbiz, /upgradebiz, /sellbiz, /biztop.", sizeof(body));
+        }
+        case 6:
+        {
+            format(title, sizeof(title), "Help - Organization");
+            strcat(body, "Organization = ekonomi/legal/company, terpisah dari gang.\n", sizeof(body));
+            strcat(body, "/orgmenu: menu dialog organisasi.\n", sizeof(body));
+            strcat(body, "/orgs, /createorg [nama], /org, /orginfo.\n", sizeof(body));
+            strcat(body, "/inviteorg [id], /acceptorg, /leaveorg.\n", sizeof(body));
+            strcat(body, "/orgmembers, /orgchat [msg] atau /oc [msg].\n", sizeof(body));
+            strcat(body, "/setorgrank [id] [rank], /kickorg [id], /disbandorg.\n", sizeof(body));
+            strcat(body, "/orgbank, /orgdeposit [amount/all], /orgwithdraw [amount].", sizeof(body));
+        }
+        case 7:
+        {
+            format(title, sizeof(title), "Help - Gang & Turf War");
+            strcat(body, "Gang = preset offline-like, join lewat ALT di HQ.\n", sizeof(body));
+            strcat(body, "/gangmenu, /gangs, /ganginfo, /gangmembers.\n", sizeof(body));
+            strcat(body, "/leavegang: keluar gang.\n", sizeof(body));
+            strcat(body, "/kickgang [id]: Gang Boss only.\n", sizeof(body));
+            strcat(body, "/turfmap, /territories: lihat territory.\n", sizeof(body));
+            strcat(body, "/turfstatus: status turf war aktif.\n", sizeof(body));
+            strcat(body, "/turfconfig: config turf war runtime.\n", sizeof(body));
+            strcat(body, "/challengeturf: fallback start turf war.\n\n", sizeof(body));
+            strcat(body, "Turf normal: masuk area musuh/neutral lalu hold ALT sesuai durasi config.\n", sizeof(body));
+            strcat(body, "Owner/debug: /setgangrank, /setterritory, /cancelturfwar, /setturfconfig.", sizeof(body));
+        }
+        case 8:
+        {
+            format(title, sizeof(title), "Help - Weapon & Ammu-Nation");
+            strcat(body, "ALT dekat Ammu-Nation: buka Weapon Shop Dialog.\n", sizeof(body));
+            strcat(body, "/weaponshop: fallback buka shop, harus dekat Ammu-Nation.\n", sizeof(body));
+            strcat(body, "/weaponinfo: daftar weapon/harga.\n", sizeof(body));
+            strcat(body, "/weaponlicense: cek license.\n", sizeof(body));
+            strcat(body, "/loadout: lihat saved weapon loadout.\n", sizeof(body));
+            strcat(body, "/reloadout: apply ulang saved loadout.\n", sizeof(body));
+            strcat(body, "/givelicense [id]: Owner only.", sizeof(body));
+        }
+        case 9:
+        {
+            format(title, sizeof(title), "Help - Race");
+            strcat(body, "/races: daftar race.\n", sizeof(body));
+            strcat(body, "/joinrace ls: ikut race Los Santos Intro.\n", sizeof(body));
+            strcat(body, "/raceinfo: status race/cooldown.\n", sizeof(body));
+            strcat(body, "/leaverace: keluar dari race aktif.\n", sizeof(body));
+            strcat(body, "/racetop: leaderboard race.", sizeof(body));
+        }
+        case 10:
+        {
+            format(title, sizeof(title), "Help - Beta & Feedback");
+            strcat(body, "/motd: pengumuman closed beta.\n", sizeof(body));
+            strcat(body, "/serverrules: aturan server.\n", sizeof(body));
+            strcat(body, "/betahelp atau /betaguide: starter guide.\n", sizeof(body));
+            strcat(body, "/bugreport [text]: lapor bug.\n", sizeof(body));
+            strcat(body, "/suggest [text]: kirim saran.\n", sizeof(body));
+            strcat(body, "/report [id] [reason]: laporkan player.\n", sizeof(body));
+            strcat(body, "/adminmenu dan /betamenu: admin dashboard.", sizeof(body));
+        }
+        case 11:
+        {
+            format(title, sizeof(title), "Help - Map / World Editor");
+            strcat(body, "Owner/Admin world tools.\n", sizeof(body));
+            strcat(body, "/locmenu: dynamic location editor.\n", sizeof(body));
+            strcat(body, "/loccreate, /loclist, /locinfo, /locmove, /locgoto.\n", sizeof(body));
+            strcat(body, "/loclabel, /locicon, /locpickup, /locobject, /locradius.\n", sizeof(body));
+            strcat(body, "/locenable, /locdisable, /locdelete, /locremove, /locpurge, /locreload.\n\n", sizeof(body));
+            strcat(body, "/objmenu: dynamic object editor UI.\n", sizeof(body));
+            strcat(body, "/objcreate, /objlist, /objinfo, /objmove, /objrot, /objgoto.\n", sizeof(body));
+            strcat(body, "/objtoloc, /locwithobject, /objdelete, /objpurge, /objreload.\n\n", sizeof(body));
+            strcat(body, "/turfmenu: dynamic turf zone editor.\n", sizeof(body));
+            strcat(body, "/turfcreate, /turflist, /turfinfo, /turfsetcorner1, /turfsetcorner2.\n", sizeof(body));
+            strcat(body, "/turfgoto, /turfowner, /turfdelete, /turfreload, /turfdebug.", sizeof(body));
+        }
+        case 12:
+        {
+            format(title, sizeof(title), "Help - Admin Tools");
+            strcat(body, "/admins: admin online.\n", sizeof(body));
+            strcat(body, "/ahelp: command admin lengkap.\n", sizeof(body));
+            strcat(body, "/adminmenu: dashboard admin dialog.\n", sizeof(body));
+            strcat(body, "/betamenu: whitelist/beta menu.\n", sizeof(body));
+            strcat(body, "/playerlist, /onlineadmins.\n", sizeof(body));
+            strcat(body, "/recentbugs, /recentreports, /recentfeedback, /recentlogs.\n", sizeof(body));
+            strcat(body, "/wladd, /wlremove, /wlcheck, /whitelist.\n", sizeof(body));
+            strcat(body, "/serverinfo, /dbping, /saveall.\n", sizeof(body));
+            strcat(body, "/playerinfo [id], /vehdebug, /jobdebug.\n", sizeof(body));
+            strcat(body, "/goto [id], /gethere [id].\n", sizeof(body));
+            strcat(body, "/setmoney, /setlevel, /makeadmin, /kick, /ban, /unban.", sizeof(body));
+        }
+        default:
+        {
+            ShowHelpMenu(playerid);
+            return 1;
+        }
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_HELP_DETAIL, DIALOG_STYLE_MSGBOX, title, body, "Kembali", "Tutup");
+    return 1;
+}
+
 public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 {
     if (dialogid == DIALOG_BETA_RULES || dialogid == DIALOG_BETA_MOTD || dialogid == DIALOG_FEEDBACK_LIST)
     {
+        return 1;
+    }
+
+    if (dialogid == DIALOG_HELP_MENU)
+    {
+        if (!response) return 1;
+        ShowHelpCategory(playerid, listitem);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_HELP_DETAIL)
+    {
+        if (response)
+        {
+            ShowHelpMenu(playerid);
+        }
         return 1;
     }
 
@@ -18486,148 +18713,9 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
-    if (!strcmp(cmdtext, "/help", true))
+    if (!strcmp(cmdtext, "/help", true) || !strcmp(cmdtext, "/cmds", true) || !strcmp(cmdtext, "/commands", true))
     {
-        SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF HELP ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "/help - Menampilkan bantuan");
-        SendClientMessage(playerid, COLOR_WHITE, "ALT - Interaksi dunia; ATM, dealer, house, business, dan garage service memakai Dialog UI");
-        SendClientMessage(playerid, COLOR_WHITE, "Tombol 2 - Khusus start job/vehicle mission saat driver kendaraan job");
-        SendClientMessage(playerid, COLOR_WHITE, "/maplegend - Penjelasan icon radar/map LSIF");
-        SendClientMessage(playerid, COLOR_WHITE, "/refreshicons - Refresh icon radar/map LSIF");
-        SendClientMessage(playerid, COLOR_WHITE, "/refreshzones - Refresh blok warna territory/turf");
-        SendClientMessage(playerid, COLOR_WHITE, "/turfstatus - Lihat turf war aktif");
-        SendClientMessage(playerid, COLOR_WHITE, "/turfconfig - Lihat config turf war");
-        SendClientMessage(playerid, COLOR_WHITE, "/challengeturf - Fallback start turf war");
-        SendClientMessage(playerid, COLOR_WHITE, "/weaponshop - Buka Ammu-Nation Weapon Shop, harus dekat Ammu-Nation");
-        SendClientMessage(playerid, COLOR_WHITE, "/weaponinfo - Lihat daftar weapon dan harga");
-        SendClientMessage(playerid, COLOR_WHITE, "/weaponlicense - Cek status weapon license");
-        SendClientMessage(playerid, COLOR_WHITE, "/gangmenu - Menu gang/territory");
-        SendClientMessage(playerid, COLOR_WHITE, "/gangs - Lihat daftar gang");
-        SendClientMessage(playerid, COLOR_WHITE, "Gang preset: datang ke HQ gang lalu ALT untuk join");
-        SendClientMessage(playerid, COLOR_WHITE, "/leavegang - Keluar dari gang | /kickgang [id] - Gang Boss only");
-        SendClientMessage(playerid, COLOR_WHITE, "/turfmap - Lihat territory map");
-        SendClientMessage(playerid, COLOR_WHITE, "/setgangrank [id] [rank] - Owner server only untuk testing rank gang");
-        SendClientMessage(playerid, COLOR_WHITE, "/setterritory [territory] [gang] - Set owner turf, Owner server only");
-        SendClientMessage(playerid, COLOR_WHITE, "/loadout - Lihat saved weapon loadout");
-        SendClientMessage(playerid, COLOR_WHITE, "/reloadout - Apply ulang saved weapon loadout");
-        SendClientMessage(playerid, COLOR_WHITE, "/stats - Melihat statistik player");
-        SendClientMessage(playerid, COLOR_WHITE, "/money - Melihat uang kamu");
-        SendClientMessage(playerid, COLOR_WHITE, "/givemoney - Dev test tambah uang");
-        SendClientMessage(playerid, COLOR_WHITE, "/givemexp - Dev test tambah XP");
-        SendClientMessage(playerid, COLOR_WHITE, "/pay [id] [amount] - Kirim uang ke player lain");
-        SendClientMessage(playerid, COLOR_WHITE, "/spawn - Kembali ke spawn utama");
-        SendClientMessage(playerid, COLOR_WHITE, "/kill - Respawn test");
-        SendClientMessage(playerid, COLOR_WHITE, "/veh [modelid] - Spawn kendaraan, contoh: /veh 411");
-        SendClientMessage(playerid, COLOR_WHITE, "/fixveh - Perbaiki kendaraan");
-        SendClientMessage(playerid, COLOR_WHITE, "/dv - Hapus kendaraan pribadi sementara");
-        SendClientMessage(playerid, COLOR_ORANGE, "Admin dev: /goto [id], /gethere [id]");
-        SendClientMessage(playerid, COLOR_WHITE, "/jobs - Melihat daftar job");
-        SendClientMessage(playerid, COLOR_WHITE, "/jobguide - Panduan job/vehicle mission");
-        SendClientMessage(playerid, COLOR_WHITE, "/joinjob courier - Ambil job courier");
-        SendClientMessage(playerid, COLOR_WHITE, "/joinjob taxi - Ambil job taxi");
-        SendClientMessage(playerid, COLOR_WHITE, "/joinjob trucker - Ambil job trucker");
-        SendClientMessage(playerid, COLOR_WHITE, "/joinjob bus - Ambil job bus driver");
-        SendClientMessage(playerid, COLOR_WHITE, "/joinjob police - Ambil job police/vigilante");
-        SendClientMessage(playerid, COLOR_WHITE, "/jobinfo - Melihat informasi job aktif");
-        SendClientMessage(playerid, COLOR_WHITE, "/jobstats - Melihat statistik job kamu");
-        SendClientMessage(playerid, COLOR_WHITE, "/jobtop [job] - Leaderboard job");
-        SendClientMessage(playerid, COLOR_WHITE, "/taxifare - Melihat formula reward taxi");
-        SendClientMessage(playerid, COLOR_WHITE, "/truckerfare - Melihat formula reward trucker");
-        SendClientMessage(playerid, COLOR_WHITE, "/leavejob - Keluar dari job");
-        SendClientMessage(playerid, COLOR_WHITE, "/work - Mulai pekerjaan aktif");
-        SendClientMessage(playerid, COLOR_WHITE, "/cancelwork - Batalkan pekerjaan aktif");
-        SendClientMessage(playerid, COLOR_WHITE, "/account - Melihat informasi akun");
-        SendClientMessage(playerid, COLOR_WHITE, "/savedata - Simpan data akun manual");
-        SendClientMessage(playerid, COLOR_WHITE, "/garage - Melihat slot kendaraan");
-        SendClientMessage(playerid, COLOR_WHITE, "/myveh [slot] - Spawn kendaraan dari garage");
-        SendClientMessage(playerid, COLOR_WHITE, "/sellveh [slot] - Jual kendaraan dari garage");
-        SendClientMessage(playerid, COLOR_WHITE, "/park - Simpan posisi kendaraan pribadi");
-        SendClientMessage(playerid, COLOR_WHITE, "/lock - Kunci/buka kendaraan pribadi");
-        SendClientMessage(playerid, COLOR_WHITE, "/vehinfo - Melihat informasi kendaraan pribadi");
-        SendClientMessage(playerid, COLOR_WHITE, "/admins - Melihat admin online");
-        if (PlayerAdmin[playerid] > 0)
-        {
-            SendClientMessage(playerid, COLOR_ORANGE, "Admin: gunakan /ahelp untuk command admin.");
-        }
-        SendClientMessage(playerid, COLOR_WHITE, "/report [id] [reason] - Laporkan player ke admin");
-        SendClientMessage(playerid, COLOR_WHITE, "/races - Melihat daftar race");
-        SendClientMessage(playerid, COLOR_WHITE, "/joinrace ls - Ikut race Los Santos Intro");
-        SendClientMessage(playerid, COLOR_WHITE, "/raceinfo - Melihat status race aktif/cooldown");
-        SendClientMessage(playerid, COLOR_WHITE, "/leaverace - Keluar dari race aktif");
-        SendClientMessage(playerid, COLOR_WHITE, "/racetop - Leaderboard race");
-        SendClientMessage(playerid, COLOR_WHITE, "/serverinfo - Melihat info server");
-        SendClientMessage(playerid, COLOR_WHITE, "/balance atau /bank - Melihat saldo cash dan bank");
-        SendClientMessage(playerid, COLOR_WHITE, "/banks - Melihat daftar bank/ATM");
-        SendClientMessage(playerid, COLOR_WHITE, "/findbank - Cari bank/ATM terdekat");
-        SendClientMessage(playerid, COLOR_WHITE, "/cancelbank - Hapus checkpoint bank");
-        SendClientMessage(playerid, COLOR_WHITE, "/deposit [amount/all] - Simpan cash ke bank");
-        SendClientMessage(playerid, COLOR_WHITE, "/withdraw [amount/all] - Ambil uang dari bank");
-        SendClientMessage(playerid, COLOR_WHITE, "/houses - Melihat daftar rumah");
-        SendClientMessage(playerid, COLOR_WHITE, "/findhouse [id] - Cari lokasi rumah");
-        SendClientMessage(playerid, COLOR_WHITE, "/cancelhouse - Hapus checkpoint rumah");
-        SendClientMessage(playerid, COLOR_WHITE, "/buyhouse [id] - Beli rumah");
-        SendClientMessage(playerid, COLOR_WHITE, "/myhouse - Info rumah pribadi");
-        SendClientMessage(playerid, COLOR_WHITE, "/enterhouse - Masuk ke rumah pribadi");
-        SendClientMessage(playerid, COLOR_WHITE, "/exithouse - Keluar dari rumah");
-        SendClientMessage(playerid, COLOR_WHITE, "/lockhouse - Kunci/buka rumah");
-        SendClientMessage(playerid, COLOR_WHITE, "/houseinfo - Debug/info rumah pribadi");
-        SendClientMessage(playerid, COLOR_WHITE, "/gohome - Teleport ke rumah");
-        SendClientMessage(playerid, COLOR_WHITE, "/setspawn [house/default] - Atur spawn");
-        SendClientMessage(playerid, COLOR_WHITE, "/sellhouse - Jual rumah");
-        SendClientMessage(playerid, COLOR_WHITE, "/visithouse [id] - Masuk rumah player jika unlocked/diundang");
-        SendClientMessage(playerid, COLOR_WHITE, "/invitehouse [id] - Undang player ke rumah");
-        SendClientMessage(playerid, COLOR_WHITE, "/kickhouse [id] - Keluarkan visitor dari rumah");
-        SendClientMessage(playerid, COLOR_WHITE, "/housevisitors - Lihat visitor rumah");
-        SendClientMessage(playerid, COLOR_WHITE, "/orgmenu - Menu dialog organisasi");
-        SendClientMessage(playerid, COLOR_WHITE, "/adminmenu - Dialog dashboard admin closed beta");
-        SendClientMessage(playerid, COLOR_WHITE, "/betamenu - Dialog whitelist/beta management");
-        SendClientMessage(playerid, COLOR_WHITE, "/orgs - Melihat daftar organisasi");
-        SendClientMessage(playerid, COLOR_WHITE, "/createorg [nama] - Membuat organisasi");
-        SendClientMessage(playerid, COLOR_WHITE, "/org - Info organisasi kamu");
-        SendClientMessage(playerid, COLOR_WHITE, "/inviteorg [id] - Invite player ke organisasi");
-        SendClientMessage(playerid, COLOR_WHITE, "/acceptorg - Terima invite organisasi");
-        SendClientMessage(playerid, COLOR_WHITE, "/leaveorg - Keluar dari organisasi");
-        SendClientMessage(playerid, COLOR_WHITE, "/orgmembers - Lihat member organisasi");
-        SendClientMessage(playerid, COLOR_WHITE, "/orgchat [msg] atau /oc [msg] - Chat organisasi");
-        SendClientMessage(playerid, COLOR_WHITE, "/orginfo - Detail organisasi");
-        SendClientMessage(playerid, COLOR_WHITE, "/setorgrank [id] [rank] - Ubah rank organisasi");
-        SendClientMessage(playerid, COLOR_WHITE, "/kickorg [id] - Keluarkan member organisasi");
-        SendClientMessage(playerid, COLOR_WHITE, "/disbandorg - Bubarkan organisasi");
-        SendClientMessage(playerid, COLOR_WHITE, "/orgbank - Melihat saldo bank organisasi");
-        SendClientMessage(playerid, COLOR_WHITE, "/orgdeposit [amount/all] - Deposit cash ke org bank");
-        SendClientMessage(playerid, COLOR_WHITE, "/orgwithdraw [amount] - Withdraw org bank, Admin+");
-        SendClientMessage(playerid, COLOR_WHITE, "/businesses - Melihat daftar business");
-        SendClientMessage(playerid, COLOR_WHITE, "/findbiz [id] - Cari lokasi business");
-        SendClientMessage(playerid, COLOR_WHITE, "/cancelbiz - Hapus checkpoint business");
-        SendClientMessage(playerid, COLOR_WHITE, "/buybiz [id] - Beli business");
-        SendClientMessage(playerid, COLOR_WHITE, "/mybiz - Info business pribadi");
-        SendClientMessage(playerid, COLOR_WHITE, "/collectbiz - Ambil income business");
-        SendClientMessage(playerid, COLOR_WHITE, "/sellbiz - Jual business");
-        SendClientMessage(playerid, COLOR_WHITE, "/upgradebiz - Upgrade level business");
-        SendClientMessage(playerid, COLOR_WHITE, "/biztop - Leaderboard business income");
-        SendClientMessage(playerid, COLOR_WHITE, "/dealerships - Melihat daftar dealership");
-        SendClientMessage(playerid, COLOR_WHITE, "/finddealer - Cari dealership terdekat");
-        SendClientMessage(playerid, COLOR_WHITE, "/canceldealer - Hapus checkpoint dealership");
-        SendClientMessage(playerid, COLOR_WHITE, "/vehicleshop - Melihat daftar kendaraan");
-        SendClientMessage(playerid, COLOR_WHITE, "/buyvehicle [id] - Beli kendaraan di dealership");
-        SendClientMessage(playerid, COLOR_WHITE, "/vehstatus - Status kendaraan aktif");
-        SendClientMessage(playerid, COLOR_WHITE, "/fuelinfo - Melihat info fuel kendaraan aktif");
-        SendClientMessage(playerid, COLOR_WHITE, "/renameveh [slot] [name] - Ganti nama kendaraan");
-        SendClientMessage(playerid, COLOR_WHITE, "/repairveh - Repair kendaraan di dealership");
-        SendClientMessage(playerid, COLOR_WHITE, "/refuelveh - Isi fuel kendaraan di dealership");
-        SendClientMessage(playerid, COLOR_WHITE, "/motd - Melihat pengumuman closed beta");
-        SendClientMessage(playerid, COLOR_WHITE, "/serverrules - Membaca aturan server");
-        SendClientMessage(playerid, COLOR_WHITE, "/betahelp - Starter guide closed beta");
-        SendClientMessage(playerid, COLOR_WHITE, "/starterpack - Klaim starter pack beta sekali");
-        SendClientMessage(playerid, COLOR_WHITE, "/whereami - Cek posisi/interior/debug lokasi");
-        SendClientMessage(playerid, COLOR_WHITE, "/bugreport [text] - Laporkan bug closed beta");
-        SendClientMessage(playerid, COLOR_WHITE, "/suggest [text] - Kirim saran closed beta");
-        SendClientMessage(playerid, COLOR_WHITE, "/version - Melihat versi server");
-        SendClientMessage(playerid, COLOR_WHITE, "/changelog - Melihat ringkasan update closed beta");
-        SendClientMessage(playerid, COLOR_WHITE, "/credits - Melihat credit project LSIF");
-        SendClientMessage(playerid, COLOR_WHITE, "/betaguide - Panduan ringkas closed beta");
-        SendClientMessage(playerid, COLOR_WHITE, "/staff - Melihat staff/admin online");
-
+        ShowHelpMenu(playerid);
         return 1;
     }
 
@@ -18654,7 +18742,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.21C Dynamic Object System (SAIF candidate)");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.22A.4 Help Dialog (SAIF candidate)");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -18663,15 +18751,14 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.21C: Dynamic object system untuk persistent custom mapping awal.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.22A.4: /help menjadi Dialog UI berkategori.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.22A.3: Runtime turf war config untuk balancing/testing.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.22A.2: Turf HUD compact menggunakan TextDraw kecil.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.22A: Basic turf war system.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.21E: Dynamic turf zone editor.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.21C-D: Dynamic object system dan editor UI.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.21A-B: Dynamic world location dan integration.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.19B: Weapon license dan saved loadout persistence.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.16D: Release polish, version, credits, staff, beta guide.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.16D.1: Temporary /veh engine fix for manual engine mode.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.17F: Organization info, members, bank, invite, rank, kick, leave, dan disband memakai Dialog UI.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.17B: house arrow enter/exit, ALT transaksi/menu, dan job vehicle grace timer.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.16C: Admin beta dashboard dan monitoring reports/logs.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.16B: Starter pack, bug report, suggestion, feedback handling.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.16A: Whitelist, MOTD, rules, closed beta gate.");
         SendClientMessage(playerid, COLOR_WHITE, "Core: jobs, race, house, org, business, dealership, garage, fuel.");
         return 1;
     }

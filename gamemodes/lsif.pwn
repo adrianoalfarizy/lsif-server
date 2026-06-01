@@ -7041,7 +7041,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.21C.6 Obj Purge Deep");
+    SetGameModeText("SAIF Dev v0.21C.7 Obj-Loc Clean");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -7132,7 +7132,7 @@ public OnGameModeInit()
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
-    print("[SAIF] Gamemode v0.21C.6 Object Purge Deep Clean berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.21C.7 Object-Location Orphan Prevention berhasil dijalankan.");
     return 1;
 }
 
@@ -10349,6 +10349,7 @@ public OnDynamicObjectsLoaded()
 public OnDynamicObjectCreated(playerid)
 {
     new insertId = cache_insert_id();
+    new createdLinkedLocation = 0;
 
     if (IsPlayerConnected(playerid))
     {
@@ -10372,12 +10373,21 @@ public OnDynamicObjectCreated(playerid)
             );
 
             PlayerPendingObjLocCreate[playerid] = 0;
+            createdLinkedLocation = 1;
             SendClientMessage(playerid, COLOR_CYAN, "Location berhasil dibuat dan ditautkan ke object baru.");
         }
     }
 
     LoadDynamicObjects();
-    LoadDynamicLocations();
+
+    // Jangan reload dynamic locations di sini jika object baru sedang membuat linked location.
+    // Location insert bersifat async dan OnDynamicLocationCreated akan melakukan LoadDynamicLocations().
+    // Ini mencegah double/reload race yang bisa meninggalkan 3D label orphan.
+    if (!createdLinkedLocation)
+    {
+        LoadDynamicLocations();
+    }
+
     return 1;
 }
 
@@ -10489,6 +10499,7 @@ stock ShowDynamicObjectHelp(playerid)
     SendClientMessage(playerid, COLOR_WHITE, "/objgoto [id] - Teleport ke object");
     SendClientMessage(playerid, COLOR_WHITE, "/objdelete [id] - Hapus object saja, linked location tetap ada");
     SendClientMessage(playerid, COLOR_WHITE, "/objpurge [id] - Hapus object + semua linked location/ALT/label");
+    SendClientMessage(playerid, COLOR_YELLOW, "Jika ada label orphan dari versi lama, restart server sekali untuk membersihkan visual ghost.");
     SendClientMessage(playerid, COLOR_WHITE, "/objdeletefull [id] - Alias /objpurge");
     SendClientMessage(playerid, COLOR_WHITE, "/objtoloc [objid] [type] [name] - Tautkan object menjadi titik ALT/location");
     SendClientMessage(playerid, COLOR_WHITE, "/locwithobject [type] [modelid] [name] - Buat object + location tertaut sekaligus");

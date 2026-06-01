@@ -520,4 +520,48 @@ AFTER object_model;
 CREATE INDEX IF NOT EXISTS idx_world_locations_linked_object_id
 ON world_locations (linked_object_id);
 
+ALTER TABLE gang_territories
+ADD COLUMN IF NOT EXISTS min_x FLOAT NOT NULL DEFAULT 0 AFTER radius,
+ADD COLUMN IF NOT EXISTS min_y FLOAT NOT NULL DEFAULT 0 AFTER min_x,
+ADD COLUMN IF NOT EXISTS max_x FLOAT NOT NULL DEFAULT 0 AFTER min_y,
+ADD COLUMN IF NOT EXISTS max_y FLOAT NOT NULL DEFAULT 0 AFTER max_x,
+ADD COLUMN IF NOT EXISTS enabled TINYINT NOT NULL DEFAULT 1 AFTER max_y;
+
+UPDATE gang_territories
+SET
+    min_x = center_x - radius,
+    min_y = center_y - radius,
+    max_x = center_x + radius,
+    max_y = center_y + radius,
+    enabled = 1
+WHERE min_x = 0 AND min_y = 0 AND max_x = 0 AND max_y = 0;
+
+-- Optional sanity check
+SELECT territory_index, territory_name, owner_gang_name, min_x, min_y, max_x, max_y, enabled
+FROM gang_territories
+ORDER BY territory_index ASC;
+
+
+-- SAIF / LSIF Dev v0.22B — Turf War History & Gang Stats
+
+CREATE TABLE IF NOT EXISTS turf_war_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    territory_index INT NOT NULL,
+    territory_name VARCHAR(64) NOT NULL,
+    attacker_gang_id INT NOT NULL DEFAULT 0,
+    attacker_gang_name VARCHAR(64) NOT NULL DEFAULT 'Neutral',
+    defender_gang_id INT NOT NULL DEFAULT 0,
+    defender_gang_name VARCHAR(64) NOT NULL DEFAULT 'Neutral',
+    result VARCHAR(24) NOT NULL,
+    detail VARCHAR(255) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_territory_index (territory_index),
+    INDEX idx_attacker_gang_id (attacker_gang_id),
+    INDEX idx_defender_gang_id (defender_gang_id),
+    INDEX idx_result (result),
+    INDEX idx_created_at (created_at)
+);
+
+
 

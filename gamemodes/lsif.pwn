@@ -9,6 +9,7 @@
 #define COLOR_CYAN      0x00FFFFFF
 #define COLOR_ORANGE    0xFF9900FF
 #define COLOR_GRAY      0xAAAAAAFF
+#define COLOR_GREY      COLOR_GRAY
 #define COLOR_PURPLE    0xAA66CCFF
 
 #define MYSQL_HOST      "localhost"
@@ -1658,6 +1659,9 @@ forward OnRecentBugsLoaded(playerid);
 forward OnRecentFeedbackLoaded(playerid);
 forward OnRecentReportsLoaded(playerid);
 forward OnRecentLogsLoaded(playerid);
+forward OnRecentTurfLogsLoaded(playerid);
+forward OnGangStatsLoaded(playerid, gangid);
+forward OnGangTopLoaded(playerid);
 forward OnWhitelistDialogLoaded(playerid);
 forward OnWhitelistCheckDialogLoaded(playerid);
 forward OnRecentBugsDialogLoaded(playerid);
@@ -5501,6 +5505,148 @@ stock RebuildTerritoryZone(territoryIndex)
 }
 
 
+stock LogTurfWarHistory(territoryIndex, const result[], const detail[])
+{
+    if (!IsValidTerritoryIndex(territoryIndex)) return 0;
+
+    new attacker = TurfWarAttackerGangID[territoryIndex];
+    new defender = TurfWarDefenderGangID[territoryIndex];
+    new attackerName[64];
+    new defenderName[64];
+    new query[768];
+
+    GetGangNameByID(attacker, attackerName, sizeof(attackerName));
+    GetGangNameByID(defender, defenderName, sizeof(defenderName));
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO turf_war_logs (territory_index, territory_name, attacker_gang_id, attacker_gang_name, defender_gang_id, defender_gang_name, result, detail) VALUES (%d, '%e', %d, '%e', %d, '%e', '%e', '%e')",
+        territoryIndex + 1,
+        TerritoryName[territoryIndex],
+        attacker,
+        attackerName,
+        defender,
+        defenderName,
+        result,
+        detail
+    );
+    mysql_tquery(g_SQL, query);
+    return 1;
+}
+
+public OnRecentTurfLogsLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+
+    new rows = cache_num_rows();
+    SendClientMessage(playerid, COLOR_YELLOW, "========== RECENT TURF WAR LOGS ==========");
+
+    if (rows == 0)
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "Belum ada riwayat turf war.");
+        return 1;
+    }
+
+    new id;
+    new territoryName[64];
+    new attackerName[64];
+    new defenderName[64];
+    new result[24];
+    new createdAt[32];
+    new msg[192];
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name_int(i, "id", id);
+        cache_get_value_name(i, "territory_name", territoryName, sizeof(territoryName));
+        cache_get_value_name(i, "attacker_gang_name", attackerName, sizeof(attackerName));
+        cache_get_value_name(i, "defender_gang_name", defenderName, sizeof(defenderName));
+        cache_get_value_name(i, "result", result, sizeof(result));
+        cache_get_value_name(i, "created_at", createdAt, sizeof(createdAt));
+
+        format(msg, sizeof(msg), "#%d [%s] %s | A:%s vs D:%s", id, result, territoryName, attackerName, defenderName);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+        format(msg, sizeof(msg), "Time: %s", createdAt);
+        SendClientMessage(playerid, COLOR_GREY, msg);
+    }
+    return 1;
+}
+
+public OnGangStatsLoaded(playerid, gangid)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+
+    if (cache_num_rows() == 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang tidak ditemukan.");
+        return 1;
+    }
+
+    new name[64];
+    new bankMoney;
+    new reputation;
+    new territories;
+    new members;
+    new captures;
+    new defends;
+    new msg[192];
+
+    cache_get_value_name(0, "name", name, sizeof(name));
+    cache_get_value_name_int(0, "bank_money", bankMoney);
+    cache_get_value_name_int(0, "reputation", reputation);
+    cache_get_value_name_int(0, "territories", territories);
+    cache_get_value_name_int(0, "members", members);
+    cache_get_value_name_int(0, "captures", captures);
+    cache_get_value_name_int(0, "defends", defends);
+
+    SendClientMessage(playerid, COLOR_YELLOW, "========== GANG STATS ==========");
+    format(msg, sizeof(msg), "Gang: %s | ID: %d", name, gangid);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+    format(msg, sizeof(msg), "Members: %d | Territories: %d", members, territories);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+    format(msg, sizeof(msg), "Bank: $%d | Reputation: %d", bankMoney, reputation);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+    format(msg, sizeof(msg), "Turf Captures: %d | Turf Defends: %d", captures, defends);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+    return 1;
+}
+
+public OnGangTopLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+
+    new rows = cache_num_rows();
+    SendClientMessage(playerid, COLOR_YELLOW, "========== GANG TOP ==========");
+
+    if (rows == 0)
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "Belum ada data gang.");
+        return 1;
+    }
+
+    new gangid;
+    new name[64];
+    new bankMoney;
+    new reputation;
+    new territories;
+    new msg[192];
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name_int(i, "id", gangid);
+        cache_get_value_name(i, "name", name, sizeof(name));
+        cache_get_value_name_int(i, "bank_money", bankMoney);
+        cache_get_value_name_int(i, "reputation", reputation);
+        cache_get_value_name_int(i, "territories", territories);
+
+        format(msg, sizeof(msg), "%d. %s | Turf: %d | Rep: %d | Bank: $%d", i + 1, name, territories, reputation, bankMoney);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+    }
+    return 1;
+}
+
 stock ResetTurfWarData()
 {
     for (new i = 0; i < MAX_TERRITORIES; i++)
@@ -5784,6 +5930,7 @@ stock CompleteTurfCapture(territoryIndex)
     format(msg, sizeof(msg), "[TURF CAPTURED] %s berhasil dikuasai oleh %s.", TerritoryName[territoryIndex], attackerName);
     SendClientMessageToAll(COLOR_GREEN, msg);
     LogAdminAction(INVALID_PLAYER_ID, INVALID_PLAYER_ID, "TURF_CAPTURE", msg);
+    LogTurfWarHistory(territoryIndex, "captured", msg);
     TurfWarCooldownUntil[territoryIndex] = gettime() + g_TurfCooldownSeconds;
     ResetTurfWarState(territoryIndex);
     return 1;
@@ -5809,6 +5956,7 @@ stock CompleteTurfDefend(territoryIndex)
     format(msg, sizeof(msg), "[TURF DEFENDED] %s berhasil dipertahankan oleh %s.", TerritoryName[territoryIndex], defenderName);
     SendClientMessageToAll(COLOR_CYAN, msg);
     LogAdminAction(INVALID_PLAYER_ID, INVALID_PLAYER_ID, "TURF_DEFEND", msg);
+    LogTurfWarHistory(territoryIndex, "defended", msg);
     TurfWarCooldownUntil[territoryIndex] = gettime() + g_TurfCooldownSeconds;
     ResetTurfWarState(territoryIndex);
     return 1;
@@ -5821,6 +5969,7 @@ stock CancelTurfWar(territoryIndex, const reason[])
     format(msg, sizeof(msg), "[TURF CANCELLED] %s: %s", TerritoryName[territoryIndex], reason);
     SendClientMessageToAll(COLOR_YELLOW, msg);
     LogAdminAction(INVALID_PLAYER_ID, INVALID_PLAYER_ID, "TURF_CANCEL", msg);
+    LogTurfWarHistory(territoryIndex, "cancelled", msg);
     TurfWarCooldownUntil[territoryIndex] = gettime() + 180;
     ResetTurfWarState(territoryIndex);
     return 1;
@@ -8200,7 +8349,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.22A.5 Help Role");
+    SetGameModeText("SAIF Dev v0.22B.1 Turf Compile");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -8294,7 +8443,7 @@ public OnGameModeInit()
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
-    print("[SAIF] Gamemode v0.22A.5 Help Role berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.22B.1 Turf Compile berhasil dijalankan.");
     return 1;
 }
 
@@ -17755,6 +17904,70 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_RED, "Kamu harus login/register terlebih dahulu.");
         return 1;
     }
+
+    if (!strcmp(cmdtext, "/turflogs", true))
+    {
+        mysql_tquery(g_SQL, "SELECT id, territory_name, attacker_gang_name, defender_gang_name, result, created_at FROM turf_war_logs ORDER BY id DESC LIMIT 10", "OnRecentTurfLogsLoaded", "i", playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/mygangstats", true))
+    {
+        if (PlayerGangID[playerid] <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum tergabung dalam gang.");
+            return 1;
+        }
+
+        new query[1024];
+        mysql_format(g_SQL, query, sizeof(query),
+                     "SELECT g.id, g.name, g.bank_money, g.reputation, COALESCE(t.territories,0) AS territories, COALESCE(m.members,0) AS members, COALESCE(c.captures,0) AS captures, COALESCE(d.defends,0) AS defends FROM gangs g LEFT JOIN (SELECT owner_gang_id, COUNT(*) territories FROM gang_territories WHERE enabled=1 GROUP BY owner_gang_id) t ON t.owner_gang_id=g.id LEFT JOIN (SELECT gang_id, COUNT(*) members FROM gang_members GROUP BY gang_id) m ON m.gang_id=g.id LEFT JOIN (SELECT attacker_gang_id, COUNT(*) captures FROM turf_war_logs WHERE result='captured' GROUP BY attacker_gang_id) c ON c.attacker_gang_id=g.id LEFT JOIN (SELECT defender_gang_id, COUNT(*) defends FROM turf_war_logs WHERE result='defended' GROUP BY defender_gang_id) d ON d.defender_gang_id=g.id WHERE g.id=%d LIMIT 1",
+                     PlayerGangID[playerid]
+                    );
+        mysql_tquery(g_SQL, query, "OnGangStatsLoaded", "ii", playerid, PlayerGangID[playerid]);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/gangstats", true) == 0)
+    {
+        new gangid = PlayerGangID[playerid];
+
+        if (strfind(cmdtext, "/gangstats ", true) == 0)
+        {
+            new gangStr[16];
+            if (!GetOneParam(cmdtext[11], gangStr, sizeof(gangStr)) || !IsNumericString(gangStr))
+            {
+                SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangstats [gang_id] atau /mygangstats");
+                return 1;
+            }
+            gangid = strval(gangStr);
+        }
+
+        if (gangid <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Gang ID tidak valid. Gunakan /gangs.");
+            return 1;
+        }
+
+        new query[1024];
+        mysql_format(g_SQL, query, sizeof(query),
+                     "SELECT g.id, g.name, g.bank_money, g.reputation, COALESCE(t.territories,0) AS territories, COALESCE(m.members,0) AS members, COALESCE(c.captures,0) AS captures, COALESCE(d.defends,0) AS defends FROM gangs g LEFT JOIN (SELECT owner_gang_id, COUNT(*) territories FROM gang_territories WHERE enabled=1 GROUP BY owner_gang_id) t ON t.owner_gang_id=g.id LEFT JOIN (SELECT gang_id, COUNT(*) members FROM gang_members GROUP BY gang_id) m ON m.gang_id=g.id LEFT JOIN (SELECT attacker_gang_id, COUNT(*) captures FROM turf_war_logs WHERE result='captured' GROUP BY attacker_gang_id) c ON c.attacker_gang_id=g.id LEFT JOIN (SELECT defender_gang_id, COUNT(*) defends FROM turf_war_logs WHERE result='defended' GROUP BY defender_gang_id) d ON d.defender_gang_id=g.id WHERE g.id=%d LIMIT 1",
+                     gangid
+                    );
+        mysql_tquery(g_SQL, query, "OnGangStatsLoaded", "ii", playerid, gangid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/gangtop", true))
+    {
+        mysql_tquery(g_SQL,
+                     "SELECT g.id, g.name, g.bank_money, g.reputation, COALESCE(t.territories,0) AS territories FROM gangs g LEFT JOIN (SELECT owner_gang_id, COUNT(*) territories FROM gang_territories WHERE enabled=1 GROUP BY owner_gang_id) t ON t.owner_gang_id=g.id WHERE g.id IN (1,2,3,4) ORDER BY territories DESC, g.reputation DESC, g.bank_money DESC",
+                     "OnGangTopLoaded",
+                     "i",
+                     playerid
+                    );
+        return 1;
+    }
     if (!strcmp(cmdtext, "/objmenu", true))
     {
         ShowDynamicObjectMenu(playerid);
@@ -18758,7 +18971,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.22A.5 Help Role (SAIF candidate)");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.22B.1 Turf Compile (SAIF candidate)");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -18767,7 +18980,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.22A.5: /help menyembunyikan kategori admin dari non-admin.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.22B: Turf war history, gang stats, gang top leaderboard.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A.3: Runtime turf war config untuk balancing/testing.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A.2: Turf HUD compact menggunakan TextDraw kecil.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A: Basic turf war system.");

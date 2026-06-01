@@ -412,6 +412,13 @@ new g_AntiCheatTimer;
 new g_FuelTimer;
 new g_TurfWarTimer;
 
+// Runtime turf war config for beta balancing/debug.
+// Defaults follow the constants above and can be changed by Owner in-game.
+new g_TurfHoldSeconds = TURF_HOLD_SECONDS;
+new g_TurfCaptureSeconds = TURF_CAPTURE_SECONDS;
+new g_TurfGraceSeconds = TURF_ATTACKER_GRACE_SECONDS;
+new g_TurfCooldownSeconds = TURF_COOLDOWN_SECONDS;
+
 new g_ServerStartTick;
 
 new PlayerMoneyMismatchCount[MAX_PLAYERS];
@@ -5637,9 +5644,13 @@ stock TryStartTurfChallengeHold(playerid)
     PlayerTurfHoldGang[playerid] = PlayerGangID[playerid];
     PlayerTurfHoldStarted[playerid] = GetTickCount();
 
-    GameTextForPlayer(playerid, "~r~Challenging Turf~n~~w~Hold ALT 5 seconds", 2500, 3);
-    SendClientMessage(playerid, COLOR_ORANGE, "Tahan ALT selama 5 detik untuk memulai turf war. Lepas ALT untuk batal.");
-    SetTimerEx("CompleteTurfChallengeHold", TURF_HOLD_SECONDS * 1000, false, "iiii", playerid, territoryIndex, PlayerGangID[playerid], PlayerTurfHoldStarted[playerid]);
+    new holdMsg[96];
+    format(holdMsg, sizeof(holdMsg), "~r~Challenging Turf~n~~w~Hold ALT %d seconds", g_TurfHoldSeconds);
+    GameTextForPlayer(playerid, holdMsg, 2500, 3);
+    new holdChat[128];
+    format(holdChat, sizeof(holdChat), "Tahan ALT selama %d detik untuk memulai turf war. Lepas ALT untuk batal.", g_TurfHoldSeconds);
+    SendClientMessage(playerid, COLOR_ORANGE, holdChat);
+    SetTimerEx("CompleteTurfChallengeHold", g_TurfHoldSeconds * 1000, false, "iiii", playerid, territoryIndex, PlayerGangID[playerid], PlayerTurfHoldStarted[playerid]);
     return 1;
 }
 
@@ -5673,11 +5684,11 @@ stock StartTurfWar(playerid, territoryIndex)
     TurfWarState[territoryIndex] = TURF_WAR_STATE_CAPTURING;
     TurfWarAttackerGangID[territoryIndex] = PlayerGangID[playerid];
     TurfWarDefenderGangID[territoryIndex] = TerritoryOwnerGangID[territoryIndex];
-    TurfWarCaptureSecondsLeft[territoryIndex] = TURF_CAPTURE_SECONDS;
+    TurfWarCaptureSecondsLeft[territoryIndex] = g_TurfCaptureSeconds;
     TurfWarGraceSecondsLeft[territoryIndex] = 0;
 
     new msg[192];
-    format(msg, sizeof(msg), "[TURF WAR] %s diserang oleh %s! Timer capture: %d detik.", TerritoryName[territoryIndex], PlayerGangName[playerid], TURF_CAPTURE_SECONDS);
+    format(msg, sizeof(msg), "[TURF WAR] %s diserang oleh %s! Timer capture: %d detik.", TerritoryName[territoryIndex], PlayerGangName[playerid], g_TurfCaptureSeconds);
     SendClientMessageToAll(COLOR_ORANGE, msg);
     GameTextForPlayer(playerid, "~r~TURF WAR STARTED", 3000, 3);
 
@@ -5771,7 +5782,7 @@ stock CompleteTurfCapture(territoryIndex)
     format(msg, sizeof(msg), "[TURF CAPTURED] %s berhasil dikuasai oleh %s.", TerritoryName[territoryIndex], attackerName);
     SendClientMessageToAll(COLOR_GREEN, msg);
     LogAdminAction(INVALID_PLAYER_ID, INVALID_PLAYER_ID, "TURF_CAPTURE", msg);
-    TurfWarCooldownUntil[territoryIndex] = gettime() + TURF_COOLDOWN_SECONDS;
+    TurfWarCooldownUntil[territoryIndex] = gettime() + g_TurfCooldownSeconds;
     ResetTurfWarState(territoryIndex);
     return 1;
 }
@@ -5796,7 +5807,7 @@ stock CompleteTurfDefend(territoryIndex)
     format(msg, sizeof(msg), "[TURF DEFENDED] %s berhasil dipertahankan oleh %s.", TerritoryName[territoryIndex], defenderName);
     SendClientMessageToAll(COLOR_CYAN, msg);
     LogAdminAction(INVALID_PLAYER_ID, INVALID_PLAYER_ID, "TURF_DEFEND", msg);
-    TurfWarCooldownUntil[territoryIndex] = gettime() + TURF_COOLDOWN_SECONDS;
+    TurfWarCooldownUntil[territoryIndex] = gettime() + g_TurfCooldownSeconds;
     ResetTurfWarState(territoryIndex);
     return 1;
 }
@@ -5994,9 +6005,9 @@ public TurfWarTick()
             if (TurfWarState[t] != TURF_WAR_STATE_ATTACKER_GRACE)
             {
                 TurfWarState[t] = TURF_WAR_STATE_ATTACKER_GRACE;
-                TurfWarGraceSecondsLeft[t] = TURF_ATTACKER_GRACE_SECONDS;
+                TurfWarGraceSecondsLeft[t] = g_TurfGraceSeconds;
                 new msg[160];
-                format(msg, sizeof(msg), "[TURF] Tidak ada attacker di %s. Kembali dalam %d detik atau turf defended.", TerritoryName[t], TURF_ATTACKER_GRACE_SECONDS);
+                format(msg, sizeof(msg), "[TURF] Tidak ada attacker di %s. Kembali dalam %d detik atau turf defended.", TerritoryName[t], g_TurfGraceSeconds);
                 SendTurfWarMessage(t, COLOR_YELLOW, msg);
                 UpdateTurfWarHUD(t, attackerCount, defenderCount);
             }
@@ -8187,7 +8198,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.22A.2 HUD Fix");
+    SetGameModeText("SAIF Dev v0.22A.3 Turf Config");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -8281,7 +8292,7 @@ public OnGameModeInit()
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
-    print("[SAIF] Gamemode v0.22A.2 Compact Turf HUD berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.22A.3 Turf Config berhasil dijalankan.");
     return 1;
 }
 
@@ -17917,6 +17928,110 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/turfconfig", true))
+    {
+        new msg[144];
+        SendClientMessage(playerid, COLOR_YELLOW, "========== TURF WAR CONFIG ==========");
+        format(msg, sizeof(msg), "Hold ALT: %d detik | Capture: %d detik | Grace: %d detik", g_TurfHoldSeconds, g_TurfCaptureSeconds, g_TurfGraceSeconds);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+        format(msg, sizeof(msg), "Cooldown: %d detik | Flash: merah | HUD: compact TextDraw", g_TurfCooldownSeconds);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+        if (IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_CYAN, "Owner: /setturfconfig [hold] [capture] [grace] [cooldown]");
+            SendClientMessage(playerid, COLOR_CYAN, "Debug cepat: /setturfdebugtime [capture_seconds]");
+        }
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/setturfconfig ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa mengubah turf config.");
+            return 1;
+        }
+
+        new holdStr[16], captureStr[16], graceStr[16], cooldownStr[16];
+        if (!GetFourParams(cmdtext[15], holdStr, sizeof(holdStr), captureStr, sizeof(captureStr), graceStr, sizeof(graceStr), cooldownStr, sizeof(cooldownStr)) ||
+                !IsNumericString(holdStr) || !IsNumericString(captureStr) || !IsNumericString(graceStr) || !IsNumericString(cooldownStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setturfconfig [hold] [capture] [grace] [cooldown]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh beta test: /setturfconfig 5 60 20 300");
+            return 1;
+        }
+
+        new hold = strval(holdStr);
+        new capture = strval(captureStr);
+        new grace = strval(graceStr);
+        new cooldown = strval(cooldownStr);
+
+        if (hold < 1 || hold > 30 || capture < 10 || capture > 1800 || grace < 5 || grace > 300 || cooldown < 0 || cooldown > 7200)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Range: hold 1-30, capture 10-1800, grace 5-300, cooldown 0-7200 detik.");
+            return 1;
+        }
+
+        g_TurfHoldSeconds = hold;
+        g_TurfCaptureSeconds = capture;
+        g_TurfGraceSeconds = grace;
+        g_TurfCooldownSeconds = cooldown;
+
+        new msg[144];
+        format(msg, sizeof(msg), "Turf config diubah: hold %d, capture %d, grace %d, cooldown %d detik.", hold, capture, grace, cooldown);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+        LogAdminAction(playerid, INVALID_PLAYER_ID, "SET_TURF_CONFIG", msg);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/setturfdebugtime ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa mengubah debug time.");
+            return 1;
+        }
+
+        new timeStr[16];
+        if (!GetOneParam(cmdtext[18], timeStr, sizeof(timeStr)) || !IsNumericString(timeStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setturfdebugtime [capture_seconds]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /setturfdebugtime 30");
+            return 1;
+        }
+
+        new capture = strval(timeStr);
+        if (capture < 10 || capture > 1800)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Capture seconds harus 10 sampai 1800.");
+            return 1;
+        }
+
+        g_TurfCaptureSeconds = capture;
+        new msg[128];
+        format(msg, sizeof(msg), "Debug turf capture time diset menjadi %d detik.", g_TurfCaptureSeconds);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+        LogAdminAction(playerid, INVALID_PLAYER_ID, "SET_TURF_DEBUG_TIME", msg);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/resetturfconfig", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa reset turf config.");
+            return 1;
+        }
+
+        g_TurfHoldSeconds = TURF_HOLD_SECONDS;
+        g_TurfCaptureSeconds = TURF_CAPTURE_SECONDS;
+        g_TurfGraceSeconds = TURF_ATTACKER_GRACE_SECONDS;
+        g_TurfCooldownSeconds = TURF_COOLDOWN_SECONDS;
+        SendClientMessage(playerid, COLOR_GREEN, "Turf config dikembalikan ke default.");
+        LogAdminAction(playerid, INVALID_PLAYER_ID, "RESET_TURF_CONFIG", "Turf config dikembalikan ke default.");
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/refreshzones", true))
     {
         HideTerritoryZones(playerid);
@@ -18381,6 +18496,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/refreshicons - Refresh icon radar/map LSIF");
         SendClientMessage(playerid, COLOR_WHITE, "/refreshzones - Refresh blok warna territory/turf");
         SendClientMessage(playerid, COLOR_WHITE, "/turfstatus - Lihat turf war aktif");
+        SendClientMessage(playerid, COLOR_WHITE, "/turfconfig - Lihat config turf war");
         SendClientMessage(playerid, COLOR_WHITE, "/challengeturf - Fallback start turf war");
         SendClientMessage(playerid, COLOR_WHITE, "/weaponshop - Buka Ammu-Nation Weapon Shop, harus dekat Ammu-Nation");
         SendClientMessage(playerid, COLOR_WHITE, "/weaponinfo - Lihat daftar weapon dan harga");

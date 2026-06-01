@@ -306,7 +306,7 @@
 #define MAX_TERRITORIES 32
 #define MAX_DEFAULT_TERRITORIES 6
 #define TERRITORY_ACCESS_RADIUS 80.0
-#define TERRITORY_ZONE_ALPHA 0x55
+#define TERRITORY_ZONE_ALPHA 0x77
 #define DEFAULT_GANG_COLOR 0xFFFFFFFF
 #define MAX_GANG_COLOR_PRESETS 8
 #define MAX_PRESET_GANGS 4
@@ -1623,6 +1623,7 @@ forward OnPlayerWeaponsLoaded(playerid);
 forward ApplySavedWeaponLoadout(playerid);
 forward OnGangTerritoriesLoaded();
 forward OnGangTerritoryGangLookup(playerid, territoryIndex, gangid);
+forward DelayedRefreshAllPlayerTerritoryZones();
 forward OnGangColorUpdated(playerid, colorIndex);
 forward OnPlayerGangLoaded(playerid);
 forward OnGangCreated(playerid);
@@ -5078,6 +5079,14 @@ stock CreateTerritoryGangZones()
             continue;
         }
 
+        NormalizeTerritoryCorners(i);
+
+        // Skip invalid/too-small rectangles. GangZone blocks are not visible if corners overlap.
+        if (floatabs(TerritoryMaxX[i] - TerritoryMinX[i]) < 5.0 || floatabs(TerritoryMaxY[i] - TerritoryMinY[i]) < 5.0)
+        {
+            continue;
+        }
+
         TerritoryZone[i] = GangZoneCreate(TerritoryMinX[i], TerritoryMinY[i], TerritoryMaxX[i], TerritoryMaxY[i]);
     }
 
@@ -5125,8 +5134,19 @@ stock RefreshAllTerritoryRuntime()
     DestroyTerritoryGangZones();
     CreateTerritoryGangZones();
     RefreshAllTerritoryLabels();
-    RefreshAllPlayerTerritoryZones();
+
+    // Clear old point icons first, then show colored GangZone blocks.
     RefreshAllPlayerMapIcons();
+    RefreshAllPlayerTerritoryZones();
+
+    // Some clients need a short delay after GangZoneCreate before the block is visible.
+    SetTimer("DelayedRefreshAllPlayerTerritoryZones", 350, false);
+    return 1;
+}
+
+public DelayedRefreshAllPlayerTerritoryZones()
+{
+    RefreshAllPlayerTerritoryZones();
     return 1;
 }
 
@@ -5134,7 +5154,7 @@ stock ApplyTerritoryZones(playerid)
 {
     for (new i = 0; i < MAX_TERRITORIES; i++)
     {
-        if (TerritoryZone[i] != -1)
+        if (TerritoryEnabled[i] && TerritoryZone[i] != -1)
         {
             GangZoneShowForPlayer(playerid, TerritoryZone[i], GetTerritoryZoneColor(i));
         }
@@ -5405,8 +5425,9 @@ stock RebuildTerritoryZone(territoryIndex)
 
     // Full refresh is intentionally used here. GangZone visibility is per player, and a full refresh
     // avoids missing colored blocks after corner/owner/delete edits.
-    RefreshAllPlayerTerritoryZones();
     RefreshAllPlayerMapIcons();
+    RefreshAllPlayerTerritoryZones();
+    SetTimer("DelayedRefreshAllPlayerTerritoryZones", 350, false);
     return 1;
 }
 
@@ -5652,10 +5673,19 @@ stock DeleteTurfZone(playerid, territoryIndex)
     TerritoryEnabled[territoryIndex] = 0;
     TerritoryOwnerGangID[territoryIndex] = 0;
     TerritoryOwnerColor[territoryIndex] = COLOR_GRAY;
+    TerritoryX[territoryIndex] = 0.0;
+    TerritoryY[territoryIndex] = 0.0;
+    TerritoryZ[territoryIndex] = 0.0;
+    TerritoryRadius[territoryIndex] = 0.0;
+    TerritoryMinX[territoryIndex] = 0.0;
+    TerritoryMinY[territoryIndex] = 0.0;
+    TerritoryMaxX[territoryIndex] = 0.0;
+    TerritoryMaxY[territoryIndex] = 0.0;
     format(TerritoryOwnerName[territoryIndex], 64, "Neutral");
+    format(TerritoryName[territoryIndex], 64, "Empty Territory");
 
     new query[256];
-    mysql_format(g_SQL, query, sizeof(query), "UPDATE gang_territories SET enabled=0, owner_gang_id=0, owner_gang_name='Neutral', owner_color=%d, updated_at=NOW() WHERE territory_index=%d LIMIT 1", COLOR_GRAY, territoryIndex + 1);
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE gang_territories SET enabled=0, territory_name='Empty Territory', owner_gang_id=0, owner_gang_name='Neutral', owner_color=%d, center_x=0, center_y=0, center_z=0, radius=0, min_x=0, min_y=0, max_x=0, max_y=0, updated_at=NOW() WHERE territory_index=%d LIMIT 1", COLOR_GRAY, territoryIndex + 1);
     mysql_tquery(g_SQL, query);
 
     RefreshAllPlayerTerritoryZones();
@@ -7530,7 +7560,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.21E.2 Turf Runtime");
+    SetGameModeText("SAIF Dev v0.21E.3 Turf Zone Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -7621,7 +7651,7 @@ public OnGameModeInit()
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
-    print("[SAIF] Gamemode v0.21E.2 Turf Runtime Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.21E.3 Turf Zone Fix Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -12358,10 +12388,8 @@ stock ApplyLSIFMapIcons(playerid)
         SetPlayerMapIcon(playerid, MAPICON_BASE_BUS_STOP + i, BusStopX[i], BusStopY[i], BusStopZ[i], MAPICON_TYPE_BUS_STOP, COLOR_YELLOW, MAPICON_LOCAL);
     }
 
-    for (new i = 0; i < MAX_TERRITORIES; i++)
-    {
-        SetPlayerMapIcon(playerid, MAPICON_BASE_TERRITORY + i, TerritoryX[i], TerritoryY[i], TerritoryZ[i], MAPICON_TYPE_TERRITORY, TerritoryOwnerColor[i], MAPICON_LOCAL);
-    }
+    // Territory/turf is now represented by transparent GangZone blocks, not point map icons.
+    // Point icons were removed here to prevent stale symbols and map icon ID conflicts.
 
     for (new i = 0; i < MAX_PRESET_GANGS; i++)
     {
@@ -12485,7 +12513,7 @@ stock ShowMapLegendDialog(playerid)
     format(
         dialogText,
         sizeof(dialogText),
-        "Radar/Map Icon LSIF:\n\nATM/Bank - transaksi bank, pakai ALT di marker ATM.\nHouse - rumah/interior; ALT untuk menu, panah untuk masuk/keluar.\nBusiness - beli/manage/collect business dengan ALT.\nDealership - vehicle shop dan garage service dengan ALT.\nAmmu-Nation - weapon shop dengan ALT.\nTerritory/Turf - blok warna transparan di map sesuai owner gang. Lihat /turfmap atau /refreshzones.\nGang HQ - markas gang preset; tekan ALT untuk join/menu gang. Jika satu titik punya beberapa fungsi, ALT membuka Nearby Interaction Menu.\nRace - lokasi race/time trial.\nJob Marker - titik panduan vehicle mission/job.\nBus Stop - rute Bus Driver Mission.\n\nDi dunia, cari 3D label seperti [ALT] ATM, [ALT] Dealership, [ALT] Ammu-Nation, [ALT] Grove/Ballas/Vagos/Aztecas HQ, atau [JOB] Bus Terminal.\nALT = menu/transaksi. Tombol 2 = start vehicle mission/job. Turf map = /gangmenu atau /turfmap. Organization tetap untuk ekonomi/bisnis."
+        "Radar/Map Icon LSIF:\n\nATM/Bank - transaksi bank, pakai ALT di marker ATM.\nHouse - rumah/interior; ALT untuk menu, panah untuk masuk/keluar.\nBusiness - beli/manage/collect business dengan ALT.\nDealership - vehicle shop dan garage service dengan ALT.\nAmmu-Nation - weapon shop dengan ALT.\nTerritory/Turf - blok warna transparan di map/radar sesuai owner gang, bukan icon titik. Lihat /turfmap, /refreshzones, atau /turfdebug [id].\nGang HQ - markas gang preset; tekan ALT untuk join/menu gang. Jika satu titik punya beberapa fungsi, ALT membuka Nearby Interaction Menu.\nRace - lokasi race/time trial.\nJob Marker - titik panduan vehicle mission/job.\nBus Stop - rute Bus Driver Mission.\n\nDi dunia, cari 3D label seperti [ALT] ATM, [ALT] Dealership, [ALT] Ammu-Nation, [ALT] Grove/Ballas/Vagos/Aztecas HQ, atau [JOB] Bus Terminal.\nALT = menu/transaksi. Tombol 2 = start vehicle mission/job. Turf map = /gangmenu atau /turfmap. Organization tetap untuk ekonomi/bisnis."
     );
 
     ShowPlayerDialog(playerid, DIALOG_BETA_MOTD, DIALOG_STYLE_MSGBOX, "LSIF Map Legend", dialogText, "OK", "Tutup");
@@ -17284,6 +17312,37 @@ public OnPlayerCommandText(playerid, cmdtext[])
     }
 
 
+
+
+    if (strfind(cmdtext, "/turfdebug ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa debug turf.");
+            return 1;
+        }
+
+        new idStr[16];
+        if (!GetOneParam(cmdtext[11], idStr, sizeof(idStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /turfdebug [id]");
+            return 1;
+        }
+
+        new t = strval(idStr) - 1;
+        if (!IsValidTerritoryIndex(t))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Turf ID tidak valid.");
+            return 1;
+        }
+
+        new msg[192];
+        format(msg, sizeof(msg), "Turf %d enabled=%d zone=%d owner=%d color=0x%x", t + 1, TerritoryEnabled[t], TerritoryZone[t], TerritoryOwnerGangID[t], GetTerritoryZoneColor(t));
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+        format(msg, sizeof(msg), "Corners: %.2f %.2f -> %.2f %.2f | Center %.2f %.2f %.2f", TerritoryMinX[t], TerritoryMinY[t], TerritoryMaxX[t], TerritoryMaxY[t], TerritoryX[t], TerritoryY[t], TerritoryZ[t]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+        return 1;
+    }
 
     if (!strcmp(cmdtext, "/turfmenu", true))
     {

@@ -129,6 +129,7 @@
 #define DIALOG_GANG_TOP_DETAIL 1109
 #define DIALOG_TURF_LOGS_DIALOG 1110
 #define DIALOG_GANG_TURF_LIST 1111
+#define DIALOG_INFO 1112
 
 
 
@@ -325,6 +326,7 @@
 #define GANG_RANK_SOLDIER   2
 #define GANG_RANK_ENFORCER  3
 #define GANG_RANK_UNDERBOSS 4
+#define GANG_RANK_OG        GANG_RANK_UNDERBOSS
 #define GANG_RANK_LEADER    5
 
 #define TURF_WAR_STATE_NONE            0
@@ -895,6 +897,10 @@ new PlayerGangInvite[MAX_PLAYERS];
 new PlayerGangName[MAX_PLAYERS][64];
 new PlayerPendingGangName[MAX_PLAYERS][64];
 new PlayerGangColor[MAX_PLAYERS];
+new PlayerGangRespect[MAX_PLAYERS];
+new PlayerGangCaptures[MAX_PLAYERS];
+new PlayerGangDefends[MAX_PLAYERS];
+new PlayerGangWars[MAX_PLAYERS];
 new PlayerSelectedGangTarget[MAX_PLAYERS];
 new PlayerDialogTerritoryIndex[MAX_PLAYERS];
 new PlayerDialogGangID[MAX_PLAYERS];
@@ -1666,6 +1672,7 @@ forward OnRecentLogsLoaded(playerid);
 forward OnRecentTurfLogsLoaded(playerid);
 forward OnGangStatsLoaded(playerid, gangid);
 forward OnGangTopLoaded(playerid);
+forward OnGangRespectLoaded(playerid);
 forward OnGangStatsDialogLoaded(playerid, gangid);
 forward OnGangTopDialogLoaded(playerid);
 forward OnTurfLogsDialogLoaded(playerid);
@@ -4816,7 +4823,7 @@ stock LoadPlayerGang(playerid)
         g_SQL,
         query,
         sizeof(query),
-        "SELECT gm.gang_id, gm.rank_level, g.name, g.gang_color FROM gang_members gm JOIN gangs g ON g.id = gm.gang_id WHERE gm.player_id=%d LIMIT 1",
+        "SELECT gm.gang_id, gm.rank_level, g.name, g.gang_color, COALESCE(gs.respect,0) AS respect, COALESCE(gs.captures,0) AS captures, COALESCE(gs.defends,0) AS defends, COALESCE(gs.wars_participated,0) AS wars_participated FROM gang_members gm JOIN gangs g ON g.id = gm.gang_id LEFT JOIN gang_member_stats gs ON gs.gang_id=gm.gang_id AND gs.player_id=gm.player_id WHERE gm.player_id=%d LIMIT 1",
         PlayerDBID[playerid]
     );
 
@@ -4900,7 +4907,7 @@ stock ShowGangHQDialog(playerid, gangid)
     PlayerDialogGangID[playerid] = gangid;
 
     new title[96];
-    new body[512];
+    new body[1024];
     format(title, sizeof(title), "%s HQ", PresetGangName[gangid - 1]);
 
     if (PlayerGangID[playerid] == gangid)
@@ -4908,12 +4915,15 @@ stock ShowGangHQDialog(playerid, gangid)
         strcat(body, "Gang Info\n", sizeof(body));
         strcat(body, "Gang Members\n", sizeof(body));
         strcat(body, "Gang Stats\n", sizeof(body));
+        strcat(body, "My Gang Respect\n", sizeof(body));
+        strcat(body, "Gang Rank Info\n", sizeof(body));
         strcat(body, "Gang Turfs\n", sizeof(body));
         strcat(body, "Turf Map\n", sizeof(body));
         strcat(body, "Recent Turf Logs\n", sizeof(body));
         strcat(body, "Kick Member (Gang Boss)\n", sizeof(body));
-        strcat(body, "Leave Gang\n", sizeof(body));
-        strcat(body, "Organization Menu", sizeof(body));
+        strcat(body, "Promote Member (Gang Boss)\n", sizeof(body));
+        strcat(body, "Demote Member (Gang Boss)\n", sizeof(body));
+        strcat(body, "Leave Gang", sizeof(body));
     }
     else
     {
@@ -4922,7 +4932,7 @@ stock ShowGangHQDialog(playerid, gangid)
         strcat(body, "Gang Turfs\n", sizeof(body));
         strcat(body, "Join This Gang\n", sizeof(body));
         strcat(body, "Turf Map\n", sizeof(body));
-        strcat(body, "Organization Menu", sizeof(body));
+        strcat(body, "Gang Rank Info", sizeof(body));
     }
 
     ShowPlayerDialog(playerid, DIALOG_GANG_HQ_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Close");
@@ -4969,8 +4979,16 @@ stock ProcessJoinPresetGang(playerid, gangid)
 
     mysql_tquery(g_SQL, query);
 
+    new statQuery[384];
+    mysql_format(g_SQL, statQuery, sizeof(statQuery), "INSERT INTO gang_member_stats (gang_id, player_id, player_name) VALUES (%d, %d, '%e') ON DUPLICATE KEY UPDATE player_name=VALUES(player_name), updated_at=NOW()", gangid, PlayerDBID[playerid], playerName);
+    mysql_tquery(g_SQL, statQuery);
+
     PlayerGangID[playerid] = gangid;
     PlayerGangRank[playerid] = GANG_RANK_MEMBER;
+    PlayerGangRespect[playerid] = 0;
+    PlayerGangCaptures[playerid] = 0;
+    PlayerGangDefends[playerid] = 0;
+    PlayerGangWars[playerid] = 0;
     PlayerGangColor[playerid] = PresetGangColor[gangIndex];
     format(PlayerGangName[playerid], 64, "%s", PresetGangName[gangIndex]);
     ApplyPlayerGangNameColor(playerid);
@@ -5901,7 +5919,222 @@ stock RewardGangTurf(gangid, reward, reputation)
     return 1;
 }
 
-stock RewardGangMembersInside(gangid, territoryIndex, cash, xp)
+
+stock GetAutoGangRankFromRespect(respect)
+{
+    if (respect >= 600) return GANG_RANK_OG;
+    if (respect >= 250) return GANG_RANK_ENFORCER;
+    if (respect >= 100) return GANG_RANK_SOLDIER;
+    return GANG_RANK_MEMBER;
+}
+
+stock SaveOnlineGangRank(playerid)
+{
+    if (PlayerGangID[playerid] <= 0 || PlayerDBID[playerid] <= 0) return 0;
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE gang_members SET rank_level=%d WHERE player_id=%d AND gang_id=%d LIMIT 1", PlayerGangRank[playerid], PlayerDBID[playerid], PlayerGangID[playerid]);
+    mysql_tquery(g_SQL, query);
+    return 1;
+}
+
+stock TryAutoPromoteByGangRespect(playerid)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid] || PlayerGangID[playerid] <= 0) return 0;
+    if (PlayerGangRank[playerid] >= GANG_RANK_LEADER) return 0;
+
+    new suggestedRank = GetAutoGangRankFromRespect(PlayerGangRespect[playerid]);
+
+    if (suggestedRank > PlayerGangRank[playerid])
+    {
+        PlayerGangRank[playerid] = suggestedRank;
+        SaveOnlineGangRank(playerid);
+
+        new rankName[32];
+        new msg[144];
+        GetGangRankName(suggestedRank, rankName, sizeof(rankName));
+        format(msg, sizeof(msg), "Gang respect naik. Rank kamu sekarang: %s.", rankName);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+        return 1;
+    }
+
+    return 0;
+}
+
+stock AddGangMemberContribution(playerid, gangid, respect, captureInc, defendInc, warInc)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid]) return 0;
+    if (PlayerGangID[playerid] != gangid || gangid <= 0) return 0;
+
+    new pname[MAX_PLAYER_NAME];
+    GetPlayerName(playerid, pname, sizeof(pname));
+
+    PlayerGangRespect[playerid] += respect;
+    PlayerGangCaptures[playerid] += captureInc;
+    PlayerGangDefends[playerid] += defendInc;
+    PlayerGangWars[playerid] += warInc;
+
+    new query[512];
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO gang_member_stats (gang_id, player_id, player_name, respect, captures, defends, wars_participated, last_activity_at) VALUES (%d, %d, '%e', %d, %d, %d, %d, NOW()) ON DUPLICATE KEY UPDATE player_name=VALUES(player_name), respect=respect+%d, captures=captures+%d, defends=defends+%d, wars_participated=wars_participated+%d, last_activity_at=NOW(), updated_at=NOW()",
+        gangid,
+        PlayerDBID[playerid],
+        pname,
+        respect,
+        captureInc,
+        defendInc,
+        warInc,
+        respect,
+        captureInc,
+        defendInc,
+        warInc
+    );
+    mysql_tquery(g_SQL, query);
+
+    TryAutoPromoteByGangRespect(playerid);
+    return 1;
+}
+
+stock ProcessGangPromote(playerid, targetid)
+{
+    if (!IsGangLeader(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Gang Boss yang bisa promote member.");
+        return 0;
+    }
+
+    if (!IsPlayerConnected(targetid) || !PlayerLoggedIn[targetid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Target tidak online/login.");
+        return 0;
+    }
+
+    if (targetid == playerid)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Tidak bisa promote diri sendiri.");
+        return 0;
+    }
+
+    if (PlayerGangID[targetid] != PlayerGangID[playerid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Target bukan anggota gang kamu.");
+        return 0;
+    }
+
+    if (PlayerGangRank[targetid] >= GANG_RANK_OG)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang Boss hanya bisa promote sampai OG. Gang Boss ditentukan Owner server.");
+        return 0;
+    }
+
+    PlayerGangRank[targetid]++;
+    SaveOnlineGangRank(targetid);
+
+    new rankName[32], msg[160], targetName[MAX_PLAYER_NAME];
+    GetPlayerName(targetid, targetName, sizeof(targetName));
+    GetGangRankName(PlayerGangRank[targetid], rankName, sizeof(rankName));
+    format(msg, sizeof(msg), "%s dipromote menjadi %s.", targetName, rankName);
+    SendMessageToGang(PlayerGangID[playerid], COLOR_GREEN, msg);
+    return 1;
+}
+
+stock ProcessGangDemote(playerid, targetid)
+{
+    if (!IsGangLeader(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Gang Boss yang bisa demote member.");
+        return 0;
+    }
+
+    if (!IsPlayerConnected(targetid) || !PlayerLoggedIn[targetid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Target tidak online/login.");
+        return 0;
+    }
+
+    if (targetid == playerid)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Tidak bisa demote diri sendiri.");
+        return 0;
+    }
+
+    if (PlayerGangID[targetid] != PlayerGangID[playerid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Target bukan anggota gang kamu.");
+        return 0;
+    }
+
+    if (PlayerGangRank[targetid] >= PlayerGangRank[playerid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Tidak bisa demote rank yang sama/lebih tinggi.");
+        return 0;
+    }
+
+    if (PlayerGangRank[targetid] <= GANG_RANK_MEMBER)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Target sudah berada di rank terendah.");
+        return 0;
+    }
+
+    PlayerGangRank[targetid]--;
+    SaveOnlineGangRank(targetid);
+
+    new rankName[32], msg[160], targetName[MAX_PLAYER_NAME];
+    GetPlayerName(targetid, targetName, sizeof(targetName));
+    GetGangRankName(PlayerGangRank[targetid], rankName, sizeof(rankName));
+    format(msg, sizeof(msg), "%s didemote menjadi %s.", targetName, rankName);
+    SendMessageToGang(PlayerGangID[playerid], COLOR_YELLOW, msg);
+    return 1;
+}
+
+stock ShowGangRankInfoDialog(playerid)
+{
+    new body[1024];
+    strcat(body, "Gang rank progression:\n\n", sizeof(body));
+    strcat(body, "1. Member - Rank awal gang.\n", sizeof(body));
+    strcat(body, "2. Soldier - Auto pada 100 respect.\n", sizeof(body));
+    strcat(body, "3. Enforcer - Auto pada 250 respect.\n", sizeof(body));
+    strcat(body, "4. OG - Auto pada 600 respect.\n", sizeof(body));
+    strcat(body, "5. Gang Boss - Hanya ditetapkan Owner server.\n\n", sizeof(body));
+    strcat(body, "Respect didapat dari capture/defend turf dan aktivitas gang.\n", sizeof(body));
+    strcat(body, "Gang Boss bisa /gangpromote dan /gangdemote member sampai OG.", sizeof(body));
+
+    ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "Gang Rank Info", body, "OK", "");
+    return 1;
+}
+
+stock ShowMyGangRespectDialog(playerid)
+{
+    if (PlayerGangID[playerid] <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum bergabung dengan gang.");
+        return 0;
+    }
+
+    new rankName[32];
+    new body[512];
+    GetGangRankName(PlayerGangRank[playerid], rankName, sizeof(rankName));
+
+    format(
+        body,
+        sizeof(body),
+        "Gang: %s\nRank: %s (%d)\nRespect: %d\n\nTurf Captures: %d\nTurf Defends: %d\nWars Participated: %d",
+        PlayerGangName[playerid],
+        rankName,
+        PlayerGangRank[playerid],
+        PlayerGangRespect[playerid],
+        PlayerGangCaptures[playerid],
+        PlayerGangDefends[playerid],
+        PlayerGangWars[playerid]
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "My Gang Respect", body, "OK", "");
+    return 1;
+}
+
+stock RewardGangMembersInside(gangid, territoryIndex, cash, xp, respect = 0, captureInc = 0, defendInc = 0, warInc = 0)
 {
     if (gangid <= 0) return 0;
     new msg[144];
@@ -5913,7 +6146,11 @@ stock RewardGangMembersInside(gangid, territoryIndex, cash, xp)
         GivePlayerCash(i, cash);
         GivePlayerXPEx(i, xp);
         SavePlayerData(i);
-        format(msg, sizeof(msg), "Turf reward: +$%d +%d XP.", cash, xp);
+        if (respect > 0 || captureInc > 0 || defendInc > 0 || warInc > 0)
+        {
+            AddGangMemberContribution(i, gangid, respect, captureInc, defendInc, warInc);
+        }
+        format(msg, sizeof(msg), "Turf reward: +$%d +%d XP +%d respect.", cash, xp, respect);
         SendClientMessage(i, COLOR_GREEN, msg);
     }
     return 1;
@@ -5927,7 +6164,7 @@ stock CompleteTurfCapture(territoryIndex)
     GetGangNameByID(attacker, attackerName, sizeof(attackerName));
     SetTerritoryOwnerFromGang(territoryIndex, attacker);
     RewardGangTurf(attacker, TURF_CAPTURE_GANG_REWARD, 10);
-    RewardGangMembersInside(attacker, territoryIndex, TURF_CAPTURE_PLAYER_REWARD, TURF_CAPTURE_XP);
+    RewardGangMembersInside(attacker, territoryIndex, TURF_CAPTURE_PLAYER_REWARD, TURF_CAPTURE_XP, 25, 1, 0, 1);
     new msg[192];
     format(msg, sizeof(msg), "[TURF CAPTURED] %s berhasil dikuasai oleh %s.", TerritoryName[territoryIndex], attackerName);
     SendClientMessageToAll(COLOR_GREEN, msg);
@@ -5951,7 +6188,7 @@ stock CompleteTurfDefend(territoryIndex)
         return 1;
     }
     RewardGangTurf(defender, TURF_DEFEND_GANG_REWARD, 5);
-    RewardGangMembersInside(defender, territoryIndex, TURF_DEFEND_PLAYER_REWARD, TURF_DEFEND_XP);
+    RewardGangMembersInside(defender, territoryIndex, TURF_DEFEND_PLAYER_REWARD, TURF_DEFEND_XP, 15, 0, 1, 1);
     new defenderName[64];
     GetGangNameByID(defender, defenderName, sizeof(defenderName));
     new msg[192];
@@ -6487,7 +6724,7 @@ stock DeleteTurfZone(playerid, territoryIndex)
 
 stock ShowGangMenuDialog(playerid)
 {
-    new body[768];
+    new body[1024];
 
     if (PlayerGangID[playerid] <= 0)
     {
@@ -6495,22 +6732,25 @@ stock ShowGangMenuDialog(playerid)
         strcat(body, "Preset Gangs / HQ List\n", sizeof(body));
         strcat(body, "Turf Map\n", sizeof(body));
         strcat(body, "Gang Top\n", sizeof(body));
-        strcat(body, "Recent Turf Logs\n", sizeof(body));
-        strcat(body, "Organization Menu", sizeof(body));
+        strcat(body, "Gang Rank Info\n", sizeof(body));
+        strcat(body, "Recent Turf Logs", sizeof(body));
     }
     else
     {
         strcat(body, "Gang Info\n", sizeof(body));
         strcat(body, "Gang Members\n", sizeof(body));
         strcat(body, "My Gang Stats\n", sizeof(body));
+        strcat(body, "My Gang Respect\n", sizeof(body));
+        strcat(body, "Gang Rank Info\n", sizeof(body));
         strcat(body, "My Gang Turfs\n", sizeof(body));
         strcat(body, "Turf Map\n", sizeof(body));
         strcat(body, "Gang Top\n", sizeof(body));
         strcat(body, "Recent Turf Logs\n", sizeof(body));
         strcat(body, "Kick Member (Gang Boss)\n", sizeof(body));
+        strcat(body, "Promote Member (Gang Boss)\n", sizeof(body));
+        strcat(body, "Demote Member (Gang Boss)\n", sizeof(body));
         strcat(body, "Leave Gang\n", sizeof(body));
-        strcat(body, "Preset Gangs / HQ List\n", sizeof(body));
-        strcat(body, "Organization Menu", sizeof(body));
+        strcat(body, "Preset Gangs / HQ List", sizeof(body));
     }
 
     ShowPlayerDialog(
@@ -8426,7 +8666,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.22C Gang Menu");
+    SetGameModeText("SAIF Dev v0.22D.1 Gang Rank");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -8520,7 +8760,7 @@ public OnGameModeInit()
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
-    print("[SAIF] Gamemode v0.22C Gang HQ/Menu Polish berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.22D.1 Gang Rank Progression berhasil dijalankan.");
     return 1;
 }
 
@@ -10424,12 +10664,12 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             }
             if (listitem == 4)
             {
-                QueryTurfLogsDialog(playerid);
+                ShowGangRankInfoDialog(playerid);
                 return 1;
             }
             if (listitem == 5)
             {
-                ShowOrgMenuDialog(playerid);
+                QueryTurfLogsDialog(playerid);
                 return 1;
             }
             return 1;
@@ -10452,25 +10692,35 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         }
         if (listitem == 3)
         {
-            QueryGangTurfListDialog(playerid, PlayerGangID[playerid]);
+            ShowMyGangRespectDialog(playerid);
             return 1;
         }
         if (listitem == 4)
         {
-            ShowTurfMapDialog(playerid);
+            ShowGangRankInfoDialog(playerid);
             return 1;
         }
         if (listitem == 5)
         {
-            QueryGangTopDialog(playerid);
+            QueryGangTurfListDialog(playerid, PlayerGangID[playerid]);
             return 1;
         }
         if (listitem == 6)
         {
-            QueryTurfLogsDialog(playerid);
+            ShowTurfMapDialog(playerid);
             return 1;
         }
         if (listitem == 7)
+        {
+            QueryGangTopDialog(playerid);
+            return 1;
+        }
+        if (listitem == 8)
+        {
+            QueryTurfLogsDialog(playerid);
+            return 1;
+        }
+        if (listitem == 9)
         {
             if (!IsGangLeader(playerid))
             {
@@ -10480,19 +10730,34 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             ShowPlayerDialog(playerid, DIALOG_GANG_KICK_INPUT, DIALOG_STYLE_INPUT, "Kick Gang Member", "Masukkan player ID member yang ingin dikeluarkan.", "Next", "Back");
             return 1;
         }
-        if (listitem == 8)
+        if (listitem == 10)
+        {
+            if (!IsGangLeader(playerid))
+            {
+                SendClientMessage(playerid, COLOR_RED, "Hanya Gang Boss yang bisa promote member.");
+                return 1;
+            }
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangpromote [playerid]");
+            return 1;
+        }
+        if (listitem == 11)
+        {
+            if (!IsGangLeader(playerid))
+            {
+                SendClientMessage(playerid, COLOR_RED, "Hanya Gang Boss yang bisa demote member.");
+                return 1;
+            }
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangdemote [playerid]");
+            return 1;
+        }
+        if (listitem == 12)
         {
             ShowPlayerDialog(playerid, DIALOG_GANG_LEAVE_CONFIRM, DIALOG_STYLE_MSGBOX, "Leave Gang", "Yakin ingin keluar dari gang?", "Leave", "Back");
             return 1;
         }
-        if (listitem == 9)
+        if (listitem == 13)
         {
             mysql_tquery(g_SQL, "SELECT id, name, leader_name, reputation FROM gangs WHERE id BETWEEN 1 AND 4 ORDER BY id ASC", "OnGangListLoaded", "i", playerid);
-            return 1;
-        }
-        if (listitem == 10)
-        {
-            ShowOrgMenuDialog(playerid);
             return 1;
         }
 
@@ -10533,20 +10798,30 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             }
             if (listitem == 3)
             {
-                QueryGangTurfListDialog(playerid, gangid);
+                ShowMyGangRespectDialog(playerid);
                 return 1;
             }
             if (listitem == 4)
             {
-                ShowTurfMapDialog(playerid);
+                ShowGangRankInfoDialog(playerid);
                 return 1;
             }
             if (listitem == 5)
             {
-                QueryTurfLogsDialog(playerid);
+                QueryGangTurfListDialog(playerid, gangid);
                 return 1;
             }
             if (listitem == 6)
+            {
+                ShowTurfMapDialog(playerid);
+                return 1;
+            }
+            if (listitem == 7)
+            {
+                QueryTurfLogsDialog(playerid);
+                return 1;
+            }
+            if (listitem == 8)
             {
                 if (!IsGangLeader(playerid))
                 {
@@ -10556,14 +10831,29 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
                 ShowPlayerDialog(playerid, DIALOG_GANG_KICK_INPUT, DIALOG_STYLE_INPUT, "Kick Gang Member", "Masukkan player ID member yang ingin dikeluarkan.", "Next", "Back");
                 return 1;
             }
-            if (listitem == 7)
+            if (listitem == 9)
             {
-                ShowPlayerDialog(playerid, DIALOG_GANG_LEAVE_CONFIRM, DIALOG_STYLE_MSGBOX, "Leave Gang", "Yakin ingin keluar dari gang?", "Leave", "Back");
+                if (!IsGangLeader(playerid))
+                {
+                    SendClientMessage(playerid, COLOR_RED, "Hanya Gang Boss yang bisa promote member.");
+                    return 1;
+                }
+                SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangpromote [playerid]");
                 return 1;
             }
-            if (listitem == 8)
+            if (listitem == 10)
             {
-                ShowOrgMenuDialog(playerid);
+                if (!IsGangLeader(playerid))
+                {
+                    SendClientMessage(playerid, COLOR_RED, "Hanya Gang Boss yang bisa demote member.");
+                    return 1;
+                }
+                SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangdemote [playerid]");
+                return 1;
+            }
+            if (listitem == 11)
+            {
+                ShowPlayerDialog(playerid, DIALOG_GANG_LEAVE_CONFIRM, DIALOG_STYLE_MSGBOX, "Leave Gang", "Yakin ingin keluar dari gang?", "Leave", "Back");
                 return 1;
             }
         }
@@ -10596,7 +10886,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             }
             if (listitem == 5)
             {
-                ShowOrgMenuDialog(playerid);
+                ShowGangRankInfoDialog(playerid);
                 return 1;
             }
         }
@@ -16943,6 +17233,10 @@ public OnPlayerGangLoaded(playerid)
     cache_get_value_name_int(0, "rank_level", PlayerGangRank[playerid]);
     cache_get_value_name(0, "name", PlayerGangName[playerid], 64);
     cache_get_value_name_int(0, "gang_color", PlayerGangColor[playerid]);
+    cache_get_value_name_int(0, "respect", PlayerGangRespect[playerid]);
+    cache_get_value_name_int(0, "captures", PlayerGangCaptures[playerid]);
+    cache_get_value_name_int(0, "defends", PlayerGangDefends[playerid]);
+    cache_get_value_name_int(0, "wars_participated", PlayerGangWars[playerid]);
     ApplyPlayerGangNameColor(playerid);
 
     new msg[144];
@@ -19083,6 +19377,54 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/gangrankinfo", true))
+    {
+        ShowGangRankInfoDialog(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/gangrespect", true) || !strcmp(cmdtext, "/mygangrespect", true))
+    {
+        ShowMyGangRespectDialog(playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/gangpromote ", true) == 0)
+    {
+        new targetStr[16];
+        if (!GetOneParam(cmdtext[13], targetStr, sizeof(targetStr)) || !IsNumericString(targetStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangpromote [playerid]");
+            return 1;
+        }
+        ProcessGangPromote(playerid, strval(targetStr));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/gangpromote", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangpromote [playerid]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/gangdemote ", true) == 0)
+    {
+        new targetStr[16];
+        if (!GetOneParam(cmdtext[12], targetStr, sizeof(targetStr)) || !IsNumericString(targetStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangdemote [playerid]");
+            return 1;
+        }
+        ProcessGangDemote(playerid, strval(targetStr));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/gangdemote", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangdemote [playerid]");
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/gangcolor", true) || strfind(cmdtext, "/gangcolor ", true) == 0)
     {
         SendClientMessage(playerid, COLOR_YELLOW, "Gang color fixed mengikuti versi offline GTA SA dan tidak bisa diubah player.");
@@ -19257,7 +19599,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.22C Gang Menu (SAIF candidate)");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.22D.1 Gang Rank (SAIF candidate)");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -19266,7 +19608,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.22C: Gang HQ/Menu polish, gang stats/logs/turfs via dialog.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.22D: Gang rank progression, respect, promote/demote, and turf reward polish.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A.3: Runtime turf war config untuk balancing/testing.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A.2: Turf HUD compact menggunakan TextDraw kecil.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A: Basic turf war system.");

@@ -219,6 +219,15 @@
 #define DIALOG_GANG_PRESET_INFO 1199
 #define DIALOG_GANG_PRESET_RADIUS_INPUT 1200
 #define DIALOG_ADMIN_TOOLS_MENU 1201
+#define DIALOG_BUSINESS_PRESET_MENU 1202
+#define DIALOG_BUSINESS_PRESET_LIST 1203
+#define DIALOG_BUSINESS_PRESET_SELECT_INPUT 1204
+#define DIALOG_BUSINESS_PRESET_ACTION_MENU 1205
+#define DIALOG_BUSINESS_PRESET_INFO 1206
+#define DIALOG_BUSINESS_PRESET_NAME_INPUT 1207
+#define DIALOG_BUSINESS_PRESET_PRICE_INPUT 1208
+#define DIALOG_BUSINESS_PRESET_INCOME_INPUT 1209
+
 
 
 
@@ -1477,6 +1486,7 @@ new PlayerEditingParkedVehicleID[MAX_PLAYERS];
 new PlayerEditingWorldPickupID[MAX_PLAYERS];
 new PlayerEditingPublicInteriorID[MAX_PLAYERS];
 new PlayerEditingGangPresetID[MAX_PLAYERS];
+new PlayerEditingBusinessPresetIndex[MAX_PLAYERS];
 new PlayerPendingPublicInteriorType[MAX_PLAYERS][PUBINT_TYPE_SIZE];
 new PlayerInsidePublicInteriorID[MAX_PLAYERS];
 new PlayerPublicInteriorServiceCheckpoint[MAX_PLAYERS];
@@ -2060,6 +2070,7 @@ forward OnGangWeaponStashLoaded();
 forward OnGangRestockBankLoaded(playerid, gangid, weaponIndex, ammo, cost);
 forward OnGangHQInteriorsLoaded();
 forward OnGangPresetConfigLoaded();
+forward OnBusinessPresetConfigLoaded();
 forward OnDynamicLocationsLoaded();
 forward OnDynamicLocationCreated(playerid);
 forward OnDynamicLocationUpdated(playerid);
@@ -10473,7 +10484,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24H.1 Admin Menus Hub");
+    SetGameModeText("SAIF Dev v0.24I Business Preset DB Config");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -10494,6 +10505,7 @@ public OnGameModeInit()
     LoadWeaponShopConfigFromDB();
     LoadPublicServiceConfigFromDB();
     LoadGangPresetConfigFromDB();
+    LoadBusinessPresetConfigFromDB();
 
     AddPlayerClass(
         0,
@@ -10542,6 +10554,7 @@ public OnGameModeInit()
         ResetPlayerGangData(i);
         ResetPlayerBusinessData(i);
         ResetPlayerDealerData(i);
+        PlayerEditingBusinessPresetIndex[i] = -1;
 
         PlayerJob[i] = JOB_NONE;
         PlayerWorking[i] = 0;
@@ -10580,9 +10593,10 @@ public OnGameModeInit()
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Legacy static ATM/Dealer/Ammu/Job/Race Pawn markers deprecated; gunakan world_locations DB + /locmenu.");
     print("[SAIF] Gang preset HQ/color/name dapat dioverride via gang_preset_config DB + /gangpresetmenu.");
+    print("[SAIF] Business preset position/price/income dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24H.1 Admin Menus Hub berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24I Business Preset DB Config berhasil dijalankan.");
     return 1;
 }
 
@@ -10817,6 +10831,210 @@ public OnPlayerSpawn(playerid)
 }
 
 
+
+stock RefreshBusinessRuntime()
+{
+    new labelText[144];
+
+    for (new i = 0; i < MAX_BUSINESSES; i++)
+    {
+        if (BusinessPickup[i] != -1)
+        {
+            DestroyPickup(BusinessPickup[i]);
+            BusinessPickup[i] = -1;
+        }
+
+        if (BusinessLabel[i] != Text3D:INVALID_3DTEXT_ID)
+        {
+            Delete3DTextLabel(BusinessLabel[i]);
+            BusinessLabel[i] = Text3D:INVALID_3DTEXT_ID;
+        }
+
+        BusinessPickup[i] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, BusinessX[i], BusinessY[i], BusinessZ[i], 0);
+        format(labelText, sizeof(labelText), "[ALT] Business\n%s\nBuy / Manage / Collect\nSource: DB preset", BusinessName[i]);
+        BusinessLabel[i] = Create3DTextLabel(labelText, COLOR_YELLOW, BusinessX[i], BusinessY[i], BusinessZ[i] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
+    }
+
+    return 1;
+}
+
+stock LoadBusinessPresetConfigFromDB()
+{
+    mysql_tquery(g_SQL, "SELECT business_index, name, x, y, z, price, income_per_minute FROM business_preset_config WHERE business_index BETWEEN 0 AND 4 AND enabled=1 ORDER BY business_index ASC", "OnBusinessPresetConfigLoaded");
+    return 1;
+}
+
+public OnBusinessPresetConfigLoaded()
+{
+    new rows = cache_num_rows();
+    new businessIndex;
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name_int(i, "business_index", businessIndex);
+
+        if (!IsValidBusinessIndex(businessIndex))
+        {
+            continue;
+        }
+
+        cache_get_value_name(i, "name", BusinessName[businessIndex], 64);
+        cache_get_value_name_float(i, "x", BusinessX[businessIndex]);
+        cache_get_value_name_float(i, "y", BusinessY[businessIndex]);
+        cache_get_value_name_float(i, "z", BusinessZ[businessIndex]);
+        cache_get_value_name_int(i, "price", BusinessPrice[businessIndex]);
+        cache_get_value_name_int(i, "income_per_minute", BusinessIncomePerMinute[businessIndex]);
+
+        if (BusinessPrice[businessIndex] < 1)
+        {
+            BusinessPrice[businessIndex] = 10000;
+        }
+
+        if (BusinessIncomePerMinute[businessIndex] < 1)
+        {
+            BusinessIncomePerMinute[businessIndex] = 50;
+        }
+    }
+
+    RefreshBusinessRuntime();
+    printf("[SAIF] Business preset DB config loaded: %d rows.", rows);
+    return 1;
+}
+
+stock SaveBusinessPresetConfig(businessIndex)
+{
+    if (!IsValidBusinessIndex(businessIndex))
+    {
+        return 0;
+    }
+
+    new query[1024];
+    mysql_format(g_SQL, query, sizeof(query), "REPLACE INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled, updated_at) VALUES (%d, '%e', %f, %f, %f, %d, %d, 'db_editor_manual', 1, NOW())", businessIndex, BusinessName[businessIndex], BusinessX[businessIndex], BusinessY[businessIndex], BusinessZ[businessIndex], BusinessPrice[businessIndex], BusinessIncomePerMinute[businessIndex]);
+    mysql_tquery(g_SQL, query);
+    return 1;
+}
+
+stock ShowBusinessPresetMenu(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka Business Preset DB Config.");
+        return 0;
+    }
+
+    new body[512];
+    body[0] = EOS;
+    strcat(body, "List / Select Business Preset\n", sizeof(body));
+    strcat(body, "Input Business ID Manual\n", sizeof(body));
+    strcat(body, "Reload Business DB Config\n", sizeof(body));
+    strcat(body, "Source Policy Info", sizeof(body));
+    ShowPlayerDialog(playerid, DIALOG_BUSINESS_PRESET_MENU, DIALOG_STYLE_LIST, "Business Preset DB Config", body, "Select", "Close");
+    return 1;
+}
+
+stock ShowBusinessPresetListDialog(playerid)
+{
+    new body[1024];
+    new line[192];
+    body[0] = EOS;
+    strcat(body, "ID\tBusiness\tPrice / Income\n", sizeof(body));
+
+    for (new i = 0; i < MAX_BUSINESSES; i++)
+    {
+        format(line, sizeof(line), "%d\t%s\t$%d / $%d min\n", i, BusinessName[i], BusinessPrice[i], BusinessIncomePerMinute[i]);
+        strcat(body, line, sizeof(body));
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_BUSINESS_PRESET_LIST, DIALOG_STYLE_TABLIST_HEADERS, "Business Preset List", body, "Select", "Back");
+    return 1;
+}
+
+stock ShowBusinessPresetSelectInput(playerid)
+{
+    ShowPlayerDialog(playerid, DIALOG_BUSINESS_PRESET_SELECT_INPUT, DIALOG_STYLE_INPUT, "Select Business Preset", "Masukkan business ID.\nDefault saat ini: 0 sampai 4.", "Select", "Back");
+    return 1;
+}
+
+stock ShowBusinessPresetActionMenu(playerid, businessIndex)
+{
+    if (!IsValidBusinessIndex(businessIndex))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Business preset tidak valid.");
+        return 0;
+    }
+
+    PlayerEditingBusinessPresetIndex[playerid] = businessIndex;
+
+    new title[96];
+    new body[512];
+    body[0] = EOS;
+    format(title, sizeof(title), "Business Preset: %s", BusinessName[businessIndex]);
+    strcat(body, "Info\n", sizeof(body));
+    strcat(body, "Set Position = My Position\n", sizeof(body));
+    strcat(body, "Edit Name\n", sizeof(body));
+    strcat(body, "Edit Buy Price\n", sizeof(body));
+    strcat(body, "Edit Income Per Minute\n", sizeof(body));
+    strcat(body, "Goto Business\n", sizeof(body));
+    strcat(body, "Reload DB\n", sizeof(body));
+    strcat(body, "Back", sizeof(body));
+    ShowPlayerDialog(playerid, DIALOG_BUSINESS_PRESET_ACTION_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Back");
+    return 1;
+}
+
+stock ShowBusinessPresetInfo(playerid, businessIndex)
+{
+    if (!IsValidBusinessIndex(businessIndex))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Business preset tidak valid.");
+        return 0;
+    }
+
+    new body[1024];
+    new line[192];
+    body[0] = EOS;
+    format(line, sizeof(line), "Business ID: %d\n", businessIndex);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Name: %s\n", BusinessName[businessIndex]);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Position: %.3f %.3f %.3f\n", BusinessX[businessIndex], BusinessY[businessIndex], BusinessZ[businessIndex]);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Buy Price: $%d\nIncome/min: $%d\n", BusinessPrice[businessIndex], BusinessIncomePerMinute[businessIndex]);
+    strcat(body, line, sizeof(body));
+    strcat(body, "Source: business_preset_config DB.\n", sizeof(body));
+    strcat(body, "Catatan: Ini memindahkan business preset dari hardcode Pawn menuju DB/editor.", sizeof(body));
+
+    PlayerEditingBusinessPresetIndex[playerid] = businessIndex;
+    ShowPlayerDialog(playerid, DIALOG_BUSINESS_PRESET_INFO, DIALOG_STYLE_MSGBOX, "Business Preset Info", body, "Back", "Close");
+    return 1;
+}
+
+stock UpdateBusinessPresetPositionFromPlayer(playerid, businessIndex)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa set business preset.");
+        return 0;
+    }
+
+    if (!IsValidBusinessIndex(businessIndex))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Business preset tidak valid.");
+        return 0;
+    }
+
+    new Float:x, Float:y, Float:z;
+    GetPlayerPos(playerid, x, y, z);
+
+    BusinessX[businessIndex] = x;
+    BusinessY[businessIndex] = y;
+    BusinessZ[businessIndex] = z;
+
+    SaveBusinessPresetConfig(businessIndex);
+    RefreshBusinessRuntime();
+    SendClientMessage(playerid, COLOR_GREEN, "Business preset position disimpan ke DB dan runtime direfresh.");
+    return 1;
+}
+
 stock ShowAdminDashboardMenu(playerid)
 {
     if (!IsAdminLevel(playerid, ADMIN_HELPER))
@@ -10896,7 +11114,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "Core Admin:\n/adminmenu - Admin dashboard\n/betamenu - Beta/whitelist dashboard\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu - Dynamic location editor\n/objmenu - Dynamic object editor\n/parkvehmenu - Parked vehicle editor\n/wpickupmenu - Offline world pickup editor\n/pubintmenu - Public interior editor + point editor\n/turfmenu - Turf zone editor\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu - Gang preset DB config\n/ammuconfig - Ammu-Nation price/ammo config\n/serviceconfig - Public shop/service config\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu - Gang preset DB config\n/bizpresetmenu - Business preset DB config\n/ammuconfig - Ammu-Nation price/ammo config\n/serviceconfig - Public shop/service config\n\n", sizeof(body));
     strcat(body, "Catatan:\nMenu Owner-only tetap akan menolak jika admin level belum cukup.\n/amenus hanya mengumpulkan pintu masuk menu agar command tidak mudah lupa.", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "SAIF Admin Menu Reference", body, "Back", "Close");
@@ -11378,13 +11596,207 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 6: ShowPublicInteriorMenu(playerid);
             case 7: ShowTurfEditorMenu(playerid);
             case 8: ShowGangPresetMenu(playerid);
-            case 9: ShowAmmuConfigMenu(playerid);
-            case 10: ShowPublicServiceConfigMenu(playerid);
-            case 11: ShowAdminToolsReference(playerid);
+            case 9: ShowBusinessPresetMenu(playerid);
+            case 10: ShowAmmuConfigMenu(playerid);
+            case 11: ShowPublicServiceConfigMenu(playerid);
+            case 12: ShowAdminToolsReference(playerid);
         }
         return 1;
     }
 
+
+
+    if (dialogid == DIALOG_BUSINESS_PRESET_MENU)
+    {
+        if (!response) return 1;
+
+        switch (listitem)
+        {
+            case 0: ShowBusinessPresetListDialog(playerid);
+            case 1: ShowBusinessPresetSelectInput(playerid);
+            case 2:
+            {
+                LoadBusinessPresetConfigFromDB();
+                SendClientMessage(playerid, COLOR_GREEN, "Business preset config reload dari database diminta.");
+            }
+            case 3:
+            {
+                ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "Business Source Policy", "OFFLINE-FIRST / DB-FIRST\n\nBusiness preset lama yang dulu hardcoded sekarang bisa dioverride dari business_preset_config DB.\nGunakan /bizpresetmenu untuk memindahkan titik, harga, income, dan nama business.\n\nCatatan: ownership player tetap di player_businesses.", "Back", "Close");
+            }
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_BUSINESS_PRESET_LIST)
+    {
+        if (!response)
+        {
+            ShowBusinessPresetMenu(playerid);
+            return 1;
+        }
+
+        if (!IsValidBusinessIndex(listitem))
+        {
+            ShowBusinessPresetMenu(playerid);
+            return 1;
+        }
+
+        PlayerEditingBusinessPresetIndex[playerid] = listitem;
+        ShowBusinessPresetActionMenu(playerid, listitem);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_BUSINESS_PRESET_SELECT_INPUT)
+    {
+        if (!response)
+        {
+            ShowBusinessPresetMenu(playerid);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            ShowBusinessPresetSelectInput(playerid);
+            return 1;
+        }
+
+        new businessIndex = strval(inputtext);
+        if (!IsValidBusinessIndex(businessIndex))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Business ID tidak valid.");
+            ShowBusinessPresetSelectInput(playerid);
+            return 1;
+        }
+
+        PlayerEditingBusinessPresetIndex[playerid] = businessIndex;
+        ShowBusinessPresetActionMenu(playerid, businessIndex);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_BUSINESS_PRESET_ACTION_MENU)
+    {
+        new businessIndex = PlayerEditingBusinessPresetIndex[playerid];
+        if (!response)
+        {
+            ShowBusinessPresetMenu(playerid);
+            return 1;
+        }
+
+        if (!IsValidBusinessIndex(businessIndex))
+        {
+            ShowBusinessPresetMenu(playerid);
+            return 1;
+        }
+
+        switch (listitem)
+        {
+            case 0: ShowBusinessPresetInfo(playerid, businessIndex);
+            case 1: UpdateBusinessPresetPositionFromPlayer(playerid, businessIndex);
+            case 2: ShowPlayerDialog(playerid, DIALOG_BUSINESS_PRESET_NAME_INPUT, DIALOG_STYLE_INPUT, "Edit Business Name", "Masukkan nama business baru.", "Save", "Back");
+            case 3: ShowPlayerDialog(playerid, DIALOG_BUSINESS_PRESET_PRICE_INPUT, DIALOG_STYLE_INPUT, "Edit Business Price", "Masukkan harga beli business baru.", "Save", "Back");
+            case 4: ShowPlayerDialog(playerid, DIALOG_BUSINESS_PRESET_INCOME_INPUT, DIALOG_STYLE_INPUT, "Edit Business Income", "Masukkan base income per minute baru.", "Save", "Back");
+            case 5:
+            {
+                SetPlayerInterior(playerid, 0);
+                SetPlayerVirtualWorld(playerid, 0);
+                SetPlayerPos(playerid, BusinessX[businessIndex], BusinessY[businessIndex], BusinessZ[businessIndex] + 1.0);
+                SendClientMessage(playerid, COLOR_GREEN, "Teleport ke business preset.");
+                ShowBusinessPresetActionMenu(playerid, businessIndex);
+            }
+            case 6:
+            {
+                LoadBusinessPresetConfigFromDB();
+                SendClientMessage(playerid, COLOR_GREEN, "Business preset config reload dari database diminta.");
+            }
+            case 7: ShowBusinessPresetMenu(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_BUSINESS_PRESET_INFO)
+    {
+        if (response)
+        {
+            ShowBusinessPresetActionMenu(playerid, PlayerEditingBusinessPresetIndex[playerid]);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_BUSINESS_PRESET_NAME_INPUT)
+    {
+        new businessIndex = PlayerEditingBusinessPresetIndex[playerid];
+        if (!response)
+        {
+            ShowBusinessPresetActionMenu(playerid, businessIndex);
+            return 1;
+        }
+
+        if (!IsValidBusinessIndex(businessIndex) || strlen(inputtext) < 2)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Nama business tidak valid.");
+            ShowBusinessPresetActionMenu(playerid, businessIndex);
+            return 1;
+        }
+
+        format(BusinessName[businessIndex], 64, "%s", inputtext);
+        SaveBusinessPresetConfig(businessIndex);
+        RefreshBusinessRuntime();
+        SendClientMessage(playerid, COLOR_GREEN, "Nama business disimpan ke DB.");
+        ShowBusinessPresetActionMenu(playerid, businessIndex);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_BUSINESS_PRESET_PRICE_INPUT)
+    {
+        new businessIndex = PlayerEditingBusinessPresetIndex[playerid];
+        if (!response)
+        {
+            ShowBusinessPresetActionMenu(playerid, businessIndex);
+            return 1;
+        }
+
+        if (!IsValidBusinessIndex(businessIndex) || !IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Harga business tidak valid.");
+            ShowBusinessPresetActionMenu(playerid, businessIndex);
+            return 1;
+        }
+
+        new price = strval(inputtext);
+        if (price < 1) price = 1;
+        BusinessPrice[businessIndex] = price;
+        SaveBusinessPresetConfig(businessIndex);
+        RefreshBusinessRuntime();
+        SendClientMessage(playerid, COLOR_GREEN, "Harga business disimpan ke DB.");
+        ShowBusinessPresetActionMenu(playerid, businessIndex);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_BUSINESS_PRESET_INCOME_INPUT)
+    {
+        new businessIndex = PlayerEditingBusinessPresetIndex[playerid];
+        if (!response)
+        {
+            ShowBusinessPresetActionMenu(playerid, businessIndex);
+            return 1;
+        }
+
+        if (!IsValidBusinessIndex(businessIndex) || !IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Income business tidak valid.");
+            ShowBusinessPresetActionMenu(playerid, businessIndex);
+            return 1;
+        }
+
+        new income = strval(inputtext);
+        if (income < 1) income = 1;
+        BusinessIncomePerMinute[businessIndex] = income;
+        SaveBusinessPresetConfig(businessIndex);
+        RefreshBusinessRuntime();
+        SendClientMessage(playerid, COLOR_GREEN, "Income business disimpan ke DB.");
+        ShowBusinessPresetActionMenu(playerid, businessIndex);
+        return 1;
+    }
 
     if (dialogid == DIALOG_GANG_PRESET_MENU)
     {
@@ -27086,6 +27498,25 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+
+    if (!strcmp(cmdtext, "/bizpresetmenu", true) || !strcmp(cmdtext, "/businessdbmenu", true) || !strcmp(cmdtext, "/bizdbmenu", true))
+    {
+        ShowBusinessPresetMenu(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/bizpresetreload", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa reload business preset DB config.");
+            return 1;
+        }
+        LoadBusinessPresetConfigFromDB();
+        SendClientMessage(playerid, COLOR_GREEN, "Business preset config reload dari database diminta.");
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/turflogs", true))
     {
         mysql_tquery(g_SQL, "SELECT id, territory_name, attacker_gang_name, defender_gang_name, result, created_at FROM turf_war_logs ORDER BY id DESC LIMIT 10", "OnRecentTurfLogsLoaded", "i", playerid);
@@ -28792,7 +29223,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24H.1 Admin Menus Hub");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24I Business Preset DB Config");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");

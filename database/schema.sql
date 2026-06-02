@@ -1592,3 +1592,35 @@ VALUES
 ON DUPLICATE KEY UPDATE
     gang_id=gang_id;
 
+
+CREATE TABLE IF NOT EXISTS business_preset_config (
+    business_index INT NOT NULL PRIMARY KEY,
+    name VARCHAR(64) NOT NULL,
+    x FLOAT NOT NULL DEFAULT 0,
+    y FLOAT NOT NULL DEFAULT 0,
+    z FLOAT NOT NULL DEFAULT 0,
+    price INT NOT NULL DEFAULT 10000,
+    income_per_minute INT NOT NULL DEFAULT 50,
+    source_tag VARCHAR(64) NOT NULL DEFAULT 'legacy_static_migrated',
+    enabled TINYINT NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL DEFAULT NULL
+);
+
+INSERT INTO business_preset_config
+(business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+VALUES
+(0, 'Idlewood Mini Market', 1833.1124, -1842.9921, 13.5781, 80000, 120, 'legacy_static_migrated', 1),
+(1, 'Willowfield Workshop', 2105.4583, -1806.4227, 13.5547, 120000, 180, 'legacy_static_migrated', 1),
+(2, 'Market Food Store', 1368.9248, -1279.6914, 13.5469, 175000, 250, 'legacy_static_migrated', 1),
+(3, 'East LS Gas Station', 2420.3311, -1508.2178, 24.0000, 250000, 350, 'legacy_static_migrated', 1),
+(4, 'Vinewood Electronics', 1000.5822, -919.9146, 42.3281, 350000, 500, 'legacy_static_migrated', 1)
+ON DUPLICATE KEY UPDATE
+    name = VALUES(name),
+    x = VALUES(x),
+    y = VALUES(y),
+    z = VALUES(z),
+    price = VALUES(price),
+    income_per_minute = VALUES(income_per_minute),
+    source_tag = VALUES(source_tag),
+    enabled = VALUES(enabled);

@@ -1624,3 +1624,254 @@ ON DUPLICATE KEY UPDATE
     income_per_minute = VALUES(income_per_minute),
     source_tag = VALUES(source_tag),
     enabled = VALUES(enabled);
+
+-- SAIF / LSIF Dev v0.24J.1 — Duplicate-Safe Full SA Seed SQL
+-- Purpose: avoid Warning 1062 duplicate primary key when schema.sql is re-run.
+-- Existing rows/admin edits are preserved. Missing rows are inserted.
+-- SAIF / LSIF Dev v0.24J.2 — Strict-Safe Seed / MySQL 1364 Fix
+-- Purpose:
+-- - Avoid MySQL/MariaDB 1364 "Field doesn't have a default value" warnings/errors.
+-- - Avoid INSERT IGNORE duplicate warnings.
+-- - Preserve existing admin edits.
+-- - Insert only missing rows.
+
+-- ---------------------------------------------------------------------
+-- 1) Make common gang/business seed tables default-safe.
+-- ---------------------------------------------------------------------
+
+ALTER TABLE gangs
+    MODIFY COLUMN id INT NOT NULL,
+    MODIFY COLUMN name VARCHAR(64) NOT NULL DEFAULT '',
+    MODIFY COLUMN leader_id INT NOT NULL DEFAULT 0,
+    MODIFY COLUMN leader_name VARCHAR(32) NOT NULL DEFAULT 'Server',
+    MODIFY COLUMN gang_color INT NOT NULL DEFAULT 0,
+    MODIFY COLUMN reputation INT NOT NULL DEFAULT 0,
+    MODIFY COLUMN bank_money INT NOT NULL DEFAULT 0;
+
+ALTER TABLE gang_preset_config
+    MODIFY COLUMN gang_id INT NOT NULL,
+    MODIFY COLUMN name VARCHAR(64) NOT NULL DEFAULT '',
+    MODIFY COLUMN short_name VARCHAR(24) NOT NULL DEFAULT '',
+    MODIFY COLUMN color INT NOT NULL DEFAULT 0,
+    MODIFY COLUMN color_name VARCHAR(24) NOT NULL DEFAULT 'DB Custom',
+    MODIFY COLUMN hq_x FLOAT NOT NULL DEFAULT 0,
+    MODIFY COLUMN hq_y FLOAT NOT NULL DEFAULT 0,
+    MODIFY COLUMN hq_z FLOAT NOT NULL DEFAULT 0,
+    MODIFY COLUMN hq_a FLOAT NOT NULL DEFAULT 0,
+    MODIFY COLUMN hq_radius FLOAT NOT NULL DEFAULT 8,
+    MODIFY COLUMN source_tag VARCHAR(32) NOT NULL DEFAULT 'offline_reference_manual',
+    MODIFY COLUMN enabled TINYINT NOT NULL DEFAULT 1;
+
+ALTER TABLE gang_hq_interiors
+    MODIFY COLUMN gang_id INT NOT NULL,
+    MODIFY COLUMN interior_id INT NOT NULL DEFAULT 0,
+    MODIFY COLUMN virtual_world INT NOT NULL DEFAULT 0,
+    MODIFY COLUMN int_x FLOAT NOT NULL DEFAULT 0,
+    MODIFY COLUMN int_y FLOAT NOT NULL DEFAULT 0,
+    MODIFY COLUMN int_z FLOAT NOT NULL DEFAULT 0,
+    MODIFY COLUMN int_a FLOAT NOT NULL DEFAULT 0,
+    MODIFY COLUMN exit_x FLOAT NOT NULL DEFAULT 0,
+    MODIFY COLUMN exit_y FLOAT NOT NULL DEFAULT 0,
+    MODIFY COLUMN exit_z FLOAT NOT NULL DEFAULT 0,
+    MODIFY COLUMN exit_a FLOAT NOT NULL DEFAULT 0,
+    MODIFY COLUMN enabled TINYINT NOT NULL DEFAULT 1;
+
+ALTER TABLE business_preset_config
+    ADD COLUMN IF NOT EXISTS enabled TINYINT NOT NULL DEFAULT 1,
+    MODIFY COLUMN business_index INT NOT NULL,
+    MODIFY COLUMN name VARCHAR(64) NOT NULL DEFAULT '',
+    MODIFY COLUMN x FLOAT NOT NULL DEFAULT 0,
+    MODIFY COLUMN y FLOAT NOT NULL DEFAULT 0,
+    MODIFY COLUMN z FLOAT NOT NULL DEFAULT 0,
+    MODIFY COLUMN price INT NOT NULL DEFAULT 10000,
+    MODIFY COLUMN income_per_minute INT NOT NULL DEFAULT 50,
+    MODIFY COLUMN source_tag VARCHAR(64) NOT NULL DEFAULT 'full_sa_business_seed',
+    MODIFY COLUMN enabled TINYINT NOT NULL DEFAULT 1;
+
+-- ---------------------------------------------------------------------
+-- 2) Insert missing gang preset rows only. Existing edits are preserved.
+-- ---------------------------------------------------------------------
+
+INSERT INTO gang_preset_config (gang_id, name, short_name, color, color_name, hq_x, hq_y, hq_z, hq_a, hq_radius, source_tag, enabled)
+SELECT 1, 'Grove Street Families', 'Grove', 16711935, 'Green', 2495.4094, -1686.1682, 13.5153, 180.0, 8.0, 'offline_reference_manual', 1
+WHERE NOT EXISTS (SELECT 1 FROM gang_preset_config WHERE gang_id=1);
+INSERT INTO gang_preset_config (gang_id, name, short_name, color, color_name, hq_x, hq_y, hq_z, hq_a, hq_radius, source_tag, enabled)
+SELECT 2, 'Ballas', 'Ballas', -1436103425, 'Purple', 2229.3215, -1159.7343, 25.7331, 90.0, 8.0, 'offline_reference_manual', 1
+WHERE NOT EXISTS (SELECT 1 FROM gang_preset_config WHERE gang_id=2);
+INSERT INTO gang_preset_config (gang_id, name, short_name, color, color_name, hq_x, hq_y, hq_z, hq_a, hq_radius, source_tag, enabled)
+SELECT 3, 'Los Santos Vagos', 'Vagos', -65281, 'Yellow', 2421.5427, -1224.3597, 25.3828, 270.0, 8.0, 'offline_reference_manual', 1
+WHERE NOT EXISTS (SELECT 1 FROM gang_preset_config WHERE gang_id=3);
+INSERT INTO gang_preset_config (gang_id, name, short_name, color, color_name, hq_x, hq_y, hq_z, hq_a, hq_radius, source_tag, enabled)
+SELECT 4, 'Varrios Los Aztecas', 'Aztecas', 16777215, 'Turquoise', 1766.6000, -1918.3000, 13.5600, 180.0, 8.0, 'offline_reference_manual', 1
+WHERE NOT EXISTS (SELECT 1 FROM gang_preset_config WHERE gang_id=4);
+INSERT INTO gang_preset_config (gang_id, name, short_name, color, color_name, hq_x, hq_y, hq_z, hq_a, hq_radius, source_tag, enabled)
+SELECT 5, 'San Fierro Rifa', 'Rifa', 869046783, 'Teal', -2142.7000, -238.4000, 36.5156, 90.0, 8.0, 'offline_reference_manual', 1
+WHERE NOT EXISTS (SELECT 1 FROM gang_preset_config WHERE gang_id=5);
+INSERT INTO gang_preset_config (gang_id, name, short_name, color, color_name, hq_x, hq_y, hq_z, hq_a, hq_radius, source_tag, enabled)
+SELECT 6, 'San Fierro Triads', 'Triads', -3435777, 'Red', -2175.3000, 645.6000, 49.4375, 180.0, 8.0, 'offline_reference_manual', 1
+WHERE NOT EXISTS (SELECT 1 FROM gang_preset_config WHERE gang_id=6);
+INSERT INTO gang_preset_config (gang_id, name, short_name, color, color_name, hq_x, hq_y, hq_z, hq_a, hq_radius, source_tag, enabled)
+SELECT 7, 'Da Nang Boys', 'Da Nang', -862362881, 'Brown', -1720.8000, 1338.3000, 7.1875, 270.0, 8.0, 'offline_reference_manual', 1
+WHERE NOT EXISTS (SELECT 1 FROM gang_preset_config WHERE gang_id=7);
+INSERT INTO gang_preset_config (gang_id, name, short_name, color, color_name, hq_x, hq_y, hq_z, hq_a, hq_radius, source_tag, enabled)
+SELECT 8, 'The Mafia', 'Mafia', 1717987071, 'Gray', 2170.2000, 1677.5000, 10.8203, 180.0, 8.0, 'offline_reference_manual', 1
+WHERE NOT EXISTS (SELECT 1 FROM gang_preset_config WHERE gang_id=8);
+INSERT INTO gang_preset_config (gang_id, name, short_name, color, color_name, hq_x, hq_y, hq_z, hq_a, hq_radius, source_tag, enabled)
+SELECT 9, 'Russian Mafia', 'Russian', -1717960705, 'Pale Blue', 2520.3000, 2311.2000, 10.8203, 90.0, 8.0, 'offline_reference_manual', 1
+WHERE NOT EXISTS (SELECT 1 FROM gang_preset_config WHERE gang_id=9);
+
+-- ---------------------------------------------------------------------
+-- 3) Insert missing gang runtime rows only. Existing bank/reputation are preserved.
+-- ---------------------------------------------------------------------
+
+INSERT INTO gangs (id, name, leader_id, leader_name, gang_color, reputation, bank_money)
+SELECT 5, 'San Fierro Rifa', 0, 'Server', 869046783, 0, 0 WHERE NOT EXISTS (SELECT 1 FROM gangs WHERE id=5);
+INSERT INTO gangs (id, name, leader_id, leader_name, gang_color, reputation, bank_money)
+SELECT 6, 'San Fierro Triads', 0, 'Server', -3435777, 0, 0 WHERE NOT EXISTS (SELECT 1 FROM gangs WHERE id=6);
+INSERT INTO gangs (id, name, leader_id, leader_name, gang_color, reputation, bank_money)
+SELECT 7, 'Da Nang Boys', 0, 'Server', -862362881, 0, 0 WHERE NOT EXISTS (SELECT 1 FROM gangs WHERE id=7);
+INSERT INTO gangs (id, name, leader_id, leader_name, gang_color, reputation, bank_money)
+SELECT 8, 'The Mafia', 0, 'Server', 1717987071, 0, 0 WHERE NOT EXISTS (SELECT 1 FROM gangs WHERE id=8);
+INSERT INTO gangs (id, name, leader_id, leader_name, gang_color, reputation, bank_money)
+SELECT 9, 'Russian Mafia', 0, 'Server', -1717960705, 0, 0 WHERE NOT EXISTS (SELECT 1 FROM gangs WHERE id=9);
+
+-- ---------------------------------------------------------------------
+-- 4) Insert missing gang HQ interiors only.
+-- ---------------------------------------------------------------------
+
+INSERT INTO gang_hq_interiors (gang_id, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, enabled)
+SELECT 5, 3, 42005, 2496.0498, -1695.2382, 1014.7422, 180.0, -2142.7000, -238.4000, 36.5156, 90.0, 1
+WHERE NOT EXISTS (SELECT 1 FROM gang_hq_interiors WHERE gang_id=5);
+INSERT INTO gang_hq_interiors (gang_id, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, enabled)
+SELECT 6, 3, 42006, 2496.0498, -1695.2382, 1014.7422, 180.0, -2175.3000, 645.6000, 49.4375, 180.0, 1
+WHERE NOT EXISTS (SELECT 1 FROM gang_hq_interiors WHERE gang_id=6);
+INSERT INTO gang_hq_interiors (gang_id, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, enabled)
+SELECT 7, 3, 42007, 2496.0498, -1695.2382, 1014.7422, 180.0, -1720.8000, 1338.3000, 7.1875, 270.0, 1
+WHERE NOT EXISTS (SELECT 1 FROM gang_hq_interiors WHERE gang_id=7);
+INSERT INTO gang_hq_interiors (gang_id, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, enabled)
+SELECT 8, 3, 42008, 2496.0498, -1695.2382, 1014.7422, 180.0, 2170.2000, 1677.5000, 10.8203, 180.0, 1
+WHERE NOT EXISTS (SELECT 1 FROM gang_hq_interiors WHERE gang_id=8);
+INSERT INTO gang_hq_interiors (gang_id, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, enabled)
+SELECT 9, 3, 42009, 2496.0498, -1695.2382, 1014.7422, 180.0, 2520.3000, 2311.2000, 10.8203, 90.0, 1
+WHERE NOT EXISTS (SELECT 1 FROM gang_hq_interiors WHERE gang_id=9);
+
+-- ---------------------------------------------------------------------
+-- 5) Insert missing full SA business rows only. Existing admin edits are preserved.
+-- ---------------------------------------------------------------------
+
+INSERT INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+SELECT 5, 'Blueberry Gas Station', 219.7430, -233.4430, 1.5781, 110000, 160, 'full_sa_business_seed', 1 WHERE NOT EXISTS (SELECT 1 FROM business_preset_config WHERE business_index=5);
+INSERT INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+SELECT 6, 'Dillimore General Store', 664.2500, -573.9100, 16.3359, 120000, 170, 'full_sa_business_seed', 1 WHERE NOT EXISTS (SELECT 1 FROM business_preset_config WHERE business_index=6);
+INSERT INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+SELECT 7, 'Palomino Creek Market', 2303.8500, -16.1600, 26.4844, 130000, 180, 'full_sa_business_seed', 1 WHERE NOT EXISTS (SELECT 1 FROM business_preset_config WHERE business_index=7);
+INSERT INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+SELECT 8, 'Montgomery Workshop', 1291.7100, 269.3400, 19.5547, 135000, 190, 'full_sa_business_seed', 1 WHERE NOT EXISTS (SELECT 1 FROM business_preset_config WHERE business_index=8);
+INSERT INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+SELECT 9, 'Angel Pine General Store', -2092.5800, -2464.8400, 30.6250, 125000, 180, 'full_sa_business_seed', 1 WHERE NOT EXISTS (SELECT 1 FROM business_preset_config WHERE business_index=9);
+INSERT INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+SELECT 10, 'Doherty Garage', -2029.6500, 143.3600, 28.8359, 240000, 320, 'full_sa_business_seed', 1 WHERE NOT EXISTS (SELECT 1 FROM business_preset_config WHERE business_index=10);
+INSERT INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+SELECT 11, 'Wang Cars Showroom', -1952.9200, 299.1200, 35.4688, 350000, 500, 'full_sa_business_seed', 1 WHERE NOT EXISTS (SELECT 1 FROM business_preset_config WHERE business_index=11);
+INSERT INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+SELECT 12, 'Zero RC Shop', -2244.2300, 128.0100, 35.3203, 300000, 420, 'full_sa_business_seed', 1 WHERE NOT EXISTS (SELECT 1 FROM business_preset_config WHERE business_index=12);
+INSERT INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+SELECT 13, 'Chinatown Betting Shop', -2172.2100, 645.8100, 49.4375, 260000, 360, 'full_sa_business_seed', 1 WHERE NOT EXISTS (SELECT 1 FROM business_preset_config WHERE business_index=13);
+INSERT INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+SELECT 14, 'Hashbury Clothing Store', -2491.2100, -29.7200, 25.7656, 210000, 300, 'full_sa_business_seed', 1 WHERE NOT EXISTS (SELECT 1 FROM business_preset_config WHERE business_index=14);
+INSERT INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+SELECT 15, 'Easter Basin Depot', -1692.5500, 1326.8500, 7.1875, 230000, 330, 'full_sa_business_seed', 1 WHERE NOT EXISTS (SELECT 1 FROM business_preset_config WHERE business_index=15);
+INSERT INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+SELECT 16, 'Bayside Marina Store', -2454.2800, 2254.4600, 4.9844, 180000, 260, 'full_sa_business_seed', 1 WHERE NOT EXISTS (SELECT 1 FROM business_preset_config WHERE business_index=16);
+INSERT INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+SELECT 17, 'Fort Carson Diner', -121.2600, 1116.3800, 19.7422, 145000, 210, 'full_sa_business_seed', 1 WHERE NOT EXISTS (SELECT 1 FROM business_preset_config WHERE business_index=17);
+INSERT INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+SELECT 18, 'El Quebrados Barbers', -1446.1500, 2592.7700, 55.8359, 145000, 210, 'full_sa_business_seed', 1 WHERE NOT EXISTS (SELECT 1 FROM business_preset_config WHERE business_index=18);
+INSERT INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+SELECT 19, 'Verdant Meadows Airfield', 414.9400, 2536.0500, 19.1484, 500000, 700, 'full_sa_business_seed', 1 WHERE NOT EXISTS (SELECT 1 FROM business_preset_config WHERE business_index=19);
+INSERT INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+SELECT 20, 'Redsands West Gas Station', 1596.7700, 2199.1100, 10.8203, 210000, 300, 'full_sa_business_seed', 1 WHERE NOT EXISTS (SELECT 1 FROM business_preset_config WHERE business_index=20);
+INSERT INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+SELECT 21, 'The Strip Casino Kiosk', 2025.2500, 1007.7300, 10.8203, 350000, 500, 'full_sa_business_seed', 1 WHERE NOT EXISTS (SELECT 1 FROM business_preset_config WHERE business_index=21);
+INSERT INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+SELECT 22, 'Come-A-Lot Gifts', 2169.7800, 1122.9400, 12.6100, 250000, 340, 'full_sa_business_seed', 1 WHERE NOT EXISTS (SELECT 1 FROM business_preset_config WHERE business_index=22);
+INSERT INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+SELECT 23, 'Old Venturas Steakhouse', 2384.9000, 1041.5300, 10.8203, 240000, 320, 'full_sa_business_seed', 1 WHERE NOT EXISTS (SELECT 1 FROM business_preset_config WHERE business_index=23);
+INSERT INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+SELECT 24, 'Pirates Casino Shop', 1997.2100, 1522.0900, 14.6172, 320000, 450, 'full_sa_business_seed', 1 WHERE NOT EXISTS (SELECT 1 FROM business_preset_config WHERE business_index=24);
+INSERT INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+SELECT 25, 'Rockshore Industrial Depot', 2520.1300, 2311.3500, 10.8203, 260000, 360, 'full_sa_business_seed', 1 WHERE NOT EXISTS (SELECT 1 FROM business_preset_config WHERE business_index=25);
+INSERT INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+SELECT 26, 'LV Airport Cargo Office', 1685.6200, 1447.5200, 10.7734, 300000, 420, 'full_sa_business_seed', 1 WHERE NOT EXISTS (SELECT 1 FROM business_preset_config WHERE business_index=26);
+INSERT INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+SELECT 27, 'SF Airport Cargo Office', -1425.4100, -289.6200, 14.1484, 300000, 420, 'full_sa_business_seed', 1 WHERE NOT EXISTS (SELECT 1 FROM business_preset_config WHERE business_index=27);
+INSERT INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+SELECT 28, 'LS Airport Rentals', 1685.8200, -2241.2300, 13.5469, 280000, 390, 'full_sa_business_seed', 1 WHERE NOT EXISTS (SELECT 1 FROM business_preset_config WHERE business_index=28);
+INSERT INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled)
+SELECT 29, 'Flint County Farm Supply', -1060.7200, -1195.4300, 129.2188, 150000, 220, 'full_sa_business_seed', 1 WHERE NOT EXISTS (SELECT 1 FROM business_preset_config WHERE business_index=29);
+
+-- SAIF / LSIF Dev v0.24J.3 — Gang HQ Interiors 1364 Fix
+-- Fix for MySQL/MariaDB 1364 caused by gang_hq_interiors.gang_name being NOT NULL
+-- while some seed rows did not provide gang_name.
+-- This script is duplicate-safe and preserves existing edits.
+
+-- Make gang_name default-safe for future inserts.
+ALTER TABLE gang_hq_interiors
+    MODIFY COLUMN gang_name VARCHAR(64) NOT NULL DEFAULT '';
+
+-- Ensure existing blank names are filled from known presets.
+UPDATE gang_hq_interiors SET gang_name='Grove Street Families' WHERE gang_id=1 AND (gang_name IS NULL OR gang_name='');
+UPDATE gang_hq_interiors SET gang_name='Ballas' WHERE gang_id=2 AND (gang_name IS NULL OR gang_name='');
+UPDATE gang_hq_interiors SET gang_name='Los Santos Vagos' WHERE gang_id=3 AND (gang_name IS NULL OR gang_name='');
+UPDATE gang_hq_interiors SET gang_name='Varrios Los Aztecas' WHERE gang_id=4 AND (gang_name IS NULL OR gang_name='');
+UPDATE gang_hq_interiors SET gang_name='San Fierro Rifa' WHERE gang_id=5 AND (gang_name IS NULL OR gang_name='');
+UPDATE gang_hq_interiors SET gang_name='San Fierro Triads' WHERE gang_id=6 AND (gang_name IS NULL OR gang_name='');
+UPDATE gang_hq_interiors SET gang_name='Da Nang Boys' WHERE gang_id=7 AND (gang_name IS NULL OR gang_name='');
+UPDATE gang_hq_interiors SET gang_name='The Mafia' WHERE gang_id=8 AND (gang_name IS NULL OR gang_name='');
+UPDATE gang_hq_interiors SET gang_name='Russian Mafia' WHERE gang_id=9 AND (gang_name IS NULL OR gang_name='');
+
+-- Insert missing gang HQ interior rows only. Existing rows/edits are preserved.
+INSERT INTO gang_hq_interiors
+(gang_id, gang_name, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, enabled)
+SELECT 1, 'Grove Street Families', 3, 42001, 2496.0498, -1695.2382, 1014.7422, 180.0, 2495.4094, -1686.1682, 13.5153, 0.0, 1
+WHERE NOT EXISTS (SELECT 1 FROM gang_hq_interiors WHERE gang_id=1);
+
+INSERT INTO gang_hq_interiors
+(gang_id, gang_name, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, enabled)
+SELECT 2, 'Ballas', 3, 42002, 2496.0498, -1695.2382, 1014.7422, 180.0, 2229.3215, -1159.7343, 25.7331, 0.0, 1
+WHERE NOT EXISTS (SELECT 1 FROM gang_hq_interiors WHERE gang_id=2);
+
+INSERT INTO gang_hq_interiors
+(gang_id, gang_name, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, enabled)
+SELECT 3, 'Los Santos Vagos', 3, 42003, 2496.0498, -1695.2382, 1014.7422, 180.0, 2421.5427, -1224.3597, 25.3828, 0.0, 1
+WHERE NOT EXISTS (SELECT 1 FROM gang_hq_interiors WHERE gang_id=3);
+
+INSERT INTO gang_hq_interiors
+(gang_id, gang_name, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, enabled)
+SELECT 4, 'Varrios Los Aztecas', 3, 42004, 2496.0498, -1695.2382, 1014.7422, 180.0, 1766.6000, -1918.3000, 13.5600, 0.0, 1
+WHERE NOT EXISTS (SELECT 1 FROM gang_hq_interiors WHERE gang_id=4);
+
+INSERT INTO gang_hq_interiors
+(gang_id, gang_name, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, enabled)
+SELECT 5, 'San Fierro Rifa', 3, 42005, 2496.0498, -1695.2382, 1014.7422, 180.0, -2142.7000, -238.4000, 36.5156, 90.0, 1
+WHERE NOT EXISTS (SELECT 1 FROM gang_hq_interiors WHERE gang_id=5);
+
+INSERT INTO gang_hq_interiors
+(gang_id, gang_name, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, enabled)
+SELECT 6, 'San Fierro Triads', 3, 42006, 2496.0498, -1695.2382, 1014.7422, 180.0, -2175.3000, 645.6000, 49.4375, 180.0, 1
+WHERE NOT EXISTS (SELECT 1 FROM gang_hq_interiors WHERE gang_id=6);
+
+INSERT INTO gang_hq_interiors
+(gang_id, gang_name, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, enabled)
+SELECT 7, 'Da Nang Boys', 3, 42007, 2496.0498, -1695.2382, 1014.7422, 180.0, -1720.8000, 1338.3000, 7.1875, 270.0, 1
+WHERE NOT EXISTS (SELECT 1 FROM gang_hq_interiors WHERE gang_id=7);
+
+INSERT INTO gang_hq_interiors
+(gang_id, gang_name, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, enabled)
+SELECT 8, 'The Mafia', 3, 42008, 2496.0498, -1695.2382, 1014.7422, 180.0, 2170.2000, 1677.5000, 10.8203, 180.0, 1
+WHERE NOT EXISTS (SELECT 1 FROM gang_hq_interiors WHERE gang_id=8);
+
+INSERT INTO gang_hq_interiors
+(gang_id, gang_name, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, enabled)
+SELECT 9, 'Russian Mafia', 3, 42009, 2496.0498, -1695.2382, 1014.7422, 180.0, 2520.3000, 2311.2000, 10.8203, 90.0, 1
+WHERE NOT EXISTS (SELECT 1 FROM gang_hq_interiors WHERE gang_id=9);

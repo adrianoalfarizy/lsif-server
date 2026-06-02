@@ -416,7 +416,7 @@
 #define TERRITORY_ZONE_ALPHA 0x77
 #define DEFAULT_GANG_COLOR 0xFFFFFFFF
 #define MAX_GANG_COLOR_PRESETS 8
-#define MAX_PRESET_GANGS 4
+#define MAX_PRESET_GANGS 9
 #define GANG_HQ_ACCESS_RADIUS 8.0
 #define GANG_CREATE_PRICE 75000 // deprecated after v0.20A.2
 
@@ -458,7 +458,7 @@
 #define TURF_COOLDOWN_SECONDS          900
 #define TURF_WAR_FLASH_COLOR            0xFF0000AA
 
-#define MAX_BUSINESSES 5
+#define MAX_BUSINESSES 64
 #define BUSINESS_ACCESS_RADIUS 5.0
 #define BUSINESS_SELL_PERCENT 70
 #define BUSINESS_MAX_COLLECT 500000
@@ -1286,7 +1286,12 @@ new PresetGangID[MAX_PRESET_GANGS] =
     1,
     2,
     3,
-    4
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
 };
 
 new PresetGangName[MAX_PRESET_GANGS][64] =
@@ -1294,7 +1299,12 @@ new PresetGangName[MAX_PRESET_GANGS][64] =
     "Grove Street Families",
     "Ballas",
     "Los Santos Vagos",
-    "Varrios Los Aztecas"
+    "Varrios Los Aztecas",
+    "San Fierro Rifa",
+    "San Fierro Triads",
+    "Da Nang Boys",
+    "The Mafia",
+    "Russian Mafia"
 };
 
 new PresetGangShortName[MAX_PRESET_GANGS][24] =
@@ -1302,7 +1312,12 @@ new PresetGangShortName[MAX_PRESET_GANGS][24] =
     "Grove",
     "Ballas",
     "Vagos",
-    "Aztecas"
+    "Aztecas",
+    "Rifa",
+    "Triads",
+    "Da Nang",
+    "Mafia",
+    "Russian"
 };
 
 new PresetGangColor[MAX_PRESET_GANGS] =
@@ -1310,7 +1325,12 @@ new PresetGangColor[MAX_PRESET_GANGS] =
     0x00FF00FF, // Grove green
     0xAA66CCFF, // Ballas purple
     0xFFFF00FF, // Vagos yellow
-    0x00FFFFFF  // Aztecas turquoise
+    0x00FFFFFF, // Aztecas turquoise
+    0x33CC99FF, // San Fierro Rifa teal/green
+    0xFF3333FF, // Triads red
+    0xCC9966FF, // Da Nang Boys brown/orange
+    0x666666FF, // The Mafia gray
+    0x9999FFFF  // Russian Mafia pale blue
 };
 
 new PresetGangColorName[MAX_PRESET_GANGS][24] =
@@ -1318,7 +1338,12 @@ new PresetGangColorName[MAX_PRESET_GANGS][24] =
     "Green",
     "Purple",
     "Yellow",
-    "Turquoise"
+    "Turquoise",
+    "Teal",
+    "Red",
+    "Brown",
+    "Gray",
+    "Pale Blue"
 };
 
 new Float:GangHQX[MAX_PRESET_GANGS] =
@@ -1326,7 +1351,12 @@ new Float:GangHQX[MAX_PRESET_GANGS] =
     2495.4094, // Grove Street / Ganton
     2229.3215, // Ballas / Glen Park-Idlewood
     2421.5427, // Vagos / East LS
-    1766.6000  // Aztecas / El Corona
+    1766.6000, // Aztecas / El Corona
+    -2142.7000, // San Fierro Rifa / Garcia-Doherty side
+    -2175.3000, // San Fierro Triads / Chinatown
+    -1720.8000, // Da Nang Boys / Easter Basin docks
+    2170.2000, // The Mafia / Las Venturas casino strip
+    2520.3000  // Russian Mafia / LV industrial placeholder
 };
 
 new Float:GangHQY[MAX_PRESET_GANGS] =
@@ -1334,7 +1364,12 @@ new Float:GangHQY[MAX_PRESET_GANGS] =
     -1686.1682,
         -1159.7343,
         -1224.3597,
-        -1918.3000
+        -1918.3000,
+        -238.4000,
+        645.6000,
+        1338.3000,
+        1677.5000,
+        2311.2000
     };
 
 new Float:GangHQZ[MAX_PRESET_GANGS] =
@@ -1342,7 +1377,12 @@ new Float:GangHQZ[MAX_PRESET_GANGS] =
     13.5153,
     25.7331,
     25.3828,
-    13.5600
+    13.5600,
+    36.5156,
+    49.4375,
+    7.1875,
+    10.8203,
+    10.8203
 };
 
 new Float:GangHQA[MAX_PRESET_GANGS] =
@@ -1350,11 +1390,21 @@ new Float:GangHQA[MAX_PRESET_GANGS] =
     180.0000,
     90.0000,
     270.0000,
-    180.0000
+    180.0000,
+    90.0000,
+    180.0000,
+    270.0000,
+    180.0000,
+    90.0000
 };
 
 new Float:GangHQRadius[MAX_PRESET_GANGS] =
 {
+    GANG_HQ_ACCESS_RADIUS,
+    GANG_HQ_ACCESS_RADIUS,
+    GANG_HQ_ACCESS_RADIUS,
+    GANG_HQ_ACCESS_RADIUS,
+    GANG_HQ_ACCESS_RADIUS,
     GANG_HQ_ACCESS_RADIUS,
     GANG_HQ_ACCESS_RADIUS,
     GANG_HQ_ACCESS_RADIUS,
@@ -1366,7 +1416,12 @@ new GangHQName[MAX_PRESET_GANGS][64] =
     "Grove Street HQ",
     "Ballas HQ",
     "Los Santos Vagos HQ",
-    "Varrios Los Aztecas HQ"
+    "Varrios Los Aztecas HQ",
+    "San Fierro Rifa HQ",
+    "San Fierro Triads HQ",
+    "Da Nang Boys HQ",
+    "The Mafia HQ",
+    "Russian Mafia HQ"
 };
 
 new DynamicLocationCount;
@@ -1502,59 +1557,13 @@ new PlayerBusinessTotalCollected[MAX_PLAYERS];
 new PlayerFindingBusiness[MAX_PLAYERS];
 new PlayerFindingBusinessIndex[MAX_PLAYERS];
 
-new Float:BusinessX[MAX_BUSINESSES] =
-{
-    1833.1124,
-    2105.4583,
-    1368.9248,
-    2420.3311,
-    1000.5822
-};
-
-new Float:BusinessY[MAX_BUSINESSES] =
-{
-    -1842.9921,
-        -1806.4227,
-        -1279.6914,
-        -1508.2178,
-        -919.9146
-    };
-
-new Float:BusinessZ[MAX_BUSINESSES] =
-{
-    13.5781,
-    13.5547,
-    13.5469,
-    24.0000,
-    42.3281
-};
-
-new BusinessPrice[MAX_BUSINESSES] =
-{
-    80000,
-    120000,
-    175000,
-    250000,
-    350000
-};
-
-new BusinessIncomePerMinute[MAX_BUSINESSES] =
-{
-    120,
-    180,
-    250,
-    350,
-    500
-};
-
-new BusinessName[MAX_BUSINESSES][64] =
-{
-    "Idlewood Mini Market",
-    "Willowfield Workshop",
-    "Market Food Store",
-    "East LS Gas Station",
-    "Vinewood Electronics"
-};
+new Float:BusinessX[MAX_BUSINESSES];
+new Float:BusinessY[MAX_BUSINESSES];
+new Float:BusinessZ[MAX_BUSINESSES];
+new BusinessPrice[MAX_BUSINESSES];
+new BusinessIncomePerMinute[MAX_BUSINESSES];
+new BusinessName[MAX_BUSINESSES][64];
+new BusinessEnabled[MAX_BUSINESSES];
 
 new PlayerFindingDealer[MAX_PLAYERS];
 new PlayerDialogDealerVehicle[MAX_PLAYERS];
@@ -1579,6 +1588,64 @@ new Text3D:AmmuNationLabel[MAX_AMMUNATIONS];
 
 new BusinessPickup[MAX_BUSINESSES];
 new Text3D:BusinessLabel[MAX_BUSINESSES];
+
+stock InitBusinessPresetDefaults()
+{
+    for (new i = 0; i < MAX_BUSINESSES; i++)
+    {
+        BusinessX[i] = 0.0;
+        BusinessY[i] = 0.0;
+        BusinessZ[i] = 0.0;
+        BusinessPrice[i] = 0;
+        BusinessIncomePerMinute[i] = 0;
+        BusinessEnabled[i] = 0;
+        format(BusinessName[i], 64, "");
+    }
+
+    // Legacy default business slots. These are only runtime fallbacks.
+    // DB rows from business_preset_config override them after load.
+    BusinessX[0] = 1833.1124;
+    BusinessY[0] = -1842.9921;
+    BusinessZ[0] = 13.5781;
+    BusinessPrice[0] = 80000;
+    BusinessIncomePerMinute[0] = 120;
+    BusinessEnabled[0] = 1;
+    format(BusinessName[0], 64, "Idlewood Mini Market");
+
+    BusinessX[1] = 2105.4583;
+    BusinessY[1] = -1806.4227;
+    BusinessZ[1] = 13.5547;
+    BusinessPrice[1] = 120000;
+    BusinessIncomePerMinute[1] = 180;
+    BusinessEnabled[1] = 1;
+    format(BusinessName[1], 64, "Willowfield Workshop");
+
+    BusinessX[2] = 1368.9248;
+    BusinessY[2] = -1279.6914;
+    BusinessZ[2] = 13.5469;
+    BusinessPrice[2] = 175000;
+    BusinessIncomePerMinute[2] = 250;
+    BusinessEnabled[2] = 1;
+    format(BusinessName[2], 64, "Market Food Store");
+
+    BusinessX[3] = 2420.3311;
+    BusinessY[3] = -1508.2178;
+    BusinessZ[3] = 24.0000;
+    BusinessPrice[3] = 250000;
+    BusinessIncomePerMinute[3] = 350;
+    BusinessEnabled[3] = 1;
+    format(BusinessName[3], 64, "East LS Gas Station");
+
+    BusinessX[4] = 1000.5822;
+    BusinessY[4] = -919.9146;
+    BusinessZ[4] = 42.3281;
+    BusinessPrice[4] = 350000;
+    BusinessIncomePerMinute[4] = 500;
+    BusinessEnabled[4] = 1;
+    format(BusinessName[4], 64, "Vinewood Electronics");
+
+    return 1;
+}
 
 new Text3D:HouseExteriorLabel[MAX_HOUSES];
 new RaceStartPickup;
@@ -7485,7 +7552,7 @@ stock QueryGangStatsDialog(playerid, gangid)
 stock QueryGangTopDialog(playerid)
 {
     mysql_tquery(g_SQL,
-                 "SELECT g.id, g.name, g.bank_money, g.reputation, COALESCE(t.territories,0) AS territories FROM gangs g LEFT JOIN (SELECT owner_gang_id, COUNT(*) territories FROM gang_territories WHERE enabled=1 GROUP BY owner_gang_id) t ON t.owner_gang_id=g.id WHERE g.id IN (1,2,3,4) ORDER BY territories DESC, g.reputation DESC, g.bank_money DESC",
+                 "SELECT g.id, g.name, g.bank_money, g.reputation, COALESCE(t.territories,0) AS territories FROM gangs g LEFT JOIN (SELECT owner_gang_id, COUNT(*) territories FROM gang_territories WHERE enabled=1 GROUP BY owner_gang_id) t ON t.owner_gang_id=g.id WHERE g.id IN (1,2,3,4,5,6,7,8,9) ORDER BY territories DESC, g.reputation DESC, g.bank_money DESC",
                  "OnGangTopDialogLoaded",
                  "i",
                  playerid
@@ -7770,7 +7837,7 @@ stock DestroyAllGangHQInteriorRuntime()
 stock LoadGangHQInteriors()
 {
     InitGangHQInteriorDefaults();
-    mysql_tquery(g_SQL, "SELECT gang_id, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, enabled FROM gang_hq_interiors WHERE gang_id BETWEEN 1 AND 4 ORDER BY gang_id ASC", "OnGangHQInteriorsLoaded");
+    mysql_tquery(g_SQL, "SELECT gang_id, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, enabled FROM gang_hq_interiors WHERE gang_id BETWEEN 1 AND 9 ORDER BY gang_id ASC", "OnGangHQInteriorsLoaded");
     return 1;
 }
 
@@ -8073,7 +8140,7 @@ stock RefreshGangHQMapIconsForAll()
 
 stock LoadGangPresetConfigFromDB()
 {
-    mysql_tquery(g_SQL, "SELECT gang_id, name, short_name, color, color_name, hq_x, hq_y, hq_z, hq_a, hq_radius, enabled FROM gang_preset_config WHERE gang_id BETWEEN 1 AND 4 AND enabled=1 ORDER BY gang_id ASC", "OnGangPresetConfigLoaded");
+    mysql_tquery(g_SQL, "SELECT gang_id, name, short_name, color, color_name, hq_x, hq_y, hq_z, hq_a, hq_radius, enabled FROM gang_preset_config WHERE gang_id BETWEEN 1 AND 9 AND enabled=1 ORDER BY gang_id ASC", "OnGangPresetConfigLoaded");
     return 1;
 }
 
@@ -8164,7 +8231,7 @@ stock ShowGangPresetListDialog(playerid)
 
 stock ShowGangPresetSelectInput(playerid)
 {
-    ShowPlayerDialog(playerid, DIALOG_GANG_PRESET_SELECT_INPUT, DIALOG_STYLE_INPUT, "Select Gang Preset", "Masukkan gang_id preset.\n1 Grove | 2 Ballas | 3 Vagos | 4 Aztecas", "Select", "Back");
+    ShowPlayerDialog(playerid, DIALOG_GANG_PRESET_SELECT_INPUT, DIALOG_STYLE_INPUT, "Select Gang Preset", "Masukkan gang_id preset.\n1 Grove | 2 Ballas | 3 Vagos | 4 Aztecas | 5 Rifa | 6 Triads | 7 Da Nang | 8 Mafia | 9 Russian", "Select", "Back");
     return 1;
 }
 
@@ -9464,7 +9531,7 @@ stock IsValidBusinessIndex(businessIndex)
 
 stock IsPlayerNearBusiness(playerid, businessIndex)
 {
-    if (!IsValidBusinessIndex(businessIndex))
+    if (!IsValidBusinessIndex(businessIndex) || !BusinessEnabled[businessIndex])
     {
         return 0;
     }
@@ -10484,7 +10551,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24I.1 Admin Menus Business Fix");
+    SetGameModeText("SAIF Dev v0.24J.4 Business Compile Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -10505,6 +10572,7 @@ public OnGameModeInit()
     LoadWeaponShopConfigFromDB();
     LoadPublicServiceConfigFromDB();
     LoadGangPresetConfigFromDB();
+    InitBusinessPresetDefaults();
     LoadBusinessPresetConfigFromDB();
 
     AddPlayerClass(
@@ -10592,11 +10660,11 @@ public OnGameModeInit()
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Legacy static ATM/Dealer/Ammu/Job/Race Pawn markers deprecated; gunakan world_locations DB + /locmenu.");
-    print("[SAIF] Gang preset HQ/color/name dapat dioverride via gang_preset_config DB + /gangpresetmenu.");
-    print("[SAIF] Business preset position/price/income dapat dioverride via business_preset_config DB + /bizpresetmenu.");
+    print("[SAIF] Full San Andreas gang preset HQ/color/name dapat dioverride via gang_preset_config DB + /gangpresetmenu.");
+    print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24I.1 Admin Menus Business Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24J Full SA Offline Expansion berhasil dijalankan.");
     return 1;
 }
 
@@ -10850,6 +10918,11 @@ stock RefreshBusinessRuntime()
             BusinessLabel[i] = Text3D:INVALID_3DTEXT_ID;
         }
 
+        if (!BusinessEnabled[i] || strlen(BusinessName[i]) < 1)
+        {
+            continue;
+        }
+
         BusinessPickup[i] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, BusinessX[i], BusinessY[i], BusinessZ[i], 0);
         format(labelText, sizeof(labelText), "[ALT] Business\n%s\nBuy / Manage / Collect\nSource: DB preset", BusinessName[i]);
         BusinessLabel[i] = Create3DTextLabel(labelText, COLOR_YELLOW, BusinessX[i], BusinessY[i], BusinessZ[i] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
@@ -10860,7 +10933,7 @@ stock RefreshBusinessRuntime()
 
 stock LoadBusinessPresetConfigFromDB()
 {
-    mysql_tquery(g_SQL, "SELECT business_index, name, x, y, z, price, income_per_minute FROM business_preset_config WHERE business_index BETWEEN 0 AND 4 AND enabled=1 ORDER BY business_index ASC", "OnBusinessPresetConfigLoaded");
+    mysql_tquery(g_SQL, "SELECT business_index, name, x, y, z, price, income_per_minute, enabled FROM business_preset_config WHERE business_index BETWEEN 0 AND 63 ORDER BY business_index ASC", "OnBusinessPresetConfigLoaded");
     return 1;
 }
 
@@ -10884,6 +10957,7 @@ public OnBusinessPresetConfigLoaded()
         cache_get_value_name_float(i, "z", BusinessZ[businessIndex]);
         cache_get_value_name_int(i, "price", BusinessPrice[businessIndex]);
         cache_get_value_name_int(i, "income_per_minute", BusinessIncomePerMinute[businessIndex]);
+        cache_get_value_name_int(i, "enabled", BusinessEnabled[businessIndex]);
 
         if (BusinessPrice[businessIndex] < 1)
         {
@@ -10909,8 +10983,75 @@ stock SaveBusinessPresetConfig(businessIndex)
     }
 
     new query[1024];
-    mysql_format(g_SQL, query, sizeof(query), "REPLACE INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled, updated_at) VALUES (%d, '%e', %f, %f, %f, %d, %d, 'db_editor_manual', 1, NOW())", businessIndex, BusinessName[businessIndex], BusinessX[businessIndex], BusinessY[businessIndex], BusinessZ[businessIndex], BusinessPrice[businessIndex], BusinessIncomePerMinute[businessIndex]);
+    mysql_format(g_SQL, query, sizeof(query), "REPLACE INTO business_preset_config (business_index, name, x, y, z, price, income_per_minute, source_tag, enabled, updated_at) VALUES (%d, '%e', %f, %f, %f, %d, %d, 'db_editor_manual', %d, NOW())", businessIndex, BusinessName[businessIndex], BusinessX[businessIndex], BusinessY[businessIndex], BusinessZ[businessIndex], BusinessPrice[businessIndex], BusinessIncomePerMinute[businessIndex], BusinessEnabled[businessIndex]);
     mysql_tquery(g_SQL, query);
+    return 1;
+}
+
+stock FindFreeBusinessPresetSlot()
+{
+    for (new i = 0; i < MAX_BUSINESSES; i++)
+    {
+        if (!BusinessEnabled[i])
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+stock CreateBusinessPresetFromPlayer(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa create business preset.");
+        return 0;
+    }
+
+    new businessIndex = FindFreeBusinessPresetSlot();
+    if (businessIndex == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Tidak ada slot business kosong. Naikkan MAX_BUSINESSES jika perlu.");
+        return 0;
+    }
+
+    new Float:x, Float:y, Float:z;
+    GetPlayerPos(playerid, x, y, z);
+
+    BusinessX[businessIndex] = x;
+    BusinessY[businessIndex] = y;
+    BusinessZ[businessIndex] = z;
+    BusinessPrice[businessIndex] = 100000;
+    BusinessIncomePerMinute[businessIndex] = 150;
+    BusinessEnabled[businessIndex] = 1;
+    format(BusinessName[businessIndex], 64, "New Business %d", businessIndex);
+
+    SaveBusinessPresetConfig(businessIndex);
+    RefreshBusinessRuntime();
+    PlayerEditingBusinessPresetIndex[playerid] = businessIndex;
+    SendClientMessage(playerid, COLOR_GREEN, "Business preset baru dibuat di posisi admin. Silakan edit nama/harga/income.");
+    ShowBusinessPresetActionMenu(playerid, businessIndex);
+    return 1;
+}
+
+stock SetBusinessPresetEnabled(playerid, businessIndex, enabled)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa enable/disable business preset.");
+        return 0;
+    }
+
+    if (!IsValidBusinessIndex(businessIndex))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Business preset tidak valid.");
+        return 0;
+    }
+
+    BusinessEnabled[businessIndex] = enabled ? 1 : 0;
+    SaveBusinessPresetConfig(businessIndex);
+    RefreshBusinessRuntime();
+    SendClientMessage(playerid, COLOR_GREEN, enabled ? "Business preset diaktifkan." : "Business preset dinonaktifkan.");
     return 1;
 }
 
@@ -10924,6 +11065,7 @@ stock ShowBusinessPresetMenu(playerid)
 
     new body[512];
     body[0] = EOS;
+    strcat(body, "Create Business at My Position\n", sizeof(body));
     strcat(body, "List / Select Business Preset\n", sizeof(body));
     strcat(body, "Input Business ID Manual\n", sizeof(body));
     strcat(body, "Reload Business DB Config\n", sizeof(body));
@@ -10934,14 +11076,24 @@ stock ShowBusinessPresetMenu(playerid)
 
 stock ShowBusinessPresetListDialog(playerid)
 {
-    new body[1024];
+    new body[4096];
     new line[192];
+    new displayName[64];
     body[0] = EOS;
-    strcat(body, "ID\tBusiness\tPrice / Income\n", sizeof(body));
+    strcat(body, "ID\tStatus\tBusiness / Price\n", sizeof(body));
 
     for (new i = 0; i < MAX_BUSINESSES; i++)
     {
-        format(line, sizeof(line), "%d\t%s\t$%d / $%d min\n", i, BusinessName[i], BusinessPrice[i], BusinessIncomePerMinute[i]);
+        if (strlen(BusinessName[i]) < 1)
+        {
+            format(displayName, sizeof(displayName), "Empty Business Slot");
+        }
+        else
+        {
+            format(displayName, sizeof(displayName), "%s", BusinessName[i]);
+        }
+
+        format(line, sizeof(line), "%d\t%s\t%s | $%d / $%d min\n", i, BusinessEnabled[i] ? "ON" : "OFF", displayName, BusinessPrice[i], BusinessIncomePerMinute[i]);
         strcat(body, line, sizeof(body));
     }
 
@@ -10951,7 +11103,7 @@ stock ShowBusinessPresetListDialog(playerid)
 
 stock ShowBusinessPresetSelectInput(playerid)
 {
-    ShowPlayerDialog(playerid, DIALOG_BUSINESS_PRESET_SELECT_INPUT, DIALOG_STYLE_INPUT, "Select Business Preset", "Masukkan business ID.\nDefault saat ini: 0 sampai 4.", "Select", "Back");
+    ShowPlayerDialog(playerid, DIALOG_BUSINESS_PRESET_SELECT_INPUT, DIALOG_STYLE_INPUT, "Select Business Preset", "Masukkan business ID.\nDefault saat ini: 0 sampai 63. Gunakan Create Business untuk slot baru otomatis.", "Select", "Back");
     return 1;
 }
 
@@ -10975,6 +11127,7 @@ stock ShowBusinessPresetActionMenu(playerid, businessIndex)
     strcat(body, "Edit Buy Price\n", sizeof(body));
     strcat(body, "Edit Income Per Minute\n", sizeof(body));
     strcat(body, "Goto Business\n", sizeof(body));
+    strcat(body, BusinessEnabled[businessIndex] ? "Disable Business\n" : "Enable Business\n", sizeof(body));
     strcat(body, "Reload DB\n", sizeof(body));
     strcat(body, "Back", sizeof(body));
     ShowPlayerDialog(playerid, DIALOG_BUSINESS_PRESET_ACTION_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Back");
@@ -11613,16 +11766,17 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 
         switch (listitem)
         {
-            case 0: ShowBusinessPresetListDialog(playerid);
-            case 1: ShowBusinessPresetSelectInput(playerid);
-            case 2:
+            case 0: CreateBusinessPresetFromPlayer(playerid);
+            case 1: ShowBusinessPresetListDialog(playerid);
+            case 2: ShowBusinessPresetSelectInput(playerid);
+            case 3:
             {
                 LoadBusinessPresetConfigFromDB();
                 SendClientMessage(playerid, COLOR_GREEN, "Business preset config reload dari database diminta.");
             }
-            case 3:
+            case 4:
             {
-                ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "Business Source Policy", "OFFLINE-FIRST / DB-FIRST\n\nBusiness preset lama yang dulu hardcoded sekarang bisa dioverride dari business_preset_config DB.\nGunakan /bizpresetmenu untuk memindahkan titik, harga, income, dan nama business.\n\nCatatan: ownership player tetap di player_businesses.", "Back", "Close");
+                ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "Business Source Policy", "OFFLINE-FIRST / DB-FIRST\n\nBusiness preset lama yang dulu hardcoded sekarang bisa dioverride dari business_preset_config DB.\nGunakan /bizpresetmenu untuk create/memindahkan titik, harga, income, enable/disable, dan nama business.\n\nCatatan: ownership player tetap di player_businesses.", "Back", "Close");
             }
         }
         return 1;
@@ -11706,10 +11860,15 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             }
             case 6:
             {
+                SetBusinessPresetEnabled(playerid, businessIndex, !BusinessEnabled[businessIndex]);
+                ShowBusinessPresetActionMenu(playerid, businessIndex);
+            }
+            case 7:
+            {
                 LoadBusinessPresetConfigFromDB();
                 SendClientMessage(playerid, COLOR_GREEN, "Business preset config reload dari database diminta.");
             }
-            case 7: ShowBusinessPresetMenu(playerid);
+            case 8: ShowBusinessPresetMenu(playerid);
         }
         return 1;
     }
@@ -11856,7 +12015,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         new gangid = strval(inputtext);
         if (!IsPresetGangID(gangid))
         {
-            SendClientMessage(playerid, COLOR_RED, "Gang ID harus 1-4.");
+            SendClientMessage(playerid, COLOR_RED, "Gang ID harus 1-9.");
             ShowGangPresetSelectInput(playerid);
             return 1;
         }
@@ -14406,7 +14565,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             }
             if (listitem == 1)
             {
-                mysql_tquery(g_SQL, "SELECT id, name, leader_name, reputation FROM gangs WHERE id BETWEEN 1 AND 4 ORDER BY id ASC", "OnGangListLoaded", "i", playerid);
+                mysql_tquery(g_SQL, "SELECT id, name, leader_name, reputation FROM gangs WHERE id BETWEEN 1 AND 9 ORDER BY id ASC", "OnGangListLoaded", "i", playerid);
                 return 1;
             }
             if (listitem == 2)
@@ -14514,7 +14673,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         }
         if (listitem == 13)
         {
-            mysql_tquery(g_SQL, "SELECT id, name, leader_name, reputation FROM gangs WHERE id BETWEEN 1 AND 4 ORDER BY id ASC", "OnGangListLoaded", "i", playerid);
+            mysql_tquery(g_SQL, "SELECT id, name, leader_name, reputation FROM gangs WHERE id BETWEEN 1 AND 9 ORDER BY id ASC", "OnGangListLoaded", "i", playerid);
             return 1;
         }
         if (listitem == 14)
@@ -15778,6 +15937,11 @@ stock GetNearestBusiness(playerid)
 
     for (new i = 0; i < MAX_BUSINESSES; i++)
     {
+        if (!BusinessEnabled[i])
+        {
+            continue;
+        }
+
         new Float:distance = GetPlayerDistanceFromPoint(playerid, BusinessX[i], BusinessY[i], BusinessZ[i]);
 
         if (distance < nearestDistance)
@@ -27574,7 +27738,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/gangtop", true))
     {
         mysql_tquery(g_SQL,
-                     "SELECT g.id, g.name, g.bank_money, g.reputation, COALESCE(t.territories,0) AS territories FROM gangs g LEFT JOIN (SELECT owner_gang_id, COUNT(*) territories FROM gang_territories WHERE enabled=1 GROUP BY owner_gang_id) t ON t.owner_gang_id=g.id WHERE g.id IN (1,2,3,4) ORDER BY territories DESC, g.reputation DESC, g.bank_money DESC",
+                     "SELECT g.id, g.name, g.bank_money, g.reputation, COALESCE(t.territories,0) AS territories FROM gangs g LEFT JOIN (SELECT owner_gang_id, COUNT(*) territories FROM gang_territories WHERE enabled=1 GROUP BY owner_gang_id) t ON t.owner_gang_id=g.id WHERE g.id IN (1,2,3,4,5,6,7,8,9) ORDER BY territories DESC, g.reputation DESC, g.bank_money DESC",
                      "OnGangTopLoaded",
                      "i",
                      playerid
@@ -28986,7 +29150,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
     if (!strcmp(cmdtext, "/gangs", true))
     {
-        mysql_tquery(g_SQL, "SELECT id, name, leader_name, reputation FROM gangs WHERE id BETWEEN 1 AND 4 ORDER BY id ASC", "OnGangListLoaded", "i", playerid);
+        mysql_tquery(g_SQL, "SELECT id, name, leader_name, reputation FROM gangs WHERE id BETWEEN 1 AND 9 ORDER BY id ASC", "OnGangListLoaded", "i", playerid);
         return 1;
     }
 
@@ -29224,7 +29388,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24I.1 Admin Menus Business Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24J Full SA Offline Expansion");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");

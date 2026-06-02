@@ -482,6 +482,8 @@
 #define PUBLIC_INTERIOR_PICKUP_MODEL 1318
 #define PUBLIC_INTERIOR_PICKUP_TYPE 1
 #define PUBLIC_INTERIOR_LABEL_DRAW_DISTANCE 18.0
+#define PUBLIC_INTERIOR_SERVICE_CP_SIZE 1.8
+#define PUBLIC_INTERIOR_SERVICE_RADIUS 2.2
 #define PUBLIC_INTERIOR_VW_BASE 43000
 #define PUBINT_TYPE_SIZE 32
 #define PUBINT_NAME_SIZE 64
@@ -1370,6 +1372,7 @@ new PlayerEditingWorldPickupID[MAX_PLAYERS];
 new PlayerEditingPublicInteriorID[MAX_PLAYERS];
 new PlayerPendingPublicInteriorType[MAX_PLAYERS][PUBINT_TYPE_SIZE];
 new PlayerInsidePublicInteriorID[MAX_PLAYERS];
+new PlayerPublicInteriorServiceCheckpoint[MAX_PLAYERS];
 new PlayerLastPublicInteriorPickupTick[MAX_PLAYERS];
 new PlayerPendingObjectLinkType[MAX_PLAYERS][LOC_TYPE_SIZE];
 new PlayerPendingObjectLinkName[MAX_PLAYERS][LOC_NAME_SIZE];
@@ -9878,7 +9881,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.23F.2 Public Interior Interaction Pack");
+    SetGameModeText("SAIF Dev v0.23F.3 Public Interior Checkpoint Interaction");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -9980,7 +9983,7 @@ public OnGameModeInit()
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.23F.2 Public Interior Interaction Pack berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.23F.3 Public Interior Checkpoint Interaction berhasil dijalankan.");
     return 1;
 }
 
@@ -10041,6 +10044,7 @@ public OnPlayerConnect(playerid)
     PlayerEditingWorldPickupID[playerid] = 0;
     PlayerEditingPublicInteriorID[playerid] = 0;
     PlayerInsidePublicInteriorID[playerid] = 0;
+    PlayerPublicInteriorServiceCheckpoint[playerid] = 0;
     PlayerLastPublicInteriorPickupTick[playerid] = 0;
     CreatePlayerTurfHud(playerid);
 
@@ -10091,6 +10095,7 @@ public OnPlayerDisconnect(playerid, reason)
     PlayerAuthDialogShown[playerid] = 0;
     PlayerFindingBank[playerid] = 0;
     PlayerInsidePublicInteriorID[playerid] = 0;
+    PlayerPublicInteriorServiceCheckpoint[playerid] = 0;
     if (PlayerInsideGangHQ[playerid])
     {
         PlayerInsideGangHQ[playerid] = 0;
@@ -15523,6 +15528,134 @@ stock Float:GetPublicInteriorDefaultA(const type[])
     return 0.0;
 }
 
+
+stock Float:GetPublicInteriorDefaultExitX(const type[])
+{
+    return GetPublicInteriorDefaultX(type);
+}
+
+stock Float:GetPublicInteriorDefaultExitY(const type[])
+{
+    return GetPublicInteriorDefaultY(type);
+}
+
+stock Float:GetPublicInteriorDefaultExitZ(const type[])
+{
+    return GetPublicInteriorDefaultZ(type);
+}
+
+stock Float:GetPublicInteriorDefaultSpawnX(const type[])
+{
+    if (!strcmp(type, "ammunation", true)) return GetPublicInteriorDefaultX(type) + 2.2;
+    if (!strcmp(type, "gym", true)) return GetPublicInteriorDefaultX(type) + 2.2;
+    if (!strcmp(type, "casino", true)) return GetPublicInteriorDefaultX(type);
+    return GetPublicInteriorDefaultX(type);
+}
+
+stock Float:GetPublicInteriorDefaultSpawnY(const type[])
+{
+    if (!strcmp(type, "casino", true)) return GetPublicInteriorDefaultY(type) - 2.2;
+    if (!strcmp(type, "ammunation", true)) return GetPublicInteriorDefaultY(type);
+    if (!strcmp(type, "gym", true)) return GetPublicInteriorDefaultY(type);
+    return GetPublicInteriorDefaultY(type) + 2.2;
+}
+
+stock Float:GetPublicInteriorDefaultSpawnZ(const type[])
+{
+    return GetPublicInteriorDefaultZ(type);
+}
+
+stock Float:GetPublicInteriorServiceXByType(const type[])
+{
+    if (!strcmp(type, "ammunation", true)) return 296.0;
+    if (!strcmp(type, "247", true)) return -23.7;
+    if (!strcmp(type, "burgershot", true)) return 376.5;
+    if (!strcmp(type, "cluckinbell", true)) return 369.1;
+    if (!strcmp(type, "pizzastack", true)) return 376.0;
+    if (!strcmp(type, "gym", true)) return 772.7;
+    if (!strcmp(type, "barber", true)) return 417.6;
+    if (!strcmp(type, "tattoo", true)) return -203.0;
+    if (!strcmp(type, "police", true)) return 246.7;
+    if (!strcmp(type, "hospital", true)) return 390.8;
+    if (!strcmp(type, "cityhall", true)) return 386.5;
+    if (!strcmp(type, "casino", true)) return 2233.9;
+    return GetPublicInteriorDefaultX(type);
+}
+
+stock Float:GetPublicInteriorServiceYByType(const type[])
+{
+    if (!strcmp(type, "ammunation", true)) return -40.6;
+    if (!strcmp(type, "247", true)) return -181.8;
+    if (!strcmp(type, "burgershot", true)) return -67.5;
+    if (!strcmp(type, "cluckinbell", true)) return -6.7;
+    if (!strcmp(type, "pizzastack", true)) return -119.5;
+    if (!strcmp(type, "gym", true)) return 5.0;
+    if (!strcmp(type, "barber", true)) return -21.4;
+    if (!strcmp(type, "tattoo", true)) return -32.5;
+    if (!strcmp(type, "police", true)) return 68.2;
+    if (!strcmp(type, "hospital", true)) return 177.5;
+    if (!strcmp(type, "cityhall", true)) return 177.3;
+    if (!strcmp(type, "casino", true)) return 1708.9;
+    return GetPublicInteriorDefaultY(type) + 4.0;
+}
+
+stock Float:GetPublicInteriorServiceZByType(const type[])
+{
+    return GetPublicInteriorDefaultZ(type);
+}
+
+stock ShowPublicInteriorServiceCheckpoint(playerid, idx)
+{
+    if (idx < 0 || idx >= PublicInteriorCount)
+    {
+        return 0;
+    }
+
+    new Float:cpX = GetPublicInteriorServiceXByType(PublicInteriorType[idx]);
+    new Float:cpY = GetPublicInteriorServiceYByType(PublicInteriorType[idx]);
+    new Float:cpZ = GetPublicInteriorServiceZByType(PublicInteriorType[idx]);
+
+    SetPlayerCheckpoint(playerid, cpX, cpY, cpZ, PUBLIC_INTERIOR_SERVICE_CP_SIZE);
+    PlayerPublicInteriorServiceCheckpoint[playerid] = 1;
+    return 1;
+}
+
+stock HidePublicInteriorServiceCheckpoint(playerid)
+{
+    if (PlayerPublicInteriorServiceCheckpoint[playerid])
+    {
+        DisablePlayerCheckpoint(playerid);
+        PlayerPublicInteriorServiceCheckpoint[playerid] = 0;
+    }
+    return 1;
+}
+
+stock IsPlayerNearPublicInteriorServicePoint(playerid, idx)
+{
+    if (idx < 0 || idx >= PublicInteriorCount)
+    {
+        return 0;
+    }
+
+    if (GetPlayerInterior(playerid) != PublicInteriorInteriorID[idx])
+    {
+        return 0;
+    }
+
+    if (GetPlayerVirtualWorld(playerid) != GetPublicInteriorRuntimeVW(idx))
+    {
+        return 0;
+    }
+
+    return IsPlayerInRangeOfPoint(
+               playerid,
+               PUBLIC_INTERIOR_SERVICE_RADIUS,
+               GetPublicInteriorServiceXByType(PublicInteriorType[idx]),
+               GetPublicInteriorServiceYByType(PublicInteriorType[idx]),
+               GetPublicInteriorServiceZByType(PublicInteriorType[idx])
+           );
+}
+
 stock IsPlayerInPublicInteriorPickupCooldown(playerid)
 {
     if (GetTickCount() - PlayerLastPublicInteriorPickupTick[playerid] < 1500)
@@ -15598,7 +15731,7 @@ stock CreatePublicInteriorRuntime(index)
                                           runtimeVW
                                       );
 
-    format(exitLabel, sizeof(exitLabel), "[EXIT]\n%s\nPanah = Exit\nALT = Shop / Service", PublicInteriorName[index]);
+    format(exitLabel, sizeof(exitLabel), "[EXIT]\n%s\nPanah = Exit\nService: checkpoint merah", PublicInteriorName[index]);
     PublicInteriorExitLabel[index] = Create3DTextLabel(
                                          exitLabel,
                                          COLOR_CYAN,
@@ -15787,13 +15920,13 @@ stock CreatePublicInteriorAtPlayer(playerid, const rawType[], const rawName[])
     GetPlayerFacingAngle(playerid, a);
 
     new interiorId = GetPublicInteriorDefaultInterior(type);
-    new Float:intX = GetPublicInteriorDefaultX(type);
-    new Float:intY = GetPublicInteriorDefaultY(type);
-    new Float:intZ = GetPublicInteriorDefaultZ(type);
+    new Float:intX = GetPublicInteriorDefaultSpawnX(type);
+    new Float:intY = GetPublicInteriorDefaultSpawnY(type);
+    new Float:intZ = GetPublicInteriorDefaultSpawnZ(type);
     new Float:intA = GetPublicInteriorDefaultA(type);
-    new Float:exitX = intX;
-    new Float:exitY = intY + 1.8;
-    new Float:exitZ = intZ;
+    new Float:exitX = GetPublicInteriorDefaultExitX(type);
+    new Float:exitY = GetPublicInteriorDefaultExitY(type);
+    new Float:exitZ = GetPublicInteriorDefaultExitZ(type);
 
     new query[1024];
     mysql_format(g_SQL, query, sizeof(query),
@@ -15842,10 +15975,12 @@ stock EnterPublicInterior(playerid, dbid)
     SetPlayerPos(playerid, PublicInteriorIntX[idx], PublicInteriorIntY[idx], PublicInteriorIntZ[idx]);
     SetPlayerFacingAngle(playerid, PublicInteriorIntA[idx]);
     SetCameraBehindPlayer(playerid);
+    ShowPublicInteriorServiceCheckpoint(playerid, idx);
 
     new msg[144];
     format(msg, sizeof(msg), "Kamu masuk ke %s. Public interior ini shared untuk semua player.", PublicInteriorName[idx]);
     SendClientMessage(playerid, COLOR_GREEN, msg);
+    SendClientMessage(playerid, COLOR_WHITE, "Gunakan checkpoint merah di depan kasir/service point untuk transaksi seperti GTA SA offline.");
     SendClientMessage(playerid, COLOR_WHITE, "Sentuh panah exit atau gunakan /pubintexit untuk keluar.");
     return 1;
 }
@@ -15873,6 +16008,7 @@ stock ExitPublicInterior(playerid)
         return 0;
     }
 
+    HidePublicInteriorServiceCheckpoint(playerid);
     SetPlayerPublicInteriorPickupCooldown(playerid);
     PlayerInsidePublicInteriorID[playerid] = 0;
     SetPlayerInterior(playerid, PublicInteriorExteriorInterior[idx]);
@@ -16098,7 +16234,7 @@ stock ShowPublicInteriorActionMenu(playerid, dbid)
 stock ShowPublicInteriorHelp(playerid)
 {
     new body[768];
-    format(body, sizeof(body), "Public Interior System\n\nPublic interiors = tempat umum shared virtual world.\nContoh: Ammu-Nation, 24/7, Burger Shot, Cluckin' Bell, Pizza Stack, Gym, Barber, Tattoo, Police, Hospital.\n\nCommand:\n/pubintmenu\n/pubintcreate [type] [name]\n/pubintlist\n/pubintinfo [id]\n/pubintgoto [id]\n/pubintenter [id]\n/pubintexit\n/pubintdelete [id]\n/pubintreload\n/pubintuse\n\nMasuk/keluar pakai pickup panah. Di dalam interior, tekan ALT atau /pubintuse untuk membuka menu shop/service seperti offline GTA SA.");
+    format(body, sizeof(body), "Public Interior System\n\nPublic interiors = tempat umum shared virtual world.\nContoh: Ammu-Nation, 24/7, Burger Shot, Cluckin' Bell, Pizza Stack, Gym, Barber, Tattoo, Police, Hospital.\n\nCommand:\n/pubintmenu\n/pubintcreate [type] [name]\n/pubintlist\n/pubintinfo [id]\n/pubintgoto [id]\n/pubintenter [id]\n/pubintexit\n/pubintdelete [id]\n/pubintreload\n/pubintuse\n\nMasuk/keluar pakai pickup panah. Di dalam interior, transaksi hanya di checkpoint merah depan kasir/service point. Masuk checkpoint atau tekan ALT di checkpoint untuk membuka menu seperti GTA SA offline.");
     ShowPlayerDialog(playerid, DIALOG_PUBINT_HELP, DIALOG_STYLE_MSGBOX, "Public Interior Help", body, "Back", "Close");
     return 1;
 }
@@ -16175,6 +16311,14 @@ stock ShowPublicInteriorInteractionMenu(playerid)
     }
 
     PlayerInsidePublicInteriorID[playerid] = PublicInteriorDBID[idx];
+
+    if (!IsPlayerNearPublicInteriorServicePoint(playerid, idx))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Dekati checkpoint merah di depan kasir/service point untuk memakai menu interior.");
+        SendClientMessage(playerid, COLOR_WHITE, "Panah exit tetap dipakai untuk keluar dari interior.");
+        ShowPublicInteriorServiceCheckpoint(playerid, idx);
+        return 0;
+    }
 
     new title[96];
     new body[256];
@@ -22081,6 +22225,16 @@ public OnPlayerEnterCheckpoint(playerid)
         }
     }
 
+    if (PlayerInsidePublicInteriorID[playerid] > 0 || GetPlayerPublicInteriorIndex(playerid) != -1)
+    {
+        new pubIdx = GetPlayerPublicInteriorIndex(playerid);
+        if (pubIdx != -1 && IsPlayerNearPublicInteriorServicePoint(playerid, pubIdx))
+        {
+            ShowPublicInteriorInteractionMenu(playerid);
+            return 1;
+        }
+    }
+
     if (PlayerWorking[playerid] && PlayerWorkType[playerid] == WORK_BUS)
     {
         HandleBusCheckpoint(playerid);
@@ -25865,7 +26019,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.23F.2 Public Interior Interaction Pack");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.23F.3 Public Interior Checkpoint Interaction");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;

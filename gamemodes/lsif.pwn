@@ -181,6 +181,10 @@
 #define DIALOG_PUBINT_INFO 1161
 #define DIALOG_PUBINT_DELETE_CONFIRM 1162
 #define DIALOG_PUBINT_HELP 1163
+#define DIALOG_PUBINT_INTERACT_MENU 1164
+#define DIALOG_PUBINT_STORE_MENU 1165
+#define DIALOG_PUBINT_FOOD_MENU 1166
+#define DIALOG_PUBINT_SERVICE_MENU 1167
 
 
 
@@ -9874,7 +9878,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.23F.1 Public Interior Template Fix");
+    SetGameModeText("SAIF Dev v0.23F.2 Public Interior Interaction Pack");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -9976,7 +9980,7 @@ public OnGameModeInit()
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.23F.1 Public Interior Template Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.23F.2 Public Interior Interaction Pack berhasil dijalankan.");
     return 1;
 }
 
@@ -10856,6 +10860,59 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             return 1;
         }
         DeletePublicInterior(playerid, PlayerEditingPublicInteriorID[playerid]);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PUBINT_INTERACT_MENU)
+    {
+        if (!response) return 1;
+
+        new idx = GetPlayerPublicInteriorIndex(playerid);
+        if (idx == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu tidak sedang berada di public interior.");
+            return 1;
+        }
+
+        switch (listitem)
+        {
+            case 0: OpenPublicInteriorMainService(playerid);
+            case 1: ExitPublicInterior(playerid);
+            case 2: ShowPublicInteriorInfo(playerid, PublicInteriorDBID[idx]);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PUBINT_STORE_MENU)
+    {
+        if (!response)
+        {
+            ShowPublicInteriorInteractionMenu(playerid);
+            return 1;
+        }
+        ProcessPublicInteriorStorePurchase(playerid, listitem);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PUBINT_FOOD_MENU)
+    {
+        if (!response)
+        {
+            ShowPublicInteriorInteractionMenu(playerid);
+            return 1;
+        }
+        ProcessPublicInteriorFoodPurchase(playerid, listitem);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PUBINT_SERVICE_MENU)
+    {
+        if (!response)
+        {
+            ShowPublicInteriorInteractionMenu(playerid);
+            return 1;
+        }
+        ProcessPublicInteriorService(playerid, listitem);
         return 1;
     }
 
@@ -15541,7 +15598,7 @@ stock CreatePublicInteriorRuntime(index)
                                           runtimeVW
                                       );
 
-    format(exitLabel, sizeof(exitLabel), "[EXIT]\n%s\nPanah = Exit", PublicInteriorName[index]);
+    format(exitLabel, sizeof(exitLabel), "[EXIT]\n%s\nPanah = Exit\nALT = Shop / Service", PublicInteriorName[index]);
     PublicInteriorExitLabel[index] = Create3DTextLabel(
                                          exitLabel,
                                          COLOR_CYAN,
@@ -16041,10 +16098,530 @@ stock ShowPublicInteriorActionMenu(playerid, dbid)
 stock ShowPublicInteriorHelp(playerid)
 {
     new body[768];
-    format(body, sizeof(body), "Public Interior System\n\nPublic interiors = tempat umum shared virtual world.\nContoh: Ammu-Nation, 24/7, Burger Shot, Cluckin' Bell, Pizza Stack, Gym, Barber, Tattoo, Police, Hospital.\n\nCommand:\n/pubintmenu\n/pubintcreate [type] [name]\n/pubintlist\n/pubintinfo [id]\n/pubintgoto [id]\n/pubintenter [id]\n/pubintexit\n/pubintdelete [id]\n/pubintreload\n\nMasuk/keluar pakai pickup panah. Semua player masuk ke virtual world yang sama per lokasi.");
+    format(body, sizeof(body), "Public Interior System\n\nPublic interiors = tempat umum shared virtual world.\nContoh: Ammu-Nation, 24/7, Burger Shot, Cluckin' Bell, Pizza Stack, Gym, Barber, Tattoo, Police, Hospital.\n\nCommand:\n/pubintmenu\n/pubintcreate [type] [name]\n/pubintlist\n/pubintinfo [id]\n/pubintgoto [id]\n/pubintenter [id]\n/pubintexit\n/pubintdelete [id]\n/pubintreload\n/pubintuse\n\nMasuk/keluar pakai pickup panah. Di dalam interior, tekan ALT atau /pubintuse untuk membuka menu shop/service seperti offline GTA SA.");
     ShowPlayerDialog(playerid, DIALOG_PUBINT_HELP, DIALOG_STYLE_MSGBOX, "Public Interior Help", body, "Back", "Close");
     return 1;
 }
+
+stock GetPlayerPublicInteriorIndex(playerid)
+{
+    new dbid = PlayerInsidePublicInteriorID[playerid];
+    new idx = FindPublicInteriorIndexByDBID(dbid);
+
+    if (idx != -1)
+    {
+        return idx;
+    }
+
+    for (new i = 0; i < PublicInteriorCount; i++)
+    {
+        if (!PublicInteriorEnabled[i]) continue;
+        if (GetPlayerInterior(playerid) != PublicInteriorInteriorID[i]) continue;
+        if (GetPlayerVirtualWorld(playerid) != GetPublicInteriorRuntimeVW(i)) continue;
+        return i;
+    }
+
+    return -1;
+}
+
+stock IsPlayerInPublicInteriorType(playerid, const type[])
+{
+    new idx = GetPlayerPublicInteriorIndex(playerid);
+    if (idx == -1) return 0;
+
+    if (!strcmp(PublicInteriorType[idx], type, true))
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
+stock IsPublicInteriorRestaurantType(const type[])
+{
+    if (!strcmp(type, "burgershot", true)) return 1;
+    if (!strcmp(type, "cluckinbell", true)) return 1;
+    if (!strcmp(type, "pizzastack", true)) return 1;
+    return 0;
+}
+
+stock AddPublicInteriorHealth(playerid, Float:addAmount)
+{
+    new Float:health;
+    GetPlayerHealth(playerid, health);
+    health += addAmount;
+    if (health > 100.0) health = 100.0;
+    SetPlayerHealth(playerid, health);
+    return 1;
+}
+
+stock AddPublicInteriorArmour(playerid, Float:addAmount)
+{
+    new Float:armor;
+    GetPlayerArmour(playerid, armor);
+    armor += addAmount;
+    if (armor > 100.0) armor = 100.0;
+    SetPlayerArmour(playerid, armor);
+    return 1;
+}
+
+stock ShowPublicInteriorInteractionMenu(playerid)
+{
+    new idx = GetPlayerPublicInteriorIndex(playerid);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak sedang berada di public interior yang terdaftar.");
+        return 0;
+    }
+
+    PlayerInsidePublicInteriorID[playerid] = PublicInteriorDBID[idx];
+
+    new title[96];
+    new body[256];
+    format(title, sizeof(title), "%s", PublicInteriorName[idx]);
+
+    if (!strcmp(PublicInteriorType[idx], "ammunation", true))
+    {
+        format(body, sizeof(body), "Weapon Shop\nExit Interior\nInterior Info");
+    }
+    else if (!strcmp(PublicInteriorType[idx], "247", true))
+    {
+        format(body, sizeof(body), "Buy Items\nExit Interior\nInterior Info");
+    }
+    else if (IsPublicInteriorRestaurantType(PublicInteriorType[idx]))
+    {
+        format(body, sizeof(body), "Buy Food\nExit Interior\nInterior Info");
+    }
+    else
+    {
+        format(body, sizeof(body), "Use Service\nExit Interior\nInterior Info");
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_PUBINT_INTERACT_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Close");
+    return 1;
+}
+
+stock OpenPublicInteriorMainService(playerid)
+{
+    new idx = GetPlayerPublicInteriorIndex(playerid);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak sedang berada di public interior.");
+        return 0;
+    }
+
+    if (!strcmp(PublicInteriorType[idx], "ammunation", true))
+    {
+        ShowWeaponShopDialog(playerid);
+        return 1;
+    }
+
+    if (!strcmp(PublicInteriorType[idx], "247", true))
+    {
+        ShowPublicInteriorStoreMenu(playerid);
+        return 1;
+    }
+
+    if (IsPublicInteriorRestaurantType(PublicInteriorType[idx]))
+    {
+        ShowPublicInteriorFoodMenu(playerid);
+        return 1;
+    }
+
+    ShowPublicInteriorServiceMenu(playerid);
+    return 1;
+}
+
+stock ShowPublicInteriorStoreMenu(playerid)
+{
+    ShowPlayerDialog(playerid, DIALOG_PUBINT_STORE_MENU, DIALOG_STYLE_LIST, "24/7 Supermarket", "Sprunk - $25 - Health +5\nSnack - $35 - Health +8\nFirst Aid - $150 - Health +25\nArmor Vest - $600 - Armor +25", "Buy", "Back");
+    return 1;
+}
+
+stock ShowPublicInteriorFoodMenu(playerid)
+{
+    new idx = GetPlayerPublicInteriorIndex(playerid);
+    if (idx == -1) return 0;
+
+    new title[64];
+    new body[384];
+    format(title, sizeof(title), "%s", PublicInteriorName[idx]);
+
+    if (!strcmp(PublicInteriorType[idx], "burgershot", true))
+    {
+        format(body, sizeof(body), "Moo Kids Meal - $45 - Health +10\nBeef Tower - $80 - Health +20\nMeat Stack - $120 - Health +35\nBurger Shot Big Meal - $160 - Health +50");
+    }
+    else if (!strcmp(PublicInteriorType[idx], "cluckinbell", true))
+    {
+        format(body, sizeof(body), "Cluckin' Little Meal - $45 - Health +10\nCluckin' Big Meal - $80 - Health +20\nCluckin' Huge Meal - $120 - Health +35\nSalad Meal - $90 - Health +18");
+    }
+    else
+    {
+        format(body, sizeof(body), "Pizza Slice - $40 - Health +10\nSmall Pizza - $75 - Health +20\nFull Rack - $120 - Health +35\nBuster Meal - $160 - Health +50");
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_PUBINT_FOOD_MENU, DIALOG_STYLE_LIST, title, body, "Buy", "Back");
+    return 1;
+}
+
+stock ShowPublicInteriorServiceMenu(playerid)
+{
+    new idx = GetPlayerPublicInteriorIndex(playerid);
+    if (idx == -1) return 0;
+
+    new title[64];
+    new body[384];
+    format(title, sizeof(title), "%s", PublicInteriorName[idx]);
+
+    if (!strcmp(PublicInteriorType[idx], "gym", true))
+    {
+        format(body, sizeof(body), "Light Training - $100 - XP +10\nBoxing Session - $150 - XP +15 / Health +5\nFull Workout - $250 - XP +25 / Health +10");
+    }
+    else if (!strcmp(PublicInteriorType[idx], "barber", true))
+    {
+        format(body, sizeof(body), "Basic Haircut - $150 - RP style service\nClean Cut - $250 - RP style service\nPremium Style - $500 - RP style service");
+    }
+    else if (!strcmp(PublicInteriorType[idx], "tattoo", true))
+    {
+        format(body, sizeof(body), "Small Tattoo - $250 - RP style service\nGang Tattoo - $500 - RP style service\nFull Body Tattoo - $1000 - RP style service");
+    }
+    else if (!strcmp(PublicInteriorType[idx], "hospital", true))
+    {
+        format(body, sizeof(body), "Medical Checkup - $150 - Health +35\nEmergency Treatment - $350 - Health 100\nArmor Patch - $500 - Armor +20");
+    }
+    else if (!strcmp(PublicInteriorType[idx], "police", true))
+    {
+        format(body, sizeof(body), "Ask Wanted Status - Free\nPay Small Fine - $500 - Reduce wanted 1\nPublic Safety Info - Free");
+    }
+    else if (!strcmp(PublicInteriorType[idx], "cityhall", true))
+    {
+        format(body, sizeof(body), "Citizen Service Info - Free\nBusiness Permit Info - Free\nVehicle/Weapon License Info - Free");
+    }
+    else if (!strcmp(PublicInteriorType[idx], "casino", true))
+    {
+        format(body, sizeof(body), "Casino Info - Free\nLucky Snack - $100 - Health +10\nVIP Service Placeholder - $1000");
+    }
+    else
+    {
+        format(body, sizeof(body), "Public Service Info - Free");
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_PUBINT_SERVICE_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Back");
+    return 1;
+}
+
+stock ProcessPublicInteriorStorePurchase(playerid, listitem)
+{
+    if (!IsPlayerInPublicInteriorType(playerid, "247"))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak sedang berada di 24/7 Supermarket.");
+        return 0;
+    }
+
+    new price = 25;
+    new Float:healthAdd = 5.0;
+    new Float:armorAdd = 0.0;
+    new itemName[32];
+
+    switch (listitem)
+    {
+        case 0:
+        {
+            price = 25;
+            healthAdd = 5.0;
+            format(itemName, sizeof(itemName), "Sprunk");
+        }
+        case 1:
+        {
+            price = 35;
+            healthAdd = 8.0;
+            format(itemName, sizeof(itemName), "Snack");
+        }
+        case 2:
+        {
+            price = 150;
+            healthAdd = 25.0;
+            format(itemName, sizeof(itemName), "First Aid");
+        }
+        case 3:
+        {
+            price = 600;
+            healthAdd = 0.0;
+            armorAdd = 25.0;
+            format(itemName, sizeof(itemName), "Armor Vest");
+        }
+        default:
+            return 0;
+    }
+
+    if (!TakePlayerCash(playerid, price))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Cash kamu tidak cukup.");
+        ShowPublicInteriorStoreMenu(playerid);
+        return 0;
+    }
+
+    if (healthAdd > 0.0) AddPublicInteriorHealth(playerid, healthAdd);
+    if (armorAdd > 0.0) AddPublicInteriorArmour(playerid, armorAdd);
+    SavePlayerData(playerid);
+
+    new msg[144];
+    format(msg, sizeof(msg), "24/7: kamu membeli %s seharga $%d.", itemName, price);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    return 1;
+}
+
+stock ProcessPublicInteriorFoodPurchase(playerid, listitem)
+{
+    new idx = GetPlayerPublicInteriorIndex(playerid);
+    if (idx == -1 || !IsPublicInteriorRestaurantType(PublicInteriorType[idx]))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak sedang berada di restoran public interior.");
+        return 0;
+    }
+
+    new price;
+    new Float:healthAdd;
+    new itemName[48];
+
+    switch (listitem)
+    {
+        case 0:
+        {
+            price = 45;
+            healthAdd = 10.0;
+            format(itemName, sizeof(itemName), "small meal");
+        }
+        case 1:
+        {
+            price = 80;
+            healthAdd = 20.0;
+            format(itemName, sizeof(itemName), "regular meal");
+        }
+        case 2:
+        {
+            price = 120;
+            healthAdd = 35.0;
+            format(itemName, sizeof(itemName), "large meal");
+        }
+        case 3:
+        {
+            price = 160;
+            healthAdd = 50.0;
+            format(itemName, sizeof(itemName), "big meal");
+        }
+        default:
+            return 0;
+    }
+
+    if (!TakePlayerCash(playerid, price))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Cash kamu tidak cukup.");
+        ShowPublicInteriorFoodMenu(playerid);
+        return 0;
+    }
+
+    AddPublicInteriorHealth(playerid, healthAdd);
+    SavePlayerData(playerid);
+
+    new msg[160];
+    format(msg, sizeof(msg), "%s: kamu membeli %s seharga $%d. Health bertambah.", PublicInteriorName[idx], itemName, price);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    return 1;
+}
+
+stock ProcessPublicInteriorService(playerid, listitem)
+{
+    new idx = GetPlayerPublicInteriorIndex(playerid);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak sedang berada di public interior.");
+        return 0;
+    }
+
+    new price = 0;
+    new serviceName[64];
+    new xpReward = 0;
+    new Float:healthAdd = 0.0;
+    new Float:armorAdd = 0.0;
+    new setFullHealth = 0;
+    new reduceWanted = 0;
+    new handled = 1;
+
+    if (!strcmp(PublicInteriorType[idx], "gym", true))
+    {
+        switch (listitem)
+        {
+            case 0:
+            {
+                price = 100;
+                xpReward = 10;
+                format(serviceName, sizeof(serviceName), "Light Training");
+            }
+            case 1:
+            {
+                price = 150;
+                xpReward = 15;
+                healthAdd = 5.0;
+                format(serviceName, sizeof(serviceName), "Boxing Session");
+            }
+            case 2:
+            {
+                price = 250;
+                xpReward = 25;
+                healthAdd = 10.0;
+                format(serviceName, sizeof(serviceName), "Full Workout");
+            }
+            default:
+                handled = 0;
+        }
+    }
+    else if (!strcmp(PublicInteriorType[idx], "barber", true))
+    {
+        switch (listitem)
+        {
+            case 0:
+            {
+                price = 150;
+                format(serviceName, sizeof(serviceName), "Basic Haircut");
+            }
+            case 1:
+            {
+                price = 250;
+                format(serviceName, sizeof(serviceName), "Clean Cut");
+            }
+            case 2:
+            {
+                price = 500;
+                format(serviceName, sizeof(serviceName), "Premium Style");
+            }
+            default:
+                handled = 0;
+        }
+    }
+    else if (!strcmp(PublicInteriorType[idx], "tattoo", true))
+    {
+        switch (listitem)
+        {
+            case 0:
+            {
+                price = 250;
+                format(serviceName, sizeof(serviceName), "Small Tattoo");
+            }
+            case 1:
+            {
+                price = 500;
+                format(serviceName, sizeof(serviceName), "Gang Tattoo");
+            }
+            case 2:
+            {
+                price = 1000;
+                format(serviceName, sizeof(serviceName), "Full Body Tattoo");
+            }
+            default:
+                handled = 0;
+        }
+    }
+    else if (!strcmp(PublicInteriorType[idx], "hospital", true))
+    {
+        switch (listitem)
+        {
+            case 0:
+            {
+                price = 150;
+                healthAdd = 35.0;
+                format(serviceName, sizeof(serviceName), "Medical Checkup");
+            }
+            case 1:
+            {
+                price = 350;
+                setFullHealth = 1;
+                format(serviceName, sizeof(serviceName), "Emergency Treatment");
+            }
+            case 2:
+            {
+                price = 500;
+                armorAdd = 20.0;
+                format(serviceName, sizeof(serviceName), "Armor Patch");
+            }
+            default:
+                handled = 0;
+        }
+    }
+    else if (!strcmp(PublicInteriorType[idx], "police", true))
+    {
+        if (listitem == 0)
+        {
+            new msg[96];
+            format(msg, sizeof(msg), "Wanted level kamu saat ini: %d.", GetPlayerWantedLevel(playerid));
+            SendClientMessage(playerid, COLOR_WHITE, msg);
+            return 1;
+        }
+        if (listitem == 1)
+        {
+            price = 500;
+            reduceWanted = 1;
+            format(serviceName, sizeof(serviceName), "Small Fine");
+        }
+        else if (listitem == 2)
+        {
+            SendClientMessage(playerid, COLOR_WHITE, "Police Department: patuhi hukum, kurangi wanted level dengan police bribe atau bayar fine.");
+            return 1;
+        }
+        else handled = 0;
+    }
+    else if (!strcmp(PublicInteriorType[idx], "cityhall", true))
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "City Hall: layanan administrasi, license info, business permit, dan civic service akan dikembangkan bertahap.");
+        return 1;
+    }
+    else if (!strcmp(PublicInteriorType[idx], "casino", true))
+    {
+        if (listitem == 1)
+        {
+            price = 100;
+            healthAdd = 10.0;
+            format(serviceName, sizeof(serviceName), "Lucky Snack");
+        }
+        else
+        {
+            SendClientMessage(playerid, COLOR_WHITE, "Casino: gambling/minigame belum diaktifkan. Interior dan public service sudah siap.");
+            return 1;
+        }
+    }
+    else
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "Public service tersedia, detail fitur akan dikembangkan bertahap.");
+        return 1;
+    }
+
+    if (!handled) return 0;
+
+    if (price > 0 && !TakePlayerCash(playerid, price))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Cash kamu tidak cukup.");
+        ShowPublicInteriorServiceMenu(playerid);
+        return 0;
+    }
+
+    if (xpReward > 0) GivePlayerXPEx(playerid, xpReward);
+    if (healthAdd > 0.0) AddPublicInteriorHealth(playerid, healthAdd);
+    if (armorAdd > 0.0) AddPublicInteriorArmour(playerid, armorAdd);
+    if (setFullHealth) SetPlayerHealth(playerid, 100.0);
+    if (reduceWanted)
+    {
+        new wanted = GetPlayerWantedLevel(playerid);
+        if (wanted > 0) SetPlayerWantedLevel(playerid, wanted - 1);
+    }
+
+    SavePlayerData(playerid);
+
+    new msg[160];
+    format(msg, sizeof(msg), "%s: kamu menggunakan layanan %s seharga $%d.", PublicInteriorName[idx], serviceName, price);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    return 1;
+}
+
 
 stock LoadWorldPickups()
 {
@@ -20881,6 +21458,11 @@ stock GetNearestAmmuNation(playerid)
 
 stock IsPlayerNearAmmuNation(playerid)
 {
+    if (IsPlayerInPublicInteriorType(playerid, "ammunation"))
+    {
+        return 1;
+    }
+
     for (new i = 0; i < MAX_AMMUNATIONS; i++)
     {
         if (GetPlayerDistanceFromPoint(playerid, AmmuNationX[i], AmmuNationY[i], AmmuNationZ[i]) <= AMMUNATION_ACCESS_RADIUS)
@@ -21246,6 +21828,11 @@ stock HandleWorldInteractKey(playerid)
         ResetNearbyInteractions(playerid);
         AddNearbyInteraction(playerid, INTERACT_TYPE_GANG_HQ, PlayerInsideGangHQID[playerid], "Gang HQ Interior Utility");
         return ShowNearbyInteractionDialog(playerid);
+    }
+
+    if (PlayerInsidePublicInteriorID[playerid] > 0 || GetPlayerPublicInteriorIndex(playerid) != -1)
+    {
+        return ShowPublicInteriorInteractionMenu(playerid);
     }
 
     if (PlayerWorking[playerid] || PlayerRace[playerid] != RACE_NONE)
@@ -23973,6 +24560,12 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/pubintuse", true))
+    {
+        ShowPublicInteriorInteractionMenu(playerid);
+        return 1;
+    }
+
     if (strfind(cmdtext, "/pubintdelete ", true) == 0)
     {
         new idStr[16];
@@ -25272,7 +25865,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.23F.1 Public Interior Template Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.23F.2 Public Interior Interaction Pack");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;

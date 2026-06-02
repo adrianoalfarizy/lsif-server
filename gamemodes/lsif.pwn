@@ -2163,6 +2163,7 @@ forward OnBusinessPresetConfigLoaded();
 forward OnSourceAuditSummaryLoaded(playerid);
 forward OnSourceAuditDetailLoaded(playerid, datasetIndex);
 forward OnSourceAuditDeprecatedLoaded(playerid);
+forward OnSourceCleanupUpdated(playerid, datasetIndex, actionType);
 
 forward OnDynamicLocationsLoaded();
 forward OnDynamicLocationCreated(playerid);
@@ -10655,7 +10656,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24M Source Audit Detail Tools");
+    SetGameModeText("SAIF Dev v0.24N Source Cleanup Assistant");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -10768,7 +10769,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24M Source Audit Detail Tools berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24N Source Cleanup Assistant berhasil dijalankan.");
     return 1;
 }
 
@@ -11372,10 +11373,10 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "SAIF Admin Menus Hub (/amenus)\n\n", sizeof(body));
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/turfmenu | /turfedit\n\n", sizeof(body));
-    strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
+    strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
     strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id]\n\n", sizeof(body));
-    strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
+    strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "SAIF Admin Menu Reference", body, "Back", "Close");
     return 1;
@@ -11412,6 +11413,7 @@ stock ShowSourceAuditActionMenu(playerid)
     strcat(body, "Summary by Source Tag\tHitung exact/manual/deprecated/unknown\n", sizeof(body));
     strcat(body, "Detail per Dataset\tLihat record ID/nama/source sebelum cleanup\n", sizeof(body));
     strcat(body, "Deprecated/Fallback Records\tTampilkan data template/curated/legacy/unknown\n", sizeof(body));
+    strcat(body, "Cleanup Assistant\tDisable/relabel source_tag secara aman\n", sizeof(body));
     strcat(body, "Source Policy & Cleanup Rule\tPanduan aman offline-first\n", sizeof(body));
     strcat(body, "Admin Command Reference\tDaftar command admin/editor\n", sizeof(body));
 
@@ -11456,9 +11458,279 @@ stock ShowSourceAuditPolicy(playerid)
     strcat(body, "- Mulai dari disable enabled=0 untuk deprecated yang sudah diganti exact.\n", sizeof(body));
     strcat(body, "- Pastikan public/system core seperti house, gang HQ, business ownership tidak rusak.\n", sizeof(body));
     strcat(body, "- Setelah audit, baru buat patch cleanup spesifik per dataset/source_tag.\n\n", sizeof(body));
-    strcat(body, "Tools:\n/sourceaudit = summary\n/sourcedetail = detail per dataset\n/sourcedeprecated = list record fallback\n/sourcepolicy = policy ini", sizeof(body));
+    strcat(body, "Tools:\n/sourceaudit = summary\n/sourcedetail = detail per dataset\n/sourcedeprecated = list record fallback\n/sourcecleanup = cleanup assistant\n/sourcedisabletag [dataset] [tag] = disable fallback aktif\n/sourcerelabeltag [dataset] [old] [new] = label ulang tag non-exact\n/sourcepolicy = policy ini", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "SAIF Source Policy", body, "Back", "Close");
+    return 1;
+}
+
+
+stock IsSafeSourceTagName(const sourceTag[])
+{
+    if (sourceTag[0] == EOS) return 0;
+
+    for (new i = 0; sourceTag[i] != EOS; i++)
+    {
+        if ((sourceTag[i] >= 'a' && sourceTag[i] <= 'z') ||
+            (sourceTag[i] >= 'A' && sourceTag[i] <= 'Z') ||
+            (sourceTag[i] >= '0' && sourceTag[i] <= '9') ||
+            sourceTag[i] == '_' || sourceTag[i] == '-')
+        {
+            continue;
+        }
+        return 0;
+    }
+    return 1;
+}
+
+stock IsCleanupProtectedSourceTag(const sourceTag[])
+{
+    if (strfind(sourceTag, "offline_exact", true) != -1 || strfind(sourceTag, "exact", true) != -1)
+    {
+        return 1;
+    }
+
+    if (strfind(sourceTag, "manual", true) != -1 || strfind(sourceTag, "db_editor", true) != -1)
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
+stock IsCleanupAllowedSourceTag(const sourceTag[])
+{
+    if (!strcmp(sourceTag, "unknown", true)) return 1;
+    if (strfind(sourceTag, "template", true) != -1) return 1;
+    if (strfind(sourceTag, "curated", true) != -1) return 1;
+    if (strfind(sourceTag, "legacy", true) != -1) return 1;
+    if (strfind(sourceTag, "fallback", true) != -1) return 1;
+    return 0;
+}
+
+stock GetSourceAuditDatasetLabel(datasetIndex, datasetLabel[], len)
+{
+    switch (datasetIndex)
+    {
+        case 0: format(datasetLabel, len, "0 world_locations");
+        case 1: format(datasetLabel, len, "1 world_objects");
+        case 2: format(datasetLabel, len, "2 parked_vehicles");
+        case 3: format(datasetLabel, len, "3 world_pickups");
+        case 4: format(datasetLabel, len, "4 public_interiors");
+        case 5: format(datasetLabel, len, "5 gang_preset_config");
+        case 6: format(datasetLabel, len, "6 business_preset_config");
+        default: format(datasetLabel, len, "unknown");
+    }
+    return 1;
+}
+
+stock ShowSourceCleanupAssistant(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka source cleanup assistant.");
+        return 0;
+    }
+
+    new body[4096];
+    body[0] = EOS;
+    strcat(body, "SAIF SOURCE CLEANUP ASSISTANT\n\n", sizeof(body));
+    strcat(body, "Tujuan: bersih-bersih data source_tag tanpa delete permanen.\n", sizeof(body));
+    strcat(body, "Cleanup ini hanya untuk fallback/deprecated/unknown yang sudah direview via /sourcedeprecated.\n\n", sizeof(body));
+    strcat(body, "Dataset ID:\n", sizeof(body));
+    strcat(body, "0 = world_locations\n1 = world_objects\n2 = parked_vehicles\n3 = world_pickups\n", sizeof(body));
+    strcat(body, "4 = public_interiors\n5 = gang_preset_config\n6 = business_preset_config\n\n", sizeof(body));
+    strcat(body, "Command aman:\n", sizeof(body));
+    strcat(body, "/sourcedisabletag [dataset_id] [source_tag]\n", sizeof(body));
+    strcat(body, "Contoh: /sourcedisabletag 2 offline_template_ls\n", sizeof(body));
+    strcat(body, "Efek: enabled=0 untuk row aktif dengan source_tag tersebut, lalu runtime direfresh.\n\n", sizeof(body));
+    strcat(body, "/sourcerelabeltag [dataset_id] [old_tag] [new_tag]\n", sizeof(body));
+    strcat(body, "Contoh: /sourcerelabeltag 0 unknown manual_review\n", sizeof(body));
+    strcat(body, "Efek: ubah label source_tag agar audit lebih jelas.\n\n", sizeof(body));
+    strcat(body, "Proteksi:\n", sizeof(body));
+    strcat(body, "- Tag exact/offline_exact tidak boleh bulk disable/relabel.\n", sizeof(body));
+    strcat(body, "- Tag manual/db_editor tidak boleh bulk disable lewat command ini. Pakai editor spesifik kalau perlu.\n", sizeof(body));
+    strcat(body, "- Disable hanya menerima unknown/template/curated/legacy/fallback.\n", sizeof(body));
+    strcat(body, "- Tidak ada DELETE massal di patch ini.\n", sizeof(body));
+
+    ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "SAIF Source Cleanup Assistant", body, "Back", "Close");
+    return 1;
+}
+
+stock RefreshSourceAuditDatasetRuntime(datasetIndex)
+{
+    switch (datasetIndex)
+    {
+        case 0:
+        {
+            LoadDynamicLocations();
+        }
+        case 1:
+        {
+            LoadDynamicObjects();
+            LoadDynamicLocations();
+        }
+        case 2:
+        {
+            LoadParkedVehicles();
+        }
+        case 3:
+        {
+            LoadWorldPickups();
+        }
+        case 4:
+        {
+            LoadPublicInteriors();
+        }
+        case 5:
+        {
+            LoadGangPresetConfigFromDB();
+        }
+        case 6:
+        {
+            LoadBusinessPresetConfigFromDB();
+        }
+    }
+    return 1;
+}
+
+stock BuildSourceTagWhere(query[], querySize, const sourceTag[])
+{
+    query[0] = EOS;
+
+    if (!strcmp(sourceTag, "unknown", true))
+    {
+        strcat(query, "((source_tag IS NULL OR source_tag='' OR source_tag='unknown'))", querySize);
+    }
+    else
+    {
+        mysql_format(g_SQL, query, querySize, "source_tag='%e'", sourceTag);
+    }
+    return 1;
+}
+
+stock DisableSourceTagForDataset(playerid, datasetIndex, const sourceTag[])
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa menjalankan source cleanup.");
+        return 0;
+    }
+
+    if (datasetIndex < 0 || datasetIndex > 6)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dataset tidak valid. Gunakan /sourcecleanup untuk daftar dataset ID.");
+        return 0;
+    }
+
+    if (!IsSafeSourceTagName(sourceTag))
+    {
+        SendClientMessage(playerid, COLOR_RED, "source_tag tidak valid. Gunakan huruf/angka/underscore/dash tanpa spasi.");
+        return 0;
+    }
+
+    if (IsCleanupProtectedSourceTag(sourceTag) || !IsCleanupAllowedSourceTag(sourceTag))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Cleanup ditolak. Command ini hanya untuk unknown/template/curated/legacy/fallback, bukan exact/manual.");
+        return 0;
+    }
+
+    new whereClause[256];
+    new query[768];
+    new datasetLabel[64];
+    BuildSourceTagWhere(whereClause, sizeof(whereClause), sourceTag);
+
+    switch (datasetIndex)
+    {
+        case 0: format(query, sizeof(query), "UPDATE world_locations SET enabled=0 WHERE %s AND enabled=1", whereClause);
+        case 1: format(query, sizeof(query), "UPDATE world_objects SET enabled=0 WHERE %s AND enabled=1", whereClause);
+        case 2: format(query, sizeof(query), "UPDATE parked_vehicles SET enabled=0 WHERE %s AND enabled=1", whereClause);
+        case 3: format(query, sizeof(query), "UPDATE world_pickups SET enabled=0 WHERE %s AND enabled=1", whereClause);
+        case 4: format(query, sizeof(query), "UPDATE public_interiors SET enabled=0 WHERE %s AND enabled=1", whereClause);
+        case 5: format(query, sizeof(query), "UPDATE gang_preset_config SET enabled=0 WHERE %s AND enabled=1", whereClause);
+        case 6: format(query, sizeof(query), "UPDATE business_preset_config SET enabled=0 WHERE %s AND enabled=1", whereClause);
+    }
+
+    GetSourceAuditDatasetLabel(datasetIndex, datasetLabel, sizeof(datasetLabel));
+    new msg[160];
+    format(msg, sizeof(msg), "Source cleanup: disable tag '%s' pada dataset %s...", sourceTag, datasetLabel);
+    SendClientMessage(playerid, COLOR_YELLOW, msg);
+
+    mysql_tquery(g_SQL, query, "OnSourceCleanupUpdated", "iii", playerid, datasetIndex, 1);
+    return 1;
+}
+
+stock RelabelSourceTagForDataset(playerid, datasetIndex, const oldTag[], const newTag[])
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa menjalankan source relabel.");
+        return 0;
+    }
+
+    if (datasetIndex < 0 || datasetIndex > 6)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dataset tidak valid. Gunakan /sourcecleanup untuk daftar dataset ID.");
+        return 0;
+    }
+
+    if (!IsSafeSourceTagName(oldTag) || !IsSafeSourceTagName(newTag))
+    {
+        SendClientMessage(playerid, COLOR_RED, "source_tag tidak valid. Gunakan huruf/angka/underscore/dash tanpa spasi.");
+        return 0;
+    }
+
+    if (IsCleanupProtectedSourceTag(oldTag) || strfind(newTag, "exact", true) != -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Relabel exact/offline_exact ditolak agar data exact-source tidak tercampur.");
+        return 0;
+    }
+
+    new whereClause[256];
+    new query[768];
+    new datasetLabel[64];
+    BuildSourceTagWhere(whereClause, sizeof(whereClause), oldTag);
+
+    switch (datasetIndex)
+    {
+        case 0: mysql_format(g_SQL, query, sizeof(query), "UPDATE world_locations SET source_tag='%e' WHERE %s", newTag, whereClause);
+        case 1: mysql_format(g_SQL, query, sizeof(query), "UPDATE world_objects SET source_tag='%e' WHERE %s", newTag, whereClause);
+        case 2: mysql_format(g_SQL, query, sizeof(query), "UPDATE parked_vehicles SET source_tag='%e' WHERE %s", newTag, whereClause);
+        case 3: mysql_format(g_SQL, query, sizeof(query), "UPDATE world_pickups SET source_tag='%e' WHERE %s", newTag, whereClause);
+        case 4: mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET source_tag='%e' WHERE %s", newTag, whereClause);
+        case 5: mysql_format(g_SQL, query, sizeof(query), "UPDATE gang_preset_config SET source_tag='%e' WHERE %s", newTag, whereClause);
+        case 6: mysql_format(g_SQL, query, sizeof(query), "UPDATE business_preset_config SET source_tag='%e' WHERE %s", newTag, whereClause);
+    }
+
+    GetSourceAuditDatasetLabel(datasetIndex, datasetLabel, sizeof(datasetLabel));
+    new msg[180];
+    format(msg, sizeof(msg), "Source relabel: '%s' -> '%s' pada dataset %s...", oldTag, newTag, datasetLabel);
+    SendClientMessage(playerid, COLOR_YELLOW, msg);
+
+    mysql_tquery(g_SQL, query, "OnSourceCleanupUpdated", "iii", playerid, datasetIndex, 2);
+    return 1;
+}
+
+public OnSourceCleanupUpdated(playerid, datasetIndex, actionType)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+
+    new affectedRows = cache_affected_rows();
+    new datasetLabel[64];
+    new msg[160];
+    GetSourceAuditDatasetLabel(datasetIndex, datasetLabel, sizeof(datasetLabel));
+
+    RefreshSourceAuditDatasetRuntime(datasetIndex);
+
+    if (actionType == 1)
+    {
+        format(msg, sizeof(msg), "Source cleanup selesai: %d row disabled pada %s. Runtime direfresh.", affectedRows, datasetLabel);
+    }
+    else
+    {
+        format(msg, sizeof(msg), "Source relabel selesai: %d row updated pada %s. Runtime direfresh.", affectedRows, datasetLabel);
+    }
+    SendClientMessage(playerid, COLOR_GREEN, msg);
     return 1;
 }
 
@@ -12281,8 +12553,9 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 0: ShowOfflineSourceAudit(playerid);
             case 1: ShowSourceAuditDatasetMenu(playerid);
             case 2: ShowSourceDeprecatedRecords(playerid);
-            case 3: ShowSourceAuditPolicy(playerid);
-            case 4: ShowAdminToolsReference(playerid);
+            case 3: ShowSourceCleanupAssistant(playerid);
+            case 4: ShowSourceAuditPolicy(playerid);
+            case 5: ShowAdminToolsReference(playerid);
         }
         return 1;
     }
@@ -28294,6 +28567,45 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/sourcecleanup", true) || !strcmp(cmdtext, "/sourcecleanuphelp", true))
+    {
+        ShowSourceCleanupAssistant(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/sourcedisabletag", true, 17))
+    {
+        new datasetStr[16];
+        new sourceTag[80];
+
+        if (!GetTwoParams(cmdtext[17], datasetStr, sizeof(datasetStr), sourceTag, sizeof(sourceTag)) || !IsNumericString(datasetStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Usage: /sourcedisabletag [dataset_id 0-6] [source_tag]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /sourcedisabletag 2 offline_template_ls");
+            return 1;
+        }
+
+        DisableSourceTagForDataset(playerid, strval(datasetStr), sourceTag);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/sourcerelabeltag", true, 17))
+    {
+        new datasetStr[16];
+        new oldTag[80];
+        new newTag[80];
+
+        if (!GetThreeParams(cmdtext[17], datasetStr, sizeof(datasetStr), oldTag, sizeof(oldTag), newTag, sizeof(newTag)) || !IsNumericString(datasetStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Usage: /sourcerelabeltag [dataset_id 0-6] [old_tag] [new_tag]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /sourcerelabeltag 0 unknown manual_review");
+            return 1;
+        }
+
+        RelabelSourceTagForDataset(playerid, strval(datasetStr), oldTag, newTag);
+        return 1;
+    }
+
 
     if (!strcmp(cmdtext, "/bizpresetmenu", true) || !strcmp(cmdtext, "/businessdbmenu", true) || !strcmp(cmdtext, "/bizdbmenu", true))
     {
@@ -30052,7 +30364,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24M Source Audit Detail Tools");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24N Source Cleanup Assistant");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -30062,6 +30374,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24N: Source cleanup assistant, safe disable by source_tag, relabel fallback tags, and runtime refresh.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24M: Source audit detail menu, deprecated/fallback record review, and source cleanup policy.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24L: Offline/source audit tools, source_tag validation summary, and /amenus audit entry.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K: Gang preset active status, enable/disable, runtime hide, and /amenus command reference cleanup.");
@@ -31641,7 +31954,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/adminmenu - Dashboard admin berbasis dialog");
         SendClientMessage(playerid, COLOR_WHITE, "/betamenu - Dashboard beta/whitelist berbasis dialog");
         SendClientMessage(playerid, COLOR_WHITE, "/amenus - Admin menus hub");
-        SendClientMessage(playerid, COLOR_WHITE, "/sourceauditmenu, /sourceaudit, /sourcedetail, /sourcedeprecated, /sourcepolicy - Source audit tools, Owner only");
+        SendClientMessage(playerid, COLOR_WHITE, "/sourceauditmenu, /sourceaudit, /sourcedetail, /sourcedeprecated, /sourcecleanup, /sourcepolicy - Source audit tools, Owner only");
         SendClientMessage(playerid, COLOR_WHITE, "/version, /changelog, /credits, /staff - Release info commands");
 
         return 1;

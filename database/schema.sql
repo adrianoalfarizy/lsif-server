@@ -1560,3 +1560,35 @@ INSERT INTO world_locations
 (location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled, source_tag)
 SELECT 'legacy_static_race_ls_intro', 'race', 'LS Intro Race Start', 1528.3741, -1678.0245, 13.3828, 0.0, 0, 0, 53, 1239, 0, 0, '[RACE] LS Intro\nGunakan /joinrace ls\nTombol 2 hanya untuk vehicle mission/job', 5.0, 1, 'legacy_static_migrated'
 WHERE NOT EXISTS (SELECT 1 FROM world_locations WHERE location_key='legacy_static_race_ls_intro');
+
+-- SAIF / LSIF Dev v0.24H — Gang Preset DB Config
+-- Offline-first / exact-source-first gang HQ preset override.
+-- Gang tetap preset GTA SA, bukan player-made gang.
+
+CREATE TABLE IF NOT EXISTS gang_preset_config (
+    gang_id INT NOT NULL PRIMARY KEY,
+    name VARCHAR(64) NOT NULL,
+    short_name VARCHAR(24) NOT NULL,
+    color INT NOT NULL,
+    color_name VARCHAR(24) NOT NULL DEFAULT 'DB Custom',
+    hq_x FLOAT NOT NULL,
+    hq_y FLOAT NOT NULL,
+    hq_z FLOAT NOT NULL,
+    hq_a FLOAT NOT NULL DEFAULT 0,
+    hq_radius FLOAT NOT NULL DEFAULT 8,
+    source_tag VARCHAR(32) NOT NULL DEFAULT 'offline_exact_manual',
+    enabled TINYINT NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+INSERT INTO gang_preset_config
+(gang_id, name, short_name, color, color_name, hq_x, hq_y, hq_z, hq_a, hq_radius, source_tag, enabled)
+VALUES
+(1, 'Grove Street Families', 'Grove', 16711935, 'Green', 2495.4094, -1686.1682, 13.5153, 180.0000, 8.0, 'offline_exact_manual', 1),
+(2, 'Ballas', 'Ballas', -1436103425, 'Purple', 2229.3215, -1159.7343, 25.7331, 90.0000, 8.0, 'offline_exact_manual', 1),
+(3, 'Los Santos Vagos', 'Vagos', -65281, 'Yellow', 2421.5427, -1224.3597, 25.3828, 270.0000, 8.0, 'offline_exact_manual', 1),
+(4, 'Varrios Los Aztecas', 'Aztecas', 16777215, 'Turquoise', 1766.6000, -1918.3000, 13.5600, 180.0000, 8.0, 'offline_exact_manual', 1)
+ON DUPLICATE KEY UPDATE
+    gang_id=gang_id;
+

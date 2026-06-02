@@ -1981,6 +1981,8 @@ forward OnExactPublicInteriorImportFinished(playerid);
 forward OnExactPublicInteriorImportClearedOnly(playerid);
 forward OnExactPublicInteriorImportInfoLoaded(playerid);
 forward ReloadPublicInteriorsDelayed(playerid);
+forward ApplyPublicInteriorFacingDelayed(playerid, Float:angle);
+forward ApplyPublicInteriorFacingDelayed2(playerid, Float:angle);
 forward RespawnWorldPickupByDBID(dbid);
 forward ReloadDynamicLocationsDelayed(playerid);
 
@@ -9996,7 +9998,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24E.3 Public Interior Facing Editor");
+    SetGameModeText("SAIF Dev v0.24E.4 Public Interior Facing Apply Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -10100,7 +10102,7 @@ public OnGameModeInit()
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24E.3 Public Interior Facing Editor berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24E.4 Public Interior Facing Apply Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -16085,6 +16087,36 @@ stock CreatePublicInteriorRuntime(index)
     return 1;
 }
 
+
+stock ForceApplyPublicInteriorFacing(playerid, Float:angle)
+{
+    if (!IsPlayerConnected(playerid)) return 0;
+
+    SetPlayerFacingAngle(playerid, angle);
+    SetCameraBehindPlayer(playerid);
+    SetTimerEx("ApplyPublicInteriorFacingDelayed", 150, false, "if", playerid, angle);
+    SetTimerEx("ApplyPublicInteriorFacingDelayed2", 450, false, "if", playerid, angle);
+    return 1;
+}
+
+public ApplyPublicInteriorFacingDelayed(playerid, Float:angle)
+{
+    if (!IsPlayerConnected(playerid)) return 0;
+
+    SetPlayerFacingAngle(playerid, angle);
+    SetCameraBehindPlayer(playerid);
+    return 1;
+}
+
+public ApplyPublicInteriorFacingDelayed2(playerid, Float:angle)
+{
+    if (!IsPlayerConnected(playerid)) return 0;
+
+    SetPlayerFacingAngle(playerid, angle);
+    SetCameraBehindPlayer(playerid);
+    return 1;
+}
+
 stock CreatePublicInteriorRuntimeAll()
 {
     for (new i = 0; i < PublicInteriorCount; i++)
@@ -16322,8 +16354,7 @@ stock EnterPublicInterior(playerid, dbid)
     SetPlayerInterior(playerid, PublicInteriorInteriorID[idx]);
     SetPlayerVirtualWorld(playerid, GetPublicInteriorRuntimeVW(idx));
     SetPlayerPos(playerid, PublicInteriorIntX[idx], PublicInteriorIntY[idx], PublicInteriorIntZ[idx]);
-    SetPlayerFacingAngle(playerid, PublicInteriorIntA[idx]);
-    SetCameraBehindPlayer(playerid);
+    ForceApplyPublicInteriorFacing(playerid, PublicInteriorIntA[idx]);
     ShowPublicInteriorServiceCheckpoint(playerid, idx);
 
     new msg[144];
@@ -16363,7 +16394,7 @@ stock ExitPublicInterior(playerid)
     SetPlayerInterior(playerid, PublicInteriorExteriorInterior[idx]);
     SetPlayerVirtualWorld(playerid, PublicInteriorExteriorVirtualWorld[idx]);
     SetPlayerPos(playerid, PublicInteriorExtX[idx], PublicInteriorExtY[idx], PublicInteriorExtZ[idx]);
-    SetPlayerFacingAngle(playerid, PublicInteriorExtA[idx]);
+    ForceApplyPublicInteriorFacing(playerid, PublicInteriorExtA[idx]);
 
     SendClientMessage(playerid, COLOR_GREEN, "Kamu keluar dari public interior.");
     return 1;
@@ -16405,7 +16436,7 @@ stock GotoPublicInterior(playerid, dbid)
     SetPlayerInterior(playerid, PublicInteriorExteriorInterior[idx]);
     SetPlayerVirtualWorld(playerid, PublicInteriorExteriorVirtualWorld[idx]);
     SetPlayerPos(playerid, PublicInteriorExtX[idx], PublicInteriorExtY[idx], PublicInteriorExtZ[idx] + 1.0);
-    SetPlayerFacingAngle(playerid, PublicInteriorExtA[idx]);
+    ForceApplyPublicInteriorFacing(playerid, PublicInteriorExtA[idx]);
     return 1;
 }
 
@@ -16635,14 +16666,14 @@ stock GotoPublicInteriorPoint(playerid, dbid, pointType)
         SetPlayerInterior(playerid, PublicInteriorExteriorInterior[idx]);
         SetPlayerVirtualWorld(playerid, PublicInteriorExteriorVirtualWorld[idx]);
         SetPlayerPos(playerid, PublicInteriorExtX[idx], PublicInteriorExtY[idx], PublicInteriorExtZ[idx] + 1.0);
-        SetPlayerFacingAngle(playerid, PublicInteriorExtA[idx]);
+        ForceApplyPublicInteriorFacing(playerid, PublicInteriorExtA[idx]);
     }
     else if (pointType == 2)
     {
         SetPlayerInterior(playerid, PublicInteriorInteriorID[idx]);
         SetPlayerVirtualWorld(playerid, GetPublicInteriorRuntimeVW(idx));
         SetPlayerPos(playerid, PublicInteriorIntX[idx], PublicInteriorIntY[idx], PublicInteriorIntZ[idx] + 0.5);
-        SetPlayerFacingAngle(playerid, PublicInteriorIntA[idx]);
+        ForceApplyPublicInteriorFacing(playerid, PublicInteriorIntA[idx]);
         PlayerInsidePublicInteriorID[playerid] = PublicInteriorDBID[idx];
         ShowPublicInteriorServiceCheckpoint(playerid, idx);
     }
@@ -16651,7 +16682,7 @@ stock GotoPublicInteriorPoint(playerid, dbid, pointType)
         SetPlayerInterior(playerid, PublicInteriorInteriorID[idx]);
         SetPlayerVirtualWorld(playerid, GetPublicInteriorRuntimeVW(idx));
         SetPlayerPos(playerid, PublicInteriorExitX[idx], PublicInteriorExitY[idx], PublicInteriorExitZ[idx] + 0.5);
-        SetPlayerFacingAngle(playerid, GetPublicInteriorExitFacing(idx));
+        ForceApplyPublicInteriorFacing(playerid, GetPublicInteriorExitFacing(idx));
         PlayerInsidePublicInteriorID[playerid] = PublicInteriorDBID[idx];
         ShowPublicInteriorServiceCheckpoint(playerid, idx);
     }
@@ -16660,7 +16691,7 @@ stock GotoPublicInteriorPoint(playerid, dbid, pointType)
         SetPlayerInterior(playerid, PublicInteriorInteriorID[idx]);
         SetPlayerVirtualWorld(playerid, GetPublicInteriorRuntimeVW(idx));
         SetPlayerPos(playerid, GetPublicInteriorServicePointX(idx), GetPublicInteriorServicePointY(idx), GetPublicInteriorServicePointZ(idx) + 0.5);
-        SetPlayerFacingAngle(playerid, GetPublicInteriorServiceFacing(idx));
+        ForceApplyPublicInteriorFacing(playerid, GetPublicInteriorServiceFacing(idx));
         PlayerInsidePublicInteriorID[playerid] = PublicInteriorDBID[idx];
         ShowPublicInteriorServiceCheckpoint(playerid, idx);
     }

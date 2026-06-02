@@ -188,6 +188,7 @@
 #define DIALOG_PARKVEH_SEED_INFO 1168
 #define DIALOG_PARKVEH_EXACT_INFO 1169
 #define DIALOG_WPICKUP_EXACT_INFO 1170
+#define DIALOG_PUBINT_EXACT_INFO 1171
 
 
 
@@ -495,6 +496,7 @@
 #define PUBINT_TYPE_SIZE 32
 #define PUBINT_NAME_SIZE 64
 #define PUBINT_SOURCE_MANUAL "manual"
+#define PUBINT_SOURCE_EXACT "offline_exact_public"
 
 #define DYN_OBJECT_NAME_SIZE 64
 #define MAPICON_BASE_DYNAMIC 80
@@ -1966,6 +1968,10 @@ forward OnPublicInteriorsLoaded();
 forward OnPublicInteriorCreated(playerid);
 forward OnPublicInteriorUpdated(playerid);
 forward OnPublicInteriorDeleted(playerid);
+forward OnExactPublicInteriorImportCleared(playerid);
+forward OnExactPublicInteriorImportFinished(playerid);
+forward OnExactPublicInteriorImportClearedOnly(playerid);
+forward OnExactPublicInteriorImportInfoLoaded(playerid);
 forward ReloadPublicInteriorsDelayed(playerid);
 forward RespawnWorldPickupByDBID(dbid);
 forward ReloadDynamicLocationsDelayed(playerid);
@@ -9982,7 +9988,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24D SCM Offline Pickup Importer");
+    SetGameModeText("SAIF Dev v0.24E.1 Public Interior Exact Importer Compile Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -10086,7 +10092,7 @@ public OnGameModeInit()
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24D SCM Offline Pickup Importer berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24E.1 Public Interior Exact Importer Compile Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -10836,12 +10842,15 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 0: ShowPublicInteriorCreateTypeMenu(playerid);
             case 1: ShowPublicInteriorListDialog(playerid);
             case 2: ShowPublicInteriorSelectInput(playerid);
-            case 3:
+            case 3: ImportExactPublicInteriorQueue(playerid);
+            case 4: ClearExactPublicInteriorImport(playerid);
+            case 5: ShowExactPublicInteriorImportInfo(playerid);
+            case 6:
             {
                 LoadPublicInteriors();
                 SendClientMessage(playerid, COLOR_GREEN, "Public interiors direload dari database.");
             }
-            case 4: ShowPublicInteriorHelp(playerid);
+            case 7: ShowPublicInteriorHelp(playerid);
         }
         return 1;
     }
@@ -10952,7 +10961,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         return 1;
     }
 
-    if (dialogid == DIALOG_PUBINT_INFO || dialogid == DIALOG_PUBINT_HELP)
+    if (dialogid == DIALOG_PUBINT_INFO || dialogid == DIALOG_PUBINT_HELP || dialogid == DIALOG_PUBINT_EXACT_INFO)
     {
         if (response)
         {
@@ -16330,6 +16339,123 @@ stock DeletePublicInterior(playerid, dbid)
     return 1;
 }
 
+
+stock ImportExactPublicInteriorQueue(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_ADMIN))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak punya izin admin.");
+        return 0;
+    }
+
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET enabled=0 WHERE source_tag='%e'", PUBINT_SOURCE_EXACT);
+    mysql_tquery(g_SQL, query, "OnExactPublicInteriorImportCleared", "i", playerid);
+    return 1;
+}
+
+public OnExactPublicInteriorImportCleared(playerid)
+{
+    new query[2048];
+    new fmt[2048];
+
+    fmt[0] = '\0';
+    strcat(fmt, "INSERT INTO public_interiors (interior_type, display_name, exterior_x, exterior_y, exterior_z, exterior_a, exterior_interior, exterior_virtual_world, interior_id, interior_virtual_world, interior_x, interior_y, interior_z, interior_a, exit_x, exit_y, exit_z, source_tag, enabled) ");
+    strcat(fmt, "SELECT interior_type, display_name, exterior_x, exterior_y, exterior_z, exterior_a, exterior_interior, exterior_virtual_world, interior_id, 0, interior_x, interior_y, interior_z, interior_a, exit_x, exit_y, exit_z, '%e', 1 FROM public_interior_import_queue WHERE enabled=1");
+
+    mysql_format(g_SQL, query, sizeof(query), fmt, PUBINT_SOURCE_EXACT);
+    mysql_tquery(g_SQL, query, "OnExactPublicInteriorImportFinished", "i", playerid);
+    return 1;
+}
+
+public OnExactPublicInteriorImportFinished(playerid)
+{
+    mysql_tquery(g_SQL, "UPDATE public_interior_import_queue SET imported=1 WHERE enabled=1");
+    LoadPublicInteriors();
+    SendClientMessage(playerid, COLOR_GREEN, "Exact public interior queue berhasil diimport ke public_interiors.");
+    SendClientMessage(playerid, COLOR_WHITE, "Runtime tetap pakai panah custom SAIF, shared virtual world, dan checkpoint merah.");
+    return 1;
+}
+
+stock ClearExactPublicInteriorImport(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_ADMIN))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak punya izin admin.");
+        return 0;
+    }
+
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET enabled=0 WHERE source_tag='%e'", PUBINT_SOURCE_EXACT);
+    mysql_tquery(g_SQL, query, "OnExactPublicInteriorImportClearedOnly", "i", playerid);
+    return 1;
+}
+
+public OnExactPublicInteriorImportClearedOnly(playerid)
+{
+    LoadPublicInteriors();
+    SendClientMessage(playerid, COLOR_GREEN, "Exact public interior import dinonaktifkan. Manual public interior tetap aman.");
+    return 1;
+}
+
+stock ShowExactPublicInteriorImportInfo(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_ADMIN))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak punya izin admin.");
+        return 0;
+    }
+
+    new query[768];
+    new fmt[768];
+
+    fmt[0] = '\0';
+    strcat(fmt, "SELECT ");
+    strcat(fmt, "(SELECT COUNT(*) FROM public_interior_import_queue) AS queue_total, ");
+    strcat(fmt, "(SELECT COUNT(*) FROM public_interior_import_queue WHERE enabled=1) AS queue_active, ");
+    strcat(fmt, "(SELECT COUNT(*) FROM public_interior_import_queue WHERE imported=1) AS queue_imported, ");
+    strcat(fmt, "(SELECT COUNT(*) FROM public_interiors WHERE source_tag='%e') AS imported_total, ");
+    strcat(fmt, "(SELECT COUNT(*) FROM public_interiors WHERE source_tag='%e' AND enabled=1) AS imported_active, ");
+    strcat(fmt, "(SELECT COUNT(*) FROM public_interiors WHERE source_tag='manual' AND enabled=1) AS manual_active");
+
+    mysql_format(g_SQL, query, sizeof(query), fmt, PUBINT_SOURCE_EXACT, PUBINT_SOURCE_EXACT);
+    mysql_tquery(g_SQL, query, "OnExactPublicInteriorImportInfoLoaded", "i", playerid);
+    return 1;
+}
+
+public OnExactPublicInteriorImportInfoLoaded(playerid)
+{
+    new rows;
+    cache_get_row_count(rows);
+    if (rows <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Exact public interior info tidak tersedia.");
+        return 1;
+    }
+
+    new queueTotal, queueActive, queueImported, importedTotal, importedActive, manualActive;
+    cache_get_value_name_int(0, "queue_total", queueTotal);
+    cache_get_value_name_int(0, "queue_active", queueActive);
+    cache_get_value_name_int(0, "queue_imported", queueImported);
+    cache_get_value_name_int(0, "imported_total", importedTotal);
+    cache_get_value_name_int(0, "imported_active", importedActive);
+    cache_get_value_name_int(0, "manual_active", manualActive);
+
+    new body[1024];
+    format(body, sizeof(body),
+           "Exact Public Interior Import\\n\\nSource Tag: %s\\nQueue Total: %d\\nQueue Active: %d\\nQueue Imported Flag: %d\\n\\nImported Total Rows: %d\\nImported Active Rows: %d\\nManual Active Rows: %d\\n\\nOffline-first policy:\\n- Gunakan data IPL/ENEX/map source GTA SA jika tersedia.\\n- Jangan lagi mengandalkan template random/curated.\\n- Runtime tetap pakai panah custom SAIF.\\n- Public interior tetap shared virtual world.\\n- Checkpoint merah tetap dipakai untuk kasir/service.\\n\\nCommands:\\n/pubintimportdb\\n/pubintexactclear\\n/pubintexactinfo",
+           PUBINT_SOURCE_EXACT,
+           queueTotal,
+           queueActive,
+           queueImported,
+           importedTotal,
+           importedActive,
+           manualActive
+          );
+    ShowPlayerDialog(playerid, DIALOG_PUBINT_EXACT_INFO, DIALOG_STYLE_MSGBOX, "Exact Public Interior Info", body, "Back", "Close");
+    return 1;
+}
+
 stock ListPublicInteriorsToChat(playerid)
 {
     SendClientMessage(playerid, COLOR_YELLOW, "========== PUBLIC INTERIORS ==========");
@@ -16356,7 +16482,7 @@ stock ShowPublicInteriorMenu(playerid)
         return 0;
     }
 
-    ShowPlayerDialog(playerid, DIALOG_PUBINT_MENU, DIALOG_STYLE_LIST, "Public Interior Editor", "Create Public Interior\nList / Select Interior\nInput ID Manual\nReload Public Interiors\nHelp", "Select", "Close");
+    ShowPlayerDialog(playerid, DIALOG_PUBINT_MENU, DIALOG_STYLE_LIST, "Public Interior Editor", "Create Public Interior\nList / Select Interior\nInput ID Manual\nImport Exact IPL/ENEX Queue\nClear Exact Public Interior Import\nExact Import Info\nReload Public Interiors\nHelp", "Select", "Close");
     return 1;
 }
 
@@ -16447,7 +16573,7 @@ stock ShowPublicInteriorActionMenu(playerid, dbid)
 stock ShowPublicInteriorHelp(playerid)
 {
     new body[768];
-    format(body, sizeof(body), "Public Interior System\n\nPublic interiors = tempat umum shared virtual world.\nContoh: Ammu-Nation, 24/7, Burger Shot, Cluckin' Bell, Pizza Stack, Gym, Barber, Tattoo, Police, Hospital.\n\nCommand:\n/pubintmenu\n/pubintcreate [type] [name]\n/pubintlist\n/pubintinfo [id]\n/pubintgoto [id]\n/pubintenter [id]\n/pubintexit\n/pubintdelete [id]\n/pubintreload\n/pubintuse\n\nMasuk/keluar pakai pickup panah. Di dalam interior, transaksi hanya di checkpoint merah depan kasir/service point. Masuk checkpoint atau tekan ALT di checkpoint untuk membuka menu seperti GTA SA offline.");
+    format(body, sizeof(body), "Public Interior System\n\nOffline-first policy:\n- Public interior exact source utama: IPL/ENEX/map data GTA SA.\n- Runtime SAIF tetap pakai panah custom, shared virtual world, dan checkpoint merah.\n- Manual public interior hanya untuk koreksi/placeholder.\n\nCommand:\n/pubintmenu\n/pubintcreate [type] [name]\n/pubintlist\n/pubintinfo [id]\n/pubintgoto [id]\n/pubintenter [id]\n/pubintexit\n/pubintdelete [id]\n/pubintreload\n/pubintuse\n/pubintimportdb\n/pubintexactclear\n/pubintexactinfo\n\nMasuk/keluar pakai pickup panah custom. Transaksi hanya di checkpoint merah depan kasir/service point.");
     ShowPlayerDialog(playerid, DIALOG_PUBINT_HELP, DIALOG_STYLE_MSGBOX, "Public Interior Help", body, "Back", "Close");
     return 1;
 }
@@ -25484,6 +25610,24 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/pubintimportdb", true))
+    {
+        ImportExactPublicInteriorQueue(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/pubintexactclear", true))
+    {
+        ClearExactPublicInteriorImport(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/pubintexactinfo", true))
+    {
+        ShowExactPublicInteriorImportInfo(playerid);
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/pubintreload", true))
     {
         LoadPublicInteriors();
@@ -26789,7 +26933,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24D SCM Offline Pickup Importer");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24E.1 Public Interior Exact Importer Compile Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -26799,6 +26943,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24E.1: compile fix exact public interior importer; panah custom tetap dipakai.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24D: SCM exact pickup import queue, weapon pickups, curated pickup seed tetap deprecated.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24B: Exact offline parked vehicle importer, /parkvehimportdb, /parkvehexactinfo.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24A: Curated parked vehicle seed is deprecated; use exact offline import when possible.");

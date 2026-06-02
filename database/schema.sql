@@ -1070,4 +1070,207 @@ WHERE source_tag = 'offline_template_ls';
 -- Manual rows and exact imported rows are intentionally preserved.
 -- Manual source_tag is usually manual/empty. Exact parked vehicle import uses offline_exact_ls.
 
+-- SAIF / LSIF v0.24D - SCM exact world pickup import queue SAFE EXTERIOR
+-- Source: uploaded main.scm direct opcode 0213 constant weapon pickup candidates
+-- This safe file excludes z>=200 interior/high-altitude candidates because interior id is not reliable from binary-only scan.
+
+CREATE TABLE IF NOT EXISTS world_pickup_import_queue (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    pickup_type VARCHAR(32) NOT NULL DEFAULT 'weapon',
+    display_name VARCHAR(64) NOT NULL,
+    model_id INT NOT NULL,
+    pos_x FLOAT NOT NULL,
+    pos_y FLOAT NOT NULL,
+    pos_z FLOAT NOT NULL,
+    interior INT NOT NULL DEFAULT 0,
+    virtual_world INT NOT NULL DEFAULT 0,
+    amount INT NOT NULL DEFAULT 30,
+    cooldown_seconds INT NOT NULL DEFAULT 300,
+    source_tag VARCHAR(64) NOT NULL DEFAULT 'offline_exact_scm',
+    enabled TINYINT NOT NULL DEFAULT 1,
+    imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_source_tag (source_tag),
+    KEY idx_enabled (enabled)
+);
+
+UPDATE world_pickup_import_queue SET enabled=0 WHERE source_tag='offline_exact_scm';
+
+INSERT INTO world_pickup_import_queue (pickup_type, display_name, model_id, pos_x, pos_y, pos_z, interior, virtual_world, amount, cooldown_seconds, source_tag, enabled) VALUES
+('weapon','SCM Weapon - Molotov',344,-366.2235,-1429.0878,25.5000,0,0,3,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Chainsaw',341,-365.7906,-1425.2526,25.5000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Pool Cue',338,2854.0000,944.0000,11.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Nightstick',334,2241.0000,2425.0000,11.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Golf Club',333,1418.0000,2774.0000,15.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Shovel',337,1393.0000,2174.0000,10.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Chainsaw',341,1061.0000,2074.0000,11.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Parachute',371,2057.0000,2434.0000,166.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Katana',339,2000.0000,1526.0000,15.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Shovel',337,1997.0000,1658.0000,12.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Golf Club',333,1457.0000,-792.0000,90.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Chainsaw',341,2371.0000,-2543.0000,3.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Knife',335,1124.0000,-1335.0000,13.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Katana',339,1862.0000,-1862.0000,14.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Brass Knuckles',331,1339.0000,-1765.0000,14.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Chainsaw',341,2192.2429,-1988.7507,13.4185,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Shovel',337,2459.0000,-1708.0000,13.6000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Chainsaw',341,-2083.0000,298.0000,42.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Baseball Bat',336,-2306.0000,93.0000,35.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Shovel',337,-2796.4155,123.6860,6.8440,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Pool Cue',338,-2135.0000,197.0000,35.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Katana',339,-2208.0000,696.0000,50.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Brass Knuckles',331,-2206.0000,961.0000,80.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Nightstick',334,-2222.0000,-302.0000,43.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Knife',335,-1871.0000,351.0000,26.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Golf Club',333,-2715.0000,-314.0000,7.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Chainsaw',341,-2359.0000,-82.0000,35.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Shovel',337,-532.0000,-106.0000,63.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Shovel',337,-1809.0000,-1662.0000,24.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Golf Club',333,-2227.0000,-2401.0000,31.4000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Shovel',337,2240.0000,-83.0000,27.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Pool Cue',338,294.0000,-188.0000,2.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Chainsaw',341,-761.0000,-126.0000,66.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Katana',339,-1568.0000,2718.0000,56.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Gift Weapon 11',322,-2401.0000,2360.0000,5.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Shovel',337,637.0000,832.0000,-43.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Chainsaw',341,680.0000,826.0000,-39.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Chainsaw',341,752.0000,260.0000,27.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Brass Knuckles',331,-246.0000,2725.0000,63.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Knife',335,-23.0000,2322.0000,24.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Parachute',371,-1542.8567,698.4825,139.2658,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Parachute',371,-225.6758,1394.2562,172.0143,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Parachute',371,-773.0379,2423.4993,157.0856,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Shovel',337,842.9783,-17.3791,64.2000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Cane',326,-2677.7261,-192.3469,6.8518,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Chainsaw',341,-2752.2429,-272.2891,6.5956,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Cane',326,-2617.4731,-97.0801,4.0030,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Cane',326,-2777.1921,-25.2984,6.8721,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Cane',326,-2774.1130,87.8845,6.7987,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Cane',326,-2770.6235,389.0772,4.2818,0,0,1,300,'offline_exact_scm',1);
+
+INSERT INTO world_pickup_import_queue (pickup_type, display_name, model_id, pos_x, pos_y, pos_z, interior, virtual_world, amount, cooldown_seconds, source_tag, enabled) VALUES
+('weapon','SCM Weapon - Katana',339,-2535.6311,51.7034,8.6512,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Cane',326,-2530.9580,-34.1009,25.2855,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Cane',326,-1691.6486,946.7679,24.8084,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Cane',326,-2664.5183,636.5673,14.2474,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Cane',326,-377.2184,-1048.0535,58.9125,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Cane',326,-45.5928,-1148.5286,1.3953,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Brass Knuckles',331,2428.4990,-1679.2703,13.1633,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Cane',326,1296.1552,-1081.8922,26.1502,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Cane',326,1390.6113,-800.4332,81.7795,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Baseball Bat',336,1308.4662,2111.2886,10.7221,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Cane',326,2183.1160,2396.8269,10.7722,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Baseball Bat',336,1081.1333,1603.6969,5.6000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Knife',335,777.8668,1948.1228,5.3634,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Shovel',337,1888.2698,2877.2617,10.1621,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Cane',326,1420.9449,2519.8816,10.6199,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Cane',326,1372.9963,2605.7576,10.8776,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Katana',339,2631.2629,1722.3947,11.0312,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Cane',326,2490.4966,1522.4697,10.5760,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Cane',326,455.4583,-1485.8964,30.9717,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Katana',339,2002.2629,981.3947,10.5000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,1928.6801,-1774.2100,13.5400,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,1875.9100,-1917.1801,15.0300,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,2019.6000,-1214.1500,21.4700,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,2209.7700,-1001.6900,63.7100,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,1000.3400,-1858.5800,12.3000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,911.1100,-1120.3101,24.0300,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,929.0000,-750.0000,105.8200,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,1129.0900,-2052.8201,69.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,-92.7400,-1425.4600,12.7500,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,-77.6500,-1167.1801,2.1600,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,34.0000,-2649.0000,40.7300,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,-739.0000,-1262.0000,68.1200,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,-2177.0000,-2423.0000,30.6300,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,-615.0000,-861.0000,105.7200,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,-2051.0000,948.0000,55.4000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,-2658.0000,-187.0000,4.1800,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,-2649.0000,734.9700,27.9600,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,-1791.0000,481.0000,25.6800,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,-2797.0000,1182.0000,20.2800,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,-2589.6233,-16.1650,3.9662,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,-2865.0000,690.0000,23.4300,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,-2339.0000,-453.0000,80.2400,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,-1955.0000,-748.0000,36.2200,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,-2420.0300,987.5900,45.3000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,-326.5600,2215.3701,43.5700,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,-1319.0000,2705.0000,50.2700,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,-2474.9399,2443.5200,16.0300,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,-1670.6400,2590.4900,81.3700,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,-892.9800,1971.6600,60.6100,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,1576.8600,2837.1399,10.8300,0,0,1,300,'offline_exact_scm',1);
+
+INSERT INTO world_pickup_import_queue (pickup_type, display_name, model_id, pos_x, pos_y, pos_z, interior, virtual_world, amount, cooldown_seconds, source_tag, enabled) VALUES
+('weapon','SCM Weapon - Flowers',325,1492.7200,2773.7600,10.8100,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,2642.0300,1125.7400,11.0300,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,2025.2400,661.6000,10.9300,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,2181.8201,1484.9700,11.3600,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,2197.0200,2476.3301,11.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,2212.0000,2526.0000,10.8100,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,2715.7900,1109.4700,6.7000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,2489.2500,918.2800,11.0200,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flowers',325,1472.0800,1890.0900,10.8100,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Nightstick',334,911.6486,-1235.3898,17.6802,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Sniper Rifle',358,733.4333,-1356.4700,23.5229,0,0,20,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Baseball Bat',336,2285.7429,-1647.3091,14.0782,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Parachute',371,1797.6023,-1308.8815,133.8128,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Knife',335,-819.0000,1929.0000,7.0000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Knife',335,-938.3901,1901.6489,4.3000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Grenade',342,2550.9670,2824.3425,10.6000,0,0,3,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Parachute',371,2267.9888,1699.6678,101.4000,0,0,1,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Rocket Launcher',359,-686.0000,934.0000,13.5000,0,0,5,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Heat Seeker',360,-690.0000,934.0000,13.5000,0,0,5,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Minigun',362,-690.0000,939.0000,13.5000,0,0,5,300,'offline_exact_scm',1),
+('weapon','SCM Weapon - Flamethrower',361,-686.0000,939.0000,13.5000,0,0,5,300,'offline_exact_scm',1);
+
+-- SAIF / LSIF Dev v0.24E — Public Interior Exact Importer
+-- Offline-first / exact-source-first public interior import queue.
+-- Data source target: GTA SA IPL/ENEX/map data converted into this queue.
+
+CREATE TABLE IF NOT EXISTS public_interior_import_queue (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    interior_type VARCHAR(32) NOT NULL DEFAULT 'public',
+    display_name VARCHAR(64) NOT NULL DEFAULT 'Public Interior',
+
+    exterior_x FLOAT NOT NULL DEFAULT 0,
+    exterior_y FLOAT NOT NULL DEFAULT 0,
+    exterior_z FLOAT NOT NULL DEFAULT 0,
+    exterior_a FLOAT NOT NULL DEFAULT 0,
+    exterior_interior INT NOT NULL DEFAULT 0,
+    exterior_virtual_world INT NOT NULL DEFAULT 0,
+
+    interior_id INT NOT NULL DEFAULT 0,
+    interior_x FLOAT NOT NULL DEFAULT 0,
+    interior_y FLOAT NOT NULL DEFAULT 0,
+    interior_z FLOAT NOT NULL DEFAULT 0,
+    interior_a FLOAT NOT NULL DEFAULT 0,
+
+    exit_x FLOAT NOT NULL DEFAULT 0,
+    exit_y FLOAT NOT NULL DEFAULT 0,
+    exit_z FLOAT NOT NULL DEFAULT 0,
+
+    source_file VARCHAR(128) NOT NULL DEFAULT '',
+    source_ref VARCHAR(128) NOT NULL DEFAULT '',
+    source_tag VARCHAR(64) NOT NULL DEFAULT 'offline_exact_public',
+    enabled TINYINT NOT NULL DEFAULT 1,
+    imported TINYINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    KEY idx_pubint_import_enabled (enabled),
+    KEY idx_pubint_import_source_tag (source_tag),
+    KEY idx_pubint_import_type (interior_type),
+    KEY idx_pubint_import_imported (imported)
+);
+
+ALTER TABLE public_interiors
+    ADD COLUMN IF NOT EXISTS source_tag VARCHAR(64) NOT NULL DEFAULT 'manual';
+
+CREATE INDEX IF NOT EXISTS idx_public_interiors_source_tag ON public_interiors (source_tag);
+
+-- Optional sample only. Keep commented until you want to test queue import manually.
+-- INSERT INTO public_interior_import_queue
+-- (interior_type, display_name, exterior_x, exterior_y, exterior_z, exterior_a, exterior_interior, exterior_virtual_world, interior_id, interior_x, interior_y, interior_z, interior_a, exit_x, exit_y, exit_z, source_file, source_ref, source_tag, enabled)
+-- VALUES
+-- ('ammunation', 'Ammu-Nation Exact Sample', 1368.42, -1279.76, 13.55, 90.0, 0, 0, 1, 286.1489, -40.6443, 1001.5156, 90.0, 286.1489, -40.6443, 1001.5156, 'sample', 'manual_sample', 'offline_exact_public', 1);
+
+
 

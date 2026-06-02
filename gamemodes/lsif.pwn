@@ -132,6 +132,18 @@
 #define DIALOG_INFO 1112
 #define DIALOG_GANG_STASH 1113
 #define DIALOG_GANG_STASH_ACTION 1114
+#define DIALOG_PARKVEH_MENU 1115
+#define DIALOG_PARKVEH_CREATE_INPUT 1116
+#define DIALOG_PARKVEH_LIST 1117
+#define DIALOG_PARKVEH_SELECT_INPUT 1118
+#define DIALOG_PARKVEH_ACTION_MENU 1119
+#define DIALOG_PARKVEH_INFO 1120
+#define DIALOG_PARKVEH_ROTATE_MENU 1121
+#define DIALOG_PARKVEH_ROTATE_INPUT 1122
+#define DIALOG_PARKVEH_COLOR_INPUT 1123
+#define DIALOG_PARKVEH_RESPAWN_INPUT 1124
+#define DIALOG_PARKVEH_LOCK_MENU 1125
+#define DIALOG_PARKVEH_DELETE_CONFIRM 1126
 
 
 
@@ -1250,6 +1262,7 @@ new Float:PlayerPendingObjLocA[MAX_PLAYERS];
 new PlayerPendingObjLocInterior[MAX_PLAYERS];
 new PlayerPendingObjLocVirtualWorld[MAX_PLAYERS];
 new PlayerEditingObjectID[MAX_PLAYERS];
+new PlayerEditingParkedVehicleID[MAX_PLAYERS];
 new PlayerPendingObjectLinkType[MAX_PLAYERS][LOC_TYPE_SIZE];
 new PlayerPendingObjectLinkName[MAX_PLAYERS][LOC_NAME_SIZE];
 
@@ -9743,7 +9756,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.23A.1 Parked Vehicle Engine Fix");
+    SetGameModeText("SAIF Dev v0.23B Parked Vehicle Editor");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -9843,7 +9856,7 @@ public OnGameModeInit()
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.23A.1 Parked Vehicle Engine Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.23B Parked Vehicle Editor berhasil dijalankan.");
     return 1;
 }
 
@@ -10764,6 +10777,275 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         }
 
         DeleteTurfZone(playerid, PlayerSelectedTurfIndex[playerid]);
+        return 1;
+    }
+
+
+    if (dialogid == DIALOG_PARKVEH_MENU)
+    {
+        if (!response) return 1;
+
+        switch (listitem)
+        {
+            case 0: ShowParkedVehicleCreateInput(playerid);
+            case 1: ShowParkedVehicleListDialog(playerid);
+            case 2: ShowParkedVehicleSelectInput(playerid);
+            case 3:
+            {
+                LoadParkedVehicles();
+                SendClientMessage(playerid, COLOR_GREEN, "Parked vehicles direload dari database.");
+            }
+            case 4: ShowParkedVehicleEditorHelp(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PARKVEH_CREATE_INPUT)
+    {
+        if (!response)
+        {
+            ShowParkedVehicleMenu(playerid);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Model ID harus angka.");
+            ShowParkedVehicleCreateInput(playerid);
+            return 1;
+        }
+
+        CreateParkedVehicleAtPlayer(playerid, strval(inputtext));
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PARKVEH_SELECT_INPUT)
+    {
+        if (!response)
+        {
+            ShowParkedVehicleMenu(playerid);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Parked vehicle ID harus angka.");
+            ShowParkedVehicleSelectInput(playerid);
+            return 1;
+        }
+
+        new dbid = strval(inputtext);
+        if (!IsValidParkedVehicleDBID(dbid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Parked vehicle ID tidak ditemukan.");
+            ShowParkedVehicleSelectInput(playerid);
+            return 1;
+        }
+
+        ShowParkedVehicleActionMenu(playerid, dbid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PARKVEH_LIST)
+    {
+        if (!response)
+        {
+            ShowParkedVehicleMenu(playerid);
+            return 1;
+        }
+
+        if (listitem < 0 || listitem >= ParkedVehicleCount)
+        {
+            ShowParkedVehicleMenu(playerid);
+            return 1;
+        }
+
+        ShowParkedVehicleActionMenu(playerid, ParkedVehicleDBID[listitem]);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PARKVEH_INFO)
+    {
+        if (response)
+        {
+            ShowParkedVehicleActionMenu(playerid, PlayerEditingParkedVehicleID[playerid]);
+        }
+        else
+        {
+            ShowParkedVehicleMenu(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PARKVEH_ACTION_MENU)
+    {
+        if (!response)
+        {
+            return 1;
+        }
+
+        new dbid = PlayerEditingParkedVehicleID[playerid];
+        if (!IsValidParkedVehicleDBID(dbid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Parked vehicle yang dipilih sudah tidak aktif. Reload/list ulang.");
+            ShowParkedVehicleMenu(playerid);
+            return 1;
+        }
+
+        switch (listitem)
+        {
+            case 0: ShowParkedVehicleInfoDialog(playerid, dbid);
+            case 1:
+            {
+                GotoParkedVehicle(playerid, dbid);
+                ShowParkedVehicleActionMenu(playerid, dbid);
+            }
+            case 2:
+            {
+                MoveParkedVehicleToPlayer(playerid, dbid);
+                ShowParkedVehicleActionMenu(playerid, dbid);
+            }
+            case 3: ShowParkedVehicleRotateMenu(playerid, dbid);
+            case 4: ShowParkedVehicleColorInput(playerid, dbid);
+            case 5: ShowParkedVehicleLockMenu(playerid, dbid);
+            case 6: ShowParkedVehicleRespawnInput(playerid, dbid);
+            case 7: ShowParkedVehicleDeleteConfirm(playerid, dbid);
+            case 8:
+            {
+                LoadParkedVehicles();
+                SendClientMessage(playerid, COLOR_GREEN, "Parked vehicles direload dari database.");
+            }
+            case 9: ShowParkedVehicleMenu(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PARKVEH_ROTATE_MENU)
+    {
+        new dbid = PlayerEditingParkedVehicleID[playerid];
+        new index = GetParkedVehicleIndexByDBID(dbid);
+
+        if (!response)
+        {
+            ShowParkedVehicleActionMenu(playerid, dbid);
+            return 1;
+        }
+
+        if (index == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Parked vehicle ID tidak ditemukan.");
+            ShowParkedVehicleMenu(playerid);
+            return 1;
+        }
+
+        new Float:newAngle = ParkedVehicleA[index];
+        switch (listitem)
+        {
+            case 0: GetPlayerFacingAngle(playerid, newAngle);
+            case 1: newAngle = ParkedVehicleA[index] + 5.0;
+            case 2: newAngle = ParkedVehicleA[index] - 5.0;
+            case 3: newAngle = ParkedVehicleA[index] + 15.0;
+            case 4: newAngle = ParkedVehicleA[index] - 15.0;
+            case 5: newAngle = ParkedVehicleA[index] + 45.0;
+            case 6: newAngle = ParkedVehicleA[index] - 45.0;
+            case 7:
+            {
+                ShowParkedVehicleRotateInput(playerid, dbid);
+                return 1;
+            }
+        }
+
+        UpdateParkedVehicleAngle(playerid, dbid, newAngle);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PARKVEH_ROTATE_INPUT)
+    {
+        if (!response)
+        {
+            ShowParkedVehicleRotateMenu(playerid, PlayerEditingParkedVehicleID[playerid]);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Angle harus angka 0 sampai 359.");
+            ShowParkedVehicleRotateInput(playerid, PlayerEditingParkedVehicleID[playerid]);
+            return 1;
+        }
+
+        new angle = strval(inputtext);
+        if (angle < 0 || angle > 359)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Angle harus 0 sampai 359.");
+            ShowParkedVehicleRotateInput(playerid, PlayerEditingParkedVehicleID[playerid]);
+            return 1;
+        }
+
+        UpdateParkedVehicleAngle(playerid, PlayerEditingParkedVehicleID[playerid], float(angle));
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PARKVEH_COLOR_INPUT)
+    {
+        if (!response)
+        {
+            ShowParkedVehicleActionMenu(playerid, PlayerEditingParkedVehicleID[playerid]);
+            return 1;
+        }
+
+        new color1Str[16], color2Str[16];
+        if (!GetTwoParams(inputtext, color1Str, sizeof(color1Str), color2Str, sizeof(color2Str)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Format: color1 color2. Contoh: 1 1");
+            ShowParkedVehicleColorInput(playerid, PlayerEditingParkedVehicleID[playerid]);
+            return 1;
+        }
+
+        UpdateParkedVehicleColors(playerid, PlayerEditingParkedVehicleID[playerid], strval(color1Str), strval(color2Str));
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PARKVEH_RESPAWN_INPUT)
+    {
+        if (!response)
+        {
+            ShowParkedVehicleActionMenu(playerid, PlayerEditingParkedVehicleID[playerid]);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Respawn delay harus angka.");
+            ShowParkedVehicleRespawnInput(playerid, PlayerEditingParkedVehicleID[playerid]);
+            return 1;
+        }
+
+        UpdateParkedVehicleRespawn(playerid, PlayerEditingParkedVehicleID[playerid], strval(inputtext));
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PARKVEH_LOCK_MENU)
+    {
+        if (!response)
+        {
+            ShowParkedVehicleActionMenu(playerid, PlayerEditingParkedVehicleID[playerid]);
+            return 1;
+        }
+
+        UpdateParkedVehicleLock(playerid, PlayerEditingParkedVehicleID[playerid], listitem);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PARKVEH_DELETE_CONFIRM)
+    {
+        if (!response)
+        {
+            ShowParkedVehicleActionMenu(playerid, PlayerEditingParkedVehicleID[playerid]);
+            return 1;
+        }
+
+        DeleteParkedVehicle(playerid, PlayerEditingParkedVehicleID[playerid]);
         return 1;
     }
 
@@ -14253,6 +14535,216 @@ stock DeleteParkedVehicle(playerid, dbid)
     mysql_tquery(g_SQL, query, "OnParkedVehicleDeleted", "i", playerid);
     return 1;
 }
+
+stock IsValidParkedVehicleDBID(dbid)
+{
+    return GetParkedVehicleIndexByDBID(dbid) != -1;
+}
+
+stock ShowParkedVehicleMenu(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka parked vehicle editor.");
+        return 0;
+    }
+
+    new dialogText[512];
+    format(dialogText, sizeof(dialogText), "Create Parked Vehicle\nList / Select Parked Vehicle\nInput ID Manual\nReload Parked Vehicles\nHelp");
+    ShowPlayerDialog(playerid, DIALOG_PARKVEH_MENU, DIALOG_STYLE_LIST, "Parked Vehicle Editor", dialogText, "Select", "Close");
+    return 1;
+}
+
+stock ShowParkedVehicleCreateInput(playerid)
+{
+    ShowPlayerDialog(playerid, DIALOG_PARKVEH_CREATE_INPUT, DIALOG_STYLE_INPUT, "Create Parked Vehicle", "Masukkan modelid kendaraan.\nContoh: 420 untuk taxi, 431 untuk bus, 407 untuk firetruck.", "Create", "Back");
+    return 1;
+}
+
+stock ShowParkedVehicleSelectInput(playerid)
+{
+    ShowPlayerDialog(playerid, DIALOG_PARKVEH_SELECT_INPUT, DIALOG_STYLE_INPUT, "Select Parked Vehicle", "Masukkan ID parked vehicle.\nGunakan /parkvehlist atau menu List untuk melihat ID aktif.", "Select", "Back");
+    return 1;
+}
+
+stock ShowParkedVehicleListDialog(playerid)
+{
+    new dialogText[4096];
+    new line[192];
+
+    if (ParkedVehicleCount <= 0)
+    {
+        ShowPlayerDialog(playerid, DIALOG_PARKVEH_INFO, DIALOG_STYLE_MSGBOX, "Parked Vehicle List", "Belum ada parked vehicle aktif.", "Back", "Close");
+        return 1;
+    }
+
+    format(dialogText, sizeof(dialogText), "ID\tModel\tLock\tRespawn\tVW\n");
+
+    for (new i = 0; i < ParkedVehicleCount; i++)
+    {
+        format(line, sizeof(line), "%d\t%d\t%d\t%ds\t%d\n", ParkedVehicleDBID[i], ParkedVehicleModel[i], ParkedVehicleLocked[i], ParkedVehicleRespawnDelay[i], ParkedVehicleVirtualWorld[i]);
+        strcat(dialogText, line, sizeof(dialogText));
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_PARKVEH_LIST, DIALOG_STYLE_TABLIST_HEADERS, "Select Parked Vehicle", dialogText, "Select", "Back");
+    return 1;
+}
+
+stock ShowParkedVehicleActionMenu(playerid, dbid)
+{
+    new index = GetParkedVehicleIndexByDBID(dbid);
+    new title[96];
+    new dialogText[512];
+
+    if (index == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Parked vehicle ID tidak ditemukan atau belum aktif.");
+        ShowParkedVehicleMenu(playerid);
+        return 0;
+    }
+
+    PlayerEditingParkedVehicleID[playerid] = dbid;
+    format(title, sizeof(title), "Parked Vehicle ID %d", dbid);
+    format(dialogText, sizeof(dialogText), "Info\nGoto\nMove to My Position\nRotate Editor\nColor Editor\nLock / Unlock\nRespawn Delay\nDelete\nReload All\nBack");
+    ShowPlayerDialog(playerid, DIALOG_PARKVEH_ACTION_MENU, DIALOG_STYLE_LIST, title, dialogText, "Select", "Close");
+    return 1;
+}
+
+stock ShowParkedVehicleInfoDialog(playerid, dbid)
+{
+    new index = GetParkedVehicleIndexByDBID(dbid);
+    new dialogText[768];
+
+    if (index == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Parked vehicle ID tidak ditemukan atau belum aktif.");
+        return 0;
+    }
+
+    format(
+        dialogText,
+        sizeof(dialogText),
+        "ID: %d\nRuntime: %d\nModel: %d\nColor: %d/%d\nLocked: %d\nRespawn: %d seconds\nInterior: %d\nVirtual World: %d\nPosition: %.2f %.2f %.2f\nAngle: %.2f",
+        ParkedVehicleDBID[index],
+        ParkedVehicleRuntimeID[index],
+        ParkedVehicleModel[index],
+        ParkedVehicleColor1[index],
+        ParkedVehicleColor2[index],
+        ParkedVehicleLocked[index],
+        ParkedVehicleRespawnDelay[index],
+        ParkedVehicleInterior[index],
+        ParkedVehicleVirtualWorld[index],
+        ParkedVehicleX[index],
+        ParkedVehicleY[index],
+        ParkedVehicleZ[index],
+        ParkedVehicleA[index]
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_PARKVEH_INFO, DIALOG_STYLE_MSGBOX, "Parked Vehicle Info", dialogText, "Back", "Close");
+    return 1;
+}
+
+stock ShowParkedVehicleRotateMenu(playerid, dbid)
+{
+    new index = GetParkedVehicleIndexByDBID(dbid);
+    new title[96];
+    new dialogText[512];
+
+    if (index == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Parked vehicle ID tidak ditemukan atau belum aktif.");
+        return 0;
+    }
+
+    PlayerEditingParkedVehicleID[playerid] = dbid;
+    format(title, sizeof(title), "Rotate Parked Vehicle ID %d", dbid);
+    format(dialogText, sizeof(dialogText), "Set Angle From My Facing\nRotate +5\nRotate -5\nRotate +15\nRotate -15\nRotate +45\nRotate -45\nInput Angle Manual");
+    ShowPlayerDialog(playerid, DIALOG_PARKVEH_ROTATE_MENU, DIALOG_STYLE_LIST, title, dialogText, "Select", "Back");
+    return 1;
+}
+
+stock ShowParkedVehicleRotateInput(playerid, dbid)
+{
+    PlayerEditingParkedVehicleID[playerid] = dbid;
+    ShowPlayerDialog(playerid, DIALOG_PARKVEH_ROTATE_INPUT, DIALOG_STYLE_INPUT, "Set Parked Vehicle Angle", "Masukkan angle 0 sampai 359.\nContoh: 90", "Set", "Back");
+    return 1;
+}
+
+stock ShowParkedVehicleColorInput(playerid, dbid)
+{
+    PlayerEditingParkedVehicleID[playerid] = dbid;
+    ShowPlayerDialog(playerid, DIALOG_PARKVEH_COLOR_INPUT, DIALOG_STYLE_INPUT, "Set Parked Vehicle Color", "Masukkan color1 color2.\nContoh: 1 1", "Set", "Back");
+    return 1;
+}
+
+stock ShowParkedVehicleRespawnInput(playerid, dbid)
+{
+    PlayerEditingParkedVehicleID[playerid] = dbid;
+    ShowPlayerDialog(playerid, DIALOG_PARKVEH_RESPAWN_INPUT, DIALOG_STYLE_INPUT, "Set Respawn Delay", "Masukkan delay respawn 30 sampai 3600 detik.\nContoh: 300", "Set", "Back");
+    return 1;
+}
+
+stock ShowParkedVehicleLockMenu(playerid, dbid)
+{
+    PlayerEditingParkedVehicleID[playerid] = dbid;
+    ShowPlayerDialog(playerid, DIALOG_PARKVEH_LOCK_MENU, DIALOG_STYLE_LIST, "Parked Vehicle Lock", "Unlock Vehicle\nLock Vehicle", "Set", "Back");
+    return 1;
+}
+
+stock ShowParkedVehicleDeleteConfirm(playerid, dbid)
+{
+    PlayerEditingParkedVehicleID[playerid] = dbid;
+    ShowPlayerDialog(playerid, DIALOG_PARKVEH_DELETE_CONFIRM, DIALOG_STYLE_MSGBOX, "Delete Parked Vehicle", "Yakin ingin menonaktifkan parked vehicle ini?\nData tidak dihapus permanen, hanya enabled=0.", "Delete", "Back");
+    return 1;
+}
+
+stock NormalizeParkedVehicleAngle(Float:angle)
+{
+    while (angle < 0.0)
+    {
+        angle += 360.0;
+    }
+
+    while (angle >= 360.0)
+    {
+        angle -= 360.0;
+    }
+
+    return floatround(angle);
+}
+
+stock UpdateParkedVehicleAngle(playerid, dbid, Float:angle)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa rotate parked vehicle.");
+        return 0;
+    }
+
+    if (GetParkedVehicleIndexByDBID(dbid) == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Parked vehicle ID tidak ditemukan.");
+        return 0;
+    }
+
+    new normalizedAngle = NormalizeParkedVehicleAngle(angle);
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE parked_vehicles SET pos_a=%f WHERE id=%d LIMIT 1", float(normalizedAngle), dbid);
+    mysql_tquery(g_SQL, query, "OnParkedVehicleUpdated", "i", playerid);
+    return 1;
+}
+
+stock ShowParkedVehicleEditorHelp(playerid)
+{
+    SendClientMessage(playerid, COLOR_YELLOW, "========== PARKED VEHICLE EDITOR ==========");
+    SendClientMessage(playerid, COLOR_WHITE, "/parkvehmenu - dialog editor utama.");
+    SendClientMessage(playerid, COLOR_WHITE, "/parkvehcreate [modelid] - create dari posisi admin.");
+    SendClientMessage(playerid, COLOR_WHITE, "/parkvehrotate [id] [angle] - rotate arah parkir.");
+    SendClientMessage(playerid, COLOR_WHITE, "Command lama tetap aktif sebagai fallback/debug.");
+    SendClientMessage(playerid, COLOR_CYAN, "Cocok untuk taxi stand, bus terminal, depot, police/hospital/fire station.");
+    return 1;
+}
+
 
 stock ResetDynamicObjectArrays()
 {
@@ -21407,7 +21899,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.23A.1 Parked Vehicle Engine Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.23B Parked Vehicle Dialog & Editor");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -21416,6 +21908,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.23B: Parked vehicle dialog menu dan interactive editor.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23A.1: Parked vehicle engine default ON setelah create/reload.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22F.2: Gang HQ interior exit fix dan visitor access.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A.3: Runtime turf war config untuk balancing/testing.");
@@ -21760,6 +22253,37 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+
+
+    if (!strcmp(cmdtext, "/parkvehmenu", true) || !strcmp(cmdtext, "/parkvehedit", true))
+    {
+        ShowParkedVehicleMenu(playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/parkvehrotate ", true) == 0)
+    {
+        new params[128];
+        new idStr[24];
+        new angleStr[24];
+        strmid(params, cmdtext, 15, strlen(cmdtext));
+
+        if (!GetTwoParams(params, idStr, sizeof(idStr), angleStr, sizeof(angleStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /parkvehrotate [id] [angle]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /parkvehrotate 1 90");
+            return 1;
+        }
+
+        UpdateParkedVehicleAngle(playerid, strval(idStr), float(strval(angleStr)));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/parkvehrotate", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /parkvehrotate [id] [angle]");
+        return 1;
+    }
 
     if (!strcmp(cmdtext, "/parkvehlist", true))
     {

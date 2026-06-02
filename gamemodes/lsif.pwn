@@ -435,7 +435,7 @@
 
 #define MAX_AMMUNATIONS 3
 #define AMMUNATION_ACCESS_RADIUS 7.0
-#define MAX_WEAPON_SHOP_ITEMS 9
+#define MAX_WEAPON_SHOP_ITEMS 15
 #define MAX_SAVED_WEAPON_LOADOUT MAX_WEAPON_SHOP_ITEMS
 #define DEFAULT_WEAPON_LICENSE 1
 
@@ -1019,28 +1019,40 @@ new PlayerLastGangHQPickupTick[MAX_PLAYERS];
 new GangWeaponStashAmmo[MAX_PRESET_GANGS][MAX_WEAPON_SHOP_ITEMS];
 new GangStashMinRank[MAX_WEAPON_SHOP_ITEMS] =
 {
-    GANG_RANK_MEMBER,   // Colt 45
-    GANG_RANK_SOLDIER,  // Silenced Pistol
+    GANG_RANK_MEMBER,   // 9mm
+    GANG_RANK_SOLDIER,  // Silenced 9mm
     GANG_RANK_ENFORCER, // Desert Eagle
     GANG_RANK_MEMBER,   // Shotgun
+    GANG_RANK_SOLDIER,  // Sawnoff Shotgun
+    GANG_RANK_ENFORCER, // Combat Shotgun
     GANG_RANK_SOLDIER,  // Micro SMG
-    GANG_RANK_SOLDIER,  // MP5
+    GANG_RANK_SOLDIER,  // SMG
+    GANG_RANK_SOLDIER,  // Tec-9
     GANG_RANK_ENFORCER, // AK-47
     GANG_RANK_OG,       // M4
-    GANG_RANK_OG        // Rifle
+    GANG_RANK_OG,       // Country Rifle
+    GANG_RANK_OG,       // Sniper Rifle
+    GANG_RANK_LEADER,   // Grenade
+    GANG_RANK_LEADER    // Satchel Charge
 };
 
 new GangStashDefaultTakeAmmo[MAX_WEAPON_SHOP_ITEMS] =
 {
-    30,
-    30,
-    15,
+    34,
+    34,
+    21,
     20,
-    60,
-    60,
-    75,
-    75,
-    20
+    20,
+    20,
+    120,
+    120,
+    120,
+    90,
+    90,
+    25,
+    15,
+    3,
+    3
 };
 
 new GangStashRestockCostPerAmmo[MAX_WEAPON_SHOP_ITEMS] =
@@ -1048,12 +1060,18 @@ new GangStashRestockCostPerAmmo[MAX_WEAPON_SHOP_ITEMS] =
     20,
     35,
     100,
-    80,
+    70,
+    90,
+    120,
     35,
     50,
+    35,
     70,
     85,
-    100
+    100,
+    220,
+    500,
+    900
 };
 new PlayerSelectedTurfIndex[MAX_PLAYERS];
 new PlayerNearbyInteractionCount[MAX_PLAYERS];
@@ -1595,54 +1613,78 @@ new AmmuNationName[MAX_AMMUNATIONS][64] =
 
 new WeaponShopWeaponID[MAX_WEAPON_SHOP_ITEMS] =
 {
-    22, // Colt 45
-    23, // Silenced Pistol
+    22, // 9mm / Pistol
+    23, // Silenced 9mm
     24, // Desert Eagle
     25, // Shotgun
+    26, // Sawnoff Shotgun
+    27, // Combat Shotgun
     28, // Micro SMG
-    29, // MP5
+    29, // SMG / MP5
+    32, // Tec-9
     30, // AK-47
     31, // M4
-    33  // Rifle
+    33, // Country Rifle
+    34, // Sniper Rifle
+    16, // Grenade
+    39  // Satchel Charge
 };
 
 new WeaponShopAmmo[MAX_WEAPON_SHOP_ITEMS] =
 {
-    60,
-    60,
+    68,
+    68,
     35,
-    40,
+    24,
+    24,
+    24,
     150,
     150,
-    180,
-    180,
-    40
+    150,
+    120,
+    120,
+    30,
+    20,
+    5,
+    5
 };
 
 new WeaponShopPrice[MAX_WEAPON_SHOP_ITEMS] =
 {
-    2500,
+    200,
+    600,
+    1200,
+    600,
+    800,
+    1000,
+    500,
+    2000,
+    300,
+    3500,
     4500,
-    7000,
-    6000,
-    9000,
-    12000,
-    15000,
-    18000,
-    10000
+    1000,
+    5000,
+    300,
+    2000
 };
 
 new WeaponShopName[MAX_WEAPON_SHOP_ITEMS][32] =
 {
-    "Colt 45",
-    "Silenced Pistol",
+    "9mm",
+    "Silenced 9mm",
     "Desert Eagle",
     "Shotgun",
+    "Sawnoff Shotgun",
+    "Combat Shotgun",
     "Micro SMG",
-    "MP5",
+    "SMG",
+    "Tec-9",
     "AK-47",
     "M4",
-    "Rifle"
+    "Country Rifle",
+    "Sniper Rifle",
+    "Grenade",
+    "Satchel Charge"
 };
 
 new ShopVehicleModel[MAX_SHOP_VEHICLES] =
@@ -9998,7 +10040,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24E.4 Public Interior Facing Apply Fix");
+    SetGameModeText("SAIF Dev v0.24F Offline Ammu-Nation Menu");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -10102,7 +10144,7 @@ public OnGameModeInit()
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24E.4 Public Interior Facing Apply Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24F Offline Ammu-Nation Menu berhasil dijalankan.");
     return 1;
 }
 
@@ -22907,7 +22949,7 @@ stock ShowWeaponShopDialog(playerid)
         return 0;
     }
 
-    new dialogText[768];
+    new dialogText[1536];
     dialogText[0] = EOS;
 
     for (new i = 0; i < MAX_WEAPON_SHOP_ITEMS; i++)
@@ -22921,8 +22963,11 @@ stock ShowWeaponShopDialog(playerid)
 
 stock ShowWeaponInfoDialog(playerid)
 {
-    new dialogText[1024];
+    new dialogText[1536];
     dialogText[0] = EOS;
+
+    strcat(dialogText, "Ammu-Nation catalog disesuaikan ke offline-like GTA SA.\n", sizeof(dialogText));
+    strcat(dialogText, "Weapon masuk saved loadout hanya jika dibeli dari Ammu-Nation.\n\n", sizeof(dialogText));
 
     for (new i = 0; i < MAX_WEAPON_SHOP_ITEMS; i++)
     {
@@ -23006,7 +23051,7 @@ stock ProcessWeaponPurchase(playerid, weaponIndex)
     SavePlayerData(playerid);
 
     new msg[144];
-    format(msg, sizeof(msg), "Ammu-Nation: kamu membeli %s dengan ammo %d seharga $%d.", WeaponShopName[weaponIndex], WeaponShopAmmo[weaponIndex], price);
+    format(msg, sizeof(msg), "Ammu-Nation: kamu membeli %s + ammo %d seharga $%d.", WeaponShopName[weaponIndex], WeaponShopAmmo[weaponIndex], price);
     SendClientMessage(playerid, COLOR_GREEN, msg);
     SendClientMessage(playerid, COLOR_WHITE, "Weapon sudah tersimpan ke saved loadout. Gunakan /loadout atau /reloadout.");
     return 1;
@@ -27378,7 +27423,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24E.3 Public Interior Facing Editor");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24F Offline Ammu-Nation Weapon Menu");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -27388,7 +27433,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24E.1: compile fix exact public interior importer; panah custom tetap dipakai.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24F: Offline-like Ammu-Nation weapon catalog/pricing, expanded saved loadout.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24E.4: Public interior facing apply fix.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24D: SCM exact pickup import queue, weapon pickups, curated pickup seed tetap deprecated.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24B: Exact offline parked vehicle importer, /parkvehimportdb, /parkvehexactinfo.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24A: Curated parked vehicle seed is deprecated; use exact offline import when possible.");

@@ -191,6 +191,15 @@
 #define DIALOG_PUBINT_EXACT_INFO 1171
 #define DIALOG_PUBINT_POINT_MENU 1172
 #define DIALOG_PUBINT_SERVICE_RADIUS_INPUT 1173
+#define DIALOG_WEAPON_PURCHASE_MENU 1174
+#define DIALOG_WEAPON_CUSTOM_PACKS 1175
+#define DIALOG_AMMU_CONFIG_MENU 1176
+#define DIALOG_AMMU_CONFIG_LIST 1177
+#define DIALOG_AMMU_CONFIG_ACTION 1178
+#define DIALOG_AMMU_CONFIG_PRICE_INPUT 1179
+#define DIALOG_AMMU_CONFIG_AMMO_INPUT 1180
+#define DIALOG_AMMU_CONFIG_ENABLE_MENU 1181
+#define DIALOG_AMMU_CONFIG_INFO 1182
 
 
 
@@ -1482,6 +1491,7 @@ new PlayerDialogHouseIndex[MAX_PLAYERS];
 new PlayerDialogBusinessIndex[MAX_PLAYERS];
 new PlayerDialogGarageSlot[MAX_PLAYERS];
 new PlayerDialogWeaponIndex[MAX_PLAYERS];
+new PlayerEditingWeaponShopIndex[MAX_PLAYERS];
 new PlayerWeaponLicense[MAX_PLAYERS];
 new PlayerSavedWeaponOwned[MAX_PLAYERS][MAX_SAVED_WEAPON_LOADOUT];
 new PlayerSavedWeaponAmmo[MAX_PLAYERS][MAX_SAVED_WEAPON_LOADOUT];
@@ -1666,6 +1676,13 @@ new WeaponShopPrice[MAX_WEAPON_SHOP_ITEMS] =
     5000,
     300,
     2000
+};
+
+new WeaponShopEnabled[MAX_WEAPON_SHOP_ITEMS] =
+{
+    1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1
 };
 
 new WeaponShopName[MAX_WEAPON_SHOP_ITEMS][32] =
@@ -2022,6 +2039,7 @@ forward OnExactPublicInteriorImportCleared(playerid);
 forward OnExactPublicInteriorImportFinished(playerid);
 forward OnExactPublicInteriorImportClearedOnly(playerid);
 forward OnExactPublicInteriorImportInfoLoaded(playerid);
+forward OnWeaponShopConfigLoaded();
 forward ReloadPublicInteriorsDelayed(playerid);
 forward ApplyPublicInteriorFacingDelayed(playerid, Float:angle);
 forward ApplyPublicInteriorFacingDelayed2(playerid, Float:angle);
@@ -10040,7 +10058,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24F Offline Ammu-Nation Menu");
+    SetGameModeText("SAIF Dev v0.24F.1 Configurable Ammu-Nation");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -10058,6 +10076,7 @@ public OnGameModeInit()
         print("[MYSQL] Berhasil connect ke database lsif_db.");
     }
     LoadTurfConfigFromDB();
+    LoadWeaponShopConfigFromDB();
 
     AddPlayerClass(
         0,
@@ -10144,7 +10163,7 @@ public OnGameModeInit()
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24F Offline Ammu-Nation Menu berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24F.1 Configurable Ammu-Nation berhasil dijalankan.");
     return 1;
 }
 
@@ -10772,11 +10791,12 @@ stock ShowHelpCategory(playerid, category)
             format(title, sizeof(title), "Help - Weapon & Ammu-Nation");
             strcat(body, "ALT dekat Ammu-Nation: buka Weapon Shop Dialog.\n", sizeof(body));
             strcat(body, "/weaponshop: fallback buka shop, harus dekat Ammu-Nation.\n", sizeof(body));
-            strcat(body, "/weaponinfo: daftar weapon/harga.\n", sizeof(body));
+            strcat(body, "/weaponinfo: daftar weapon/harga/ammo.\n", sizeof(body));
             strcat(body, "/weaponlicense: cek license.\n", sizeof(body));
             strcat(body, "/loadout: lihat saved weapon loadout.\n", sizeof(body));
             strcat(body, "/reloadout: apply ulang saved loadout.\n", sizeof(body));
-            strcat(body, "/givelicense [id]: Owner only.", sizeof(body));
+            strcat(body, "/givelicense [id]: Owner only.\n", sizeof(body));
+            strcat(body, "/ammuconfig: Owner config harga/ammo Ammu-Nation.", sizeof(body));
         }
         case 9:
         {
@@ -13702,7 +13722,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             return 1;
         }
 
-        ShowWeaponConfirmDialog(playerid, listitem);
+        ShowWeaponPurchaseMenuDialog(playerid, listitem);
         return 1;
     }
 
@@ -13718,8 +13738,193 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         return 1;
     }
 
+    if (dialogid == DIALOG_WEAPON_PURCHASE_MENU)
+    {
+        if (!response)
+        {
+            ShowWeaponShopDialog(playerid);
+            return 1;
+        }
+
+        new weaponIndex = PlayerDialogWeaponIndex[playerid];
+
+        if (listitem == 0)
+        {
+            ProcessWeaponPurchaseAmount(playerid, weaponIndex, 1);
+            return 1;
+        }
+
+        if (listitem == 1)
+        {
+            ProcessWeaponPurchaseAmount(playerid, weaponIndex, 5);
+            return 1;
+        }
+
+        if (listitem == 2)
+        {
+            ShowPlayerDialog(playerid, DIALOG_WEAPON_CUSTOM_PACKS, DIALOG_STYLE_INPUT, "Custom Pack Amount", "Masukkan jumlah pack yang ingin dibeli.\n\n1 pack mengikuti Ammo/pack dan Price/pack config.\nContoh: 10", "Buy", "Back");
+            return 1;
+        }
+
+        ShowWeaponShopDialog(playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_WEAPON_CUSTOM_PACKS)
+    {
+        if (!response)
+        {
+            ShowWeaponPurchaseMenuDialog(playerid, PlayerDialogWeaponIndex[playerid]);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Jumlah pack harus angka.");
+            ShowWeaponPurchaseMenuDialog(playerid, PlayerDialogWeaponIndex[playerid]);
+            return 1;
+        }
+
+        ProcessWeaponPurchaseAmount(playerid, PlayerDialogWeaponIndex[playerid], strval(inputtext));
+        return 1;
+    }
+
     if (dialogid == DIALOG_WEAPON_INFO)
     {
+        return 1;
+    }
+
+    if (dialogid == DIALOG_AMMU_CONFIG_MENU)
+    {
+        if (!response)
+        {
+            return 1;
+        }
+
+        if (listitem == 0)
+        {
+            ShowAmmuConfigList(playerid);
+            return 1;
+        }
+
+        if (listitem == 1)
+        {
+            LoadWeaponShopConfigFromDB();
+            SendClientMessage(playerid, COLOR_GREEN, "Ammu-Nation config reload dari DB diminta.");
+            ShowAmmuConfigMenu(playerid);
+            return 1;
+        }
+
+        if (listitem == 2)
+        {
+            SaveAllWeaponShopConfig();
+            SendClientMessage(playerid, COLOR_GREEN, "Current Ammu-Nation config disimpan ke DB.");
+            ShowAmmuConfigMenu(playerid);
+            return 1;
+        }
+
+        ShowAmmuConfigInfo(playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_AMMU_CONFIG_LIST)
+    {
+        if (!response)
+        {
+            ShowAmmuConfigMenu(playerid);
+            return 1;
+        }
+
+        ShowAmmuConfigAction(playerid, listitem);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_AMMU_CONFIG_ACTION)
+    {
+        if (!response)
+        {
+            ShowAmmuConfigList(playerid);
+            return 1;
+        }
+
+        new weaponIndex = PlayerEditingWeaponShopIndex[playerid];
+
+        if (listitem == 0)
+        {
+            ShowPlayerDialog(playerid, DIALOG_AMMU_CONFIG_PRICE_INPUT, DIALOG_STYLE_INPUT, "Edit Weapon Price", "Masukkan harga per pack baru.", "Save", "Back");
+            return 1;
+        }
+
+        if (listitem == 1)
+        {
+            ShowPlayerDialog(playerid, DIALOG_AMMU_CONFIG_AMMO_INPUT, DIALOG_STYLE_INPUT, "Edit Weapon Ammo", "Masukkan ammo per pack baru.", "Save", "Back");
+            return 1;
+        }
+
+        if (listitem == 2)
+        {
+            WeaponShopEnabled[weaponIndex] = WeaponShopEnabled[weaponIndex] ? 0 : 1;
+            SaveWeaponShopConfigItem(weaponIndex);
+            SendClientMessage(playerid, COLOR_GREEN, "Status weapon shop item berhasil diubah dan disimpan.");
+            ShowAmmuConfigAction(playerid, weaponIndex);
+            return 1;
+        }
+
+        ShowAmmuConfigList(playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_AMMU_CONFIG_PRICE_INPUT)
+    {
+        new weaponIndex = PlayerEditingWeaponShopIndex[playerid];
+
+        if (!response)
+        {
+            ShowAmmuConfigAction(playerid, weaponIndex);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext) || strval(inputtext) <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Harga harus angka lebih dari 0.");
+            ShowAmmuConfigAction(playerid, weaponIndex);
+            return 1;
+        }
+
+        WeaponShopPrice[weaponIndex] = strval(inputtext);
+        SaveWeaponShopConfigItem(weaponIndex);
+        SendClientMessage(playerid, COLOR_GREEN, "Harga Ammu-Nation weapon berhasil disimpan.");
+        ShowAmmuConfigAction(playerid, weaponIndex);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_AMMU_CONFIG_AMMO_INPUT)
+    {
+        new weaponIndex = PlayerEditingWeaponShopIndex[playerid];
+
+        if (!response)
+        {
+            ShowAmmuConfigAction(playerid, weaponIndex);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext) || strval(inputtext) <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Ammo harus angka lebih dari 0.");
+            ShowAmmuConfigAction(playerid, weaponIndex);
+            return 1;
+        }
+
+        WeaponShopAmmo[weaponIndex] = strval(inputtext);
+        SaveWeaponShopConfigItem(weaponIndex);
+        SendClientMessage(playerid, COLOR_GREEN, "Ammo per pack Ammu-Nation berhasil disimpan.");
+        ShowAmmuConfigAction(playerid, weaponIndex);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_AMMU_CONFIG_INFO)
+    {
+        ShowAmmuConfigMenu(playerid);
         return 1;
     }
 
@@ -22741,14 +22946,14 @@ stock LoadPlayerWeaponLoadout(playerid)
     return 1;
 }
 
-stock SaveWeaponPurchase(playerid, weaponIndex)
+stock SaveWeaponPurchase(playerid, weaponIndex, purchasedAmmo)
 {
     if (!PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0)
     {
         return 0;
     }
 
-    if (weaponIndex < 0 || weaponIndex >= MAX_WEAPON_SHOP_ITEMS)
+    if (weaponIndex < 0 || weaponIndex >= MAX_WEAPON_SHOP_ITEMS || purchasedAmmo <= 0)
     {
         return 0;
     }
@@ -22762,7 +22967,7 @@ stock SaveWeaponPurchase(playerid, weaponIndex)
         PlayerDBID[playerid],
         WeaponShopWeaponID[weaponIndex],
         WeaponShopName[weaponIndex],
-        WeaponShopAmmo[weaponIndex]
+        purchasedAmmo
     );
 
     mysql_tquery(g_SQL, query);
@@ -22940,6 +23145,85 @@ stock IsPlayerNearAmmuNation(playerid)
     return 0;
 }
 
+stock LoadWeaponShopConfigFromDB()
+{
+    mysql_tquery(g_SQL, "SELECT weapon_id, price, ammo_per_purchase, enabled FROM weapon_shop_config ORDER BY weapon_id ASC", "OnWeaponShopConfigLoaded");
+    return 1;
+}
+
+public OnWeaponShopConfigLoaded()
+{
+    new rows = cache_num_rows();
+    new weaponid;
+    new price;
+    new ammo;
+    new enabled;
+    new index;
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name_int(i, "weapon_id", weaponid);
+        cache_get_value_name_int(i, "price", price);
+        cache_get_value_name_int(i, "ammo_per_purchase", ammo);
+        cache_get_value_name_int(i, "enabled", enabled);
+
+        index = GetWeaponShopIndexFromWeaponID(weaponid);
+
+        if (index == -1)
+        {
+            continue;
+        }
+
+        if (price > 0)
+        {
+            WeaponShopPrice[index] = price;
+        }
+
+        if (ammo > 0)
+        {
+            WeaponShopAmmo[index] = ammo;
+        }
+
+        WeaponShopEnabled[index] = enabled ? 1 : 0;
+    }
+
+    printf("[AMMU] Loaded %d weapon shop config rows.", rows);
+    return 1;
+}
+
+stock SaveWeaponShopConfigItem(weaponIndex)
+{
+    if (weaponIndex < 0 || weaponIndex >= MAX_WEAPON_SHOP_ITEMS)
+    {
+        return 0;
+    }
+
+    new query[512];
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO weapon_shop_config (weapon_id, weapon_name, price, ammo_per_purchase, enabled) VALUES (%d, '%e', %d, %d, %d) ON DUPLICATE KEY UPDATE weapon_name=VALUES(weapon_name), price=VALUES(price), ammo_per_purchase=VALUES(ammo_per_purchase), enabled=VALUES(enabled), updated_at=CURRENT_TIMESTAMP",
+        WeaponShopWeaponID[weaponIndex],
+        WeaponShopName[weaponIndex],
+        WeaponShopPrice[weaponIndex],
+        WeaponShopAmmo[weaponIndex],
+        WeaponShopEnabled[weaponIndex]
+    );
+
+    mysql_tquery(g_SQL, query);
+    return 1;
+}
+
+stock SaveAllWeaponShopConfig()
+{
+    for (new i = 0; i < MAX_WEAPON_SHOP_ITEMS; i++)
+    {
+        SaveWeaponShopConfigItem(i);
+    }
+    return 1;
+}
+
 stock ShowWeaponShopDialog(playerid)
 {
     if (!IsPlayerNearAmmuNation(playerid))
@@ -22949,12 +23233,21 @@ stock ShowWeaponShopDialog(playerid)
         return 0;
     }
 
-    new dialogText[1536];
+    new dialogText[2048];
+    new line[128];
     dialogText[0] = EOS;
 
     for (new i = 0; i < MAX_WEAPON_SHOP_ITEMS; i++)
     {
-        format(dialogText, sizeof(dialogText), "%s%s - $%d - Ammo %d\n", dialogText, WeaponShopName[i], WeaponShopPrice[i], WeaponShopAmmo[i]);
+        if (WeaponShopEnabled[i])
+        {
+            format(line, sizeof(line), "%s - $%d - Ammo/pack %d\n", WeaponShopName[i], WeaponShopPrice[i], WeaponShopAmmo[i]);
+        }
+        else
+        {
+            format(line, sizeof(line), "[OFF] %s - disabled\n", WeaponShopName[i]);
+        }
+        strcat(dialogText, line, sizeof(dialogText));
     }
 
     ShowPlayerDialog(playerid, DIALOG_WEAPON_SHOP, DIALOG_STYLE_LIST, "Ammu-Nation Weapon Shop", dialogText, "Pilih", "Tutup");
@@ -22963,22 +23256,25 @@ stock ShowWeaponShopDialog(playerid)
 
 stock ShowWeaponInfoDialog(playerid)
 {
-    new dialogText[1536];
+    new dialogText[2048];
+    new line[160];
     dialogText[0] = EOS;
 
-    strcat(dialogText, "Ammu-Nation catalog disesuaikan ke offline-like GTA SA.\n", sizeof(dialogText));
-    strcat(dialogText, "Weapon masuk saved loadout hanya jika dibeli dari Ammu-Nation.\n\n", sizeof(dialogText));
+    strcat(dialogText, "Ammu-Nation catalog sekarang configurable via DB.\n", sizeof(dialogText));
+    strcat(dialogText, "Admin: /ammuconfig, /ammuprice, /ammuammo, /ammureload.\n", sizeof(dialogText));
+    strcat(dialogText, "Player bisa beli berkali-kali tanpa keluar menu, atau Custom Pack.\n\n", sizeof(dialogText));
 
     for (new i = 0; i < MAX_WEAPON_SHOP_ITEMS; i++)
     {
-        format(dialogText, sizeof(dialogText), "%s%d. %s | Weapon ID %d | Ammo %d | Price $%d\n", dialogText, i + 1, WeaponShopName[i], WeaponShopWeaponID[i], WeaponShopAmmo[i], WeaponShopPrice[i]);
+        format(line, sizeof(line), "%d. %s | ID %d | Ammo/pack %d | Price/pack $%d | %s\n", i + 1, WeaponShopName[i], WeaponShopWeaponID[i], WeaponShopAmmo[i], WeaponShopPrice[i], WeaponShopEnabled[i] ? ("ON") : ("OFF"));
+        strcat(dialogText, line, sizeof(dialogText));
     }
 
     ShowPlayerDialog(playerid, DIALOG_WEAPON_INFO, DIALOG_STYLE_MSGBOX, "Weapon Shop Info / Saved Loadout", dialogText, "OK", "Tutup");
     return 1;
 }
 
-stock ShowWeaponConfirmDialog(playerid, weaponIndex)
+stock ShowWeaponPurchaseMenuDialog(playerid, weaponIndex)
 {
     if (!IsPlayerNearAmmuNation(playerid))
     {
@@ -22992,24 +23288,40 @@ stock ShowWeaponConfirmDialog(playerid, weaponIndex)
         return 0;
     }
 
+    if (!WeaponShopEnabled[weaponIndex])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Weapon ini sedang disabled di Ammu-Nation config.");
+        ShowWeaponShopDialog(playerid);
+        return 0;
+    }
+
     PlayerDialogWeaponIndex[playerid] = weaponIndex;
 
-    new dialogText[256];
+    new dialogText[512];
     format(
         dialogText,
         sizeof(dialogText),
-        "Weapon: %s\nAmmo: %d\nPrice: $%d\n\nCash kamu: $%d\n\nBeli weapon ini?",
+        "Weapon: %s\nPrice/pack: $%d\nAmmo/pack: %d\nCash kamu: $%d\n\nBuy 1 Pack - Ammo %d - $%d\nBuy 5 Packs - Ammo %d - $%d\nCustom Pack Amount\nBack to Catalog",
         WeaponShopName[weaponIndex],
+        WeaponShopPrice[weaponIndex],
+        WeaponShopAmmo[weaponIndex],
+        PlayerMoney[playerid],
         WeaponShopAmmo[weaponIndex],
         WeaponShopPrice[weaponIndex],
-        PlayerMoney[playerid]
+        WeaponShopAmmo[weaponIndex] * 5,
+        WeaponShopPrice[weaponIndex] * 5
     );
 
-    ShowPlayerDialog(playerid, DIALOG_WEAPON_CONFIRM, DIALOG_STYLE_MSGBOX, "Confirm Weapon Purchase", dialogText, "Buy", "Back");
+    ShowPlayerDialog(playerid, DIALOG_WEAPON_PURCHASE_MENU, DIALOG_STYLE_LIST, "Ammu-Nation Purchase", dialogText, "Pilih", "Back");
     return 1;
 }
 
-stock ProcessWeaponPurchase(playerid, weaponIndex)
+stock ShowWeaponConfirmDialog(playerid, weaponIndex)
+{
+    return ShowWeaponPurchaseMenuDialog(playerid, weaponIndex);
+}
+
+stock ProcessWeaponPurchaseAmount(playerid, weaponIndex, packs)
 {
     if (!IsPlayerNearAmmuNation(playerid))
     {
@@ -23023,6 +23335,20 @@ stock ProcessWeaponPurchase(playerid, weaponIndex)
         return 0;
     }
 
+    if (!WeaponShopEnabled[weaponIndex])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Weapon ini sedang disabled di Ammu-Nation config.");
+        ShowWeaponShopDialog(playerid);
+        return 0;
+    }
+
+    if (packs <= 0 || packs > 100)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Jumlah pack harus 1 sampai 100.");
+        ShowWeaponPurchaseMenuDialog(playerid, weaponIndex);
+        return 0;
+    }
+
     if (!PlayerWeaponLicense[playerid])
     {
         SendClientMessage(playerid, COLOR_RED, "Kamu belum punya weapon license.");
@@ -23030,30 +23356,91 @@ stock ProcessWeaponPurchase(playerid, weaponIndex)
         return 0;
     }
 
-    new price = WeaponShopPrice[weaponIndex];
+    new purchasedAmmo = WeaponShopAmmo[weaponIndex] * packs;
+    new price = WeaponShopPrice[weaponIndex] * packs;
 
     if (PlayerMoney[playerid] < price)
     {
         new msg[144];
-        format(msg, sizeof(msg), "Cash tidak cukup. Harga %s adalah $%d.", WeaponShopName[weaponIndex], price);
+        format(msg, sizeof(msg), "Cash tidak cukup. %s x%d pack butuh $%d.", WeaponShopName[weaponIndex], packs, price);
         SendClientMessage(playerid, COLOR_RED, msg);
-        ShowWeaponShopDialog(playerid);
+        ShowWeaponPurchaseMenuDialog(playerid, weaponIndex);
         return 0;
     }
 
     TakePlayerCash(playerid, price);
-    GivePlayerWeapon(playerid, t_WEAPON:WeaponShopWeaponID[weaponIndex], WeaponShopAmmo[weaponIndex]);
+    GivePlayerWeapon(playerid, t_WEAPON:WeaponShopWeaponID[weaponIndex], purchasedAmmo);
 
     PlayerSavedWeaponOwned[playerid][weaponIndex] = 1;
-    PlayerSavedWeaponAmmo[playerid][weaponIndex] += WeaponShopAmmo[weaponIndex];
+    PlayerSavedWeaponAmmo[playerid][weaponIndex] += purchasedAmmo;
 
-    SaveWeaponPurchase(playerid, weaponIndex);
+    SaveWeaponPurchase(playerid, weaponIndex, purchasedAmmo);
     SavePlayerData(playerid);
 
-    new msg[144];
-    format(msg, sizeof(msg), "Ammu-Nation: kamu membeli %s + ammo %d seharga $%d.", WeaponShopName[weaponIndex], WeaponShopAmmo[weaponIndex], price);
+    new msg[160];
+    format(msg, sizeof(msg), "Ammu-Nation: %s x%d pack, ammo %d, harga $%d.", WeaponShopName[weaponIndex], packs, purchasedAmmo, price);
     SendClientMessage(playerid, COLOR_GREEN, msg);
-    SendClientMessage(playerid, COLOR_WHITE, "Weapon sudah tersimpan ke saved loadout. Gunakan /loadout atau /reloadout.");
+    SendClientMessage(playerid, COLOR_WHITE, "Menu tetap terbuka. Kamu bisa beli lagi atau Back ke catalog.");
+
+    ShowWeaponPurchaseMenuDialog(playerid, weaponIndex);
+    return 1;
+}
+
+stock ProcessWeaponPurchase(playerid, weaponIndex)
+{
+    return ProcessWeaponPurchaseAmount(playerid, weaponIndex, 1);
+}
+
+stock ShowAmmuConfigMenu(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka Ammu-Nation config.");
+        return 0;
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_AMMU_CONFIG_MENU, DIALOG_STYLE_LIST, "Ammu-Nation Config", "List / Edit Weapon Config\nReload Config From DB\nSave Current Defaults To DB\nInfo", "Pilih", "Tutup");
+    return 1;
+}
+
+stock ShowAmmuConfigList(playerid)
+{
+    new dialogText[2048];
+    new line[160];
+    dialogText[0] = EOS;
+
+    for (new i = 0; i < MAX_WEAPON_SHOP_ITEMS; i++)
+    {
+        format(line, sizeof(line), "%s | ID %d | $%d | Ammo %d | %s\n", WeaponShopName[i], WeaponShopWeaponID[i], WeaponShopPrice[i], WeaponShopAmmo[i], WeaponShopEnabled[i] ? ("ON") : ("OFF"));
+        strcat(dialogText, line, sizeof(dialogText));
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_AMMU_CONFIG_LIST, DIALOG_STYLE_LIST, "Edit Ammu-Nation Weapon", dialogText, "Pilih", "Back");
+    return 1;
+}
+
+stock ShowAmmuConfigAction(playerid, weaponIndex)
+{
+    if (weaponIndex < 0 || weaponIndex >= MAX_WEAPON_SHOP_ITEMS)
+    {
+        ShowAmmuConfigList(playerid);
+        return 0;
+    }
+
+    PlayerEditingWeaponShopIndex[playerid] = weaponIndex;
+
+    new body[512];
+    format(body, sizeof(body), "Weapon: %s\nWeapon ID: %d\nPrice/pack: $%d\nAmmo/pack: %d\nStatus: %s\n\nEdit Price\nEdit Ammo Per Pack\nToggle Enable/Disable\nBack to List", WeaponShopName[weaponIndex], WeaponShopWeaponID[weaponIndex], WeaponShopPrice[weaponIndex], WeaponShopAmmo[weaponIndex], WeaponShopEnabled[weaponIndex] ? ("ON") : ("OFF"));
+    ShowPlayerDialog(playerid, DIALOG_AMMU_CONFIG_ACTION, DIALOG_STYLE_LIST, "Weapon Config Action", body, "Pilih", "Back");
+    return 1;
+}
+
+stock ShowAmmuConfigInfo(playerid)
+{
+    new body[768];
+    strcat(body, "", sizeof(body));
+    format(body, sizeof(body), "Ammu-Nation config disimpan di DB table weapon_shop_config.\n\nPrice/pack = harga sekali beli.\nAmmo/pack = ammo yang didapat sekali beli.\nPlayer bisa beli 1 pack, 5 pack, atau custom jumlah pack.\n\nCommand fallback:\n/ammuconfig\n/ammuprice [weaponid] [price]\n/ammuammo [weaponid] [ammo]\n/ammureload");
+    ShowPlayerDialog(playerid, DIALOG_AMMU_CONFIG_INFO, DIALOG_STYLE_MSGBOX, "Ammu-Nation Config Info", body, "OK", "Back");
     return 1;
 }
 
@@ -26840,6 +27227,88 @@ public OnPlayerCommandText(playerid, cmdtext[])
     }
 
 
+    if (!strcmp(cmdtext, "/ammuconfig", true))
+    {
+        ShowAmmuConfigMenu(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/ammureload", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa reload Ammu-Nation config.");
+            return 1;
+        }
+
+        LoadWeaponShopConfigFromDB();
+        SendClientMessage(playerid, COLOR_GREEN, "Ammu-Nation config reload dari database diminta.");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/ammuprice ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa mengubah harga Ammu-Nation.");
+            return 1;
+        }
+
+        new weaponStr[16];
+        new priceStr[16];
+
+        if (!GetTwoParams(cmdtext[11], weaponStr, sizeof(weaponStr), priceStr, sizeof(priceStr)) || !IsNumericString(weaponStr) || !IsNumericString(priceStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /ammuprice [weaponid] [price]");
+            return 1;
+        }
+
+        new weaponIndex = GetWeaponShopIndexFromWeaponID(strval(weaponStr));
+
+        if (weaponIndex == -1 || strval(priceStr) <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Weapon ID atau price tidak valid.");
+            return 1;
+        }
+
+        WeaponShopPrice[weaponIndex] = strval(priceStr);
+        SaveWeaponShopConfigItem(weaponIndex);
+        SendClientMessage(playerid, COLOR_GREEN, "Harga Ammu-Nation weapon berhasil disimpan.");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/ammuammo ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa mengubah ammo Ammu-Nation.");
+            return 1;
+        }
+
+        new weaponStr[16];
+        new ammoStr[16];
+
+        if (!GetTwoParams(cmdtext[10], weaponStr, sizeof(weaponStr), ammoStr, sizeof(ammoStr)) || !IsNumericString(weaponStr) || !IsNumericString(ammoStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /ammuammo [weaponid] [ammo_per_pack]");
+            return 1;
+        }
+
+        new weaponIndex = GetWeaponShopIndexFromWeaponID(strval(weaponStr));
+
+        if (weaponIndex == -1 || strval(ammoStr) <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Weapon ID atau ammo tidak valid.");
+            return 1;
+        }
+
+        WeaponShopAmmo[weaponIndex] = strval(ammoStr);
+        SaveWeaponShopConfigItem(weaponIndex);
+        SendClientMessage(playerid, COLOR_GREEN, "Ammo per pack Ammu-Nation weapon berhasil disimpan.");
+        return 1;
+    }
+
+
     if (!strcmp(cmdtext, "/adminmenu", true))
     {
         ShowAdminDashboardMenu(playerid);
@@ -28983,6 +29452,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/acinfo - Melihat informasi basic anti-cheat");
         SendClientMessage(playerid, COLOR_WHITE, "/setfuel [amount] - Set fuel kendaraan aktif, Owner only");
         SendClientMessage(playerid, COLOR_WHITE, "/givelicense [id] - Beri basic weapon license, Owner only");
+        SendClientMessage(playerid, COLOR_WHITE, "/ammuconfig - Atur harga/ammo/status Ammu-Nation");
         SendClientMessage(playerid, COLOR_WHITE, "/serverinfo - Info server dan uptime");
         SendClientMessage(playerid, COLOR_WHITE, "/dbping - Test koneksi database");
         SendClientMessage(playerid, COLOR_WHITE, "/saveall - Simpan semua player, Owner only");

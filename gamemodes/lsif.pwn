@@ -218,6 +218,7 @@
 #define DIALOG_GANG_PRESET_COLOR_INPUT 1198
 #define DIALOG_GANG_PRESET_INFO 1199
 #define DIALOG_GANG_PRESET_RADIUS_INPUT 1200
+#define DIALOG_ADMIN_TOOLS_MENU 1201
 
 
 
@@ -10472,7 +10473,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24H Gang Preset DB Config");
+    SetGameModeText("SAIF Dev v0.24H.1 Admin Menus Hub");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -10581,7 +10582,7 @@ public OnGameModeInit()
     print("[SAIF] Gang preset HQ/color/name dapat dioverride via gang_preset_config DB + /gangpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24H Gang Preset DB Config berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24H.1 Admin Menus Hub berhasil dijalankan.");
     return 1;
 }
 
@@ -10853,6 +10854,52 @@ stock ShowBetaDashboardMenu(playerid)
         "Select",
         "Back"
     );
+    return 1;
+}
+
+
+stock ShowAdminToolsMenu(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_HELPER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+        return 0;
+    }
+
+    new body[4096];
+    body[0] = EOS;
+
+    strcat(body, "Menu\tCommand\tLevel\n", sizeof(body));
+    strcat(body, "Admin Dashboard\t/adminmenu\tHelper+\n", sizeof(body));
+    strcat(body, "Beta / Whitelist Dashboard\t/betamenu\tHelper+\n", sizeof(body));
+    strcat(body, "Dynamic Location Editor\t/locmenu\tOwner\n", sizeof(body));
+    strcat(body, "Dynamic Object Editor\t/objmenu\tOwner\n", sizeof(body));
+    strcat(body, "Parked Vehicle Editor\t/parkvehmenu\tOwner\n", sizeof(body));
+    strcat(body, "Offline World Pickup Editor\t/wpickupmenu\tOwner\n", sizeof(body));
+    strcat(body, "Public Interior Editor\t/pubintmenu\tOwner\n", sizeof(body));
+    strcat(body, "Turf Zone Editor\t/turfmenu\tOwner\n", sizeof(body));
+    strcat(body, "Gang Preset DB Config\t/gangpresetmenu\tOwner\n", sizeof(body));
+    strcat(body, "Ammu-Nation Config\t/ammuconfig\tOwner\n", sizeof(body));
+    strcat(body, "Public Service Config\t/serviceconfig\tOwner\n", sizeof(body));
+    strcat(body, "Command Reference\t/amenus\tHelper+\n", sizeof(body));
+
+    ShowPlayerDialog(playerid, DIALOG_ADMIN_TOOLS_MENU, DIALOG_STYLE_TABLIST_HEADERS, "SAIF Admin Menus Hub", body, "Open", "Close");
+    return 1;
+}
+
+stock ShowAdminToolsReference(playerid)
+{
+    new body[3072];
+    body[0] = EOS;
+
+    strcat(body, "SAIF Admin Menus Hub (/amenus)\n\n", sizeof(body));
+    strcat(body, "Core Admin:\n/adminmenu - Admin dashboard\n/betamenu - Beta/whitelist dashboard\n\n", sizeof(body));
+    strcat(body, "Dynamic World Editors:\n/locmenu - Dynamic location editor\n/objmenu - Dynamic object editor\n/parkvehmenu - Parked vehicle editor\n/wpickupmenu - Offline world pickup editor\n/pubintmenu - Public interior editor + point editor\n/turfmenu - Turf zone editor\n\n", sizeof(body));
+    strcat(body, "Offline/Exact Source Tools:\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu - Gang preset DB config\n/ammuconfig - Ammu-Nation price/ammo config\n/serviceconfig - Public shop/service config\n\n", sizeof(body));
+    strcat(body, "Catatan:\nMenu Owner-only tetap akan menolak jika admin level belum cukup.\n/amenus hanya mengumpulkan pintu masuk menu agar command tidak mudah lupa.", sizeof(body));
+
+    ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "SAIF Admin Menu Reference", body, "Back", "Close");
     return 1;
 }
 
@@ -11311,6 +11358,29 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         if (response)
         {
             ShowHelpMenu(playerid);
+        }
+        return 1;
+    }
+
+
+    if (dialogid == DIALOG_ADMIN_TOOLS_MENU)
+    {
+        if (!response) return 1;
+
+        switch (listitem)
+        {
+            case 0: ShowAdminDashboardMenu(playerid);
+            case 1: ShowBetaDashboardMenu(playerid);
+            case 2: ShowDynamicLocationEditorMenu(playerid);
+            case 3: ShowDynamicObjectMenu(playerid);
+            case 4: ShowParkedVehicleMenu(playerid);
+            case 5: ShowWorldPickupMenu(playerid);
+            case 6: ShowPublicInteriorMenu(playerid);
+            case 7: ShowTurfEditorMenu(playerid);
+            case 8: ShowGangPresetMenu(playerid);
+            case 9: ShowAmmuConfigMenu(playerid);
+            case 10: ShowPublicServiceConfigMenu(playerid);
+            case 11: ShowAdminToolsReference(playerid);
         }
         return 1;
     }
@@ -27009,6 +27079,13 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+
+    if (!strcmp(cmdtext, "/amenus", true) || !strcmp(cmdtext, "/adminmenus", true) || !strcmp(cmdtext, "/menuseadmin", true))
+    {
+        ShowAdminToolsMenu(playerid);
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/turflogs", true))
     {
         mysql_tquery(g_SQL, "SELECT id, territory_name, attacker_gang_name, defender_gang_name, result, created_at FROM turf_war_logs ORDER BY id DESC LIMIT 10", "OnRecentTurfLogsLoaded", "i", playerid);
@@ -28715,7 +28792,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24H Gang Preset DB Config");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24H.1 Admin Menus Hub");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");

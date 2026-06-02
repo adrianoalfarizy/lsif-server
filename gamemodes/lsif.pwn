@@ -187,6 +187,7 @@
 #define DIALOG_PUBINT_SERVICE_MENU 1167
 #define DIALOG_PARKVEH_SEED_INFO 1168
 #define DIALOG_PARKVEH_EXACT_INFO 1169
+#define DIALOG_WPICKUP_EXACT_INFO 1170
 
 
 
@@ -473,14 +474,16 @@
 #define PARKED_VEHICLE_OFFLINE_SEED_TAG "offline_template_ls"
 #define PARKED_VEHICLE_EXACT_IMPORT_TAG "offline_exact_ls"
 
-#define MAX_WORLD_PICKUPS 300
+#define MAX_WORLD_PICKUPS 700
 #define WORLD_PICKUP_TYPE_BRIBE 1
 #define WORLD_PICKUP_TYPE_HEALTH 2
 #define WORLD_PICKUP_TYPE_ARMOR 3
 #define WORLD_PICKUP_TYPE_HIDDEN 4
+#define WORLD_PICKUP_TYPE_WEAPON 5
 #define WORLD_PICKUP_DEFAULT_COOLDOWN 60
 #define WORLD_PICKUP_LABEL_DRAW_DISTANCE 18.0
 #define WORLD_PICKUP_OFFLINE_SEED_TAG "offline_template_ls"
+#define WORLD_PICKUP_EXACT_SCM_TAG "offline_exact_scm"
 
 #define MAX_PUBLIC_INTERIORS 80
 #define PUBLIC_INTERIOR_PICKUP_MODEL 1318
@@ -1955,6 +1958,10 @@ forward OnWorldPickupSeedClearedForSeed(playerid);
 forward OnWorldPickupSeedCleared(playerid);
 forward OnWorldPickupSeedReloadDelayed(playerid);
 forward OnWorldPickupSeedInfoLoaded(playerid);
+forward OnExactSCMWorldPickupImportCleared(playerid);
+forward OnExactSCMWorldPickupImportFinished(playerid);
+forward OnExactSCMWorldPickupImportClearedOnly(playerid);
+forward OnExactSCMWorldPickupImportInfoLoaded(playerid);
 forward OnPublicInteriorsLoaded();
 forward OnPublicInteriorCreated(playerid);
 forward OnPublicInteriorUpdated(playerid);
@@ -9975,7 +9982,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24C Offline Source Cleanup");
+    SetGameModeText("SAIF Dev v0.24D SCM Offline Pickup Importer");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -10079,7 +10086,7 @@ public OnGameModeInit()
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24C Offline Source Cleanup berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24D SCM Offline Pickup Importer berhasil dijalankan.");
     return 1;
 }
 
@@ -12260,12 +12267,15 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 3: SeedOfflinePickupTemplate(playerid);
             case 4: ClearOfflinePickupSeed(playerid);
             case 5: ShowOfflinePickupSeedInfo(playerid);
-            case 6:
+            case 6: ImportExactSCMWorldPickupQueue(playerid);
+            case 7: ClearExactSCMWorldPickupImport(playerid);
+            case 8: ShowExactSCMWorldPickupImportInfo(playerid);
+            case 9:
             {
                 LoadWorldPickups();
                 SendClientMessage(playerid, COLOR_GREEN, "World pickups direload dari database.");
             }
-            case 7: ShowWorldPickupHelp(playerid);
+            case 10: ShowWorldPickupHelp(playerid);
         }
         return 1;
     }
@@ -12281,7 +12291,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         new type = GetWorldPickupTypeFromString(inputtext);
         if (type <= 0)
         {
-            SendClientMessage(playerid, COLOR_RED, "Type tidak valid. Gunakan: bribe, health, armor, hidden.");
+            SendClientMessage(playerid, COLOR_RED, "Type tidak valid. Gunakan: bribe, health, armor, hidden, weapon.");
             ShowWorldPickupCreateTypeInput(playerid);
             return 1;
         }
@@ -12404,7 +12414,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         new type = GetWorldPickupTypeFromString(inputtext);
         if (type <= 0)
         {
-            SendClientMessage(playerid, COLOR_RED, "Type tidak valid. Gunakan: bribe, health, armor, hidden.");
+            SendClientMessage(playerid, COLOR_RED, "Type tidak valid. Gunakan: bribe, health, armor, hidden, weapon.");
             ShowWorldPickupTypeInput(playerid, PlayerEditingWorldPickupID[playerid]);
             return 1;
         }
@@ -15213,6 +15223,7 @@ stock GetWorldPickupTypeFromString(const typeText[])
     if (!strcmp(typeText, "health", true) || !strcmp(typeText, "hp", true)) return WORLD_PICKUP_TYPE_HEALTH;
     if (!strcmp(typeText, "armor", true) || !strcmp(typeText, "armour", true) || !strcmp(typeText, "vest", true)) return WORLD_PICKUP_TYPE_ARMOR;
     if (!strcmp(typeText, "hidden", true) || !strcmp(typeText, "world", true) || !strcmp(typeText, "money", true) || !strcmp(typeText, "reward", true)) return WORLD_PICKUP_TYPE_HIDDEN;
+    if (!strcmp(typeText, "weapon", true) || !strcmp(typeText, "gun", true) || !strcmp(typeText, "weapon_pickup", true)) return WORLD_PICKUP_TYPE_WEAPON;
     return 0;
 }
 
@@ -15224,6 +15235,7 @@ stock GetWorldPickupTypeName(type, dest[], len)
         case WORLD_PICKUP_TYPE_HEALTH: format(dest, len, "health");
         case WORLD_PICKUP_TYPE_ARMOR: format(dest, len, "armor");
         case WORLD_PICKUP_TYPE_HIDDEN: format(dest, len, "hidden");
+        case WORLD_PICKUP_TYPE_WEAPON: format(dest, len, "weapon");
         default:
             format(dest, len, "unknown");
     }
@@ -15238,6 +15250,7 @@ stock GetWorldPickupDisplayName(type, dest[], len)
         case WORLD_PICKUP_TYPE_HEALTH: format(dest, len, "Health Pickup");
         case WORLD_PICKUP_TYPE_ARMOR: format(dest, len, "Armor Pickup");
         case WORLD_PICKUP_TYPE_HIDDEN: format(dest, len, "Hidden World Pickup");
+        case WORLD_PICKUP_TYPE_WEAPON: format(dest, len, "Offline Weapon Pickup");
         default:
             format(dest, len, "World Pickup");
     }
@@ -15252,6 +15265,7 @@ stock GetWorldPickupDefaultModel(type)
         case WORLD_PICKUP_TYPE_HEALTH: return 1240;
         case WORLD_PICKUP_TYPE_ARMOR: return 1242;
         case WORLD_PICKUP_TYPE_HIDDEN: return 1274;
+        case WORLD_PICKUP_TYPE_WEAPON: return 346;
     }
     return 1239;
 }
@@ -15264,6 +15278,7 @@ stock GetWorldPickupDefaultAmount(type)
         case WORLD_PICKUP_TYPE_HEALTH: return 35;
         case WORLD_PICKUP_TYPE_ARMOR: return 50;
         case WORLD_PICKUP_TYPE_HIDDEN: return 500;
+        case WORLD_PICKUP_TYPE_WEAPON: return 30;
     }
     return 1;
 }
@@ -15276,8 +15291,80 @@ stock GetWorldPickupColor(type)
         case WORLD_PICKUP_TYPE_HEALTH: return COLOR_GREEN;
         case WORLD_PICKUP_TYPE_ARMOR: return COLOR_CYAN;
         case WORLD_PICKUP_TYPE_HIDDEN: return COLOR_ORANGE;
+        case WORLD_PICKUP_TYPE_WEAPON: return COLOR_PURPLE;
     }
     return COLOR_WHITE;
+}
+
+
+stock GetWeaponIDFromPickupModel(modelid)
+{
+    switch (modelid)
+    {
+        case 331: return 1;   // Brass Knuckles
+        case 333: return 2;   // Golf Club
+        case 334: return 3;   // Nightstick
+        case 335: return 4;   // Knife
+        case 336: return 5;   // Baseball Bat
+        case 337: return 6;   // Shovel
+        case 338: return 7;   // Pool Cue
+        case 339: return 8;   // Katana
+        case 341: return 9;   // Chainsaw
+        case 321: return 10;  // Dildo / gift weapon slot
+        case 322: return 11;
+        case 323: return 12;
+        case 324: return 13;
+        case 325: return 14;  // Flowers
+        case 326: return 15;  // Cane
+        case 342: return 16;  // Grenade
+        case 343: return 17;  // Teargas
+        case 344: return 18;  // Molotov
+        case 346: return 22;  // Colt 45
+        case 347: return 23;  // Silenced Pistol
+        case 348: return 24;  // Desert Eagle
+        case 349: return 25;  // Shotgun
+        case 350: return 26;  // Sawn-off
+        case 351: return 27;  // Combat Shotgun
+        case 352: return 28;  // Micro SMG
+        case 353: return 29;  // MP5
+        case 355: return 30;  // AK-47
+        case 356: return 31;  // M4
+        case 372: return 32;  // Tec-9
+        case 357: return 33;  // Rifle
+        case 358: return 34;  // Sniper
+        case 359: return 35;  // Rocket Launcher
+        case 360: return 36;  // Heat Seeker
+        case 361: return 37;  // Flamethrower
+        case 362: return 38;  // Minigun
+        case 363: return 39;  // Satchel
+        case 364: return 40;  // Detonator
+        case 365: return 41;  // Spraycan
+        case 366: return 42;  // Fire Extinguisher
+        case 367: return 43;  // Camera
+        case 368: return 44;  // Night Vision
+        case 369: return 45;  // Thermal Goggles
+        case 371: return 46;  // Parachute
+    }
+    return 0;
+}
+
+stock GetDefaultAmmoForWeaponPickup(weaponid)
+{
+    switch (weaponid)
+    {
+        case 1..15: return 1;
+        case 16..18: return 3;
+        case 22..24: return 35;
+        case 25..27: return 20;
+        case 28..32: return 80;
+        case 33..34: return 20;
+        case 35..38: return 5;
+        case 39: return 3;
+        case 40: return 1;
+        case 41..43: return 100;
+        case 44..46: return 1;
+    }
+    return 30;
 }
 
 stock DestroyWorldPickupRuntime(index)
@@ -17120,6 +17207,25 @@ stock HandleWorldPickupPickup(playerid, pickupid)
             format(msg, sizeof(msg), "Hidden pickup ditemukan. Reward $%d.", amount);
             SendClientMessage(playerid, COLOR_GREEN, msg);
         }
+        case WORLD_PICKUP_TYPE_WEAPON:
+        {
+            new weaponid = GetWeaponIDFromPickupModel(WorldPickupModel[index]);
+            if (weaponid <= 0)
+            {
+                SendClientMessage(playerid, COLOR_RED, "Weapon pickup model belum dikenali. Laporkan ke admin.");
+                consume = 0;
+            }
+            else
+            {
+                if (amount <= 0)
+                {
+                    amount = GetDefaultAmmoForWeaponPickup(weaponid);
+                }
+                GivePlayerWeapon(playerid, weaponid, amount);
+                format(msg, sizeof(msg), "Offline weapon pickup diambil. Weapon ID %d | Ammo %d.", weaponid, amount);
+                SendClientMessage(playerid, COLOR_GREEN, msg);
+            }
+        }
         default:
         {
             consume = 0;
@@ -17521,6 +17627,144 @@ public OnWorldPickupSeedInfoLoaded(playerid)
     return 1;
 }
 
+stock ImportExactSCMWorldPickupQueue(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa import exact SCM world pickup queue.");
+        return 0;
+    }
+
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE world_pickups SET enabled=0 WHERE source_tag='%e'", WORLD_PICKUP_EXACT_SCM_TAG);
+    mysql_tquery(g_SQL, query, "OnExactSCMWorldPickupImportCleared", "i", playerid);
+
+    SendClientMessage(playerid, COLOR_YELLOW, "Menyiapkan exact SCM world pickup import dari DB queue...");
+    SendClientMessage(playerid, COLOR_WHITE, "Pastikan world_pickup_import_queue sudah berisi data source_tag offline_exact_scm.");
+    return 1;
+}
+
+public OnExactSCMWorldPickupImportCleared(playerid)
+{
+    new query[1536];
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO world_pickups (pickup_type, display_name, model_id, pos_x, pos_y, pos_z, interior, virtual_world, amount, cooldown_seconds, source_tag, enabled) SELECT pickup_type, display_name, model_id, pos_x, pos_y, pos_z, interior, virtual_world, amount, cooldown_seconds, '%e', 1 FROM world_pickup_import_queue WHERE enabled=1 AND source_tag='%e'",
+        WORLD_PICKUP_EXACT_SCM_TAG,
+        WORLD_PICKUP_EXACT_SCM_TAG
+    );
+    mysql_tquery(g_SQL, query, "OnExactSCMWorldPickupImportFinished", "i", playerid);
+    return 1;
+}
+
+public OnExactSCMWorldPickupImportFinished(playerid)
+{
+    new affectedRows = cache_affected_rows();
+    LoadWorldPickups();
+
+    if (IsPlayerConnected(playerid))
+    {
+        new msg[144];
+        format(msg, sizeof(msg), "Exact SCM pickup import selesai. Rows imported: %d", affectedRows);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan /wpickupexactinfo dan /wpickuplist untuk cek hasil exact SCM pickup.");
+    }
+
+    return 1;
+}
+
+stock ClearExactSCMWorldPickupImport(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa clear exact SCM world pickup import.");
+        return 0;
+    }
+
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE world_pickups SET enabled=0 WHERE source_tag='%e'", WORLD_PICKUP_EXACT_SCM_TAG);
+    mysql_tquery(g_SQL, query, "OnExactSCMWorldPickupImportClearedOnly", "i", playerid);
+    return 1;
+}
+
+public OnExactSCMWorldPickupImportClearedOnly(playerid)
+{
+    new affectedRows = cache_affected_rows();
+    LoadWorldPickups();
+
+    if (IsPlayerConnected(playerid))
+    {
+        new msg[144];
+        format(msg, sizeof(msg), "Exact SCM imported world pickups dinonaktifkan. Rows affected: %d", affectedRows);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+        SendClientMessage(playerid, COLOR_WHITE, "Manual pickup dan curated seed tidak ikut dinonaktifkan.");
+    }
+
+    return 1;
+}
+
+stock ShowExactSCMWorldPickupImportInfo(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa cek exact SCM pickup import info.");
+        return 0;
+    }
+
+    new query[1024];
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "SELECT (SELECT COUNT(*) FROM world_pickup_import_queue WHERE source_tag='%e') AS queue_total, (SELECT COUNT(*) FROM world_pickup_import_queue WHERE source_tag='%e' AND enabled=1) AS queue_active, (SELECT COUNT(*) FROM world_pickups WHERE source_tag='%e') AS imported_total, (SELECT COUNT(*) FROM world_pickups WHERE source_tag='%e' AND enabled=1) AS imported_active",
+        WORLD_PICKUP_EXACT_SCM_TAG,
+        WORLD_PICKUP_EXACT_SCM_TAG,
+        WORLD_PICKUP_EXACT_SCM_TAG,
+        WORLD_PICKUP_EXACT_SCM_TAG
+    );
+    mysql_tquery(g_SQL, query, "OnExactSCMWorldPickupImportInfoLoaded", "i", playerid);
+    return 1;
+}
+
+public OnExactSCMWorldPickupImportInfoLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new queueTotal = 0;
+    new queueActive = 0;
+    new importedTotal = 0;
+    new importedActive = 0;
+    new body[1536];
+
+    if (cache_num_rows() > 0)
+    {
+        cache_get_value_name_int(0, "queue_total", queueTotal);
+        cache_get_value_name_int(0, "queue_active", queueActive);
+        cache_get_value_name_int(0, "imported_total", importedTotal);
+        cache_get_value_name_int(0, "imported_active", importedActive);
+    }
+
+    format(
+        body,
+        sizeof(body),
+        "Exact SCM Pickup Import Tag: %s\n\nQueue Total Rows: %d\nQueue Active Rows: %d\nImported Total Rows: %d\nImported Active Rows: %d\n\nOffline-first workflow:\n1. Extract pickup candidates from original main.scm.\n2. INSERT rows ke world_pickup_import_queue dengan source_tag offline_exact_scm.\n3. Jalankan /wpickupimportdb.\n4. Cek hasil dengan /wpickuplist.\n\nCurated pickup template is deprecated and should stay disabled.\n\nCommands:\n/wpickupimportdb\n/wpickupexactclear\n/wpickupexactinfo",
+        WORLD_PICKUP_EXACT_SCM_TAG,
+        queueTotal,
+        queueActive,
+        importedTotal,
+        importedActive
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_WPICKUP_EXACT_INFO, DIALOG_STYLE_MSGBOX, "Exact SCM World Pickup Import", body, "Back", "Close");
+    return 1;
+}
+
+
 stock ShowWorldPickupMenu(playerid)
 {
     if (!IsAdminLevel(playerid, ADMIN_OWNER))
@@ -17529,13 +17773,13 @@ stock ShowWorldPickupMenu(playerid)
         return 0;
     }
 
-    ShowPlayerDialog(playerid, DIALOG_WPICKUP_MENU, DIALOG_STYLE_LIST, "Offline World Pickup Editor", "Create Pickup\nList / Select Pickup\nInput ID Manual\nDEPRECATED: Disable Curated Seed\nClear Curated Seed\nSource Policy / Curated Info\nReload Pickups\nHelp", "Select", "Close");
+    ShowPlayerDialog(playerid, DIALOG_WPICKUP_MENU, DIALOG_STYLE_LIST, "Offline World Pickup Editor", "Create Pickup\nList / Select Pickup\nInput ID Manual\nDEPRECATED: Disable Curated Seed\nClear Curated Seed\nSource Policy / Curated Info\nImport Exact SCM Queue\nClear Exact SCM Import\nExact SCM Import Info\nReload Pickups\nHelp", "Select", "Close");
     return 1;
 }
 
 stock ShowWorldPickupCreateTypeInput(playerid)
 {
-    ShowPlayerDialog(playerid, DIALOG_WPICKUP_CREATE_TYPE, DIALOG_STYLE_INPUT, "Create World Pickup", "Masukkan type pickup:\n\nbribe = police bribe / wanted star\nhealth = health pickup\narmor = armor pickup\nhidden = hidden/world reward", "Create", "Back");
+    ShowPlayerDialog(playerid, DIALOG_WPICKUP_CREATE_TYPE, DIALOG_STYLE_INPUT, "Create World Pickup", "Masukkan type pickup:\n\nbribe = police bribe / wanted star\nhealth = health pickup\narmor = armor pickup\nhidden = hidden/world reward\nweapon = offline weapon pickup", "Create", "Back");
     return 1;
 }
 
@@ -17605,7 +17849,7 @@ stock ShowWorldPickupInfoDialog(playerid, dbid)
 stock ShowWorldPickupTypeInput(playerid, dbid)
 {
     PlayerEditingWorldPickupID[playerid] = dbid;
-    ShowPlayerDialog(playerid, DIALOG_WPICKUP_TYPE_INPUT, DIALOG_STYLE_INPUT, "Edit Pickup Type", "Masukkan type baru:\nbribe, health, armor, hidden\n\nCatatan: mengubah type akan reset model dan amount ke default type.", "Save", "Back");
+    ShowPlayerDialog(playerid, DIALOG_WPICKUP_TYPE_INPUT, DIALOG_STYLE_INPUT, "Edit Pickup Type", "Masukkan type baru:\nbribe, health, armor, hidden, weapon\n\nCatatan: mengubah type akan reset model dan amount ke default type.", "Save", "Back");
     return 1;
 }
 
@@ -17655,7 +17899,7 @@ stock ShowWorldPickupHelp(playerid)
     strcat(body, "- hidden: reward cash/world pickup\n\n", sizeof(body));
     strcat(body, "Command fallback:\n", sizeof(body));
     strcat(body, "/wpickupmenu, /wpickupcreate, /wpickuplist, /wpickupinfo, /wpickupgoto, /wpickupdelete, /wpickupreload\n", sizeof(body));
-    strcat(body, "/wpickupseed deprecated-disable, /wpickupclearseed, /wpickupseedinfo\n\n", sizeof(body));
+    strcat(body, "/wpickupseed deprecated-disable, /wpickupclearseed, /wpickupseedinfo\n/wpickupimportdb, /wpickupexactclear, /wpickupexactinfo\n\n", sizeof(body));
     strcat(body, "Template seed: police bribe, health, armor, dan hidden pickup bisa di-seed massal agar tidak input satu-satu.", sizeof(body));
     ShowPlayerDialog(playerid, DIALOG_WPICKUP_INFO, DIALOG_STYLE_MSGBOX, "World Pickup Help", body, "Back", "Close");
     return 1;
@@ -25265,7 +25509,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         new type = GetWorldPickupTypeFromString(typeStr);
         if (type <= 0)
         {
-            SendClientMessage(playerid, COLOR_RED, "Type tidak valid. Gunakan: bribe, health, armor, hidden.");
+            SendClientMessage(playerid, COLOR_RED, "Type tidak valid. Gunakan: bribe, health, armor, hidden, weapon.");
             return 1;
         }
 
@@ -25331,6 +25575,24 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/wpickupseedinfo", true))
     {
         ShowOfflinePickupSeedInfo(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/wpickupimportdb", true))
+    {
+        ImportExactSCMWorldPickupQueue(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/wpickupexactclear", true))
+    {
+        ClearExactSCMWorldPickupImport(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/wpickupexactinfo", true))
+    {
+        ShowExactSCMWorldPickupImportInfo(playerid);
         return 1;
     }
 
@@ -26527,7 +26789,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24C Offline Source Cleanup");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24D SCM Offline Pickup Importer");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -26537,7 +26799,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24C: offline-first cleanup, curated templates deprecated/disabled; exact source import jadi jalur utama.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24D: SCM exact pickup import queue, weapon pickups, curated pickup seed tetap deprecated.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24B: Exact offline parked vehicle importer, /parkvehimportdb, /parkvehexactinfo.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24A: Curated parked vehicle seed is deprecated; use exact offline import when possible.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23F.3: Public interior checkpoint interaction, service point merah, exit fix.");

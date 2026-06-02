@@ -478,6 +478,16 @@ new PublicServiceCount;
 #define WORLD_MARKER_PICKUP_TYPE 1
 #define WORLD_LABEL_DRAW_DISTANCE 22.0
 
+// v0.24G.1 Offline-first cleanup policy.
+// Legacy static Pawn markers below are deprecated and should be moved to DB world_locations.
+// Houses/business/gang/turf/bus-route remain hardcoded until their own DB/exact-source migration patches.
+#define SAIF_ENABLE_LEGACY_STATIC_ATM_MARKERS 0
+#define SAIF_ENABLE_LEGACY_STATIC_DEALER_MARKERS 0
+#define SAIF_ENABLE_LEGACY_STATIC_AMMUNATION_MARKERS 0
+#define SAIF_ENABLE_LEGACY_STATIC_JOB_MARKERS 0
+#define SAIF_ENABLE_LEGACY_STATIC_RACE_MARKER 0
+#define MAPICON_MAX_SAFE_ID 99
+
 #define MAPICON_BASE_ATM 0
 #define MAPICON_BASE_HOUSE 8
 #define MAPICON_BASE_BUSINESS 16
@@ -500,7 +510,7 @@ new PublicServiceCount;
 #define MAPICON_TYPE_TERRITORY 19
 #define MAPICON_TYPE_GANG_HQ 19
 
-#define MAX_DYNAMIC_LOCATIONS 15
+#define MAX_DYNAMIC_LOCATIONS 80
 #define MAX_DYNAMIC_OBJECTS 300
 #define MAX_PARKED_VEHICLES 200
 #define PARKED_VEHICLE_DEFAULT_RESPAWN 300
@@ -4735,6 +4745,11 @@ stock GetNearestBankPoint(playerid)
     new nearest = -1;
     new Float:nearestDistance = 999999.0;
 
+    if (!SAIF_ENABLE_LEGACY_STATIC_ATM_MARKERS)
+    {
+        return nearest;
+    }
+
     for (new i = 0; i < MAX_BANK_POINTS; i++)
     {
         new Float:distance = GetPlayerDistanceFromPoint(
@@ -4756,11 +4771,14 @@ stock GetNearestBankPoint(playerid)
 
 stock IsPlayerNearBankPoint(playerid)
 {
-    for (new i = 0; i < MAX_BANK_POINTS; i++)
+    if (SAIF_ENABLE_LEGACY_STATIC_ATM_MARKERS)
     {
-        if (GetPlayerDistanceFromPoint(playerid, BankPointX[i], BankPointY[i], BankPointZ[i]) <= BANK_ACCESS_RADIUS)
+        for (new i = 0; i < MAX_BANK_POINTS; i++)
         {
-            return 1;
+            if (GetPlayerDistanceFromPoint(playerid, BankPointX[i], BankPointY[i], BankPointZ[i]) <= BANK_ACCESS_RADIUS)
+            {
+                return 1;
+            }
         }
     }
 
@@ -9162,6 +9180,11 @@ stock GetNearestDealership(playerid)
     new nearest = -1;
     new Float:nearestDistance = 999999.0;
 
+    if (!SAIF_ENABLE_LEGACY_STATIC_DEALER_MARKERS)
+    {
+        return nearest;
+    }
+
     for (new i = 0; i < MAX_DEALERSHIPS; i++)
     {
         new Float:distance = GetPlayerDistanceFromPoint(
@@ -9183,11 +9206,14 @@ stock GetNearestDealership(playerid)
 
 stock IsPlayerNearDealership(playerid)
 {
-    for (new i = 0; i < MAX_DEALERSHIPS; i++)
+    if (SAIF_ENABLE_LEGACY_STATIC_DEALER_MARKERS)
     {
-        if (GetPlayerDistanceFromPoint(playerid, DealershipX[i], DealershipY[i], DealershipZ[i]) <= DEALERSHIP_ACCESS_RADIUS)
+        for (new i = 0; i < MAX_DEALERSHIPS; i++)
         {
-            return 1;
+            if (GetPlayerDistanceFromPoint(playerid, DealershipX[i], DealershipY[i], DealershipZ[i]) <= DEALERSHIP_ACCESS_RADIUS)
+            {
+                return 1;
+            }
         }
     }
 
@@ -10083,7 +10109,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24G Public Service Config");
+    SetGameModeText("SAIF Dev v0.24G.1 Static World DB Cleanup");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -10187,9 +10213,10 @@ public OnGameModeInit()
     print("[LSIF] Custom house arrow pickups aktif.");
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
+    print("[SAIF] Legacy static ATM/Dealer/Ammu/Job/Race Pawn markers deprecated; gunakan world_locations DB + /locmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24F.2 Ammu Config Dialog Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24G.1 Static World DB Cleanup berhasil dijalankan.");
     return 1;
 }
 
@@ -15314,9 +15341,16 @@ stock ApplyDynamicLocationIcons(playerid)
             continue;
         }
 
+        new iconSlot = MAPICON_BASE_DYNAMIC + i;
+        if (iconSlot > MAPICON_MAX_SAFE_ID)
+        {
+            // Location still has pickup/3D label; only radar icon is skipped.
+            continue;
+        }
+
         SetPlayerMapIcon(
             playerid,
-            MAPICON_BASE_DYNAMIC + i,
+            iconSlot,
             DynamicLocationX[i],
             DynamicLocationY[i],
             DynamicLocationZ[i],
@@ -15333,7 +15367,12 @@ stock RemoveDynamicLocationIcons(playerid)
 {
     for (new i = 0; i < MAX_DYNAMIC_LOCATIONS; i++)
     {
-        RemovePlayerMapIcon(playerid, MAPICON_BASE_DYNAMIC + i);
+        new iconSlot = MAPICON_BASE_DYNAMIC + i;
+        if (iconSlot > MAPICON_MAX_SAFE_ID)
+        {
+            continue;
+        }
+        RemovePlayerMapIcon(playerid, iconSlot);
     }
 
     return 1;
@@ -15478,7 +15517,7 @@ stock LoadDynamicLocations()
 
     mysql_tquery(
         g_SQL,
-        "SELECT id, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled FROM world_locations WHERE enabled=1 ORDER BY id ASC LIMIT 15",
+        "SELECT id, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled FROM world_locations WHERE enabled=1 ORDER BY id ASC LIMIT 80",
         "OnDynamicLocationsLoaded"
     );
     return 1;
@@ -21261,28 +21300,37 @@ stock CreateWorldInteractionMarkers()
 
     new labelText[144];
 
-    for (new i = 0; i < MAX_BANK_POINTS; i++)
+    if (SAIF_ENABLE_LEGACY_STATIC_ATM_MARKERS)
     {
-        BankPointPickup[i] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, BankPointX[i], BankPointY[i], BankPointZ[i], 0);
+        for (new i = 0; i < MAX_BANK_POINTS; i++)
+        {
+            BankPointPickup[i] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, BankPointX[i], BankPointY[i], BankPointZ[i], 0);
 
-        format(labelText, sizeof(labelText), "[ALT] ATM\n%s\nBalance / Deposit / Withdraw", BankPointName[i]);
-        BankPointLabel[i] = Create3DTextLabel(labelText, COLOR_CYAN, BankPointX[i], BankPointY[i], BankPointZ[i] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
+            format(labelText, sizeof(labelText), "[ALT] ATM\n%s\nBalance / Deposit / Withdraw", BankPointName[i]);
+            BankPointLabel[i] = Create3DTextLabel(labelText, COLOR_CYAN, BankPointX[i], BankPointY[i], BankPointZ[i] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
+        }
     }
 
-    for (new i = 0; i < MAX_DEALERSHIPS; i++)
+    if (SAIF_ENABLE_LEGACY_STATIC_DEALER_MARKERS)
     {
-        DealershipPickup[i] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, DealershipX[i], DealershipY[i], DealershipZ[i], 0);
+        for (new i = 0; i < MAX_DEALERSHIPS; i++)
+        {
+            DealershipPickup[i] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, DealershipX[i], DealershipY[i], DealershipZ[i], 0);
 
-        format(labelText, sizeof(labelText), "[ALT] Dealership\n%s\nVehicle Shop / Garage Service", DealershipName[i]);
-        DealershipLabel[i] = Create3DTextLabel(labelText, COLOR_GREEN, DealershipX[i], DealershipY[i], DealershipZ[i] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
+            format(labelText, sizeof(labelText), "[ALT] Dealership\n%s\nVehicle Shop / Garage Service", DealershipName[i]);
+            DealershipLabel[i] = Create3DTextLabel(labelText, COLOR_GREEN, DealershipX[i], DealershipY[i], DealershipZ[i] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
+        }
     }
 
-    for (new i = 0; i < MAX_AMMUNATIONS; i++)
+    if (SAIF_ENABLE_LEGACY_STATIC_AMMUNATION_MARKERS)
     {
-        AmmuNationPickup[i] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, AmmuNationX[i], AmmuNationY[i], AmmuNationZ[i], 0);
+        for (new i = 0; i < MAX_AMMUNATIONS; i++)
+        {
+            AmmuNationPickup[i] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, AmmuNationX[i], AmmuNationY[i], AmmuNationZ[i], 0);
 
-        format(labelText, sizeof(labelText), "[ALT] Ammu-Nation\n%s\nWeapon Shop", AmmuNationName[i]);
-        AmmuNationLabel[i] = Create3DTextLabel(labelText, COLOR_ORANGE, AmmuNationX[i], AmmuNationY[i], AmmuNationZ[i] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
+            format(labelText, sizeof(labelText), "[ALT] Ammu-Nation\n%s\nWeapon Shop", AmmuNationName[i]);
+            AmmuNationLabel[i] = Create3DTextLabel(labelText, COLOR_ORANGE, AmmuNationX[i], AmmuNationY[i], AmmuNationZ[i] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
+        }
     }
 
     for (new i = 0; i < MAX_BUSINESSES; i++)
@@ -21299,14 +21347,20 @@ stock CreateWorldInteractionMarkers()
         HouseExteriorLabel[i] = Create3DTextLabel(labelText, COLOR_WHITE, HouseX[i], HouseY[i], HouseZ[i] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
     }
 
-    RaceStartPickup = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, RaceLSX[0], RaceLSY[0], RaceLSZ[0], 0);
-    RaceStartLabel = Create3DTextLabel("[RACE] LS Intro\nGunakan /joinrace ls\nTombol 2 hanya untuk vehicle mission/job", COLOR_ORANGE, RaceLSX[0], RaceLSY[0], RaceLSZ[0] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
-
-    for (new i = 0; i < MAX_JOB_WORLD_MARKERS; i++)
+    if (SAIF_ENABLE_LEGACY_STATIC_RACE_MARKER)
     {
-        JobWorldPickup[i] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, JobWorldX[i], JobWorldY[i], JobWorldZ[i], 0);
-        format(labelText, sizeof(labelText), "[JOB] %s\n%s", JobWorldName[i], JobWorldGuide[i]);
-        JobWorldLabel[i] = Create3DTextLabel(labelText, COLOR_CYAN, JobWorldX[i], JobWorldY[i], JobWorldZ[i] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
+        RaceStartPickup = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, RaceLSX[0], RaceLSY[0], RaceLSZ[0], 0);
+        RaceStartLabel = Create3DTextLabel("[RACE] LS Intro\nGunakan /joinrace ls\nTombol 2 hanya untuk vehicle mission/job", COLOR_ORANGE, RaceLSX[0], RaceLSY[0], RaceLSZ[0] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
+    }
+
+    if (SAIF_ENABLE_LEGACY_STATIC_JOB_MARKERS)
+    {
+        for (new i = 0; i < MAX_JOB_WORLD_MARKERS; i++)
+        {
+            JobWorldPickup[i] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, JobWorldX[i], JobWorldY[i], JobWorldZ[i], 0);
+            format(labelText, sizeof(labelText), "[JOB] %s\n%s", JobWorldName[i], JobWorldGuide[i]);
+            JobWorldLabel[i] = Create3DTextLabel(labelText, COLOR_CYAN, JobWorldX[i], JobWorldY[i], JobWorldZ[i] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
+        }
     }
 
     for (new i = 0; i < MAX_BUS_STOPS; i++)
@@ -21326,12 +21380,11 @@ stock CreateWorldInteractionMarkers()
     {
         GangHQPickup[i] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, GangHQX[i], GangHQY[i], GangHQZ[i], 0);
         format(labelText, sizeof(labelText), "[GANG HQ] %s\nALT: Menu / Stash\nPickup: Enter HQ", PresetGangShortName[i]);
-        // Offset lebih tinggi agar tidak tumpuk dengan marker/label ALT lain di lokasi yang berdekatan.
         GangHQLabel[i] = Create3DTextLabel(labelText, PresetGangColor[i], GangHQX[i], GangHQY[i], GangHQZ[i] + 2.2, 16.0, 0, true);
     }
 
-    print("[LSIF] World interaction markers, job markers, bus stops, territories, gang HQ, and 3D labels created.");
-    print("[LSIF] Gang HQ labels use higher offset to avoid overlapping ALT labels.");
+    print("[LSIF] World interaction markers created with DB-first static policy.");
+    print("[SAIF] Legacy static ATM/Dealer/Ammu/Job/Race markers are disabled by default; use world_locations DB.");
     return 1;
 }
 
@@ -21491,9 +21544,12 @@ stock ApplyLSIFMapIcons(playerid)
 {
     ApplyTerritoryZones(playerid);
 
-    for (new i = 0; i < MAX_BANK_POINTS; i++)
+    if (SAIF_ENABLE_LEGACY_STATIC_ATM_MARKERS)
     {
-        SetPlayerMapIcon(playerid, MAPICON_BASE_ATM + i, BankPointX[i], BankPointY[i], BankPointZ[i], MAPICON_TYPE_ATM, COLOR_CYAN, MAPICON_LOCAL);
+        for (new i = 0; i < MAX_BANK_POINTS; i++)
+        {
+            SetPlayerMapIcon(playerid, MAPICON_BASE_ATM + i, BankPointX[i], BankPointY[i], BankPointZ[i], MAPICON_TYPE_ATM, COLOR_CYAN, MAPICON_LOCAL);
+        }
     }
 
     for (new i = 0; i < MAX_HOUSES; i++)
@@ -21506,30 +21562,39 @@ stock ApplyLSIFMapIcons(playerid)
         SetPlayerMapIcon(playerid, MAPICON_BASE_BUSINESS + i, BusinessX[i], BusinessY[i], BusinessZ[i], MAPICON_TYPE_BUSINESS, COLOR_YELLOW, MAPICON_LOCAL);
     }
 
-    for (new i = 0; i < MAX_DEALERSHIPS; i++)
+    if (SAIF_ENABLE_LEGACY_STATIC_DEALER_MARKERS)
     {
-        SetPlayerMapIcon(playerid, MAPICON_BASE_DEALER + i, DealershipX[i], DealershipY[i], DealershipZ[i], MAPICON_TYPE_DEALER, COLOR_GREEN, MAPICON_LOCAL);
+        for (new i = 0; i < MAX_DEALERSHIPS; i++)
+        {
+            SetPlayerMapIcon(playerid, MAPICON_BASE_DEALER + i, DealershipX[i], DealershipY[i], DealershipZ[i], MAPICON_TYPE_DEALER, COLOR_GREEN, MAPICON_LOCAL);
+        }
     }
 
-    for (new i = 0; i < MAX_AMMUNATIONS; i++)
+    if (SAIF_ENABLE_LEGACY_STATIC_AMMUNATION_MARKERS)
     {
-        SetPlayerMapIcon(playerid, MAPICON_BASE_AMMUNATION + i, AmmuNationX[i], AmmuNationY[i], AmmuNationZ[i], MAPICON_TYPE_AMMUNATION, COLOR_ORANGE, MAPICON_LOCAL);
+        for (new i = 0; i < MAX_AMMUNATIONS; i++)
+        {
+            SetPlayerMapIcon(playerid, MAPICON_BASE_AMMUNATION + i, AmmuNationX[i], AmmuNationY[i], AmmuNationZ[i], MAPICON_TYPE_AMMUNATION, COLOR_ORANGE, MAPICON_LOCAL);
+        }
     }
 
-    SetPlayerMapIcon(playerid, MAPICON_BASE_RACE, RaceLSX[0], RaceLSY[0], RaceLSZ[0], MAPICON_TYPE_RACE, COLOR_ORANGE, MAPICON_LOCAL);
-
-    for (new i = 0; i < MAX_JOB_WORLD_MARKERS; i++)
+    if (SAIF_ENABLE_LEGACY_STATIC_RACE_MARKER)
     {
-        SetPlayerMapIcon(playerid, MAPICON_BASE_JOB + i, JobWorldX[i], JobWorldY[i], JobWorldZ[i], MAPICON_TYPE_JOB, COLOR_CYAN, MAPICON_LOCAL);
+        SetPlayerMapIcon(playerid, MAPICON_BASE_RACE, RaceLSX[0], RaceLSY[0], RaceLSZ[0], MAPICON_TYPE_RACE, COLOR_ORANGE, MAPICON_LOCAL);
+    }
+
+    if (SAIF_ENABLE_LEGACY_STATIC_JOB_MARKERS)
+    {
+        for (new i = 0; i < MAX_JOB_WORLD_MARKERS; i++)
+        {
+            SetPlayerMapIcon(playerid, MAPICON_BASE_JOB + i, JobWorldX[i], JobWorldY[i], JobWorldZ[i], MAPICON_TYPE_JOB, COLOR_CYAN, MAPICON_LOCAL);
+        }
     }
 
     for (new i = 0; i < MAX_BUS_STOPS; i++)
     {
         SetPlayerMapIcon(playerid, MAPICON_BASE_BUS_STOP + i, BusStopX[i], BusStopY[i], BusStopZ[i], MAPICON_TYPE_BUS_STOP, COLOR_YELLOW, MAPICON_LOCAL);
     }
-
-    // Territory/turf is now represented by transparent GangZone blocks, not point map icons.
-    // Point icons were removed here to prevent stale symbols and map icon ID conflicts.
 
     for (new i = 0; i < MAX_PRESET_GANGS; i++)
     {
@@ -23215,6 +23280,11 @@ stock GetNearestAmmuNation(playerid)
     new nearest = -1;
     new Float:nearestDistance = 999999.0;
 
+    if (!SAIF_ENABLE_LEGACY_STATIC_AMMUNATION_MARKERS)
+    {
+        return nearest;
+    }
+
     for (new i = 0; i < MAX_AMMUNATIONS; i++)
     {
         new Float:distance = GetPlayerDistanceFromPoint(playerid, AmmuNationX[i], AmmuNationY[i], AmmuNationZ[i]);
@@ -23236,11 +23306,14 @@ stock IsPlayerNearAmmuNation(playerid)
         return 1;
     }
 
-    for (new i = 0; i < MAX_AMMUNATIONS; i++)
+    if (SAIF_ENABLE_LEGACY_STATIC_AMMUNATION_MARKERS)
     {
-        if (GetPlayerDistanceFromPoint(playerid, AmmuNationX[i], AmmuNationY[i], AmmuNationZ[i]) <= AMMUNATION_ACCESS_RADIUS)
+        for (new i = 0; i < MAX_AMMUNATIONS; i++)
         {
-            return 1;
+            if (GetPlayerDistanceFromPoint(playerid, AmmuNationX[i], AmmuNationY[i], AmmuNationZ[i]) <= AMMUNATION_ACCESS_RADIUS)
+            {
+                return 1;
+            }
         }
     }
 

@@ -1375,3 +1375,188 @@ UPDATE public_interiors
 SET service_a = interior_a
 WHERE service_a = 0;
 
+CREATE TABLE IF NOT EXISTS weapon_shop_config (
+    weapon_id INT NOT NULL PRIMARY KEY,
+    weapon_name VARCHAR(32) NOT NULL,
+    price INT NOT NULL DEFAULT 0,
+    ammo_per_purchase INT NOT NULL DEFAULT 0,
+    enabled TINYINT NOT NULL DEFAULT 1,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+INSERT INTO weapon_shop_config (weapon_id, weapon_name, price, ammo_per_purchase, enabled) VALUES
+(22, '9mm', 200, 68, 1),
+(23, 'Silenced 9mm', 600, 68, 1),
+(24, 'Desert Eagle', 1200, 35, 1),
+(25, 'Shotgun', 600, 24, 1),
+(26, 'Sawnoff Shotgun', 800, 24, 1),
+(27, 'Combat Shotgun', 1000, 24, 1),
+(28, 'Micro SMG', 500, 150, 1),
+(29, 'SMG', 2000, 150, 1),
+(32, 'Tec-9', 300, 150, 1),
+(30, 'AK-47', 3500, 120, 1),
+(31, 'M4', 4500, 120, 1),
+(33, 'Country Rifle', 1000, 30, 1),
+(34, 'Sniper Rifle', 5000, 20, 1),
+(16, 'Grenade', 300, 5, 1),
+(39, 'Satchel Charge', 2000, 5, 1)
+ON DUPLICATE KEY UPDATE
+    weapon_name = VALUES(weapon_name),
+    price = VALUES(price),
+    ammo_per_purchase = VALUES(ammo_per_purchase),
+    enabled = VALUES(enabled),
+    updated_at = CURRENT_TIMESTAMP;
+
+
+CREATE TABLE IF NOT EXISTS public_service_config (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    service_type VARCHAR(32) NOT NULL,
+    service_key VARCHAR(32) NOT NULL,
+    display_name VARCHAR(48) NOT NULL,
+    price INT NOT NULL DEFAULT 0,
+    health_add FLOAT NOT NULL DEFAULT 0,
+    armor_add FLOAT NOT NULL DEFAULT 0,
+    xp_reward INT NOT NULL DEFAULT 0,
+    wanted_reduce INT NOT NULL DEFAULT 0,
+    enabled TINYINT NOT NULL DEFAULT 1,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_public_service_type_key (service_type, service_key),
+    INDEX idx_public_service_type (service_type),
+    INDEX idx_public_service_enabled (enabled)
+);
+
+INSERT INTO public_service_config
+(service_type, service_key, display_name, price, health_add, armor_add, xp_reward, wanted_reduce, enabled, sort_order)
+VALUES
+('247','sprunk','Sprunk',25,5,0,0,0,1,1),
+('247','snack','Snack',35,8,0,0,0,1,2),
+('247','first_aid','First Aid',150,25,0,0,0,1,3),
+('247','armor_vest','Armor Vest',600,0,25,0,0,1,4),
+('burgershot','kids_meal','Moo Kids Meal',45,10,0,0,0,1,1),
+('burgershot','beef_tower','Beef Tower',80,20,0,0,0,1,2),
+('burgershot','meat_stack','Meat Stack',120,35,0,0,0,1,3),
+('burgershot','big_meal','Burger Shot Big Meal',160,50,0,0,0,1,4),
+('cluckinbell','little_meal','Cluckin'' Little Meal',45,10,0,0,0,1,1),
+('cluckinbell','big_meal','Cluckin'' Big Meal',80,20,0,0,0,1,2),
+('cluckinbell','huge_meal','Cluckin'' Huge Meal',120,35,0,0,0,1,3),
+('cluckinbell','salad_meal','Salad Meal',90,18,0,0,0,1,4),
+('pizzastack','pizza_slice','Pizza Slice',40,10,0,0,0,1,1),
+('pizzastack','small_pizza','Small Pizza',75,20,0,0,0,1,2),
+('pizzastack','full_rack','Full Rack',120,35,0,0,0,1,3),
+('pizzastack','buster_meal','Buster Meal',160,50,0,0,0,1,4),
+('gym','light_training','Light Training',100,0,0,10,0,1,1),
+('gym','boxing','Boxing Session',150,5,0,15,0,1,2),
+('gym','full_workout','Full Workout',250,10,0,25,0,1,3),
+('barber','basic','Basic Haircut',150,0,0,0,0,1,1),
+('barber','clean_cut','Clean Cut',250,0,0,0,0,1,2),
+('barber','premium','Premium Style',500,0,0,0,0,1,3),
+('tattoo','small','Small Tattoo',250,0,0,0,0,1,1),
+('tattoo','gang','Gang Tattoo',500,0,0,0,0,1,2),
+('tattoo','full_body','Full Body Tattoo',1000,0,0,0,0,1,3),
+('hospital','checkup','Medical Checkup',150,35,0,0,0,1,1),
+('hospital','emergency','Emergency Treatment',350,100,0,0,0,1,2),
+('hospital','armor_patch','Armor Patch',500,0,20,0,0,1,3),
+('police','wanted_status','Ask Wanted Status',0,0,0,0,0,1,1),
+('police','small_fine','Pay Small Fine',500,0,0,0,1,1,2),
+('police','safety_info','Public Safety Info',0,0,0,0,0,1,3),
+('cityhall','citizen_info','Citizen Service Info',0,0,0,0,0,1,1),
+('cityhall','permit_info','Business Permit Info',0,0,0,0,0,1,2),
+('cityhall','license_info','License Info',0,0,0,0,0,1,3),
+('casino','casino_info','Casino Info',0,0,0,0,0,1,1),
+('casino','lucky_snack','Lucky Snack',100,10,0,0,0,1,2),
+('casino','vip_service','VIP Service Placeholder',1000,0,0,20,0,1,3)
+ON DUPLICATE KEY UPDATE
+    display_name = VALUES(display_name),
+    sort_order = VALUES(sort_order);
+
+
+-- SAIF / LSIF Dev v0.24G.1
+-- Static World DB Cleanup
+-- Move legacy Pawn hardcoded world markers into world_locations so they can be edited through /locmenu.
+
+ALTER TABLE world_locations
+ADD COLUMN IF NOT EXISTS source_tag VARCHAR(64) DEFAULT 'manual';
+
+UPDATE world_locations
+SET source_tag = 'manual'
+WHERE source_tag IS NULL OR source_tag = '';
+
+-- ATM / Bank legacy hardcoded points -> DB world_locations
+INSERT INTO world_locations
+(location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled, source_tag)
+SELECT 'legacy_static_atm_idlewood_247', 'atm', 'Idlewood 24/7 ATM', 1833.8134, -1842.4136, 13.5781, 0.0, 0, 0, 52, 1239, 0, 0, '[ALT] ATM\nIdlewood 24/7 ATM\nBalance / Deposit / Withdraw', 5.0, 1, 'legacy_static_migrated'
+WHERE NOT EXISTS (SELECT 1 FROM world_locations WHERE location_key='legacy_static_atm_idlewood_247');
+INSERT INTO world_locations
+(location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled, source_tag)
+SELECT 'legacy_static_atm_commerce_247', 'atm', 'Commerce 24/7 ATM', 1352.4896, -1758.2188, 13.5078, 0.0, 0, 0, 52, 1239, 0, 0, '[ALT] ATM\nCommerce 24/7 ATM\nBalance / Deposit / Withdraw', 5.0, 1, 'legacy_static_migrated'
+WHERE NOT EXISTS (SELECT 1 FROM world_locations WHERE location_key='legacy_static_atm_commerce_247');
+INSERT INTO world_locations
+(location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled, source_tag)
+SELECT 'legacy_static_atm_vinewood_store', 'atm', 'Vinewood Store ATM', 1000.5822, -919.9146, 42.3281, 0.0, 0, 0, 52, 1239, 0, 0, '[ALT] ATM\nVinewood Store ATM\nBalance / Deposit / Withdraw', 5.0, 1, 'legacy_static_migrated'
+WHERE NOT EXISTS (SELECT 1 FROM world_locations WHERE location_key='legacy_static_atm_vinewood_store');
+INSERT INTO world_locations
+(location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled, source_tag)
+SELECT 'legacy_static_atm_east_ls_market', 'atm', 'East LS Market ATM', 2421.5427, -1224.3597, 25.3828, 0.0, 0, 0, 52, 1239, 0, 0, '[ALT] ATM\nEast LS Market ATM\nBalance / Deposit / Withdraw', 5.0, 1, 'legacy_static_migrated'
+WHERE NOT EXISTS (SELECT 1 FROM world_locations WHERE location_key='legacy_static_atm_east_ls_market');
+INSERT INTO world_locations
+(location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled, source_tag)
+SELECT 'legacy_static_atm_santa_maria_shop', 'atm', 'Santa Maria Shop ATM', 1154.7312, -1769.6847, 16.5938, 0.0, 0, 0, 52, 1239, 0, 0, '[ALT] ATM\nSanta Maria Shop ATM\nBalance / Deposit / Withdraw', 5.0, 1, 'legacy_static_migrated'
+WHERE NOT EXISTS (SELECT 1 FROM world_locations WHERE location_key='legacy_static_atm_santa_maria_shop');
+
+-- Dealership legacy hardcoded points -> DB world_locations
+INSERT INTO world_locations
+(location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled, source_tag)
+SELECT 'legacy_static_dealer_ls_grotti', 'dealer', 'LS Grotti Dealership', 2131.9177, -1150.1232, 24.2266, 0.0, 0, 0, 55, 1239, 0, 0, '[ALT] Dealership\nLS Grotti Dealership\nVehicle Shop / Garage Service', 8.0, 1, 'legacy_static_migrated'
+WHERE NOT EXISTS (SELECT 1 FROM world_locations WHERE location_key='legacy_static_dealer_ls_grotti');
+INSERT INTO world_locations
+(location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled, source_tag)
+SELECT 'legacy_static_dealer_market_budget', 'dealer', 'Market Budget Cars', 562.6155, -1291.7563, 17.2482, 0.0, 0, 0, 55, 1239, 0, 0, '[ALT] Dealership\nMarket Budget Cars\nVehicle Shop / Garage Service', 8.0, 1, 'legacy_static_migrated'
+WHERE NOT EXISTS (SELECT 1 FROM world_locations WHERE location_key='legacy_static_dealer_market_budget');
+INSERT INTO world_locations
+(location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled, source_tag)
+SELECT 'legacy_static_dealer_sf_import', 'dealer', 'San Fierro Import Dealer', -1954.2469, 300.2021, 35.4688, 0.0, 0, 0, 55, 1239, 0, 0, '[ALT] Dealership\nSan Fierro Import Dealer\nVehicle Shop / Garage Service', 8.0, 1, 'legacy_static_migrated'
+WHERE NOT EXISTS (SELECT 1 FROM world_locations WHERE location_key='legacy_static_dealer_sf_import');
+
+-- Ammu-Nation legacy static points are migrated as disabled because exact public interiors should be the main route now.
+INSERT INTO world_locations
+(location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled, source_tag)
+SELECT 'legacy_static_ammu_market', 'ammunation', 'Market Ammu-Nation Legacy Fallback', 1368.7429, -1279.8015, 13.5469, 0.0, 0, 0, 6, 1239, 0, 0, '[ALT] Ammu-Nation\nMarket Ammu-Nation\nLegacy fallback', 7.0, 0, 'legacy_static_migrated'
+WHERE NOT EXISTS (SELECT 1 FROM world_locations WHERE location_key='legacy_static_ammu_market');
+INSERT INTO world_locations
+(location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled, source_tag)
+SELECT 'legacy_static_ammu_willowfield', 'ammunation', 'Willowfield Ammu-Nation Legacy Fallback', 2400.4875, -1981.9600, 13.5469, 0.0, 0, 0, 6, 1239, 0, 0, '[ALT] Ammu-Nation\nWillowfield Ammu-Nation\nLegacy fallback', 7.0, 0, 'legacy_static_migrated'
+WHERE NOT EXISTS (SELECT 1 FROM world_locations WHERE location_key='legacy_static_ammu_willowfield');
+INSERT INTO world_locations
+(location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled, source_tag)
+SELECT 'legacy_static_ammu_blueberry', 'ammunation', 'Blueberry Ammu-Nation Legacy Fallback', 242.0057, -178.1069, 1.5781, 0.0, 0, 0, 6, 1239, 0, 0, '[ALT] Ammu-Nation\nBlueberry Ammu-Nation\nLegacy fallback', 7.0, 0, 'legacy_static_migrated'
+WHERE NOT EXISTS (SELECT 1 FROM world_locations WHERE location_key='legacy_static_ammu_blueberry');
+
+-- Job guide legacy hardcoded points -> DB world_locations
+INSERT INTO world_locations
+(location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled, source_tag)
+SELECT 'legacy_static_job_taxi_stand', 'job', 'Taxi Mission Stand', 2112.8467, -1788.3153, 13.5547, 0.0, 0, 0, 51, 1239, 0, 0, '[JOB] Taxi Mission Stand\nNaik Taxi/Cabbie lalu tekan tombol 2 untuk Taxi Mission.', 5.0, 1, 'legacy_static_migrated'
+WHERE NOT EXISTS (SELECT 1 FROM world_locations WHERE location_key='legacy_static_job_taxi_stand');
+INSERT INTO world_locations
+(location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled, source_tag)
+SELECT 'legacy_static_job_courier_depot', 'job', 'Courier Depot', 2102.8870, -1806.4775, 13.5547, 0.0, 0, 0, 51, 1239, 0, 0, '[JOB] Courier Depot\nNaik Burrito/Boxville/Mule/Pony/Rumpo lalu tekan tombol 2 untuk Courier.', 5.0, 1, 'legacy_static_migrated'
+WHERE NOT EXISTS (SELECT 1 FROM world_locations WHERE location_key='legacy_static_job_courier_depot');
+INSERT INTO world_locations
+(location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled, source_tag)
+SELECT 'legacy_static_job_trucker_depot', 'job', 'Trucker Cargo Depot', 2460.3918, -2114.8193, 13.5469, 0.0, 0, 0, 51, 1239, 0, 0, '[JOB] Trucker Cargo Depot\nNaik truck valid lalu tekan tombol 2 untuk Trucker Mission.', 5.0, 1, 'legacy_static_migrated'
+WHERE NOT EXISTS (SELECT 1 FROM world_locations WHERE location_key='legacy_static_job_trucker_depot');
+INSERT INTO world_locations
+(location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled, source_tag)
+SELECT 'legacy_static_job_bus_terminal', 'job', 'Bus Terminal', 1807.9344, -1908.1141, 13.5781, 0.0, 0, 0, 51, 1239, 0, 0, '[JOB] Bus Terminal\nNaik Bus/Coach lalu tekan tombol 2 untuk Bus Route.', 5.0, 1, 'legacy_static_migrated'
+WHERE NOT EXISTS (SELECT 1 FROM world_locations WHERE location_key='legacy_static_job_bus_terminal');
+INSERT INTO world_locations
+(location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled, source_tag)
+SELECT 'legacy_static_job_police_vigilante', 'job', 'Police Vigilante HQ', 1554.8425, -1675.6542, 16.1953, 0.0, 0, 0, 51, 1239, 0, 0, '[JOB] Police Vigilante HQ\nNaik kendaraan polisi lalu tekan tombol 2 untuk Vigilante Mission.', 5.0, 1, 'legacy_static_migrated'
+WHERE NOT EXISTS (SELECT 1 FROM world_locations WHERE location_key='legacy_static_job_police_vigilante');
+
+-- Race start legacy marker -> DB location fallback.
+INSERT INTO world_locations
+(location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled, source_tag)
+SELECT 'legacy_static_race_ls_intro', 'race', 'LS Intro Race Start', 1528.3741, -1678.0245, 13.3828, 0.0, 0, 0, 53, 1239, 0, 0, '[RACE] LS Intro\nGunakan /joinrace ls\nTombol 2 hanya untuk vehicle mission/job', 5.0, 1, 'legacy_static_migrated'
+WHERE NOT EXISTS (SELECT 1 FROM world_locations WHERE location_key='legacy_static_race_ls_intro');

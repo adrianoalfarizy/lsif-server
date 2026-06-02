@@ -7398,25 +7398,25 @@ stock CreateGangHQInteriorRuntime(gangIndex)
     new labelText[144];
 
     GangHQInteriorExitPickup[gangIndex] = CreatePickup(
-        GANG_HQ_INTERIOR_PICKUP_MODEL,
-        GANG_HQ_INTERIOR_PICKUP_TYPE,
-        GangHQInteriorX[gangIndex],
-        exitPickupY,
-        GangHQInteriorZ[gangIndex],
-        GangHQInteriorVirtualWorld[gangIndex]
-    );
+            GANG_HQ_INTERIOR_PICKUP_MODEL,
+            GANG_HQ_INTERIOR_PICKUP_TYPE,
+            GangHQInteriorX[gangIndex],
+            exitPickupY,
+            GangHQInteriorZ[gangIndex],
+            GangHQInteriorVirtualWorld[gangIndex]
+                                          );
 
     format(labelText, sizeof(labelText), "[EXIT] %s HQ\nPanah = Exit HQ\nALT = Stash / Gang Utility", PresetGangShortName[gangIndex]);
     GangHQInteriorExitLabel[gangIndex] = Create3DTextLabel(
-        labelText,
-        PresetGangColor[gangIndex],
-        GangHQInteriorX[gangIndex],
-        exitPickupY,
-        GangHQInteriorZ[gangIndex] + 0.8,
-        16.0,
-        GangHQInteriorVirtualWorld[gangIndex],
-        true
-    );
+            labelText,
+            PresetGangColor[gangIndex],
+            GangHQInteriorX[gangIndex],
+            exitPickupY,
+            GangHQInteriorZ[gangIndex] + 0.8,
+            16.0,
+            GangHQInteriorVirtualWorld[gangIndex],
+            true
+                                         );
 
     return 1;
 }
@@ -14821,7 +14821,8 @@ stock GetWorldPickupTypeName(type, dest[], len)
         case WORLD_PICKUP_TYPE_HEALTH: format(dest, len, "health");
         case WORLD_PICKUP_TYPE_ARMOR: format(dest, len, "armor");
         case WORLD_PICKUP_TYPE_HIDDEN: format(dest, len, "hidden");
-        default: format(dest, len, "unknown");
+        default:
+            format(dest, len, "unknown");
     }
     return 1;
 }
@@ -14834,7 +14835,8 @@ stock GetWorldPickupDisplayName(type, dest[], len)
         case WORLD_PICKUP_TYPE_HEALTH: format(dest, len, "Health Pickup");
         case WORLD_PICKUP_TYPE_ARMOR: format(dest, len, "Armor Pickup");
         case WORLD_PICKUP_TYPE_HIDDEN: format(dest, len, "Hidden World Pickup");
-        default: format(dest, len, "World Pickup");
+        default:
+            format(dest, len, "World Pickup");
     }
     return 1;
 }
@@ -14960,13 +14962,13 @@ stock CreateWorldPickupRuntime(index)
     }
 
     WorldPickupRuntimeID[index] = CreatePickup(
-        WorldPickupModel[index],
-        1,
-        WorldPickupX[index],
-        WorldPickupY[index],
-        WorldPickupZ[index],
-        WorldPickupVirtualWorld[index]
-    );
+                                      WorldPickupModel[index],
+                                      1,
+                                      WorldPickupX[index],
+                                      WorldPickupY[index],
+                                      WorldPickupZ[index],
+                                      WorldPickupVirtualWorld[index]
+                                  );
 
     new typeName[32];
     new labelText[160];
@@ -14974,15 +14976,15 @@ stock CreateWorldPickupRuntime(index)
     format(labelText, sizeof(labelText), "[WORLD PICKUP]\nID: %d | %s", WorldPickupDBID[index], typeName);
 
     WorldPickupLabel[index] = Create3DTextLabel(
-        labelText,
-        GetWorldPickupColor(WorldPickupType[index]),
-        WorldPickupX[index],
-        WorldPickupY[index],
-        WorldPickupZ[index] + 0.8,
-        WORLD_PICKUP_LABEL_DRAW_DISTANCE,
-        WorldPickupVirtualWorld[index],
-        true
-    );
+                                  labelText,
+                                  GetWorldPickupColor(WorldPickupType[index]),
+                                  WorldPickupX[index],
+                                  WorldPickupY[index],
+                                  WorldPickupZ[index] + 0.8,
+                                  WORLD_PICKUP_LABEL_DRAW_DISTANCE,
+                                  WorldPickupVirtualWorld[index],
+                                  true
+                              );
 
     return 1;
 }
@@ -15667,15 +15669,15 @@ stock CreateParkedVehicleRuntime(index)
     }
 
     ParkedVehicleRuntimeID[index] = CreateVehicle(
-        ParkedVehicleModel[index],
-        ParkedVehicleX[index],
-        ParkedVehicleY[index],
-        ParkedVehicleZ[index],
-        ParkedVehicleA[index],
-        ParkedVehicleColor1[index],
-        ParkedVehicleColor2[index],
-        ParkedVehicleRespawnDelay[index]
-    );
+                                        ParkedVehicleModel[index],
+                                        ParkedVehicleX[index],
+                                        ParkedVehicleY[index],
+                                        ParkedVehicleZ[index],
+                                        ParkedVehicleA[index],
+                                        ParkedVehicleColor1[index],
+                                        ParkedVehicleColor2[index],
+                                        ParkedVehicleRespawnDelay[index]
+                                    );
 
     if (ParkedVehicleRuntimeID[index] == INVALID_VEHICLE_ID)
     {
@@ -15700,15 +15702,15 @@ stock CreateParkedVehicleRuntime(index)
     new labelText[128];
     format(labelText, sizeof(labelText), "[PARKED VEHICLE]\nID: %d | Model: %d", ParkedVehicleDBID[index], ParkedVehicleModel[index]);
     ParkedVehicleLabel[index] = Create3DTextLabel(
-        labelText,
-        COLOR_GREY,
-        ParkedVehicleX[index],
-        ParkedVehicleY[index],
-        ParkedVehicleZ[index] + 1.2,
-        PARKED_VEHICLE_LABEL_DRAW_DISTANCE,
-        ParkedVehicleVirtualWorld[index],
-        true
-    );
+                                    labelText,
+                                    COLOR_GREY,
+                                    ParkedVehicleX[index],
+                                    ParkedVehicleY[index],
+                                    ParkedVehicleZ[index] + 1.2,
+                                    PARKED_VEHICLE_LABEL_DRAW_DISTANCE,
+                                    ParkedVehicleVirtualWorld[index],
+                                    true
+                                );
 
     return 1;
 }

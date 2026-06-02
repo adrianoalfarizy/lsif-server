@@ -185,6 +185,7 @@
 #define DIALOG_PUBINT_STORE_MENU 1165
 #define DIALOG_PUBINT_FOOD_MENU 1166
 #define DIALOG_PUBINT_SERVICE_MENU 1167
+#define DIALOG_PARKVEH_SEED_INFO 1168
 
 
 
@@ -468,6 +469,7 @@
 #define PARKED_VEHICLE_DEFAULT_COLOR1 1
 #define PARKED_VEHICLE_DEFAULT_COLOR2 1
 #define PARKED_VEHICLE_LABEL_DRAW_DISTANCE 18.0
+#define PARKED_VEHICLE_OFFLINE_SEED_TAG "offline_template_ls"
 
 #define MAX_WORLD_PICKUPS 300
 #define WORLD_PICKUP_TYPE_BRIBE 1
@@ -1933,6 +1935,14 @@ forward OnParkedVehiclesLoaded();
 forward OnParkedVehicleCreated(playerid);
 forward OnParkedVehicleUpdated(playerid);
 forward OnParkedVehicleDeleted(playerid);
+forward OnParkedVehicleOfflineSeedCleared(playerid);
+forward OnParkedVehicleOfflineSeedChunk1(playerid);
+forward OnParkedVehicleOfflineSeedChunk2(playerid);
+forward OnParkedVehicleOfflineSeedChunk3(playerid);
+forward OnParkedVehicleOfflineSeedChunk4(playerid);
+forward OnParkedVehicleOfflineSeedFinished(playerid);
+forward OnParkedVehicleOfflineSeedClearedOnly(playerid);
+forward OnParkedVehicleOfflineSeedInfoLoaded(playerid);
 forward OnWorldPickupsLoaded();
 forward OnWorldPickupCreated(playerid);
 forward OnWorldPickupUpdated(playerid);
@@ -9881,7 +9891,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.23F.3 Public Interior Checkpoint Interaction");
+    SetGameModeText("SAIF Dev v0.24A Offline Parked Vehicle Seeder");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -9983,7 +9993,7 @@ public OnGameModeInit()
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.23F.3 Public Interior Checkpoint Interaction berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24A Offline Parked Vehicle Seeder berhasil dijalankan.");
     return 1;
 }
 
@@ -11130,7 +11140,10 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
                 LoadParkedVehicles();
                 SendClientMessage(playerid, COLOR_GREEN, "Parked vehicles direload dari database.");
             }
-            case 4: ShowParkedVehicleEditorHelp(playerid);
+            case 4: SeedOfflineParkedVehicleTemplate(playerid);
+            case 5: ClearOfflineParkedVehicleSeed(playerid);
+            case 6: ShowOfflineParkedVehicleSeedInfo(playerid);
+            case 7: ShowParkedVehicleEditorHelp(playerid);
         }
         return 1;
     }
@@ -11206,6 +11219,15 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             ShowParkedVehicleActionMenu(playerid, PlayerEditingParkedVehicleID[playerid]);
         }
         else
+        {
+            ShowParkedVehicleMenu(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PARKVEH_SEED_INFO)
+    {
+        if (response)
         {
             ShowParkedVehicleMenu(playerid);
         }
@@ -17996,8 +18018,8 @@ stock ShowParkedVehicleMenu(playerid)
         return 0;
     }
 
-    new dialogText[512];
-    format(dialogText, sizeof(dialogText), "Create Parked Vehicle\nList / Select Parked Vehicle\nInput ID Manual\nReload Parked Vehicles\nHelp");
+    new dialogText[768];
+    format(dialogText, sizeof(dialogText), "Create Parked Vehicle\nList / Select Parked Vehicle\nInput ID Manual\nReload Parked Vehicles\nSeed Offline Template\nClear Offline Seed\nSeed Info\nHelp");
     ShowPlayerDialog(playerid, DIALOG_PARKVEH_MENU, DIALOG_STYLE_LIST, "Parked Vehicle Editor", dialogText, "Select", "Close");
     return 1;
 }
@@ -18187,11 +18209,224 @@ stock ShowParkedVehicleEditorHelp(playerid)
     SendClientMessage(playerid, COLOR_WHITE, "/parkvehmenu - dialog editor utama.");
     SendClientMessage(playerid, COLOR_WHITE, "/parkvehcreate [modelid] - create dari posisi admin.");
     SendClientMessage(playerid, COLOR_WHITE, "/parkvehrotate [id] [angle] - rotate arah parkir.");
+    SendClientMessage(playerid, COLOR_WHITE, "/parkvehseed - seed offline-like parked vehicles massal.");
+    SendClientMessage(playerid, COLOR_WHITE, "/parkvehclearseed - disable hanya parked vehicle hasil seed.");
+    SendClientMessage(playerid, COLOR_WHITE, "/parkvehseedinfo - cek status seed offline-like.");
     SendClientMessage(playerid, COLOR_WHITE, "Command lama tetap aktif sebagai fallback/debug.");
     SendClientMessage(playerid, COLOR_CYAN, "Cocok untuk taxi stand, bus terminal, depot, police/hospital/fire station.");
     return 1;
 }
 
+
+
+stock SeedOfflineParkedVehicleTemplate(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa seed offline parked vehicle template.");
+        return 0;
+    }
+
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE parked_vehicles SET enabled=0 WHERE source_tag='%e'", PARKED_VEHICLE_OFFLINE_SEED_TAG);
+    mysql_tquery(g_SQL, query, "OnParkedVehicleOfflineSeedCleared", "i", playerid);
+
+    SendClientMessage(playerid, COLOR_YELLOW, "Menyiapkan offline parked vehicle template seed...");
+    SendClientMessage(playerid, COLOR_WHITE, "Seed lama dengan source_tag offline_template_ls dinonaktifkan dulu agar tidak double aktif.");
+    return 1;
+}
+
+public OnParkedVehicleOfflineSeedCleared(playerid)
+{
+    new query[4096];
+    query[0] = 0;
+
+    strcat(query, "INSERT INTO parked_vehicles (modelid, color1, color2, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, respawn_delay, locked, enabled, source_tag) VALUES ", sizeof(query));
+    strcat(query, "(420,6,1,1777.52,-1905.11,13.23,270.0,0,0,300,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(420,6,1,1784.65,-1905.12,13.23,270.0,0,0,300,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(420,6,1,1467.80,-1738.60,13.28,0.0,0,0,300,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(420,6,1,1480.40,-1738.70,13.28,0.0,0,0,300,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(420,6,1,1098.50,-1749.20,13.25,90.0,0,0,300,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(431,3,3,1807.30,-1894.40,13.42,90.0,0,0,420,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(431,3,3,1814.90,-1894.30,13.42,90.0,0,0,420,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(437,1,1,1822.50,-1894.00,13.42,90.0,0,0,420,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(438,6,6,1768.20,-1862.30,13.32,180.0,0,0,300,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(438,6,6,1759.70,-1862.30,13.32,180.0,0,0,300,0,1,'offline_template_ls')", sizeof(query));
+
+    mysql_tquery(g_SQL, query, "OnParkedVehicleOfflineSeedChunk1", "i", playerid);
+    return 1;
+}
+
+public OnParkedVehicleOfflineSeedChunk1(playerid)
+{
+    new query[4096];
+    query[0] = 0;
+
+    strcat(query, "INSERT INTO parked_vehicles (modelid, color1, color2, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, respawn_delay, locked, enabled, source_tag) VALUES ", sizeof(query));
+    strcat(query, "(492,86,86,2491.90,-1682.70,13.25,90.0,0,0,300,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(567,86,86,2512.20,-1673.40,13.25,45.0,0,0,300,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(466,86,86,2475.20,-1648.80,13.25,180.0,0,0,300,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(536,85,85,2122.70,-1128.40,25.20,270.0,0,0,300,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(575,85,85,2133.10,-1149.50,24.95,90.0,0,0,300,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(412,6,6,2242.70,-1468.50,23.65,180.0,0,0,300,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(534,6,6,2261.50,-1436.70,23.65,0.0,0,0,300,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(566,93,93,2396.80,-1226.40,23.65,270.0,0,0,300,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(567,93,93,2410.30,-1221.90,23.65,90.0,0,0,300,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(576,93,93,2424.10,-1244.60,23.65,180.0,0,0,300,0,1,'offline_template_ls')", sizeof(query));
+
+    mysql_tquery(g_SQL, query, "OnParkedVehicleOfflineSeedChunk2", "i", playerid);
+    return 1;
+}
+
+public OnParkedVehicleOfflineSeedChunk2(playerid)
+{
+    new query[4096];
+    query[0] = 0;
+
+    strcat(query, "INSERT INTO parked_vehicles (modelid, color1, color2, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, respawn_delay, locked, enabled, source_tag) VALUES ", sizeof(query));
+    strcat(query, "(596,0,1,1535.60,-1678.80,13.20,90.0,0,0,420,1,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(596,0,1,1544.10,-1684.80,13.20,90.0,0,0,420,1,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(523,0,1,1565.10,-1694.10,5.65,180.0,0,0,420,1,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(416,1,3,1178.20,-1328.40,13.55,270.0,0,0,420,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(416,1,3,1186.50,-1337.70,13.55,180.0,0,0,420,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(407,3,1,1760.50,-1450.50,13.55,180.0,0,0,420,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(544,3,1,1752.30,-1450.50,13.55,180.0,0,0,420,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(427,0,1,1585.60,-1671.30,13.40,0.0,0,0,420,1,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(490,0,0,1593.60,-1710.40,5.90,0.0,0,0,420,1,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(599,0,1,1600.40,-1704.70,5.90,0.0,0,0,420,1,1,'offline_template_ls')", sizeof(query));
+
+    mysql_tquery(g_SQL, query, "OnParkedVehicleOfflineSeedChunk3", "i", playerid);
+    return 1;
+}
+
+public OnParkedVehicleOfflineSeedChunk3(playerid)
+{
+    new query[4096];
+    query[0] = 0;
+
+    strcat(query, "INSERT INTO parked_vehicles (modelid, color1, color2, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, respawn_delay, locked, enabled, source_tag) VALUES ", sizeof(query));
+    strcat(query, "(403,1,1,2205.20,-2660.80,13.45,0.0,0,0,480,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(514,1,1,2194.70,-2660.70,13.45,0.0,0,0,480,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(515,1,1,2183.80,-2660.50,13.45,0.0,0,0,480,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(455,1,1,2172.90,-2660.30,13.45,0.0,0,0,480,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(456,1,1,2162.20,-2660.10,13.45,0.0,0,0,480,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(498,1,1,2151.60,-2660.00,13.45,0.0,0,0,480,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(443,1,1,2221.70,-2638.50,13.45,90.0,0,0,480,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(414,1,1,2747.60,-2460.40,13.45,90.0,0,0,420,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(578,1,1,2770.40,-2417.50,13.55,180.0,0,0,420,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(499,1,1,2783.20,-2417.50,13.55,180.0,0,0,420,0,1,'offline_template_ls')", sizeof(query));
+
+    mysql_tquery(g_SQL, query, "OnParkedVehicleOfflineSeedChunk4", "i", playerid);
+    return 1;
+}
+
+public OnParkedVehicleOfflineSeedChunk4(playerid)
+{
+    new query[4096];
+    query[0] = 0;
+
+    strcat(query, "INSERT INTO parked_vehicles (modelid, color1, color2, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, respawn_delay, locked, enabled, source_tag) VALUES ", sizeof(query));
+    strcat(query, "(461,1,1,370.40,-2030.10,7.65,90.0,0,0,300,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(468,1,1,383.90,-2030.40,7.65,90.0,0,0,300,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(463,1,1,397.20,-2030.70,7.65,90.0,0,0,300,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(471,1,1,414.50,-2025.20,7.65,180.0,0,0,300,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(445,1,1,1120.50,-1456.80,15.55,0.0,0,0,300,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(551,1,1,1130.20,-1456.80,15.55,0.0,0,0,300,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(547,1,1,1140.20,-1456.80,15.55,0.0,0,0,300,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(410,1,1,1150.20,-1456.80,15.55,0.0,0,0,300,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(439,1,1,1160.20,-1456.80,15.55,0.0,0,0,300,0,1,'offline_template_ls'),", sizeof(query));
+    strcat(query, "(580,1,1,1170.20,-1456.80,15.55,0.0,0,0,300,0,1,'offline_template_ls')", sizeof(query));
+
+    mysql_tquery(g_SQL, query, "OnParkedVehicleOfflineSeedFinished", "i", playerid);
+    return 1;
+}
+
+public OnParkedVehicleOfflineSeedFinished(playerid)
+{
+    LoadParkedVehicles();
+
+    if (IsPlayerConnected(playerid))
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "Offline parked vehicle template berhasil di-seed.");
+        SendClientMessage(playerid, COLOR_WHITE, "Total seed awal: 50 vehicle. Gunakan /parkvehseedinfo dan /parkvehlist untuk cek.");
+    }
+
+    return 1;
+}
+
+stock ClearOfflineParkedVehicleSeed(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa clear offline parked vehicle seed.");
+        return 0;
+    }
+
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE parked_vehicles SET enabled=0 WHERE source_tag='%e'", PARKED_VEHICLE_OFFLINE_SEED_TAG);
+    mysql_tquery(g_SQL, query, "OnParkedVehicleOfflineSeedClearedOnly", "i", playerid);
+    return 1;
+}
+
+public OnParkedVehicleOfflineSeedClearedOnly(playerid)
+{
+    LoadParkedVehicles();
+
+    if (IsPlayerConnected(playerid))
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "Offline parked vehicle seed berhasil dinonaktifkan.");
+        SendClientMessage(playerid, COLOR_WHITE, "Manual parked vehicle tidak ikut dinonaktifkan.");
+    }
+
+    return 1;
+}
+
+stock ShowOfflineParkedVehicleSeedInfo(playerid)
+{
+    new query[512];
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "SELECT COUNT(*) AS total_seed, SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END) AS active_seed, SUM(CASE WHEN enabled=0 THEN 1 ELSE 0 END) AS disabled_seed FROM parked_vehicles WHERE source_tag='%e'",
+        PARKED_VEHICLE_OFFLINE_SEED_TAG
+    );
+    mysql_tquery(g_SQL, query, "OnParkedVehicleOfflineSeedInfoLoaded", "i", playerid);
+    return 1;
+}
+
+public OnParkedVehicleOfflineSeedInfoLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new totalSeed = 0;
+    new activeSeed = 0;
+    new disabledSeed = 0;
+    new body[768];
+
+    if (cache_num_rows() > 0)
+    {
+        cache_get_value_name_int(0, "total_seed", totalSeed);
+        cache_get_value_name_int(0, "active_seed", activeSeed);
+        cache_get_value_name_int(0, "disabled_seed", disabledSeed);
+    }
+
+    format(
+        body,
+        sizeof(body),
+        "Source Tag: %s\n\nDB Total Seed Rows: %d\nActive Seed Rows: %d\nDisabled Seed Rows: %d\n\nTemplate v0.24A awal:\n- Taxi stand / bus terminal: 10\n- Gang/neighborhood cars: 10\n- Police / hospital / fire station: 10\n- Truck depot / industrial: 10\n- Beach / parking lots: 10\n\nCommands:\n/parkvehseed\n/parkvehclearseed\n/parkvehseedinfo",
+        PARKED_VEHICLE_OFFLINE_SEED_TAG,
+        totalSeed,
+        activeSeed,
+        disabledSeed
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_PARKVEH_SEED_INFO, DIALOG_STYLE_MSGBOX, "Offline Parked Vehicle Seed Info", body, "Back", "Close");
+    return 1;
+}
 
 stock ResetDynamicObjectArrays()
 {
@@ -26019,7 +26254,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.23F.3 Public Interior Checkpoint Interaction");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24A Offline Parked Vehicle Seeder");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -26028,6 +26263,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24A: Offline parked vehicle template seeder, /parkvehseed, /parkvehclearseed, /parkvehseedinfo.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.23F.3: Public interior checkpoint interaction, service point merah, exit fix.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23F.1: Public interior template fix, safer default coords, shared VW.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23B: Parked vehicle dialog menu dan interactive editor.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23E.1: Offline pickup template seeder, /wpickupseed, /wpickupclearseed, /wpickupseedinfo.");
@@ -26380,6 +26617,24 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/parkvehmenu", true) || !strcmp(cmdtext, "/parkvehedit", true))
     {
         ShowParkedVehicleMenu(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/parkvehseed", true))
+    {
+        SeedOfflineParkedVehicleTemplate(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/parkvehclearseed", true))
+    {
+        ClearOfflineParkedVehicleSeed(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/parkvehseedinfo", true))
+    {
+        ShowOfflineParkedVehicleSeedInfo(playerid);
         return 1;
     }
 

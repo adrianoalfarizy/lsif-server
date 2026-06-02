@@ -144,6 +144,9 @@
 #define DIALOG_PARKVEH_RESPAWN_INPUT 1124
 #define DIALOG_PARKVEH_LOCK_MENU 1125
 #define DIALOG_PARKVEH_DELETE_CONFIRM 1126
+#define DIALOG_OBJ_ROTATE_MENU 1127
+#define DIALOG_OBJ_ROT_Z_INPUT 1128
+#define DIALOG_OBJ_RENAME_INPUT 1129
 
 
 
@@ -9756,7 +9759,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.23B Parked Vehicle Editor");
+    SetGameModeText("SAIF Dev v0.23C Object Editor UI");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -9856,7 +9859,7 @@ public OnGameModeInit()
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.23B Parked Vehicle Editor berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.23C Object Editor UI berhasil dijalankan.");
     return 1;
 }
 
@@ -11154,7 +11157,6 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
     {
         if (!response)
         {
-            ShowDynamicObjectMenu(playerid);
             return 1;
         }
 
@@ -11166,32 +11168,110 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             return 1;
         }
 
-        new cmd[160];
         switch (listitem)
         {
             case 0: ShowDynamicObjectInfoDialog(playerid, objectId);
             case 1:
             {
-                format(cmd, sizeof(cmd), "/objmove %d", objectId);
-                OnPlayerCommandText(playerid, cmd);
+                GotoDynamicObject(playerid, objectId);
                 ShowDynamicObjectActionMenu(playerid, objectId);
             }
-            case 2: ShowDynamicObjectRotateInput(playerid, objectId);
-            case 3:
+            case 2:
             {
-                format(cmd, sizeof(cmd), "/objgoto %d", objectId);
-                OnPlayerCommandText(playerid, cmd);
+                MoveDynamicObjectToPlayer(playerid, objectId);
                 ShowDynamicObjectActionMenu(playerid, objectId);
             }
-            case 4: ShowDynamicObjectLinkTypeInput(playerid, objectId);
-            case 5: ShowDynamicObjectDeleteConfirm(playerid, objectId);
-            case 6: ShowDynamicObjectPurgeConfirm(playerid, objectId);
-            case 7:
+            case 3: ShowDynamicObjectRotateMenu(playerid, objectId);
+            case 4: ShowDynamicObjectRenameInput(playerid, objectId);
+            case 5: ShowDynamicObjectLinkTypeInput(playerid, objectId);
+            case 6: ShowDynamicObjectDeleteConfirm(playerid, objectId);
+            case 7: ShowDynamicObjectPurgeConfirm(playerid, objectId);
+            case 8:
             {
                 LoadDynamicObjects();
                 SendClientMessage(playerid, COLOR_GREEN, "Dynamic objects sedang direload dari database.");
             }
+            case 9: ShowDynamicObjectMenu(playerid);
         }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OBJ_ROTATE_MENU)
+    {
+        new objectId = PlayerEditingObjectID[playerid];
+        new idx = GetDynamicObjectIndexByDBID(objectId);
+
+        if (!response)
+        {
+            ShowDynamicObjectActionMenu(playerid, objectId);
+            return 1;
+        }
+
+        if (idx == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Dynamic object ID tidak ditemukan.");
+            ShowDynamicObjectMenu(playerid);
+            return 1;
+        }
+
+        new Float:newRZ = DynamicObjectRZ[idx];
+        switch (listitem)
+        {
+            case 0: GetPlayerFacingAngle(playerid, newRZ);
+            case 1: newRZ = DynamicObjectRZ[idx] + 5.0;
+            case 2: newRZ = DynamicObjectRZ[idx] - 5.0;
+            case 3: newRZ = DynamicObjectRZ[idx] + 15.0;
+            case 4: newRZ = DynamicObjectRZ[idx] - 15.0;
+            case 5: newRZ = DynamicObjectRZ[idx] + 45.0;
+            case 6: newRZ = DynamicObjectRZ[idx] - 45.0;
+            case 7:
+            {
+                ShowDynamicObjectRotateZInput(playerid, objectId);
+                return 1;
+            }
+            case 8:
+            {
+                ShowDynamicObjectRotateInput(playerid, objectId);
+                return 1;
+            }
+        }
+
+        UpdateDynamicObjectRotation(playerid, objectId, DynamicObjectRX[idx], DynamicObjectRY[idx], NormalizeDynamicObjectAngle(newRZ));
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OBJ_ROT_Z_INPUT)
+    {
+        if (!response)
+        {
+            ShowDynamicObjectRotateMenu(playerid, PlayerEditingObjectID[playerid]);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Angle Z harus angka 0 sampai 359.");
+            ShowDynamicObjectRotateZInput(playerid, PlayerEditingObjectID[playerid]);
+            return 1;
+        }
+
+        new angle = strval(inputtext);
+        if (angle < 0 || angle > 359)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Angle Z harus 0 sampai 359.");
+            ShowDynamicObjectRotateZInput(playerid, PlayerEditingObjectID[playerid]);
+            return 1;
+        }
+
+        new idx = GetDynamicObjectIndexByDBID(PlayerEditingObjectID[playerid]);
+        if (idx == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Dynamic object ID tidak ditemukan.");
+            ShowDynamicObjectMenu(playerid);
+            return 1;
+        }
+
+        UpdateDynamicObjectRotation(playerid, PlayerEditingObjectID[playerid], DynamicObjectRX[idx], DynamicObjectRY[idx], float(angle));
         return 1;
     }
 
@@ -11199,7 +11279,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
     {
         if (!response)
         {
-            ShowDynamicObjectActionMenu(playerid, PlayerEditingObjectID[playerid]);
+            ShowDynamicObjectRotateMenu(playerid, PlayerEditingObjectID[playerid]);
             return 1;
         }
 
@@ -11211,10 +11291,26 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             return 1;
         }
 
-        new cmd[160];
-        format(cmd, sizeof(cmd), "/objrot %d %s %s %s", PlayerEditingObjectID[playerid], rxStr, ryStr, rzStr);
-        OnPlayerCommandText(playerid, cmd);
-        ShowDynamicObjectActionMenu(playerid, PlayerEditingObjectID[playerid]);
+        UpdateDynamicObjectRotation(playerid, PlayerEditingObjectID[playerid], floatstr(rxStr), floatstr(ryStr), NormalizeDynamicObjectAngle(floatstr(rzStr)));
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OBJ_RENAME_INPUT)
+    {
+        if (!response)
+        {
+            ShowDynamicObjectActionMenu(playerid, PlayerEditingObjectID[playerid]);
+            return 1;
+        }
+
+        if (strlen(inputtext) < 2)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Nama object minimal 2 karakter.");
+            ShowDynamicObjectRenameInput(playerid, PlayerEditingObjectID[playerid]);
+            return 1;
+        }
+
+        UpdateDynamicObjectName(playerid, PlayerEditingObjectID[playerid], inputtext);
         return 1;
     }
 
@@ -14972,15 +15068,9 @@ stock ShowDynamicObjectMenu(playerid)
         return 0;
     }
 
-    ShowPlayerDialog(
-        playerid,
-        DIALOG_OBJ_MENU,
-        DIALOG_STYLE_LIST,
-        "Dynamic Object Editor",
-        "Create Object\nList / Select Object\nSelect Object by ID\nReload Objects\nCommand Help",
-        "Select",
-        "Close"
-    );
+    new body[512];
+    format(body, sizeof(body), "Create Object\nList / Select Object\nInput ID Manual\nReload Objects\nHelp");
+    ShowPlayerDialog(playerid, DIALOG_OBJ_MENU, DIALOG_STYLE_LIST, "Dynamic Object Editor", body, "Select", "Close");
     return 1;
 }
 
@@ -14991,7 +15081,7 @@ stock ShowDynamicObjectCreateInput(playerid)
         DIALOG_OBJ_CREATE_INPUT,
         DIALOG_STYLE_INPUT,
         "Create Dynamic Object",
-        "Masukkan model ID object.\n\nObject akan dibuat di posisi kamu sekarang dan tersimpan permanen ke database.\nContoh: 2942 untuk ATM object.",
+        "Masukkan model ID object.\n\nObject akan dibuat di posisi kamu sekarang dan tersimpan permanen ke database.\nContoh: 2942 untuk ATM object, 1239 untuk info icon/object kecil.",
         "Create",
         "Back"
     );
@@ -15000,24 +15090,24 @@ stock ShowDynamicObjectCreateInput(playerid)
 
 stock ShowDynamicObjectListDialog(playerid)
 {
-    new body[2048];
-    new line[160];
-
-    format(body, sizeof(body), "ID\tModel\tName\n");
+    new body[4096];
+    new line[192];
 
     if (DynamicObjectCount == 0)
     {
-        ShowPlayerDialog(playerid, DIALOG_OBJ_LIST, DIALOG_STYLE_MSGBOX, "Dynamic Objects", "Belum ada dynamic object aktif.", "Back", "Close");
+        ShowPlayerDialog(playerid, DIALOG_OBJ_INFO, DIALOG_STYLE_MSGBOX, "Dynamic Objects", "Belum ada dynamic object aktif.", "Back", "Close");
         return 1;
     }
 
+    format(body, sizeof(body), "ID\tModel\tVW\tName\n");
+
     for (new i = 0; i < DynamicObjectCount; i++)
     {
-        format(line, sizeof(line), "%d\t%d\t%s\n", DynamicObjectDBID[i], DynamicObjectModel[i], DynamicObjectName[i]);
+        format(line, sizeof(line), "%d\t%d\t%d\t%s\n", DynamicObjectDBID[i], DynamicObjectModel[i], DynamicObjectVirtualWorld[i], DynamicObjectName[i]);
         strcat(body, line, sizeof(body));
     }
 
-    ShowPlayerDialog(playerid, DIALOG_OBJ_LIST, DIALOG_STYLE_TABLIST_HEADERS, "Dynamic Objects", body, "Select", "Back");
+    ShowPlayerDialog(playerid, DIALOG_OBJ_LIST, DIALOG_STYLE_TABLIST_HEADERS, "Select Dynamic Object", body, "Select", "Back");
     return 1;
 }
 
@@ -15028,7 +15118,7 @@ stock ShowDynamicObjectSelectInput(playerid)
         DIALOG_OBJ_SELECT_INPUT,
         DIALOG_STYLE_INPUT,
         "Select Dynamic Object",
-        "Masukkan ID object yang ingin diedit.\n\nTip: gunakan /objlist atau menu List Objects untuk melihat ID.",
+        "Masukkan ID object yang ingin diedit.\n\nGunakan /objlist atau menu List untuk melihat ID aktif.",
         "Select",
         "Back"
     );
@@ -15050,14 +15140,10 @@ stock ShowDynamicObjectActionMenu(playerid, objectId)
     new title[96];
     new body[512];
 
-    format(title, sizeof(title), "Object Editor: ID %d", objectId);
-    format(
-        body,
-        sizeof(body),
-        "Object Info\nMove to My Position\nRotate Object\nGoto Object\nLink to Location\nDelete Object Only\nPurge Object + Location\nReload Objects"
-    );
+    format(title, sizeof(title), "Object ID %d", objectId);
+    format(body, sizeof(body), "Info\nGoto\nMove to My Position\nRotate Editor\nRename Object\nLink to Location\nDelete Object Only\nPurge Object + Location\nReload All\nBack");
 
-    ShowPlayerDialog(playerid, DIALOG_OBJ_ACTION_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Back");
+    ShowPlayerDialog(playerid, DIALOG_OBJ_ACTION_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Close");
     return 1;
 }
 
@@ -15077,22 +15163,50 @@ stock ShowDynamicObjectInfoDialog(playerid, objectId)
     format(
         body,
         sizeof(body),
-        "ID: %d\nModel: %d\nName: %s\n\nPos: %.2f, %.2f, %.2f\nRot: %.2f, %.2f, %.2f\nInterior: %d\nVirtual World: %d\nEnabled: %d\n\nGunakan menu aksi untuk move, rotate, link, delete, atau purge.",
+        "ID: %d\nRuntime: %d\nModel: %d\nName: %s\nInterior: %d\nVirtual World: %d\nPosition: %.2f %.2f %.2f\nRotation: %.2f %.2f %.2f\nEnabled: %d",
         DynamicObjectDBID[idx],
+        DynamicObjectObjectID[idx],
         DynamicObjectModel[idx],
         DynamicObjectName[idx],
+        DynamicObjectInterior[idx],
+        DynamicObjectVirtualWorld[idx],
         DynamicObjectX[idx],
         DynamicObjectY[idx],
         DynamicObjectZ[idx],
         DynamicObjectRX[idx],
         DynamicObjectRY[idx],
         DynamicObjectRZ[idx],
-        DynamicObjectInterior[idx],
-        DynamicObjectVirtualWorld[idx],
         DynamicObjectEnabled[idx]
     );
 
     ShowPlayerDialog(playerid, DIALOG_OBJ_INFO, DIALOG_STYLE_MSGBOX, "Dynamic Object Info", body, "Back", "Close");
+    return 1;
+}
+
+stock ShowDynamicObjectRotateMenu(playerid, objectId)
+{
+    new idx = GetDynamicObjectIndexByDBID(objectId);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic object ID tidak ditemukan.");
+        ShowDynamicObjectMenu(playerid);
+        return 0;
+    }
+
+    PlayerEditingObjectID[playerid] = objectId;
+
+    new title[96];
+    new body[512];
+    format(title, sizeof(title), "Rotate Object ID %d", objectId);
+    format(body, sizeof(body), "Set RZ From My Facing\nRZ +5\nRZ -5\nRZ +15\nRZ -15\nRZ +45\nRZ -45\nInput RZ Manual\nInput Full Rotation RX RY RZ");
+    ShowPlayerDialog(playerid, DIALOG_OBJ_ROTATE_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Back");
+    return 1;
+}
+
+stock ShowDynamicObjectRotateZInput(playerid, objectId)
+{
+    PlayerEditingObjectID[playerid] = objectId;
+    ShowPlayerDialog(playerid, DIALOG_OBJ_ROT_Z_INPUT, DIALOG_STYLE_INPUT, "Set Object RZ Angle", "Masukkan angle Z 0 sampai 359.\nContoh: 90", "Set", "Back");
     return 1;
 }
 
@@ -15118,7 +15232,25 @@ stock ShowDynamicObjectRotateInput(playerid, objectId)
         DynamicObjectRZ[idx]
     );
 
-    ShowPlayerDialog(playerid, DIALOG_OBJ_ROT_INPUT, DIALOG_STYLE_INPUT, "Rotate Dynamic Object", body, "Apply", "Back");
+    ShowPlayerDialog(playerid, DIALOG_OBJ_ROT_INPUT, DIALOG_STYLE_INPUT, "Full Object Rotation", body, "Apply", "Back");
+    return 1;
+}
+
+stock ShowDynamicObjectRenameInput(playerid, objectId)
+{
+    new idx = GetDynamicObjectIndexByDBID(objectId);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic object ID tidak ditemukan.");
+        ShowDynamicObjectMenu(playerid);
+        return 0;
+    }
+
+    PlayerEditingObjectID[playerid] = objectId;
+
+    new body[256];
+    format(body, sizeof(body), "Nama sekarang: %s\n\nMasukkan nama object baru.", DynamicObjectName[idx]);
+    ShowPlayerDialog(playerid, DIALOG_OBJ_RENAME_INPUT, DIALOG_STYLE_INPUT, "Rename Dynamic Object", body, "Save", "Back");
     return 1;
 }
 
@@ -15214,15 +15346,131 @@ stock ShowDynamicObjectPurgeConfirm(playerid, objectId)
     return 1;
 }
 
+stock Float:NormalizeDynamicObjectAngle(Float:angle)
+{
+    while (angle < 0.0)
+    {
+        angle += 360.0;
+    }
+
+    while (angle >= 360.0)
+    {
+        angle -= 360.0;
+    }
+
+    return float(floatround(angle));
+}
+
+stock UpdateDynamicObjectRotation(playerid, dbid, Float:rx, Float:ry, Float:rz)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa rotate dynamic object.");
+        return 0;
+    }
+
+    if (GetDynamicObjectIndexByDBID(dbid) == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic object ID tidak ditemukan.");
+        ShowDynamicObjectMenu(playerid);
+        return 0;
+    }
+
+    new query[512];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE world_objects SET rot_x=%f, rot_y=%f, rot_z=%f WHERE id=%d LIMIT 1", rx, ry, rz, dbid);
+    mysql_tquery(g_SQL, query, "OnDynamicObjectUpdated", "i", playerid);
+
+    new locQuery[256];
+    mysql_format(g_SQL, locQuery, sizeof(locQuery), "UPDATE world_locations SET pos_a=%f WHERE linked_object_id=%d", rz, dbid);
+    mysql_tquery(g_SQL, locQuery);
+    return 1;
+}
+
+stock MoveDynamicObjectToPlayer(playerid, dbid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa memindahkan dynamic object.");
+        return 0;
+    }
+
+    new idx = GetDynamicObjectIndexByDBID(dbid);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic object ID tidak ditemukan.");
+        ShowDynamicObjectMenu(playerid);
+        return 0;
+    }
+
+    new Float:x, Float:y, Float:z;
+    new query[512];
+    GetPlayerPos(playerid, x, y, z);
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "UPDATE world_objects SET pos_x=%f, pos_y=%f, pos_z=%f, interior=%d, virtual_world=%d WHERE id=%d LIMIT 1",
+        x,
+        y,
+        z,
+        GetPlayerInterior(playerid),
+        GetPlayerVirtualWorld(playerid),
+        dbid
+    );
+    mysql_tquery(g_SQL, query, "OnDynamicObjectUpdated", "i", playerid);
+    SyncLinkedLocationsForObject(dbid, x, y, z, DynamicObjectRZ[idx], GetPlayerInterior(playerid), GetPlayerVirtualWorld(playerid));
+    return 1;
+}
+
+stock GotoDynamicObject(playerid, dbid)
+{
+    new idx = GetDynamicObjectIndexByDBID(dbid);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic object ID tidak ditemukan.");
+        ShowDynamicObjectMenu(playerid);
+        return 0;
+    }
+
+    SetPlayerInterior(playerid, DynamicObjectInterior[idx]);
+    SetPlayerVirtualWorld(playerid, DynamicObjectVirtualWorld[idx]);
+    SetPlayerPos(playerid, DynamicObjectX[idx] + 1.0, DynamicObjectY[idx], DynamicObjectZ[idx] + 1.0);
+    SendClientMessage(playerid, COLOR_GREEN, "Teleport ke dynamic object berhasil.");
+    return 1;
+}
+
+stock UpdateDynamicObjectName(playerid, dbid, const newName[])
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa rename dynamic object.");
+        return 0;
+    }
+
+    if (GetDynamicObjectIndexByDBID(dbid) == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic object ID tidak ditemukan.");
+        ShowDynamicObjectMenu(playerid);
+        return 0;
+    }
+
+    new query[384];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE world_objects SET object_name='%e' WHERE id=%d LIMIT 1", newName, dbid);
+    mysql_tquery(g_SQL, query, "OnDynamicObjectUpdated", "i", playerid);
+    return 1;
+}
+
 stock ShowDynamicObjectHelp(playerid)
 {
     SendClientMessage(playerid, COLOR_YELLOW, "========== DYNAMIC OBJECT EDITOR ==========");
-    SendClientMessage(playerid, COLOR_WHITE, "/objmenu - Dialog editor object lengkap");
+    SendClientMessage(playerid, COLOR_WHITE, "/objmenu atau /objedit - Dialog editor object lengkap");
     SendClientMessage(playerid, COLOR_WHITE, "/objcreate [modelid] - Buat object permanen di posisi admin");
     SendClientMessage(playerid, COLOR_WHITE, "/objlist - Lihat object aktif");
     SendClientMessage(playerid, COLOR_WHITE, "/objinfo [id] - Detail object");
     SendClientMessage(playerid, COLOR_WHITE, "/objmove [id] - Pindah object ke posisi admin");
     SendClientMessage(playerid, COLOR_WHITE, "/objrot [id] [rx] [ry] [rz] - Ubah rotasi object");
+    SendClientMessage(playerid, COLOR_WHITE, "/objrename [id] [name] - Rename object");
     SendClientMessage(playerid, COLOR_WHITE, "/objgoto [id] - Teleport ke object");
     SendClientMessage(playerid, COLOR_WHITE, "/objdelete [id] - Hapus object saja, linked location tetap ada");
     SendClientMessage(playerid, COLOR_WHITE, "/objpurge [id] - Hapus object + semua linked location/ALT/label");
@@ -20712,7 +20960,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
                     );
         return 1;
     }
-    if (!strcmp(cmdtext, "/objmenu", true))
+    if (!strcmp(cmdtext, "/objmenu", true) || !strcmp(cmdtext, "/objedit", true) || !strcmp(cmdtext, "/objectmenu", true))
     {
         ShowDynamicObjectMenu(playerid);
         return 1;
@@ -20837,29 +21085,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
             return 1;
         }
 
-        new dbid = strval(idStr);
-        if (GetDynamicObjectIndexByDBID(dbid) == -1)
-        {
-            SendClientMessage(playerid, COLOR_RED, "Dynamic object ID tidak ditemukan.");
-            return 1;
-        }
-
-        new query[512];
-        mysql_format(
-            g_SQL,
-            query,
-            sizeof(query),
-            "UPDATE world_objects SET rot_x=%f, rot_y=%f, rot_z=%f WHERE id=%d LIMIT 1",
-            floatstr(rxStr),
-            floatstr(ryStr),
-            floatstr(rzStr),
-            dbid
-        );
-        mysql_tquery(g_SQL, query, "OnDynamicObjectUpdated", "i", playerid);
-
-        new locQuery[256];
-        mysql_format(g_SQL, locQuery, sizeof(locQuery), "UPDATE world_locations SET pos_a=%f WHERE linked_object_id=%d", floatstr(rzStr), dbid);
-        mysql_tquery(g_SQL, locQuery);
+        UpdateDynamicObjectRotation(playerid, strval(idStr), floatstr(rxStr), floatstr(ryStr), NormalizeDynamicObjectAngle(floatstr(rzStr)));
         return 1;
     }
 
@@ -20877,17 +21103,32 @@ public OnPlayerCommandText(playerid, cmdtext[])
             return 1;
         }
 
-        new idx = GetDynamicObjectIndexByDBID(strval(idStr));
-        if (idx == -1)
+        GotoDynamicObject(playerid, strval(idStr));
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/objrename ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
         {
-            SendClientMessage(playerid, COLOR_RED, "Dynamic object ID tidak ditemukan.");
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa rename dynamic object.");
             return 1;
         }
 
-        SetPlayerInterior(playerid, DynamicObjectInterior[idx]);
-        SetPlayerVirtualWorld(playerid, DynamicObjectVirtualWorld[idx]);
-        SetPlayerPos(playerid, DynamicObjectX[idx] + 1.0, DynamicObjectY[idx], DynamicObjectZ[idx] + 1.0);
-        SendClientMessage(playerid, COLOR_GREEN, "Teleport ke dynamic object berhasil.");
+        new idStr[16], nameStr[DYN_OBJECT_NAME_SIZE];
+        if (!GetTwoParams(cmdtext[11], idStr, sizeof(idStr), nameStr, sizeof(nameStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /objrename [id] [name]");
+            SendClientMessage(playerid, COLOR_WHITE, "Catatan: untuk nama dengan spasi, gunakan dialog Rename Object di /objmenu.");
+            return 1;
+        }
+        if (!IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Object ID harus angka.");
+            return 1;
+        }
+
+        UpdateDynamicObjectName(playerid, strval(idStr), nameStr);
         return 1;
     }
 
@@ -21899,7 +22140,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.23B Parked Vehicle Dialog & Editor");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.23C Dynamic Object Dialog & Editor");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -21909,6 +22150,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23B: Parked vehicle dialog menu dan interactive editor.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.23C: Dynamic object dialog editor disamakan dengan parked vehicle editor.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23A.1: Parked vehicle engine default ON setelah create/reload.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22F.2: Gang HQ interior exit fix dan visitor access.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A.3: Runtime turf war config untuk balancing/testing.");

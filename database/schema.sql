@@ -677,3 +677,61 @@ VALUES
 ON DUPLICATE KEY UPDATE
     gang_name = VALUES(gang_name),
     updated_at = NOW();
+
+
+-- SAIF / LSIF Dev v0.23A — Dynamic Parked Vehicle System
+
+CREATE TABLE IF NOT EXISTS parked_vehicles (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    modelid INT NOT NULL,
+    color1 INT NOT NULL DEFAULT 1,
+    color2 INT NOT NULL DEFAULT 1,
+    pos_x FLOAT NOT NULL,
+    pos_y FLOAT NOT NULL,
+    pos_z FLOAT NOT NULL,
+    pos_a FLOAT NOT NULL DEFAULT 0,
+    interior INT NOT NULL DEFAULT 0,
+    virtual_world INT NOT NULL DEFAULT 0,
+    respawn_delay INT NOT NULL DEFAULT 300,
+    locked TINYINT NOT NULL DEFAULT 0,
+    enabled TINYINT NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_parked_enabled (enabled),
+    INDEX idx_parked_model (modelid)
+);
+
+-- SAIF / LSIF Dev v0.23E — Offline Pickup System
+-- Jalankan sekali, atau masukkan ke database/schema.sql.
+
+CREATE TABLE IF NOT EXISTS world_pickups (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    pickup_type VARCHAR(32) NOT NULL,
+    display_name VARCHAR(64) NOT NULL DEFAULT '',
+    model_id INT NOT NULL DEFAULT 1239,
+    pos_x FLOAT NOT NULL DEFAULT 0,
+    pos_y FLOAT NOT NULL DEFAULT 0,
+    pos_z FLOAT NOT NULL DEFAULT 0,
+    interior INT NOT NULL DEFAULT 0,
+    virtual_world INT NOT NULL DEFAULT 0,
+    amount INT NOT NULL DEFAULT 1,
+    cooldown_seconds INT NOT NULL DEFAULT 60,
+    source_tag VARCHAR(64) NOT NULL DEFAULT 'manual',
+    enabled TINYINT(1) NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_world_pickups_enabled (enabled),
+    INDEX idx_world_pickups_type (pickup_type),
+    INDEX idx_world_pickups_source (source_tag)
+);
+
+-- Type yang dipakai v0.23E:
+-- bribe  = police bribe / wanted-star pickup, default model 1247, amount = wanted level reduction
+-- health = health pickup, default model 1240, amount = health add
+-- armor  = armor pickup, default model 1242, amount = armor add
+-- hidden = hidden/world pickup, default model 1274, amount = cash reward
+
+-- Catatan roadmap:
+-- source_tag disiapkan untuk bulk seed/importer offline-like nanti.
+-- Contoh source_tag: 'manual', 'offline_ls_bribe_seed', 'offline_health_seed', 'offline_hidden_seed'.
+

@@ -159,6 +159,18 @@
 #define DIALOG_LOC_INTERIOR_INPUT 1139
 #define DIALOG_LOC_ENABLE_MENU 1140
 #define DIALOG_LOC_DELETE_CONFIRM 1141
+#define DIALOG_WPICKUP_MENU 1142
+#define DIALOG_WPICKUP_CREATE_TYPE 1143
+#define DIALOG_WPICKUP_LIST 1144
+#define DIALOG_WPICKUP_SELECT_INPUT 1145
+#define DIALOG_WPICKUP_ACTION_MENU 1146
+#define DIALOG_WPICKUP_INFO 1147
+#define DIALOG_WPICKUP_TYPE_INPUT 1148
+#define DIALOG_WPICKUP_MODEL_INPUT 1149
+#define DIALOG_WPICKUP_AMOUNT_INPUT 1150
+#define DIALOG_WPICKUP_COOLDOWN_INPUT 1151
+#define DIALOG_WPICKUP_ENABLE_MENU 1152
+#define DIALOG_WPICKUP_DELETE_CONFIRM 1153
 
 
 
@@ -441,6 +453,14 @@
 #define PARKED_VEHICLE_DEFAULT_COLOR1 1
 #define PARKED_VEHICLE_DEFAULT_COLOR2 1
 #define PARKED_VEHICLE_LABEL_DRAW_DISTANCE 18.0
+
+#define MAX_WORLD_PICKUPS 300
+#define WORLD_PICKUP_TYPE_BRIBE 1
+#define WORLD_PICKUP_TYPE_HEALTH 2
+#define WORLD_PICKUP_TYPE_ARMOR 3
+#define WORLD_PICKUP_TYPE_HIDDEN 4
+#define WORLD_PICKUP_DEFAULT_COOLDOWN 60
+#define WORLD_PICKUP_LABEL_DRAW_DISTANCE 18.0
 #define DYN_OBJECT_NAME_SIZE 64
 #define MAPICON_BASE_DYNAMIC 80
 #define LOC_TYPE_SIZE 24
@@ -1264,6 +1284,22 @@ new Float:ParkedVehicleZ[MAX_PARKED_VEHICLES];
 new Float:ParkedVehicleA[MAX_PARKED_VEHICLES];
 new Text3D:ParkedVehicleLabel[MAX_PARKED_VEHICLES];
 
+new WorldPickupCount;
+new WorldPickupDBID[MAX_WORLD_PICKUPS];
+new WorldPickupEnabled[MAX_WORLD_PICKUPS];
+new WorldPickupRuntimeID[MAX_WORLD_PICKUPS];
+new WorldPickupModel[MAX_WORLD_PICKUPS];
+new WorldPickupType[MAX_WORLD_PICKUPS];
+new WorldPickupAmount[MAX_WORLD_PICKUPS];
+new WorldPickupCooldown[MAX_WORLD_PICKUPS];
+new WorldPickupInterior[MAX_WORLD_PICKUPS];
+new WorldPickupVirtualWorld[MAX_WORLD_PICKUPS];
+new Float:WorldPickupX[MAX_WORLD_PICKUPS];
+new Float:WorldPickupY[MAX_WORLD_PICKUPS];
+new Float:WorldPickupZ[MAX_WORLD_PICKUPS];
+new WorldPickupName[MAX_WORLD_PICKUPS][64];
+new Text3D:WorldPickupLabel[MAX_WORLD_PICKUPS];
+
 
 
 new PlayerPendingLocCreateType[MAX_PLAYERS][LOC_TYPE_SIZE];
@@ -1279,6 +1315,7 @@ new PlayerPendingObjLocInterior[MAX_PLAYERS];
 new PlayerPendingObjLocVirtualWorld[MAX_PLAYERS];
 new PlayerEditingObjectID[MAX_PLAYERS];
 new PlayerEditingParkedVehicleID[MAX_PLAYERS];
+new PlayerEditingWorldPickupID[MAX_PLAYERS];
 new PlayerPendingObjectLinkType[MAX_PLAYERS][LOC_TYPE_SIZE];
 new PlayerPendingObjectLinkName[MAX_PLAYERS][LOC_NAME_SIZE];
 
@@ -1838,6 +1875,11 @@ forward OnParkedVehiclesLoaded();
 forward OnParkedVehicleCreated(playerid);
 forward OnParkedVehicleUpdated(playerid);
 forward OnParkedVehicleDeleted(playerid);
+forward OnWorldPickupsLoaded();
+forward OnWorldPickupCreated(playerid);
+forward OnWorldPickupUpdated(playerid);
+forward OnWorldPickupDeleted(playerid);
+forward RespawnWorldPickupByDBID(dbid);
 forward ReloadDynamicLocationsDelayed(playerid);
 
 
@@ -7356,25 +7398,25 @@ stock CreateGangHQInteriorRuntime(gangIndex)
     new labelText[144];
 
     GangHQInteriorExitPickup[gangIndex] = CreatePickup(
-            GANG_HQ_INTERIOR_PICKUP_MODEL,
-            GANG_HQ_INTERIOR_PICKUP_TYPE,
-            GangHQInteriorX[gangIndex],
-            exitPickupY,
-            GangHQInteriorZ[gangIndex],
-            GangHQInteriorVirtualWorld[gangIndex]
-                                          );
+        GANG_HQ_INTERIOR_PICKUP_MODEL,
+        GANG_HQ_INTERIOR_PICKUP_TYPE,
+        GangHQInteriorX[gangIndex],
+        exitPickupY,
+        GangHQInteriorZ[gangIndex],
+        GangHQInteriorVirtualWorld[gangIndex]
+    );
 
     format(labelText, sizeof(labelText), "[EXIT] %s HQ\nPanah = Exit HQ\nALT = Stash / Gang Utility", PresetGangShortName[gangIndex]);
     GangHQInteriorExitLabel[gangIndex] = Create3DTextLabel(
-            labelText,
-            PresetGangColor[gangIndex],
-            GangHQInteriorX[gangIndex],
-            exitPickupY,
-            GangHQInteriorZ[gangIndex] + 0.8,
-            16.0,
-            GangHQInteriorVirtualWorld[gangIndex],
-            true
-                                         );
+        labelText,
+        PresetGangColor[gangIndex],
+        GangHQInteriorX[gangIndex],
+        exitPickupY,
+        GangHQInteriorZ[gangIndex] + 0.8,
+        16.0,
+        GangHQInteriorVirtualWorld[gangIndex],
+        true
+    );
 
     return 1;
 }
@@ -9772,7 +9814,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.23D.1 Location Compile Fix");
+    SetGameModeText("SAIF Dev v0.23E Offline Pickup System");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -9811,6 +9853,7 @@ public OnGameModeInit()
     LoadDynamicLocations();
     LoadDynamicObjects();
     LoadParkedVehicles();
+    LoadWorldPickups();
 
     for (new i = 0; i < MAX_PLAYERS; i++)
     {
@@ -9872,7 +9915,7 @@ public OnGameModeInit()
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.23D.1 Location Compile Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.23E Offline Pickup System berhasil dijalankan.");
     return 1;
 }
 
@@ -9906,6 +9949,7 @@ public OnGameModeExit()
     }
 
     DestroyAllParkedVehicleRuntime();
+    DestroyAllWorldPickupsRuntime();
     DestroyDynamicWorldObjects();
     DestroyWorldInteractionMarkers();
 
@@ -9928,6 +9972,7 @@ public OnGameModeExit()
 public OnPlayerConnect(playerid)
 {
     ResetPlayerAccountData(playerid);
+    PlayerEditingWorldPickupID[playerid] = 0;
     CreatePlayerTurfHud(playerid);
 
     // Sembunyikan class selection/pilih skin sebelum login.
@@ -11803,6 +11848,250 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         {
             ShowDynamicLocationEditorMenu(playerid);
         }
+        return 1;
+    }
+
+
+    if (dialogid == DIALOG_WPICKUP_MENU)
+    {
+        if (!response) return 1;
+
+        switch (listitem)
+        {
+            case 0: ShowWorldPickupCreateTypeInput(playerid);
+            case 1: ShowWorldPickupListDialog(playerid);
+            case 2: ShowWorldPickupSelectInput(playerid);
+            case 3:
+            {
+                LoadWorldPickups();
+                SendClientMessage(playerid, COLOR_GREEN, "World pickups direload dari database.");
+            }
+            case 4: ShowWorldPickupHelp(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_WPICKUP_CREATE_TYPE)
+    {
+        if (!response)
+        {
+            ShowWorldPickupMenu(playerid);
+            return 1;
+        }
+
+        new type = GetWorldPickupTypeFromString(inputtext);
+        if (type <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Type tidak valid. Gunakan: bribe, health, armor, hidden.");
+            ShowWorldPickupCreateTypeInput(playerid);
+            return 1;
+        }
+
+        CreateWorldPickupAtPlayer(playerid, type);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_WPICKUP_SELECT_INPUT)
+    {
+        if (!response)
+        {
+            ShowWorldPickupMenu(playerid);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "World pickup ID harus angka.");
+            ShowWorldPickupSelectInput(playerid);
+            return 1;
+        }
+
+        new dbid = strval(inputtext);
+        if (!IsValidWorldPickupDBID(dbid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "World pickup ID tidak ditemukan.");
+            ShowWorldPickupSelectInput(playerid);
+            return 1;
+        }
+
+        ShowWorldPickupActionMenu(playerid, dbid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_WPICKUP_LIST)
+    {
+        if (!response)
+        {
+            ShowWorldPickupMenu(playerid);
+            return 1;
+        }
+
+        if (listitem < 0 || listitem >= WorldPickupCount)
+        {
+            ShowWorldPickupMenu(playerid);
+            return 1;
+        }
+
+        ShowWorldPickupActionMenu(playerid, WorldPickupDBID[listitem]);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_WPICKUP_INFO)
+    {
+        if (response)
+        {
+            ShowWorldPickupActionMenu(playerid, PlayerEditingWorldPickupID[playerid]);
+        }
+        else
+        {
+            ShowWorldPickupMenu(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_WPICKUP_ACTION_MENU)
+    {
+        if (!response)
+        {
+            ShowWorldPickupListDialog(playerid);
+            return 1;
+        }
+
+        new dbid = PlayerEditingWorldPickupID[playerid];
+        if (!IsValidWorldPickupDBID(dbid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "World pickup ID tidak ditemukan.");
+            ShowWorldPickupMenu(playerid);
+            return 1;
+        }
+
+        switch (listitem)
+        {
+            case 0: ShowWorldPickupInfoDialog(playerid, dbid);
+            case 1:
+            {
+                GotoWorldPickup(playerid, dbid);
+                ShowWorldPickupActionMenu(playerid, dbid);
+            }
+            case 2:
+            {
+                MoveWorldPickupToPlayer(playerid, dbid);
+                ShowWorldPickupActionMenu(playerid, dbid);
+            }
+            case 3: ShowWorldPickupTypeInput(playerid, dbid);
+            case 4: ShowWorldPickupModelInput(playerid, dbid);
+            case 5: ShowWorldPickupAmountInput(playerid, dbid);
+            case 6: ShowWorldPickupCooldownInput(playerid, dbid);
+            case 7: ShowWorldPickupEnableMenu(playerid, dbid);
+            case 8: ShowWorldPickupDeleteConfirm(playerid, dbid);
+            case 9:
+            {
+                LoadWorldPickups();
+                SendClientMessage(playerid, COLOR_GREEN, "World pickups direload dari database.");
+            }
+            case 10: ShowWorldPickupMenu(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_WPICKUP_TYPE_INPUT)
+    {
+        if (!response)
+        {
+            ShowWorldPickupActionMenu(playerid, PlayerEditingWorldPickupID[playerid]);
+            return 1;
+        }
+
+        new type = GetWorldPickupTypeFromString(inputtext);
+        if (type <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Type tidak valid. Gunakan: bribe, health, armor, hidden.");
+            ShowWorldPickupTypeInput(playerid, PlayerEditingWorldPickupID[playerid]);
+            return 1;
+        }
+
+        UpdateWorldPickupType(playerid, PlayerEditingWorldPickupID[playerid], type);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_WPICKUP_MODEL_INPUT)
+    {
+        if (!response)
+        {
+            ShowWorldPickupActionMenu(playerid, PlayerEditingWorldPickupID[playerid]);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Model pickup harus angka.");
+            ShowWorldPickupModelInput(playerid, PlayerEditingWorldPickupID[playerid]);
+            return 1;
+        }
+
+        UpdateWorldPickupModel(playerid, PlayerEditingWorldPickupID[playerid], strval(inputtext));
+        return 1;
+    }
+
+    if (dialogid == DIALOG_WPICKUP_AMOUNT_INPUT)
+    {
+        if (!response)
+        {
+            ShowWorldPickupActionMenu(playerid, PlayerEditingWorldPickupID[playerid]);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Amount harus angka.");
+            ShowWorldPickupAmountInput(playerid, PlayerEditingWorldPickupID[playerid]);
+            return 1;
+        }
+
+        UpdateWorldPickupAmount(playerid, PlayerEditingWorldPickupID[playerid], strval(inputtext));
+        return 1;
+    }
+
+    if (dialogid == DIALOG_WPICKUP_COOLDOWN_INPUT)
+    {
+        if (!response)
+        {
+            ShowWorldPickupActionMenu(playerid, PlayerEditingWorldPickupID[playerid]);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Cooldown harus angka.");
+            ShowWorldPickupCooldownInput(playerid, PlayerEditingWorldPickupID[playerid]);
+            return 1;
+        }
+
+        UpdateWorldPickupCooldown(playerid, PlayerEditingWorldPickupID[playerid], strval(inputtext));
+        return 1;
+    }
+
+    if (dialogid == DIALOG_WPICKUP_ENABLE_MENU)
+    {
+        if (!response)
+        {
+            ShowWorldPickupActionMenu(playerid, PlayerEditingWorldPickupID[playerid]);
+            return 1;
+        }
+
+        UpdateWorldPickupEnabled(playerid, PlayerEditingWorldPickupID[playerid], listitem == 0 ? 1 : 0);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_WPICKUP_DELETE_CONFIRM)
+    {
+        if (!response)
+        {
+            ShowWorldPickupActionMenu(playerid, PlayerEditingWorldPickupID[playerid]);
+            return 1;
+        }
+
+        DeleteWorldPickup(playerid, PlayerEditingWorldPickupID[playerid]);
         return 1;
     }
 
@@ -14490,6 +14779,785 @@ stock GetFourParams(const input[], p1[], s1, p2[], s2, p3[], s3, p4[], s4)
 }
 
 
+stock ResetWorldPickupArrays()
+{
+    WorldPickupCount = 0;
+
+    for (new i = 0; i < MAX_WORLD_PICKUPS; i++)
+    {
+        WorldPickupDBID[i] = 0;
+        WorldPickupEnabled[i] = 0;
+        WorldPickupRuntimeID[i] = -1;
+        WorldPickupModel[i] = 0;
+        WorldPickupType[i] = 0;
+        WorldPickupAmount[i] = 0;
+        WorldPickupCooldown[i] = WORLD_PICKUP_DEFAULT_COOLDOWN;
+        WorldPickupInterior[i] = 0;
+        WorldPickupVirtualWorld[i] = 0;
+        WorldPickupX[i] = 0.0;
+        WorldPickupY[i] = 0.0;
+        WorldPickupZ[i] = 0.0;
+        WorldPickupName[i][0] = EOS;
+        WorldPickupLabel[i] = Text3D:INVALID_3DTEXT_ID;
+    }
+
+    return 1;
+}
+
+stock GetWorldPickupTypeFromString(const typeText[])
+{
+    if (!strcmp(typeText, "bribe", true) || !strcmp(typeText, "wanted", true) || !strcmp(typeText, "wanted_star", true) || !strcmp(typeText, "police_bribe", true)) return WORLD_PICKUP_TYPE_BRIBE;
+    if (!strcmp(typeText, "health", true) || !strcmp(typeText, "hp", true)) return WORLD_PICKUP_TYPE_HEALTH;
+    if (!strcmp(typeText, "armor", true) || !strcmp(typeText, "armour", true) || !strcmp(typeText, "vest", true)) return WORLD_PICKUP_TYPE_ARMOR;
+    if (!strcmp(typeText, "hidden", true) || !strcmp(typeText, "world", true) || !strcmp(typeText, "money", true) || !strcmp(typeText, "reward", true)) return WORLD_PICKUP_TYPE_HIDDEN;
+    return 0;
+}
+
+stock GetWorldPickupTypeName(type, dest[], len)
+{
+    switch (type)
+    {
+        case WORLD_PICKUP_TYPE_BRIBE: format(dest, len, "bribe");
+        case WORLD_PICKUP_TYPE_HEALTH: format(dest, len, "health");
+        case WORLD_PICKUP_TYPE_ARMOR: format(dest, len, "armor");
+        case WORLD_PICKUP_TYPE_HIDDEN: format(dest, len, "hidden");
+        default: format(dest, len, "unknown");
+    }
+    return 1;
+}
+
+stock GetWorldPickupDisplayName(type, dest[], len)
+{
+    switch (type)
+    {
+        case WORLD_PICKUP_TYPE_BRIBE: format(dest, len, "Police Bribe / Wanted Star");
+        case WORLD_PICKUP_TYPE_HEALTH: format(dest, len, "Health Pickup");
+        case WORLD_PICKUP_TYPE_ARMOR: format(dest, len, "Armor Pickup");
+        case WORLD_PICKUP_TYPE_HIDDEN: format(dest, len, "Hidden World Pickup");
+        default: format(dest, len, "World Pickup");
+    }
+    return 1;
+}
+
+stock GetWorldPickupDefaultModel(type)
+{
+    switch (type)
+    {
+        case WORLD_PICKUP_TYPE_BRIBE: return 1247;
+        case WORLD_PICKUP_TYPE_HEALTH: return 1240;
+        case WORLD_PICKUP_TYPE_ARMOR: return 1242;
+        case WORLD_PICKUP_TYPE_HIDDEN: return 1274;
+    }
+    return 1239;
+}
+
+stock GetWorldPickupDefaultAmount(type)
+{
+    switch (type)
+    {
+        case WORLD_PICKUP_TYPE_BRIBE: return 1;
+        case WORLD_PICKUP_TYPE_HEALTH: return 35;
+        case WORLD_PICKUP_TYPE_ARMOR: return 50;
+        case WORLD_PICKUP_TYPE_HIDDEN: return 500;
+    }
+    return 1;
+}
+
+stock GetWorldPickupColor(type)
+{
+    switch (type)
+    {
+        case WORLD_PICKUP_TYPE_BRIBE: return COLOR_YELLOW;
+        case WORLD_PICKUP_TYPE_HEALTH: return COLOR_GREEN;
+        case WORLD_PICKUP_TYPE_ARMOR: return COLOR_CYAN;
+        case WORLD_PICKUP_TYPE_HIDDEN: return COLOR_ORANGE;
+    }
+    return COLOR_WHITE;
+}
+
+stock DestroyWorldPickupRuntime(index)
+{
+    if (index < 0 || index >= MAX_WORLD_PICKUPS)
+    {
+        return 0;
+    }
+
+    if (WorldPickupLabel[index] != Text3D:INVALID_3DTEXT_ID)
+    {
+        Delete3DTextLabel(WorldPickupLabel[index]);
+        WorldPickupLabel[index] = Text3D:INVALID_3DTEXT_ID;
+    }
+
+    if (WorldPickupRuntimeID[index] != -1)
+    {
+        DestroyPickup(WorldPickupRuntimeID[index]);
+        WorldPickupRuntimeID[index] = -1;
+    }
+
+    return 1;
+}
+
+stock DestroyAllWorldPickupsRuntime()
+{
+    for (new i = 0; i < MAX_WORLD_PICKUPS; i++)
+    {
+        DestroyWorldPickupRuntime(i);
+    }
+    return 1;
+}
+
+stock GetWorldPickupIndexByDBID(dbid)
+{
+    for (new i = 0; i < WorldPickupCount; i++)
+    {
+        if (WorldPickupDBID[i] == dbid)
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+stock GetWorldPickupIndexByRuntimeID(pickupid)
+{
+    for (new i = 0; i < WorldPickupCount; i++)
+    {
+        if (WorldPickupRuntimeID[i] == pickupid)
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+stock IsValidWorldPickupDBID(dbid)
+{
+    return GetWorldPickupIndexByDBID(dbid) != -1;
+}
+
+stock CreateWorldPickupRuntime(index)
+{
+    if (index < 0 || index >= WorldPickupCount)
+    {
+        return 0;
+    }
+
+    DestroyWorldPickupRuntime(index);
+
+    if (!WorldPickupEnabled[index])
+    {
+        return 1;
+    }
+
+    if (WorldPickupModel[index] <= 0)
+    {
+        WorldPickupModel[index] = GetWorldPickupDefaultModel(WorldPickupType[index]);
+    }
+
+    if (WorldPickupCooldown[index] < 10)
+    {
+        WorldPickupCooldown[index] = WORLD_PICKUP_DEFAULT_COOLDOWN;
+    }
+
+    WorldPickupRuntimeID[index] = CreatePickup(
+        WorldPickupModel[index],
+        1,
+        WorldPickupX[index],
+        WorldPickupY[index],
+        WorldPickupZ[index],
+        WorldPickupVirtualWorld[index]
+    );
+
+    new typeName[32];
+    new labelText[160];
+    GetWorldPickupDisplayName(WorldPickupType[index], typeName, sizeof(typeName));
+    format(labelText, sizeof(labelText), "[WORLD PICKUP]\nID: %d | %s", WorldPickupDBID[index], typeName);
+
+    WorldPickupLabel[index] = Create3DTextLabel(
+        labelText,
+        GetWorldPickupColor(WorldPickupType[index]),
+        WorldPickupX[index],
+        WorldPickupY[index],
+        WorldPickupZ[index] + 0.8,
+        WORLD_PICKUP_LABEL_DRAW_DISTANCE,
+        WorldPickupVirtualWorld[index],
+        true
+    );
+
+    return 1;
+}
+
+stock LoadWorldPickups()
+{
+    DestroyAllWorldPickupsRuntime();
+    ResetWorldPickupArrays();
+    mysql_tquery(g_SQL, "SELECT id, pickup_type, display_name, model_id, pos_x, pos_y, pos_z, interior, virtual_world, amount, cooldown_seconds, enabled FROM world_pickups WHERE enabled=1 ORDER BY id ASC LIMIT 300", "OnWorldPickupsLoaded");
+    return 1;
+}
+
+public OnWorldPickupsLoaded()
+{
+    new rows = cache_num_rows();
+    new loaded = 0;
+
+    for (new i = 0; i < rows && i < MAX_WORLD_PICKUPS; i++)
+    {
+        new typeText[32];
+
+        cache_get_value_name_int(i, "id", WorldPickupDBID[loaded]);
+        cache_get_value_name(i, "pickup_type", typeText, sizeof(typeText));
+        cache_get_value_name(i, "display_name", WorldPickupName[loaded], 64);
+        cache_get_value_name_int(i, "model_id", WorldPickupModel[loaded]);
+        cache_get_value_name_float(i, "pos_x", WorldPickupX[loaded]);
+        cache_get_value_name_float(i, "pos_y", WorldPickupY[loaded]);
+        cache_get_value_name_float(i, "pos_z", WorldPickupZ[loaded]);
+        cache_get_value_name_int(i, "interior", WorldPickupInterior[loaded]);
+        cache_get_value_name_int(i, "virtual_world", WorldPickupVirtualWorld[loaded]);
+        cache_get_value_name_int(i, "amount", WorldPickupAmount[loaded]);
+        cache_get_value_name_int(i, "cooldown_seconds", WorldPickupCooldown[loaded]);
+        cache_get_value_name_int(i, "enabled", WorldPickupEnabled[loaded]);
+
+        WorldPickupType[loaded] = GetWorldPickupTypeFromString(typeText);
+        if (WorldPickupType[loaded] <= 0)
+        {
+            continue;
+        }
+
+        if (WorldPickupModel[loaded] <= 0)
+        {
+            WorldPickupModel[loaded] = GetWorldPickupDefaultModel(WorldPickupType[loaded]);
+        }
+
+        if (WorldPickupAmount[loaded] <= 0)
+        {
+            WorldPickupAmount[loaded] = GetWorldPickupDefaultAmount(WorldPickupType[loaded]);
+        }
+
+        if (WorldPickupCooldown[loaded] < 10)
+        {
+            WorldPickupCooldown[loaded] = WORLD_PICKUP_DEFAULT_COOLDOWN;
+        }
+
+        loaded++;
+    }
+
+    WorldPickupCount = loaded;
+
+    for (new idx = 0; idx < WorldPickupCount; idx++)
+    {
+        CreateWorldPickupRuntime(idx);
+    }
+
+    printf("[SAIF] World pickups loaded: %d rows, %d runtime.", rows, WorldPickupCount);
+    return 1;
+}
+
+stock CreateWorldPickupAtPlayer(playerid, type)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuat world pickup.");
+        return 0;
+    }
+
+    if (type <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Type pickup tidak valid.");
+        return 0;
+    }
+
+    new typeName[32];
+    new displayName[64];
+    new Float:x, Float:y, Float:z;
+    new query[1024];
+
+    GetWorldPickupTypeName(type, typeName, sizeof(typeName));
+    GetWorldPickupDisplayName(type, displayName, sizeof(displayName));
+    GetPlayerPos(playerid, x, y, z);
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO world_pickups (pickup_type, display_name, model_id, pos_x, pos_y, pos_z, interior, virtual_world, amount, cooldown_seconds, source_tag, enabled) VALUES ('%e', '%e', %d, %f, %f, %f, %d, %d, %d, %d, 'manual', 1)",
+        typeName,
+        displayName,
+        GetWorldPickupDefaultModel(type),
+        x,
+        y,
+        z,
+        GetPlayerInterior(playerid),
+        GetPlayerVirtualWorld(playerid),
+        GetWorldPickupDefaultAmount(type),
+        WORLD_PICKUP_DEFAULT_COOLDOWN
+    );
+    mysql_tquery(g_SQL, query, "OnWorldPickupCreated", "i", playerid);
+    return 1;
+}
+
+public OnWorldPickupCreated(playerid)
+{
+    if (IsPlayerConnected(playerid))
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "World pickup berhasil dibuat dan disimpan ke database.");
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan /wpickuplist atau /wpickupmenu untuk edit.");
+    }
+    LoadWorldPickups();
+    return 1;
+}
+
+public OnWorldPickupUpdated(playerid)
+{
+    if (IsPlayerConnected(playerid))
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "World pickup berhasil diupdate. Runtime direload.");
+    }
+    LoadWorldPickups();
+    return 1;
+}
+
+public OnWorldPickupDeleted(playerid)
+{
+    if (IsPlayerConnected(playerid))
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "World pickup berhasil dihapus/nonaktifkan. Runtime direload.");
+    }
+    LoadWorldPickups();
+    return 1;
+}
+
+public RespawnWorldPickupByDBID(dbid)
+{
+    new index = GetWorldPickupIndexByDBID(dbid);
+    if (index == -1)
+    {
+        return 1;
+    }
+
+    if (!WorldPickupEnabled[index])
+    {
+        return 1;
+    }
+
+    if (WorldPickupRuntimeID[index] == -1)
+    {
+        CreateWorldPickupRuntime(index);
+    }
+
+    return 1;
+}
+
+stock HandleWorldPickupPickup(playerid, pickupid)
+{
+    new index = GetWorldPickupIndexByRuntimeID(pickupid);
+    if (index == -1)
+    {
+        return 0;
+    }
+
+    if (GetPlayerInterior(playerid) != WorldPickupInterior[index] || GetPlayerVirtualWorld(playerid) != WorldPickupVirtualWorld[index])
+    {
+        return 1;
+    }
+
+    new consume = 1;
+    new amount = WorldPickupAmount[index];
+    new msg[144];
+
+    if (amount <= 0)
+    {
+        amount = GetWorldPickupDefaultAmount(WorldPickupType[index]);
+    }
+
+    switch (WorldPickupType[index])
+    {
+        case WORLD_PICKUP_TYPE_BRIBE:
+        {
+            new wanted = GetPlayerWantedLevel(playerid);
+            if (wanted <= 0)
+            {
+                SendClientMessage(playerid, COLOR_YELLOW, "Police bribe tidak dibutuhkan karena wanted level kamu 0.");
+                consume = 0;
+            }
+            else
+            {
+                wanted -= amount;
+                if (wanted < 0) wanted = 0;
+                SetPlayerWantedLevel(playerid, wanted);
+                format(msg, sizeof(msg), "Police bribe diambil. Wanted level sekarang: %d.", wanted);
+                SendClientMessage(playerid, COLOR_GREEN, msg);
+            }
+        }
+        case WORLD_PICKUP_TYPE_HEALTH:
+        {
+            new Float:health;
+            GetPlayerHealth(playerid, health);
+            health += float(amount);
+            if (health > 100.0) health = 100.0;
+            SetPlayerHealth(playerid, health);
+            format(msg, sizeof(msg), "Health pickup diambil. Health +%d.", amount);
+            SendClientMessage(playerid, COLOR_GREEN, msg);
+        }
+        case WORLD_PICKUP_TYPE_ARMOR:
+        {
+            new Float:armor;
+            GetPlayerArmour(playerid, armor);
+            armor += float(amount);
+            if (armor > 100.0) armor = 100.0;
+            SetPlayerArmour(playerid, armor);
+            format(msg, sizeof(msg), "Armor pickup diambil. Armor +%d.", amount);
+            SendClientMessage(playerid, COLOR_GREEN, msg);
+        }
+        case WORLD_PICKUP_TYPE_HIDDEN:
+        {
+            GivePlayerCash(playerid, amount);
+            format(msg, sizeof(msg), "Hidden pickup ditemukan. Reward $%d.", amount);
+            SendClientMessage(playerid, COLOR_GREEN, msg);
+        }
+        default:
+        {
+            consume = 0;
+        }
+    }
+
+    if (consume)
+    {
+        new dbid = WorldPickupDBID[index];
+        new cooldown = WorldPickupCooldown[index];
+        DestroyWorldPickupRuntime(index);
+        if (cooldown < 10) cooldown = WORLD_PICKUP_DEFAULT_COOLDOWN;
+        SetTimerEx("RespawnWorldPickupByDBID", cooldown * 1000, false, "i", dbid);
+    }
+
+    return 1;
+}
+
+stock ListWorldPickupsToChat(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa melihat world pickup list.");
+        return 0;
+    }
+
+    SendClientMessage(playerid, COLOR_YELLOW, "========== WORLD PICKUPS ==========");
+    if (WorldPickupCount <= 0)
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "Belum ada world pickup aktif.");
+        return 1;
+    }
+
+    new msg[192];
+    new typeName[32];
+    for (new i = 0; i < WorldPickupCount; i++)
+    {
+        GetWorldPickupTypeName(WorldPickupType[i], typeName, sizeof(typeName));
+        format(msg, sizeof(msg), "ID %d | %s | Model %d | Amount %d | Cooldown %ds | VW %d", WorldPickupDBID[i], typeName, WorldPickupModel[i], WorldPickupAmount[i], WorldPickupCooldown[i], WorldPickupVirtualWorld[i]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+    }
+    return 1;
+}
+
+stock ShowWorldPickupInfo(playerid, dbid)
+{
+    new index = GetWorldPickupIndexByDBID(dbid);
+    if (index == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "World pickup ID tidak ditemukan.");
+        return 0;
+    }
+
+    new msg[192];
+    new typeName[32];
+    GetWorldPickupTypeName(WorldPickupType[index], typeName, sizeof(typeName));
+    SendClientMessage(playerid, COLOR_YELLOW, "========== WORLD PICKUP INFO ==========");
+    format(msg, sizeof(msg), "ID: %d | Runtime: %d | Type: %s | Model: %d", WorldPickupDBID[index], WorldPickupRuntimeID[index], typeName, WorldPickupModel[index]);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+    format(msg, sizeof(msg), "Amount: %d | Cooldown: %d | Interior: %d | VW: %d", WorldPickupAmount[index], WorldPickupCooldown[index], WorldPickupInterior[index], WorldPickupVirtualWorld[index]);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+    format(msg, sizeof(msg), "Pos: %.2f %.2f %.2f", WorldPickupX[index], WorldPickupY[index], WorldPickupZ[index]);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+    return 1;
+}
+
+stock GotoWorldPickup(playerid, dbid)
+{
+    new index = GetWorldPickupIndexByDBID(dbid);
+    if (index == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "World pickup ID tidak ditemukan.");
+        return 0;
+    }
+
+    SetPlayerInterior(playerid, WorldPickupInterior[index]);
+    SetPlayerVirtualWorld(playerid, WorldPickupVirtualWorld[index]);
+    SetPlayerPos(playerid, WorldPickupX[index] + 1.0, WorldPickupY[index], WorldPickupZ[index]);
+    SendClientMessage(playerid, COLOR_GREEN, "Kamu teleport ke world pickup.");
+    return 1;
+}
+
+stock MoveWorldPickupToPlayer(playerid, dbid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa memindahkan world pickup.");
+        return 0;
+    }
+
+    if (GetWorldPickupIndexByDBID(dbid) == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "World pickup ID tidak ditemukan.");
+        return 0;
+    }
+
+    new Float:x, Float:y, Float:z;
+    new query[512];
+    GetPlayerPos(playerid, x, y, z);
+
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE world_pickups SET pos_x=%f, pos_y=%f, pos_z=%f, interior=%d, virtual_world=%d WHERE id=%d LIMIT 1", x, y, z, GetPlayerInterior(playerid), GetPlayerVirtualWorld(playerid), dbid);
+    mysql_tquery(g_SQL, query, "OnWorldPickupUpdated", "i", playerid);
+    return 1;
+}
+
+stock UpdateWorldPickupType(playerid, dbid, type)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER)) return 0;
+    if (GetWorldPickupIndexByDBID(dbid) == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "World pickup ID tidak ditemukan.");
+        return 0;
+    }
+
+    new typeName[32];
+    new displayName[64];
+    new query[512];
+    GetWorldPickupTypeName(type, typeName, sizeof(typeName));
+    GetWorldPickupDisplayName(type, displayName, sizeof(displayName));
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE world_pickups SET pickup_type='%e', display_name='%e', model_id=%d, amount=%d WHERE id=%d LIMIT 1", typeName, displayName, GetWorldPickupDefaultModel(type), GetWorldPickupDefaultAmount(type), dbid);
+    mysql_tquery(g_SQL, query, "OnWorldPickupUpdated", "i", playerid);
+    return 1;
+}
+
+stock UpdateWorldPickupModel(playerid, dbid, modelid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER)) return 0;
+    if (GetWorldPickupIndexByDBID(dbid) == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "World pickup ID tidak ditemukan.");
+        return 0;
+    }
+    if (modelid <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Model ID tidak valid.");
+        return 0;
+    }
+
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE world_pickups SET model_id=%d WHERE id=%d LIMIT 1", modelid, dbid);
+    mysql_tquery(g_SQL, query, "OnWorldPickupUpdated", "i", playerid);
+    return 1;
+}
+
+stock UpdateWorldPickupAmount(playerid, dbid, amount)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER)) return 0;
+    if (GetWorldPickupIndexByDBID(dbid) == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "World pickup ID tidak ditemukan.");
+        return 0;
+    }
+    if (amount < 1 || amount > 1000000)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Amount harus 1 sampai 1000000.");
+        return 0;
+    }
+
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE world_pickups SET amount=%d WHERE id=%d LIMIT 1", amount, dbid);
+    mysql_tquery(g_SQL, query, "OnWorldPickupUpdated", "i", playerid);
+    return 1;
+}
+
+stock UpdateWorldPickupCooldown(playerid, dbid, seconds)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER)) return 0;
+    if (GetWorldPickupIndexByDBID(dbid) == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "World pickup ID tidak ditemukan.");
+        return 0;
+    }
+    if (seconds < 10 || seconds > 86400)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Cooldown harus 10 sampai 86400 detik.");
+        return 0;
+    }
+
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE world_pickups SET cooldown_seconds=%d WHERE id=%d LIMIT 1", seconds, dbid);
+    mysql_tquery(g_SQL, query, "OnWorldPickupUpdated", "i", playerid);
+    return 1;
+}
+
+stock UpdateWorldPickupEnabled(playerid, dbid, enabled)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER)) return 0;
+    if (GetWorldPickupIndexByDBID(dbid) == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "World pickup ID tidak ditemukan.");
+        return 0;
+    }
+
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE world_pickups SET enabled=%d WHERE id=%d LIMIT 1", enabled ? 1 : 0, dbid);
+    mysql_tquery(g_SQL, query, enabled ? "OnWorldPickupUpdated" : "OnWorldPickupDeleted", "i", playerid);
+    return 1;
+}
+
+stock DeleteWorldPickup(playerid, dbid)
+{
+    return UpdateWorldPickupEnabled(playerid, dbid, 0);
+}
+
+stock ShowWorldPickupMenu(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka world pickup editor.");
+        return 0;
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_WPICKUP_MENU, DIALOG_STYLE_LIST, "Offline World Pickup Editor", "Create Pickup\nList / Select Pickup\nInput ID Manual\nReload Pickups\nHelp", "Select", "Close");
+    return 1;
+}
+
+stock ShowWorldPickupCreateTypeInput(playerid)
+{
+    ShowPlayerDialog(playerid, DIALOG_WPICKUP_CREATE_TYPE, DIALOG_STYLE_INPUT, "Create World Pickup", "Masukkan type pickup:\n\nbribe = police bribe / wanted star\nhealth = health pickup\narmor = armor pickup\nhidden = hidden/world reward", "Create", "Back");
+    return 1;
+}
+
+stock ShowWorldPickupSelectInput(playerid)
+{
+    ShowPlayerDialog(playerid, DIALOG_WPICKUP_SELECT_INPUT, DIALOG_STYLE_INPUT, "Select World Pickup", "Masukkan ID world pickup.\nGunakan /wpickuplist atau menu List untuk melihat ID aktif.", "Select", "Back");
+    return 1;
+}
+
+stock ShowWorldPickupListDialog(playerid)
+{
+    new dialogText[4096];
+    new line[192];
+    new typeName[32];
+
+    if (WorldPickupCount <= 0)
+    {
+        ShowPlayerDialog(playerid, DIALOG_WPICKUP_INFO, DIALOG_STYLE_MSGBOX, "World Pickup List", "Belum ada world pickup aktif.", "Back", "Close");
+        return 1;
+    }
+
+    format(dialogText, sizeof(dialogText), "ID\tType\tModel\tAmount\tCooldown\n");
+    for (new i = 0; i < WorldPickupCount; i++)
+    {
+        GetWorldPickupTypeName(WorldPickupType[i], typeName, sizeof(typeName));
+        format(line, sizeof(line), "%d\t%s\t%d\t%d\t%ds\n", WorldPickupDBID[i], typeName, WorldPickupModel[i], WorldPickupAmount[i], WorldPickupCooldown[i]);
+        strcat(dialogText, line, sizeof(dialogText));
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_WPICKUP_LIST, DIALOG_STYLE_TABLIST_HEADERS, "Select World Pickup", dialogText, "Select", "Back");
+    return 1;
+}
+
+stock ShowWorldPickupActionMenu(playerid, dbid)
+{
+    if (!IsValidWorldPickupDBID(dbid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "World pickup ID tidak ditemukan atau belum aktif.");
+        ShowWorldPickupMenu(playerid);
+        return 0;
+    }
+
+    new title[96];
+    PlayerEditingWorldPickupID[playerid] = dbid;
+    format(title, sizeof(title), "World Pickup ID %d", dbid);
+    ShowPlayerDialog(playerid, DIALOG_WPICKUP_ACTION_MENU, DIALOG_STYLE_LIST, title, "Info\nGoto\nMove to My Position\nEdit Type\nEdit Model\nEdit Amount\nEdit Cooldown\nEnable / Disable\nDelete\nReload All\nBack", "Select", "Close");
+    return 1;
+}
+
+stock ShowWorldPickupInfoDialog(playerid, dbid)
+{
+    new index = GetWorldPickupIndexByDBID(dbid);
+    if (index == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "World pickup ID tidak ditemukan.");
+        return 0;
+    }
+
+    new typeName[32];
+    new dialogText[768];
+    GetWorldPickupTypeName(WorldPickupType[index], typeName, sizeof(typeName));
+    format(dialogText, sizeof(dialogText), "ID: %d\nRuntime: %d\nType: %s\nModel: %d\nAmount: %d\nCooldown: %d seconds\nInterior: %d\nVirtual World: %d\nPosition: %.2f %.2f %.2f", WorldPickupDBID[index], WorldPickupRuntimeID[index], typeName, WorldPickupModel[index], WorldPickupAmount[index], WorldPickupCooldown[index], WorldPickupInterior[index], WorldPickupVirtualWorld[index], WorldPickupX[index], WorldPickupY[index], WorldPickupZ[index]);
+    ShowPlayerDialog(playerid, DIALOG_WPICKUP_INFO, DIALOG_STYLE_MSGBOX, "World Pickup Info", dialogText, "Back", "Close");
+    return 1;
+}
+
+stock ShowWorldPickupTypeInput(playerid, dbid)
+{
+    PlayerEditingWorldPickupID[playerid] = dbid;
+    ShowPlayerDialog(playerid, DIALOG_WPICKUP_TYPE_INPUT, DIALOG_STYLE_INPUT, "Edit Pickup Type", "Masukkan type baru:\nbribe, health, armor, hidden\n\nCatatan: mengubah type akan reset model dan amount ke default type.", "Save", "Back");
+    return 1;
+}
+
+stock ShowWorldPickupModelInput(playerid, dbid)
+{
+    PlayerEditingWorldPickupID[playerid] = dbid;
+    ShowPlayerDialog(playerid, DIALOG_WPICKUP_MODEL_INPUT, DIALOG_STYLE_INPUT, "Edit Pickup Model", "Masukkan model pickup.\nDefault: bribe 1247, health 1240, armor 1242, hidden 1274.", "Save", "Back");
+    return 1;
+}
+
+stock ShowWorldPickupAmountInput(playerid, dbid)
+{
+    PlayerEditingWorldPickupID[playerid] = dbid;
+    ShowPlayerDialog(playerid, DIALOG_WPICKUP_AMOUNT_INPUT, DIALOG_STYLE_INPUT, "Edit Pickup Amount", "Masukkan amount efek.\nbribe = jumlah wanted star berkurang\nhealth/armor = nilai tambah\nhidden = cash reward", "Save", "Back");
+    return 1;
+}
+
+stock ShowWorldPickupCooldownInput(playerid, dbid)
+{
+    PlayerEditingWorldPickupID[playerid] = dbid;
+    ShowPlayerDialog(playerid, DIALOG_WPICKUP_COOLDOWN_INPUT, DIALOG_STYLE_INPUT, "Edit Pickup Cooldown", "Masukkan cooldown respawn dalam detik.\nMinimal 10, maksimal 86400.", "Save", "Back");
+    return 1;
+}
+
+stock ShowWorldPickupEnableMenu(playerid, dbid)
+{
+    PlayerEditingWorldPickupID[playerid] = dbid;
+    ShowPlayerDialog(playerid, DIALOG_WPICKUP_ENABLE_MENU, DIALOG_STYLE_LIST, "Enable / Disable Pickup", "Enable\nDisable", "Select", "Back");
+    return 1;
+}
+
+stock ShowWorldPickupDeleteConfirm(playerid, dbid)
+{
+    PlayerEditingWorldPickupID[playerid] = dbid;
+    ShowPlayerDialog(playerid, DIALOG_WPICKUP_DELETE_CONFIRM, DIALOG_STYLE_MSGBOX, "Delete World Pickup", "Yakin ingin menonaktifkan world pickup ini?\nData tidak hilang permanen, hanya enabled=0.", "Delete", "Back");
+    return 1;
+}
+
+stock ShowWorldPickupHelp(playerid)
+{
+    new body[1024];
+    strcat(body, "Offline World Pickup System\n\n", sizeof(body));
+    strcat(body, "Type:\n", sizeof(body));
+    strcat(body, "- bribe: mengurangi wanted level\n", sizeof(body));
+    strcat(body, "- health: menambah health\n", sizeof(body));
+    strcat(body, "- armor: menambah armor\n", sizeof(body));
+    strcat(body, "- hidden: reward cash/world pickup\n\n", sizeof(body));
+    strcat(body, "Command fallback:\n", sizeof(body));
+    strcat(body, "/wpickupmenu, /wpickupcreate, /wpickuplist, /wpickupinfo, /wpickupgoto, /wpickupdelete, /wpickupreload\n\n", sizeof(body));
+    strcat(body, "Roadmap: offline template/importer akan dibuat agar police bribe, health, armor, dan hidden pickup bisa di-seed massal.", sizeof(body));
+    ShowPlayerDialog(playerid, DIALOG_WPICKUP_INFO, DIALOG_STYLE_MSGBOX, "World Pickup Help", body, "Back", "Close");
+    return 1;
+}
+
+
 stock ResetParkedVehicleArrays()
 {
     ParkedVehicleCount = 0;
@@ -14599,15 +15667,15 @@ stock CreateParkedVehicleRuntime(index)
     }
 
     ParkedVehicleRuntimeID[index] = CreateVehicle(
-                                        ParkedVehicleModel[index],
-                                        ParkedVehicleX[index],
-                                        ParkedVehicleY[index],
-                                        ParkedVehicleZ[index],
-                                        ParkedVehicleA[index],
-                                        ParkedVehicleColor1[index],
-                                        ParkedVehicleColor2[index],
-                                        ParkedVehicleRespawnDelay[index]
-                                    );
+        ParkedVehicleModel[index],
+        ParkedVehicleX[index],
+        ParkedVehicleY[index],
+        ParkedVehicleZ[index],
+        ParkedVehicleA[index],
+        ParkedVehicleColor1[index],
+        ParkedVehicleColor2[index],
+        ParkedVehicleRespawnDelay[index]
+    );
 
     if (ParkedVehicleRuntimeID[index] == INVALID_VEHICLE_ID)
     {
@@ -14632,15 +15700,15 @@ stock CreateParkedVehicleRuntime(index)
     new labelText[128];
     format(labelText, sizeof(labelText), "[PARKED VEHICLE]\nID: %d | Model: %d", ParkedVehicleDBID[index], ParkedVehicleModel[index]);
     ParkedVehicleLabel[index] = Create3DTextLabel(
-                                    labelText,
-                                    COLOR_GREY,
-                                    ParkedVehicleX[index],
-                                    ParkedVehicleY[index],
-                                    ParkedVehicleZ[index] + 1.2,
-                                    PARKED_VEHICLE_LABEL_DRAW_DISTANCE,
-                                    ParkedVehicleVirtualWorld[index],
-                                    true
-                                );
+        labelText,
+        COLOR_GREY,
+        ParkedVehicleX[index],
+        ParkedVehicleY[index],
+        ParkedVehicleZ[index] + 1.2,
+        PARKED_VEHICLE_LABEL_DRAW_DISTANCE,
+        ParkedVehicleVirtualWorld[index],
+        true
+    );
 
     return 1;
 }
@@ -19082,6 +20150,11 @@ public OnPlayerPickUpPickup(playerid, pickupid)
         }
     }
 
+    if (HandleWorldPickupPickup(playerid, pickupid))
+    {
+        return 1;
+    }
+
     for (new i = 0; i < MAX_HOUSES; i++)
     {
         if (pickupid == HouseExteriorPickup[i])
@@ -21587,6 +22660,88 @@ public OnPlayerCommandText(playerid, cmdtext[])
                     );
         return 1;
     }
+
+    if (!strcmp(cmdtext, "/wpickupmenu", true) || !strcmp(cmdtext, "/wpickupedit", true))
+    {
+        ShowWorldPickupMenu(playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/wpickupcreate ", true) == 0)
+    {
+        new typeStr[32];
+        if (!GetOneParam(cmdtext[15], typeStr, sizeof(typeStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /wpickupcreate [bribe/health/armor/hidden]");
+            return 1;
+        }
+
+        new type = GetWorldPickupTypeFromString(typeStr);
+        if (type <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Type tidak valid. Gunakan: bribe, health, armor, hidden.");
+            return 1;
+        }
+
+        CreateWorldPickupAtPlayer(playerid, type);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/wpickuplist", true))
+    {
+        ListWorldPickupsToChat(playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/wpickupinfo ", true) == 0)
+    {
+        new idStr[16];
+        if (!GetOneParam(cmdtext[13], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /wpickupinfo [id]");
+            return 1;
+        }
+        ShowWorldPickupInfo(playerid, strval(idStr));
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/wpickupgoto ", true) == 0)
+    {
+        new idStr[16];
+        if (!GetOneParam(cmdtext[13], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /wpickupgoto [id]");
+            return 1;
+        }
+        GotoWorldPickup(playerid, strval(idStr));
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/wpickupdelete ", true) == 0)
+    {
+        new idStr[16];
+        if (!GetOneParam(cmdtext[15], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /wpickupdelete [id]");
+            return 1;
+        }
+        DeleteWorldPickup(playerid, strval(idStr));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/wpickupreload", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa reload world pickup.");
+            return 1;
+        }
+
+        LoadWorldPickups();
+        SendClientMessage(playerid, COLOR_GREEN, "World pickups direload dari database.");
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/objmenu", true) || !strcmp(cmdtext, "/objedit", true) || !strcmp(cmdtext, "/objectmenu", true))
     {
         ShowDynamicObjectMenu(playerid);
@@ -22767,7 +23922,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.23D.1 Dynamic Location Compile Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.23E Offline Pickup System");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -22777,7 +23932,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23B: Parked vehicle dialog menu dan interactive editor.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.23D.1: Compile fix dynamic location editor tanpa mengubah fitur v0.23D.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.23E: Offline pickup system, health/armor/bribe/hidden pickup, cooldown, dan editor dialog.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23A.1: Parked vehicle engine default ON setelah create/reload.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22F.2: Gang HQ interior exit fix dan visitor access.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A.3: Runtime turf war config untuk balancing/testing.");

@@ -227,6 +227,8 @@
 #define DIALOG_BUSINESS_PRESET_NAME_INPUT 1207
 #define DIALOG_BUSINESS_PRESET_PRICE_INPUT 1208
 #define DIALOG_BUSINESS_PRESET_INCOME_INPUT 1209
+#define DIALOG_GANG_PRESET_ENABLE_INPUT 1210
+#define DIALOG_GANG_PRESET_STATUS 1211
 
 
 
@@ -1422,6 +1424,19 @@ new GangHQName[MAX_PRESET_GANGS][64] =
     "Da Nang Boys HQ",
     "The Mafia HQ",
     "Russian Mafia HQ"
+};
+
+new PresetGangEnabled[MAX_PRESET_GANGS] =
+{
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
 };
 
 new DynamicLocationCount;
@@ -5527,6 +5542,11 @@ stock GetNearestGangHQ(playerid)
 
     for (new i = 0; i < MAX_PRESET_GANGS; i++)
     {
+        if (!PresetGangEnabled[i])
+        {
+            continue;
+        }
+
         new Float:distance = GetPlayerDistanceFromPoint(playerid, GangHQX[i], GangHQY[i], GangHQZ[i]);
 
         if (distance < nearestDistance)
@@ -5546,6 +5566,11 @@ stock IsPlayerNearGangHQ(playerid, gangIndex)
         return 0;
     }
 
+    if (!PresetGangEnabled[gangIndex])
+    {
+        return 0;
+    }
+
     if (GetPlayerDistanceFromPoint(playerid, GangHQX[gangIndex], GangHQY[gangIndex], GangHQZ[gangIndex]) <= GangHQRadius[gangIndex])
     {
         return 1;
@@ -5559,6 +5584,13 @@ stock ShowGangHQDialog(playerid, gangid)
     if (!IsPresetGangID(gangid))
     {
         SendClientMessage(playerid, COLOR_RED, "Gang HQ tidak valid.");
+        return 0;
+    }
+
+    new gangIndexCheck = GetPresetGangIndexByID(gangid);
+    if (gangIndexCheck == -1 || !PresetGangEnabled[gangIndexCheck])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang preset ini sedang disabled oleh Owner untuk audit/source validation.");
         return 0;
     }
 
@@ -5607,6 +5639,12 @@ stock ProcessJoinPresetGang(playerid, gangid)
     if (gangIndex == -1)
     {
         SendClientMessage(playerid, COLOR_RED, "Gang tidak valid.");
+        return 0;
+    }
+
+    if (!PresetGangEnabled[gangIndex])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang preset ini sedang disabled oleh Owner untuk audit/source validation.");
         return 0;
     }
 
@@ -8103,6 +8141,11 @@ stock CreateGangHQExteriorRuntime(gangIndex)
         GangHQLabel[gangIndex] = Text3D:INVALID_3DTEXT_ID;
     }
 
+    if (!PresetGangEnabled[gangIndex])
+    {
+        return 1;
+    }
+
     new labelText[192];
     GangHQPickup[gangIndex] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, GangHQX[gangIndex], GangHQY[gangIndex], GangHQZ[gangIndex], 0);
     format(labelText, sizeof(labelText), "[GANG HQ] %s\nALT: Menu / Stash\nPickup: Enter HQ\nSource: DB/offline preset", PresetGangShortName[gangIndex]);
@@ -8131,7 +8174,11 @@ stock RefreshGangHQMapIconsForAll()
 
         for (new i = 0; i < MAX_PRESET_GANGS; i++)
         {
-            SetPlayerMapIcon(playerid, MAPICON_BASE_GANG_HQ + i, GangHQX[i], GangHQY[i], GangHQZ[i], MAPICON_TYPE_GANG_HQ, PresetGangColor[i], MAPICON_LOCAL);
+            RemovePlayerMapIcon(playerid, MAPICON_BASE_GANG_HQ + i);
+            if (PresetGangEnabled[i])
+            {
+                SetPlayerMapIcon(playerid, MAPICON_BASE_GANG_HQ + i, GangHQX[i], GangHQY[i], GangHQZ[i], MAPICON_TYPE_GANG_HQ, PresetGangColor[i], MAPICON_LOCAL);
+            }
         }
     }
 
@@ -8140,7 +8187,7 @@ stock RefreshGangHQMapIconsForAll()
 
 stock LoadGangPresetConfigFromDB()
 {
-    mysql_tquery(g_SQL, "SELECT gang_id, name, short_name, color, color_name, hq_x, hq_y, hq_z, hq_a, hq_radius, enabled FROM gang_preset_config WHERE gang_id BETWEEN 1 AND 9 AND enabled=1 ORDER BY gang_id ASC", "OnGangPresetConfigLoaded");
+    mysql_tquery(g_SQL, "SELECT gang_id, name, short_name, color, color_name, hq_x, hq_y, hq_z, hq_a, hq_radius, enabled FROM gang_preset_config WHERE gang_id BETWEEN 1 AND 9 ORDER BY gang_id ASC", "OnGangPresetConfigLoaded");
     return 1;
 }
 
@@ -8169,6 +8216,12 @@ public OnGangPresetConfigLoaded()
         cache_get_value_name_float(i, "hq_z", GangHQZ[gangIndex]);
         cache_get_value_name_float(i, "hq_a", GangHQA[gangIndex]);
         cache_get_value_name_float(i, "hq_radius", GangHQRadius[gangIndex]);
+        cache_get_value_name_int(i, "enabled", PresetGangEnabled[gangIndex]);
+
+        if (PresetGangEnabled[gangIndex] != 0)
+        {
+            PresetGangEnabled[gangIndex] = 1;
+        }
 
         if (GangHQRadius[gangIndex] < 2.0 || GangHQRadius[gangIndex] > 50.0)
         {
@@ -8191,7 +8244,7 @@ stock SaveGangPresetConfig(gangid)
     }
 
     new query[1024];
-    mysql_format(g_SQL, query, sizeof(query), "REPLACE INTO gang_preset_config (gang_id, name, short_name, color, color_name, hq_x, hq_y, hq_z, hq_a, hq_radius, source_tag, enabled, updated_at) VALUES (%d, '%e', '%e', %d, '%e', %f, %f, %f, %f, %f, 'offline_exact_manual', 1, NOW())", gangid, PresetGangName[gangIndex], PresetGangShortName[gangIndex], PresetGangColor[gangIndex], PresetGangColorName[gangIndex], GangHQX[gangIndex], GangHQY[gangIndex], GangHQZ[gangIndex], GangHQA[gangIndex], GangHQRadius[gangIndex]);
+    mysql_format(g_SQL, query, sizeof(query), "REPLACE INTO gang_preset_config (gang_id, name, short_name, color, color_name, hq_x, hq_y, hq_z, hq_a, hq_radius, source_tag, enabled, updated_at) VALUES (%d, '%e', '%e', %d, '%e', %f, %f, %f, %f, %f, 'offline_exact_manual', %d, NOW())", gangid, PresetGangName[gangIndex], PresetGangShortName[gangIndex], PresetGangColor[gangIndex], PresetGangColorName[gangIndex], GangHQX[gangIndex], GangHQY[gangIndex], GangHQZ[gangIndex], GangHQA[gangIndex], GangHQRadius[gangIndex], PresetGangEnabled[gangIndex]);
     mysql_tquery(g_SQL, query);
     return 1;
 }
@@ -8208,6 +8261,7 @@ stock ShowGangPresetMenu(playerid)
     strcat(body, "List / Select Gang Preset\n", sizeof(body));
     strcat(body, "Input Gang ID Manual\n", sizeof(body));
     strcat(body, "Reload Gang Preset DB\n", sizeof(body));
+    strcat(body, "Gang Active Status Summary\n", sizeof(body));
     strcat(body, "Source Policy Info", sizeof(body));
     ShowPlayerDialog(playerid, DIALOG_GANG_PRESET_MENU, DIALOG_STYLE_LIST, "Gang Preset DB Config", body, "Select", "Close");
     return 1;
@@ -8217,11 +8271,11 @@ stock ShowGangPresetListDialog(playerid)
 {
     new body[1024];
     new line[192];
-    strcat(body, "ID\tGang\tHQ\n", sizeof(body));
+    strcat(body, "ID\tStatus\tGang\tHQ\n", sizeof(body));
 
     for (new i = 0; i < MAX_PRESET_GANGS; i++)
     {
-        format(line, sizeof(line), "%d\t%s\t%.1f %.1f %.1f\n", PresetGangID[i], PresetGangShortName[i], GangHQX[i], GangHQY[i], GangHQZ[i]);
+        format(line, sizeof(line), "%d\t%s\t%s\t%.1f %.1f %.1f\n", PresetGangID[i], (PresetGangEnabled[i] ? "ACTIVE" : "DISABLED"), PresetGangShortName[i], GangHQX[i], GangHQY[i], GangHQZ[i]);
         strcat(body, line, sizeof(body));
     }
 
@@ -8257,6 +8311,7 @@ stock ShowGangPresetActionMenu(playerid, gangid)
     strcat(body, "Edit Color Decimal\n", sizeof(body));
     strcat(body, "Goto HQ Exterior\n", sizeof(body));
     strcat(body, "Reload DB\n", sizeof(body));
+    strcat(body, "Enable / Disable Gang Preset\n", sizeof(body));
     strcat(body, "Back", sizeof(body));
     ShowPlayerDialog(playerid, DIALOG_GANG_PRESET_ACTION_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Back");
     return 1;
@@ -8273,7 +8328,7 @@ stock ShowGangPresetInfo(playerid, gangid)
 
     new body[1024];
     new line[192];
-    format(line, sizeof(line), "Gang ID: %d\n", gangid);
+    format(line, sizeof(line), "Gang ID: %d\nStatus: %s\n", gangid, (PresetGangEnabled[gangIndex] ? "ACTIVE" : "DISABLED"));
     strcat(body, line, sizeof(body));
     format(line, sizeof(line), "Name: %s\nShort: %s\n", PresetGangName[gangIndex], PresetGangShortName[gangIndex]);
     strcat(body, line, sizeof(body));
@@ -8416,6 +8471,44 @@ stock UpdateGangPresetColor(playerid, gangid, color)
     CreateGangHQExteriorRuntime(gangIndex);
     RefreshGangHQMapIconsForAll();
     SendClientMessage(playerid, COLOR_GREEN, "Warna gang preset berhasil disimpan ke DB.");
+    return 1;
+}
+
+stock SetGangPresetEnabled(playerid, gangid, enabled)
+{
+    new gangIndex = GetPresetGangIndexByID(gangid);
+    if (gangIndex == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang preset tidak valid.");
+        return 0;
+    }
+
+    PresetGangEnabled[gangIndex] = enabled ? 1 : 0;
+    SaveGangPresetConfig(gangid);
+    CreateGangHQExteriorRuntime(gangIndex);
+    RefreshGangHQMapIconsForAll();
+
+    new msg[160];
+    format(msg, sizeof(msg), "Gang preset %s sekarang %s.", PresetGangShortName[gangIndex], (PresetGangEnabled[gangIndex] ? "ACTIVE" : "DISABLED"));
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    SendClientMessage(playerid, COLOR_WHITE, "Disabled gang: pickup/label/map icon disembunyikan dan join/HQ entry ditolak. Existing member tidak otomatis dikeluarkan.");
+    return 1;
+}
+
+stock ShowGangPresetStatusSummary(playerid)
+{
+    new body[1536];
+    new line[160];
+    body[0] = EOS;
+
+    strcat(body, "ID\tStatus\tGang\tHQ Radius\n", sizeof(body));
+    for (new i = 0; i < MAX_PRESET_GANGS; i++)
+    {
+        format(line, sizeof(line), "%d\t%s\t%s\t%.1f\n", PresetGangID[i], (PresetGangEnabled[i] ? "ACTIVE" : "DISABLED"), PresetGangShortName[i], GangHQRadius[i]);
+        strcat(body, line, sizeof(body));
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_GANG_PRESET_STATUS, DIALOG_STYLE_TABLIST_HEADERS, "Gang Preset Active Status", body, "Back", "Close");
     return 1;
 }
 
@@ -10551,7 +10644,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24J.4 Business Compile Fix");
+    SetGameModeText("SAIF Dev v0.24K Gang Preset Finalization");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -10664,7 +10757,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24J Full SA Offline Expansion berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K Gang Preset Finalization berhasil dijalankan.");
     return 1;
 }
 
@@ -11261,15 +11354,16 @@ stock ShowAdminToolsMenu(playerid)
 
 stock ShowAdminToolsReference(playerid)
 {
-    new body[3072];
+    new body[4096];
     body[0] = EOS;
 
     strcat(body, "SAIF Admin Menus Hub (/amenus)\n\n", sizeof(body));
-    strcat(body, "Core Admin:\n/adminmenu - Admin dashboard\n/betamenu - Beta/whitelist dashboard\n\n", sizeof(body));
-    strcat(body, "Dynamic World Editors:\n/locmenu - Dynamic location editor\n/objmenu - Dynamic object editor\n/parkvehmenu - Parked vehicle editor\n/wpickupmenu - Offline world pickup editor\n/pubintmenu - Public interior editor + point editor\n/turfmenu - Turf zone editor\n\n", sizeof(body));
+    strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
+    strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/turfmenu | /turfedit\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu - Gang preset DB config\n/bizpresetmenu - Business preset DB config\n/ammuconfig - Ammu-Nation price/ammo config\n/serviceconfig - Public shop/service config\n\n", sizeof(body));
-    strcat(body, "Catatan:\nMenu Owner-only tetap akan menolak jika admin level belum cukup.\n/amenus hanya mengumpulkan pintu masuk menu agar command tidak mudah lupa.", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n\n", sizeof(body));
+    strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id]\n\n", sizeof(body));
+    strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "SAIF Admin Menu Reference", body, "Back", "Close");
     return 1;
@@ -11971,9 +12065,10 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
                 LoadGangPresetConfigFromDB();
                 SendClientMessage(playerid, COLOR_GREEN, "Gang preset config reload dari database diminta.");
             }
-            case 3:
+            case 3: ShowGangPresetStatusSummary(playerid);
+            case 4:
             {
-                ShowPlayerDialog(playerid, DIALOG_GANG_PRESET_INFO, DIALOG_STYLE_MSGBOX, "Gang Preset Source Policy", "OFFLINE-FIRST / EXACT-SOURCE-FIRST\n\nGang tetap preset GTA SA.\nHQ exterior, label, warna, dan radius sekarang bisa dioverride dari gang_preset_config DB.\nGunakan ini untuk audit/polish titik HQ agar lebih dekat feel offline GTA SA.\n\nPlayer tetap tidak bisa create/disband gang.", "Back", "Close");
+                ShowPlayerDialog(playerid, DIALOG_GANG_PRESET_INFO, DIALOG_STYLE_MSGBOX, "Gang Preset Source Policy", "OFFLINE-FIRST / EXACT-SOURCE-FIRST\n\nGang tetap preset GTA SA.\nHQ exterior, label, warna, status enabled, dan radius bisa dioverride dari gang_preset_config DB.\nDisable gang yang belum tervalidasi source/HQ agar tidak muncul ke player.\n\nPlayer tetap tidak bisa create/disband gang.", "Back", "Close");
             }
         }
         return 1;
@@ -12063,7 +12158,8 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
                 LoadGangPresetConfigFromDB();
                 SendClientMessage(playerid, COLOR_GREEN, "Gang preset config reload dari database diminta.");
             }
-            case 8: ShowGangPresetMenu(playerid);
+            case 8: ShowPlayerDialog(playerid, DIALOG_GANG_PRESET_ENABLE_INPUT, DIALOG_STYLE_INPUT, "Enable / Disable Gang Preset", "Masukkan 1 untuk ACTIVE atau 0 untuk DISABLED.\n\nDisabled gang disembunyikan dari pickup/label/map icon dan player tidak bisa join/enter HQ.", "Save", "Back");
+            case 9: ShowGangPresetMenu(playerid);
         }
         return 1;
     }
@@ -12119,6 +12215,44 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 
         UpdateGangPresetColor(playerid, gangid, strval(inputtext));
         ShowGangPresetActionMenu(playerid, gangid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_GANG_PRESET_ENABLE_INPUT)
+    {
+        new gangid = PlayerEditingGangPresetID[playerid];
+        if (!response)
+        {
+            ShowGangPresetActionMenu(playerid, gangid);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Input harus 1 atau 0.");
+            ShowGangPresetActionMenu(playerid, gangid);
+            return 1;
+        }
+
+        new enabled = strval(inputtext);
+        if (enabled != 0 && enabled != 1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Input harus 1 atau 0.");
+            ShowGangPresetActionMenu(playerid, gangid);
+            return 1;
+        }
+
+        SetGangPresetEnabled(playerid, gangid, enabled);
+        ShowGangPresetActionMenu(playerid, gangid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_GANG_PRESET_STATUS)
+    {
+        if (response)
+        {
+            ShowGangPresetMenu(playerid);
+        }
         return 1;
     }
 
@@ -22781,7 +22915,10 @@ stock ApplyLSIFMapIcons(playerid)
 
     for (new i = 0; i < MAX_PRESET_GANGS; i++)
     {
-        SetPlayerMapIcon(playerid, MAPICON_BASE_GANG_HQ + i, GangHQX[i], GangHQY[i], GangHQZ[i], MAPICON_TYPE_GANG_HQ, PresetGangColor[i], MAPICON_LOCAL);
+        if (PresetGangEnabled[i])
+        {
+            SetPlayerMapIcon(playerid, MAPICON_BASE_GANG_HQ + i, GangHQX[i], GangHQY[i], GangHQZ[i], MAPICON_TYPE_GANG_HQ, PresetGangColor[i], MAPICON_LOCAL);
+        }
     }
 
     ApplyDynamicLocationIcons(playerid);
@@ -28957,6 +29094,39 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (strfind(cmdtext, "/gangpresetenable ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa enable/disable gang preset.");
+            return 1;
+        }
+
+        new gangStr[16];
+        new enabledStr[16];
+        if (!GetTwoParams(cmdtext[18], gangStr, sizeof(gangStr), enabledStr, sizeof(enabledStr)) || !IsNumericString(gangStr) || !IsNumericString(enabledStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangpresetenable [gang_id] [0/1]");
+            return 1;
+        }
+
+        new enabled = strval(enabledStr);
+        if (enabled != 0 && enabled != 1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Status harus 0 atau 1.");
+            return 1;
+        }
+
+        SetGangPresetEnabled(playerid, strval(gangStr), enabled);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/gangpresetenable", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangpresetenable [gang_id] [0/1]");
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/gangpresetreload", true))
     {
         if (!IsAdminLevel(playerid, ADMIN_OWNER))
@@ -29388,7 +29558,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24J Full SA Offline Expansion");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K Gang Preset Finalization");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -29398,6 +29568,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K: Gang preset active status, enable/disable, runtime hide, and /amenus command reference cleanup.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24J.4: Business array compile fix after MAX_BUSINESSES 64 expansion.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24F.2: Ammu config dialog fix, edit price/ammo/select action now responds correctly.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24F.1: Configurable Ammu-Nation price/ammo and repeat purchase.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24F: Offline-like Ammu-Nation weapon catalog/pricing, expanded saved loadout.");

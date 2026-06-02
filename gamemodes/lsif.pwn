@@ -1690,6 +1690,8 @@ forward OnGangTerritoryGangLookup(playerid, territoryIndex, gangid);
 forward DelayedRefreshAllPlayerTerritoryZones();
 forward CompleteTurfChallengeHold(playerid, territoryIndex, gangid, startTick);
 forward TurfWarTick();
+forward OnTurfConfigLoaded();
+forward OnTurfConfigSaved();
 forward OnGangColorUpdated(playerid, colorIndex);
 forward OnPlayerGangLoaded(playerid);
 forward OnGangCreated(playerid);
@@ -1709,6 +1711,92 @@ forward OnDynamicObjectPurgeLocationsDeleted(playerid, objectId);
 forward ReloadDynamicLocationsDelayed(playerid);
 
 
+stock LoadTurfConfigFromDB()
+{
+    new query[512];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "SELECT setting_key, setting_value FROM server_settings WHERE setting_key IN ('turf_hold_seconds','turf_capture_seconds','turf_grace_seconds','turf_cooldown_seconds')"
+    );
+
+    mysql_tquery(g_SQL, query, "OnTurfConfigLoaded");
+    return 1;
+}
+
+stock SaveTurfConfigToDB()
+{
+    new query[768];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO server_settings (setting_key, setting_value) VALUES ('turf_hold_seconds','%d'),('turf_capture_seconds','%d'),('turf_grace_seconds','%d'),('turf_cooldown_seconds','%d') ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_at=CURRENT_TIMESTAMP",
+        g_TurfHoldSeconds,
+        g_TurfCaptureSeconds,
+        g_TurfGraceSeconds,
+        g_TurfCooldownSeconds
+    );
+
+    mysql_tquery(g_SQL, query, "OnTurfConfigSaved");
+    return 1;
+}
+
+public OnTurfConfigLoaded()
+{
+    new rows = cache_num_rows();
+    new key[64];
+    new valueStr[32];
+    new value;
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name(i, "setting_key", key, sizeof(key));
+        cache_get_value_name(i, "setting_value", valueStr, sizeof(valueStr));
+        value = strval(valueStr);
+
+        if (!strcmp(key, "turf_hold_seconds", true))
+        {
+            if (value >= 1 && value <= 30)
+            {
+                g_TurfHoldSeconds = value;
+            }
+        }
+        else if (!strcmp(key, "turf_capture_seconds", true))
+        {
+            if (value >= 10 && value <= 1800)
+            {
+                g_TurfCaptureSeconds = value;
+            }
+        }
+        else if (!strcmp(key, "turf_grace_seconds", true))
+        {
+            if (value >= 5 && value <= 300)
+            {
+                g_TurfGraceSeconds = value;
+            }
+        }
+        else if (!strcmp(key, "turf_cooldown_seconds", true))
+        {
+            if (value >= 0 && value <= 7200)
+            {
+                g_TurfCooldownSeconds = value;
+            }
+        }
+    }
+
+    printf("[SAIF] Turf config loaded from DB: hold=%d capture=%d grace=%d cooldown=%d", g_TurfHoldSeconds, g_TurfCaptureSeconds, g_TurfGraceSeconds, g_TurfCooldownSeconds);
+    return 1;
+}
+
+public OnTurfConfigSaved()
+{
+    print("[SAIF] Turf config saved to database.");
+    return 1;
+}
 
 stock ShowBetaMOTD(playerid)
 {
@@ -8666,7 +8754,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.22D.1 Gang Rank");
+    SetGameModeText("SAIF Dev v0.22D.2 Turf Config DB");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -8683,6 +8771,8 @@ public OnGameModeInit()
     {
         print("[MYSQL] Berhasil connect ke database lsif_db.");
     }
+    LoadTurfConfigFromDB();
+
     AddPlayerClass(
         0,
         SPAWN_X,
@@ -8760,7 +8850,7 @@ public OnGameModeInit()
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
-    print("[SAIF] Gamemode v0.22D.1 Gang Rank Progression berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.22D.2 Persistent Turf Config berhasil dijalankan.");
     return 1;
 }
 
@@ -18976,6 +19066,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         {
             SendClientMessage(playerid, COLOR_CYAN, "Owner: /setturfconfig [hold] [capture] [grace] [cooldown]");
             SendClientMessage(playerid, COLOR_CYAN, "Debug cepat: /setturfdebugtime [capture_seconds]");
+            SendClientMessage(playerid, COLOR_CYAN, "Config tersimpan permanen di database server_settings.");
         }
         return 1;
     }
@@ -19012,6 +19103,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         g_TurfCaptureSeconds = capture;
         g_TurfGraceSeconds = grace;
         g_TurfCooldownSeconds = cooldown;
+        SaveTurfConfigToDB();
 
         new msg[144];
         format(msg, sizeof(msg), "Turf config diubah: hold %d, capture %d, grace %d, cooldown %d detik.", hold, capture, grace, cooldown);
@@ -19044,6 +19136,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
         }
 
         g_TurfCaptureSeconds = capture;
+        SaveTurfConfigToDB();
+
         new msg[128];
         format(msg, sizeof(msg), "Debug turf capture time diset menjadi %d detik.", g_TurfCaptureSeconds);
         SendClientMessage(playerid, COLOR_GREEN, msg);
@@ -19063,7 +19157,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
         g_TurfCaptureSeconds = TURF_CAPTURE_SECONDS;
         g_TurfGraceSeconds = TURF_ATTACKER_GRACE_SECONDS;
         g_TurfCooldownSeconds = TURF_COOLDOWN_SECONDS;
-        SendClientMessage(playerid, COLOR_GREEN, "Turf config dikembalikan ke default.");
+        SaveTurfConfigToDB();
+        SendClientMessage(playerid, COLOR_GREEN, "Turf config dikembalikan ke default dan disimpan ke database.");
         LogAdminAction(playerid, INVALID_PLAYER_ID, "RESET_TURF_CONFIG", "Turf config dikembalikan ke default.");
         return 1;
     }

@@ -563,5 +563,42 @@ CREATE TABLE IF NOT EXISTS turf_war_logs (
     INDEX idx_created_at (created_at)
 );
 
+CREATE TABLE IF NOT EXISTS gang_member_stats (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    gang_id INT NOT NULL,
+    player_id INT NOT NULL,
+    player_name VARCHAR(24) NOT NULL,
+    respect INT NOT NULL DEFAULT 0,
+    captures INT NOT NULL DEFAULT 0,
+    defends INT NOT NULL DEFAULT 0,
+    wars_participated INT NOT NULL DEFAULT 0,
+    last_activity_at DATETIME NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+
+    UNIQUE KEY unique_gang_player (gang_id, player_id),
+    INDEX idx_gang_id (gang_id),
+    INDEX idx_player_id (player_id),
+    INDEX idx_respect (respect)
+);
+
+INSERT INTO gang_member_stats (gang_id, player_id, player_name)
+SELECT gm.gang_id, gm.player_id, gm.player_name
+FROM gang_members gm
+LEFT JOIN gang_member_stats gs ON gs.gang_id = gm.gang_id AND gs.player_id = gm.player_id
+WHERE gs.id IS NULL;
 
 
+CREATE TABLE IF NOT EXISTS server_settings (
+    setting_key VARCHAR(64) NOT NULL PRIMARY KEY,
+    setting_value VARCHAR(255) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NULL ON UPDATE CURRENT_TIMESTAMP
+);
+
+INSERT INTO server_settings (setting_key, setting_value) VALUES
+('turf_hold_seconds', '5'),
+('turf_capture_seconds', '180'),
+('turf_grace_seconds', '30'),
+('turf_cooldown_seconds', '900')
+ON DUPLICATE KEY UPDATE setting_value = setting_value;

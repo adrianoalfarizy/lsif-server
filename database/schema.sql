@@ -1272,5 +1272,79 @@ CREATE INDEX IF NOT EXISTS idx_public_interiors_source_tag ON public_interiors (
 -- VALUES
 -- ('ammunation', 'Ammu-Nation Exact Sample', 1368.42, -1279.76, 13.55, 90.0, 0, 0, 1, 286.1489, -40.6443, 1001.5156, 90.0, 286.1489, -40.6443, 1001.5156, 'sample', 'manual_sample', 'offline_exact_public', 1);
 
+-- SAIF v0.24E.1 IPL/ENEX exact public interior queue — Los Santos / County subset
+-- Generated from uploaded GTA SA gta.dat + maps IPL ENEX data.
+-- Runtime SAIF tetap pakai panah custom, shared virtual world, dan checkpoint merah.
 
+CREATE TABLE IF NOT EXISTS public_interior_import_queue (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    interior_type VARCHAR(32) NOT NULL DEFAULT 'public',
+    display_name VARCHAR(64) NOT NULL DEFAULT 'Public Interior',
+    exterior_x FLOAT NOT NULL DEFAULT 0,
+    exterior_y FLOAT NOT NULL DEFAULT 0,
+    exterior_z FLOAT NOT NULL DEFAULT 0,
+    exterior_a FLOAT NOT NULL DEFAULT 0,
+    exterior_interior INT NOT NULL DEFAULT 0,
+    exterior_virtual_world INT NOT NULL DEFAULT 0,
+    interior_id INT NOT NULL DEFAULT 0,
+    interior_x FLOAT NOT NULL DEFAULT 0,
+    interior_y FLOAT NOT NULL DEFAULT 0,
+    interior_z FLOAT NOT NULL DEFAULT 0,
+    interior_a FLOAT NOT NULL DEFAULT 0,
+    exit_x FLOAT NOT NULL DEFAULT 0,
+    exit_y FLOAT NOT NULL DEFAULT 0,
+    exit_z FLOAT NOT NULL DEFAULT 0,
+    source_file VARCHAR(128) NOT NULL DEFAULT '',
+    source_ref VARCHAR(128) NOT NULL DEFAULT '',
+    source_tag VARCHAR(64) NOT NULL DEFAULT 'offline_exact_public',
+    enabled TINYINT NOT NULL DEFAULT 1,
+    imported TINYINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_pubint_import_enabled (enabled),
+    KEY idx_pubint_import_source_tag (source_tag),
+    KEY idx_pubint_import_type (interior_type),
+    KEY idx_pubint_import_imported (imported)
+);
 
+ALTER TABLE public_interiors
+    ADD COLUMN IF NOT EXISTS source_tag VARCHAR(64) NOT NULL DEFAULT 'manual';
+
+CREATE INDEX IF NOT EXISTS idx_public_interiors_source_tag ON public_interiors (source_tag);
+
+-- Replace previous exact public import queue rows with this extracted IPL/ENEX dataset.
+DELETE FROM public_interior_import_queue WHERE source_tag = 'offline_exact_public';
+
+INSERT INTO public_interior_import_queue
+(interior_type, display_name, exterior_x, exterior_y, exterior_z, exterior_a, exterior_interior, exterior_virtual_world, interior_id, interior_x, interior_y, interior_z, interior_a, exit_x, exit_y, exit_z, source_file, source_ref, source_tag, enabled)
+VALUES
+('ammunation', 'Ammu-Nation (AMMUN1)', 1368.35, -1279.06, 12.55, 90, 0, 0, 1, 286.149, -40.6444, 1000.57, 354.270078, 286.149, -41.5444, 1000.57, 'maps/LA/LAn2.ipl', 'AMMUN1', 'offline_exact_public', 1),
+('ammunation', 'Ammu-Nation (AMMUN2)', 242.668, -178.478, 0.621441, 90.097, 0, 0, 4, 285.801, -84.5476, 1000.54, 354.270078, 285.801, -85.4476, 1000.54, 'maps/country/countrye.ipl', 'AMMUN2', 'offline_exact_public', 1),
+('ammunation', 'Ammu-Nation (AMMUN2)', 2333.43, 61.5173, 25.7342, 270, 0, 0, 4, 285.801, -84.5476, 1000.54, 354.270078, 285.801, -85.4476, 1000.54, 'maps/country/countrye.ipl', 'AMMUN2', 'offline_exact_public', 1),
+('ammunation', 'Ammu-Nation (AMMUN3)', 2400.5, -1981.48, 12.5604, 0, 0, 0, 6, 296.92, -111.072, 1000.57, 354.270078, 296.92, -111.972, 1000.57, 'maps/LA/LAs2.ipl', 'AMMUN3', 'offline_exact_public', 1),
+('247', '24/7 Supermarket (X7_11S)', 1352.31, -1758.3, 12.5149, 359.74, 0, 0, 6, -26.6916, -55.7149, 1002.55, 0, -26.6916, -57.8149, 1002.55, 'maps/LA/LAn.ipl', 'X7_11S', 'offline_exact_public', 1),
+('247', '24/7 Supermarket (X7_11B)', 1833.54, -1843.38, 12.5595, 90, 0, 0, 18, -30.9467, -89.6096, 1002.55, 0, -30.9467, -91.7096, 1002.55, 'maps/LA/LAs.ipl', 'X7_11B', 'offline_exact_public', 1),
+('247', '24/7 Supermarket (X7_11B)', 1315.49, -897.843, 38.571, 180, 0, 0, 18, -30.9467, -89.6096, 1002.55, 0, -30.9467, -91.7096, 1002.55, 'maps/LA/LaWn.ipl', 'X7_11B', 'offline_exact_public', 1),
+('247', '24/7 Supermarket (X711S2)', 1000.33, -919.924, 41.2368, 97, 0, 0, 4, -27.3123, -29.2776, 1002.55, 0, -27.3123, -31.3776, 1002.55, 'maps/LA/LaWn.ipl', 'X711S2', 'offline_exact_public', 1),
+('burgershot', 'Burger Shot (FDBURG)', 811.982, -1616.02, 12.618, 270.42, 0, 0, 10, 363.413, -74.5787, 1000.55, 314.7, 363.113, -74.8787, 1000.55, 'maps/LA/LAw.ipl', 'FDBURG', 'offline_exact_public', 1),
+('burgershot', 'Burger Shot (FDBURG)', 1199.13, -918.071, 42.3243, 180, 0, 0, 10, 363.413, -74.5787, 1000.55, 314.7, 363.113, -74.8787, 1000.55, 'maps/LA/LaWn.ipl', 'FDBURG', 'offline_exact_public', 1),
+('cluckinbell', 'Cluckin'' Bell (FDCHICK)', 2419.95, -1509.8, 23.1568, 270, 0, 0, 9, 365.673, -10.7132, 1000.87, 354.270078, 365.673, -11.6132, 1000.87, 'maps/LA/LAe2.ipl', 'FDCHICK', 'offline_exact_public', 1),
+('cluckinbell', 'Cluckin'' Bell (FDCHICK)', 2397.83, -1898.65, 12.7131, 0, 0, 0, 9, 365.673, -10.7132, 1000.87, 354.270078, 365.673, -11.6132, 1000.87, 'maps/LA/LAs2.ipl', 'FDCHICK', 'offline_exact_public', 1),
+('cluckinbell', 'Cluckin'' Bell (FDCHICK)', 928.525, -1352.77, 12.4344, 90, 0, 0, 9, 365.673, -10.7132, 1000.87, 354.270078, 365.673, -11.6132, 1000.87, 'maps/LA/LaWn.ipl', 'FDCHICK', 'offline_exact_public', 1),
+('pizzastack', 'Pizza Stack (FDPIZA)', 1367.27, 248.388, 18.6229, 69.0975, 0, 0, 5, 372.352, -131.651, 1000.45, 354.270078, 372.352, -133.551, 1000.45, 'maps/country/countrye.ipl', 'FDPIZA', 'offline_exact_public', 1),
+('pizzastack', 'Pizza Stack (FDPIZA)', 2333.43, 75.0488, 25.7342, 270, 0, 0, 5, 372.352, -131.651, 1000.45, 354.270078, 372.352, -133.551, 1000.45, 'maps/country/countrye.ipl', 'FDPIZA', 'offline_exact_public', 1),
+('pizzastack', 'Pizza Stack (FDPIZA)', 203.334, -202.532, 0.600709, 180, 0, 0, 5, 372.352, -131.651, 1000.45, 354.270078, 372.352, -133.551, 1000.45, 'maps/country/countrye.ipl', 'FDPIZA', 'offline_exact_public', 1),
+('pizzastack', 'Pizza Stack (FDPIZA)', 2105.32, -1806.49, 12.6941, 92, 0, 0, 5, 372.352, -131.651, 1000.45, 354.270078, 372.352, -133.551, 1000.45, 'maps/LA/LAe.ipl', 'FDPIZA', 'offline_exact_public', 1),
+('gym', 'Gym (GYM1)', 2229.63, -1721.63, 12.6529, 137, 0, 0, 5, 772.112, -3.89865, 999.688, 0, 772.112, -4.99865, 999.688, 'maps/LA/LAe2.ipl', 'GYM1', 'offline_exact_public', 1),
+('barber', 'Barber Shop (BARBERS)', 2070.86, -1793.84, 12.661, 270, 0, 0, 2, 411.626, -21.4333, 1000.8, 0, 411.626, -23.3333, 1000.8, 'maps/LA/LAe.ipl', 'BARBERS', 'offline_exact_public', 1),
+('barber', 'Barber Shop (BARBER2)', 672.355, -496.834, 15.3751, 271.0975, 0, 0, 3, 418.653, -82.6398, 1000.96, 0, 418.653, -84.1398, 1000.96, 'maps/country/countrye.ipl', 'BARBER2', 'offline_exact_public', 1),
+('barber', 'Barber Shop (BARBER2)', 823.629, -1588.9, 12.5764, 142.42, 0, 0, 3, 418.653, -82.6398, 1000.96, 0, 418.653, -84.1398, 1000.96, 'maps/LA/LAw.ipl', 'BARBER2', 'offline_exact_public', 1),
+('barber', 'Barber Shop (BARBER3)', 2723.76, -2026.72, 12.5753, 90, 0, 0, 12, 412.022, -52.6499, 1000.96, 0, 412.022, -54.5499, 1000.96, 'maps/LA/LAs2.ipl', 'BARBER3', 'offline_exact_public', 1),
+('tattoo', 'Tattoo Shop (TATTOO)', 2068.71, -1779.84, 12.5103, 270, 0, 0, 16, -204.44, -26.454, 1001.3, 0, -204.44, -27.154, 1001.3, 'maps/LA/LAe.ipl', 'TATTOO', 'offline_exact_public', 1),
+('tattoo', 'Tattoo Shop (TATTOO)', 1975.79, -2036.65, 12.5753, 90, 0, 0, 16, -204.44, -26.454, 1001.3, 0, -204.44, -27.154, 1001.3, 'maps/LA/LAs2.ipl', 'TATTOO', 'offline_exact_public', 1),
+('police', 'Police Department (POLICE1)', 627.642, -571.789, 16.907, 274.0975, 0, 0, 6, 246.784, 63.9002, 1002.64, 0, 246.784, 62.2002, 1002.64, 'maps/country/countrye.ipl', 'POLICE1', 'offline_exact_public', 1),
+('police', 'Police Department (POLICE1)', 1554.95, -1674.99, 15.3283, 90, 0, 0, 6, 246.784, 63.9002, 1002.64, 0, 246.784, 62.2002, 1002.64, 'maps/LA/LAn.ipl', 'POLICE1', 'offline_exact_public', 1);
+
+-- In-game after deploy:
+-- /pubintexactinfo
+-- /pubintimportdb
+-- /pubintlist

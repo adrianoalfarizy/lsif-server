@@ -5101,7 +5101,8 @@ stock ShowGangHQDialog(playerid, gangid)
         strcat(body, "Gang Turfs\n", sizeof(body));
         strcat(body, "Join This Gang\n", sizeof(body));
         strcat(body, "Turf Map\n", sizeof(body));
-        strcat(body, "Gang Rank Info", sizeof(body));
+        strcat(body, "Gang Rank Info\n", sizeof(body));
+        strcat(body, "Enter HQ Interior", sizeof(body));
     }
 
     ShowPlayerDialog(playerid, DIALOG_GANG_HQ_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Close");
@@ -7392,12 +7393,6 @@ stock EnterPlayerGangHQInterior(playerid, gangid)
         return 0;
     }
 
-    if (PlayerGangID[playerid] != gangid)
-    {
-        SendClientMessage(playerid, COLOR_RED, "Kamu hanya bisa masuk ke interior HQ gang sendiri.");
-        return 0;
-    }
-
     if (!GangHQInteriorEnabled[gangIndex])
     {
         SendClientMessage(playerid, COLOR_RED, "Interior HQ gang ini belum aktif.");
@@ -7423,7 +7418,7 @@ stock EnterPlayerGangHQInterior(playerid, gangid)
 
     if (!IsPlayerNearGangHQ(playerid, gangIndex))
     {
-        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada di luar HQ gang sendiri untuk masuk interior.");
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada di luar Gang HQ untuk masuk interior.");
         return 0;
     }
 
@@ -9692,7 +9687,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.22F Gang HQ Interior");
+    SetGameModeText("SAIF Dev v0.22F.1 Gang HQ Interior Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -9790,7 +9785,7 @@ public OnGameModeInit()
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
-    print("[SAIF] Gamemode v0.22F Gang HQ Interior & Shared Utility berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.22F.1 Gang HQ Interior Visitor Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -12000,6 +11995,11 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             if (listitem == 5)
             {
                 ShowGangRankInfoDialog(playerid);
+                return 1;
+            }
+            if (listitem == 6)
+            {
+                EnterPlayerGangHQInterior(playerid, gangid);
                 return 1;
             }
         }
@@ -14775,7 +14775,7 @@ stock CreateWorldInteractionMarkers()
 
     for (new i = 0; i < MAX_PRESET_GANGS; i++)
     {
-        GangHQPickup[i] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, GangHQX[i], GangHQY[i], GangHQZ[i], 0);
+        GangHQPickup[i] = CreatePickup(GANG_HQ_INTERIOR_PICKUP_MODEL, GANG_HQ_INTERIOR_PICKUP_TYPE, GangHQX[i], GangHQY[i], GangHQZ[i], 0);
         format(labelText, sizeof(labelText), "[GANG HQ] %s\nALT: Menu / Stash\nPanah: Enter HQ", PresetGangShortName[i]);
         // Offset lebih tinggi agar tidak tumpuk dengan marker/label ALT lain di lokasi yang berdekatan.
         GangHQLabel[i] = Create3DTextLabel(labelText, PresetGangColor[i], GangHQX[i], GangHQY[i], GangHQZ[i] + 2.2, 16.0, 0, true);
@@ -20513,12 +20513,13 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
     if (!strcmp(cmdtext, "/enterganghq", true))
     {
-        if (PlayerGangID[playerid] <= 0)
+        new gangIndex = GetNearestGangHQ(playerid);
+        if (gangIndex == -1)
         {
-            SendClientMessage(playerid, COLOR_RED, "Kamu belum tergabung dalam gang.");
+            SendClientMessage(playerid, COLOR_RED, "Kamu harus berada di dekat Gang HQ untuk masuk interior.");
             return 1;
         }
-        EnterPlayerGangHQInterior(playerid, PlayerGangID[playerid]);
+        EnterPlayerGangHQInterior(playerid, PresetGangID[gangIndex]);
         return 1;
     }
 
@@ -20886,7 +20887,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.22F Gang HQ Interior & Shared Utility");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.22F.1 Gang HQ Interior Visitor Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -20895,7 +20896,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.22F: Gang HQ shared interior, enter/exit pickup, interior stash access.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.22F.1: Gang HQ entry arrow + public visitor entry fix.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A.3: Runtime turf war config untuk balancing/testing.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A.2: Turf HUD compact menggunakan TextDraw kecil.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A: Basic turf war system.");

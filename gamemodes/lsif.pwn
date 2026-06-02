@@ -7202,6 +7202,27 @@ stock IsPlayerInsideOwnGangHQInterior(playerid)
     return 1;
 }
 
+stock GetPlayerCurrentGangHQInteriorIndex(playerid)
+{
+    new playerInterior = GetPlayerInterior(playerid);
+    new playerVirtualWorld = GetPlayerVirtualWorld(playerid);
+
+    for (new i = 0; i < MAX_PRESET_GANGS; i++)
+    {
+        if (!GangHQInteriorEnabled[i])
+        {
+            continue;
+        }
+
+        if (playerInterior == GangHQInteriorID[i] && playerVirtualWorld == GangHQInteriorVirtualWorld[i])
+        {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
 stock IsPlayerNearOwnGangHQ(playerid)
 {
     new gangIndex = GetPlayerGangHQIndex(playerid);
@@ -7440,8 +7461,16 @@ stock ExitPlayerGangHQInterior(playerid)
 {
     if (!PlayerInsideGangHQ[playerid])
     {
-        SendClientMessage(playerid, COLOR_RED, "Kamu tidak sedang berada di interior Gang HQ.");
-        return 0;
+        new detectedGangIndex = GetPlayerCurrentGangHQInteriorIndex(playerid);
+
+        if (detectedGangIndex == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu tidak sedang berada di interior Gang HQ.");
+            return 0;
+        }
+
+        PlayerInsideGangHQ[playerid] = 1;
+        PlayerInsideGangHQID[playerid] = PresetGangID[detectedGangIndex];
     }
 
     new gangid = PlayerInsideGangHQID[playerid];
@@ -9687,7 +9716,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.22F.1 Gang HQ Interior Fix");
+    SetGameModeText("SAIF Dev v0.22F.2 Gang HQ Interior Exit Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -9785,7 +9814,7 @@ public OnGameModeInit()
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
-    print("[SAIF] Gamemode v0.22F.1 Gang HQ Interior Visitor Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.22F.2 Gang HQ Interior Exit Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -14775,8 +14804,8 @@ stock CreateWorldInteractionMarkers()
 
     for (new i = 0; i < MAX_PRESET_GANGS; i++)
     {
-        GangHQPickup[i] = CreatePickup(GANG_HQ_INTERIOR_PICKUP_MODEL, GANG_HQ_INTERIOR_PICKUP_TYPE, GangHQX[i], GangHQY[i], GangHQZ[i], 0);
-        format(labelText, sizeof(labelText), "[GANG HQ] %s\nALT: Menu / Stash\nPanah: Enter HQ", PresetGangShortName[i]);
+        GangHQPickup[i] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, GangHQX[i], GangHQY[i], GangHQZ[i], 0);
+        format(labelText, sizeof(labelText), "[GANG HQ] %s\nALT: Menu / Stash\nPickup: Enter HQ", PresetGangShortName[i]);
         // Offset lebih tinggi agar tidak tumpuk dengan marker/label ALT lain di lokasi yang berdekatan.
         GangHQLabel[i] = Create3DTextLabel(labelText, PresetGangColor[i], GangHQX[i], GangHQY[i], GangHQZ[i] + 2.2, 16.0, 0, true);
     }
@@ -17171,11 +17200,6 @@ public OnPlayerPickUpPickup(playerid, pickupid)
     {
         if (GangHQInteriorExitPickup[g] != -1 && pickupid == GangHQInteriorExitPickup[g])
         {
-            if (IsPlayerInGangHQPickupCooldown(playerid))
-            {
-                return 1;
-            }
-
             ExitPlayerGangHQInterior(playerid);
             return 1;
         }

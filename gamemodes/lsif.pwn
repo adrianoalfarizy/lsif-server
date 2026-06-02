@@ -186,6 +186,7 @@
 #define DIALOG_PUBINT_FOOD_MENU 1166
 #define DIALOG_PUBINT_SERVICE_MENU 1167
 #define DIALOG_PARKVEH_SEED_INFO 1168
+#define DIALOG_PARKVEH_EXACT_INFO 1169
 
 
 
@@ -470,6 +471,7 @@
 #define PARKED_VEHICLE_DEFAULT_COLOR2 1
 #define PARKED_VEHICLE_LABEL_DRAW_DISTANCE 18.0
 #define PARKED_VEHICLE_OFFLINE_SEED_TAG "offline_template_ls"
+#define PARKED_VEHICLE_EXACT_IMPORT_TAG "offline_exact_ls"
 
 #define MAX_WORLD_PICKUPS 300
 #define WORLD_PICKUP_TYPE_BRIBE 1
@@ -9973,7 +9975,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24A.2 Restore Last Interior Position");
+    SetGameModeText("SAIF Dev v0.24B Exact Offline Vehicle Importer");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -10077,7 +10079,7 @@ public OnGameModeInit()
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24A.2 Restore Last Interior Position berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24B Exact Offline Vehicle Importer berhasil dijalankan.");
     return 1;
 }
 
@@ -11229,7 +11231,10 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 4: SeedOfflineParkedVehicleTemplate(playerid);
             case 5: ClearOfflineParkedVehicleSeed(playerid);
             case 6: ShowOfflineParkedVehicleSeedInfo(playerid);
-            case 7: ShowParkedVehicleEditorHelp(playerid);
+            case 7: ImportExactOfflineParkedVehicleQueue(playerid);
+            case 8: ClearExactOfflineParkedVehicleImport(playerid);
+            case 9: ShowExactOfflineParkedVehicleImportInfo(playerid);
+            case 10: ShowParkedVehicleEditorHelp(playerid);
         }
         return 1;
     }
@@ -11312,6 +11317,15 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
     }
 
     if (dialogid == DIALOG_PARKVEH_SEED_INFO)
+    {
+        if (response)
+        {
+            ShowParkedVehicleMenu(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PARKVEH_EXACT_INFO)
     {
         if (response)
         {
@@ -18109,7 +18123,7 @@ stock ShowParkedVehicleMenu(playerid)
     }
 
     new dialogText[768];
-    format(dialogText, sizeof(dialogText), "Create Parked Vehicle\nList / Select Parked Vehicle\nInput ID Manual\nReload Parked Vehicles\nSeed Curated Offline-like Template\nClear Curated Seed\nSeed Info\nHelp");
+    format(dialogText, sizeof(dialogText), "Create Parked Vehicle\nList / Select Parked Vehicle\nInput ID Manual\nReload Parked Vehicles\nSeed Curated Offline-like Template\nClear Curated Seed\nCurated Seed Info\nImport Exact Offline Queue\nClear Exact Import\nExact Import Info\nHelp");
     ShowPlayerDialog(playerid, DIALOG_PARKVEH_MENU, DIALOG_STYLE_LIST, "Parked Vehicle Editor", dialogText, "Select", "Close");
     return 1;
 }
@@ -18299,11 +18313,14 @@ stock ShowParkedVehicleEditorHelp(playerid)
     SendClientMessage(playerid, COLOR_WHITE, "/parkvehmenu - dialog editor utama.");
     SendClientMessage(playerid, COLOR_WHITE, "/parkvehcreate [modelid] - create dari posisi admin.");
     SendClientMessage(playerid, COLOR_WHITE, "/parkvehrotate [id] [angle] - rotate arah parkir.");
-    SendClientMessage(playerid, COLOR_WHITE, "/parkvehseed - seed offline-like parked vehicles massal.");
-    SendClientMessage(playerid, COLOR_WHITE, "/parkvehclearseed - disable hanya parked vehicle hasil seed.");
-    SendClientMessage(playerid, COLOR_WHITE, "/parkvehseedinfo - cek status seed offline-like.");
+    SendClientMessage(playerid, COLOR_WHITE, "/parkvehseed - seed curated offline-like parked vehicles massal.");
+    SendClientMessage(playerid, COLOR_WHITE, "/parkvehclearseed - disable hanya parked vehicle hasil curated seed.");
+    SendClientMessage(playerid, COLOR_WHITE, "/parkvehseedinfo - cek status curated seed.");
+    SendClientMessage(playerid, COLOR_WHITE, "/parkvehimportdb - import exact offline queue dari DB staging.");
+    SendClientMessage(playerid, COLOR_WHITE, "/parkvehexactclear - disable hasil exact import.");
+    SendClientMessage(playerid, COLOR_WHITE, "/parkvehexactinfo - cek queue/import exact offline.");
     SendClientMessage(playerid, COLOR_WHITE, "Command lama tetap aktif sebagai fallback/debug.");
-    SendClientMessage(playerid, COLOR_CYAN, "Cocok untuk taxi stand, bus terminal, depot, police/hospital/fire station. Catatan: seed v0.24A masih curated/offline-like, belum exact posisi original main.scm.");
+    SendClientMessage(playerid, COLOR_CYAN, "v0.24B: data exact dimasukkan ke parked_vehicle_import_queue, lalu import dengan /parkvehimportdb.");
     return 1;
 }
 
@@ -18515,6 +18532,137 @@ public OnParkedVehicleOfflineSeedInfoLoaded(playerid)
     );
 
     ShowPlayerDialog(playerid, DIALOG_PARKVEH_SEED_INFO, DIALOG_STYLE_MSGBOX, "Curated Parked Vehicle Seed Info", body, "Back", "Close");
+    return 1;
+}
+
+stock ImportExactOfflineParkedVehicleQueue(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa import exact offline parked vehicle queue.");
+        return 0;
+    }
+
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE parked_vehicles SET enabled=0 WHERE source_tag='%e'", PARKED_VEHICLE_EXACT_IMPORT_TAG);
+    mysql_tquery(g_SQL, query, "OnExactOfflineParkedVehicleImportCleared", "i", playerid);
+
+    SendClientMessage(playerid, COLOR_YELLOW, "Menyiapkan exact offline parked vehicle import dari DB queue...");
+    SendClientMessage(playerid, COLOR_WHITE, "Pastikan parked_vehicle_import_queue sudah berisi data source_tag offline_exact_ls.");
+    return 1;
+}
+
+public OnExactOfflineParkedVehicleImportCleared(playerid)
+{
+    new query[1536];
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO parked_vehicles (modelid, color1, color2, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, respawn_delay, locked, enabled, source_tag) SELECT modelid, color1, color2, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, respawn_delay, locked, 1, '%e' FROM parked_vehicle_import_queue WHERE enabled=1 AND source_tag='%e'",
+        PARKED_VEHICLE_EXACT_IMPORT_TAG,
+        PARKED_VEHICLE_EXACT_IMPORT_TAG
+    );
+    mysql_tquery(g_SQL, query, "OnExactOfflineParkedVehicleImportFinished", "i", playerid);
+    return 1;
+}
+
+public OnExactOfflineParkedVehicleImportFinished(playerid)
+{
+    new affectedRows = cache_affected_rows();
+    LoadParkedVehicles();
+
+    if (IsPlayerConnected(playerid))
+    {
+        new msg[144];
+        format(msg, sizeof(msg), "Exact offline import selesai. Rows imported: %d", affectedRows);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan /parkvehseedinfo atau /parkvehexactinfo untuk cek. Engine vehicle hasil import default ON saat reload.");
+    }
+
+    return 1;
+}
+
+stock ClearExactOfflineParkedVehicleImport(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa clear exact offline import.");
+        return 0;
+    }
+
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE parked_vehicles SET enabled=0 WHERE source_tag='%e'", PARKED_VEHICLE_EXACT_IMPORT_TAG);
+    mysql_tquery(g_SQL, query, "OnExactOfflineParkedVehicleImportClearedOnly", "i", playerid);
+    return 1;
+}
+
+public OnExactOfflineParkedVehicleImportClearedOnly(playerid)
+{
+    new affectedRows = cache_affected_rows();
+    LoadParkedVehicles();
+
+    if (IsPlayerConnected(playerid))
+    {
+        new msg[144];
+        format(msg, sizeof(msg), "Exact offline imported parked vehicles dinonaktifkan. Rows affected: %d", affectedRows);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+        SendClientMessage(playerid, COLOR_WHITE, "Manual parked vehicle dan curated seed tidak ikut dinonaktifkan.");
+    }
+
+    return 1;
+}
+
+stock ShowExactOfflineParkedVehicleImportInfo(playerid)
+{
+    new query[1024];
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "SELECT (SELECT COUNT(*) FROM parked_vehicle_import_queue WHERE source_tag='%e') AS queue_total, (SELECT COUNT(*) FROM parked_vehicle_import_queue WHERE source_tag='%e' AND enabled=1) AS queue_active, (SELECT COUNT(*) FROM parked_vehicles WHERE source_tag='%e') AS imported_total, (SELECT COUNT(*) FROM parked_vehicles WHERE source_tag='%e' AND enabled=1) AS imported_active",
+        PARKED_VEHICLE_EXACT_IMPORT_TAG,
+        PARKED_VEHICLE_EXACT_IMPORT_TAG,
+        PARKED_VEHICLE_EXACT_IMPORT_TAG,
+        PARKED_VEHICLE_EXACT_IMPORT_TAG
+    );
+    mysql_tquery(g_SQL, query, "OnExactOfflineParkedVehicleImportInfoLoaded", "i", playerid);
+    return 1;
+}
+
+public OnExactOfflineParkedVehicleImportInfoLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new queueTotal = 0;
+    new queueActive = 0;
+    new importedTotal = 0;
+    new importedActive = 0;
+    new body[1536];
+
+    if (cache_num_rows() > 0)
+    {
+        cache_get_value_name_int(0, "queue_total", queueTotal);
+        cache_get_value_name_int(0, "queue_active", queueActive);
+        cache_get_value_name_int(0, "imported_total", importedTotal);
+        cache_get_value_name_int(0, "imported_active", importedActive);
+    }
+
+    format(
+        body,
+        sizeof(body),
+        "Exact Offline Import Tag: %s\n\nQueue Total Rows: %d\nQueue Active Rows: %d\nImported Total Rows: %d\nImported Active Rows: %d\n\nWorkflow:\n1. Extract/generate exact parked vehicle rows dari source offline milikmu.\n2. INSERT rows ke parked_vehicle_import_queue dengan source_tag offline_exact_ls.\n3. Jalankan /parkvehimportdb.\n4. Cek hasil dengan /parkvehlist.\n\nCommands:\n/parkvehimportdb\n/parkvehexactclear\n/parkvehexactinfo",
+        PARKED_VEHICLE_EXACT_IMPORT_TAG,
+        queueTotal,
+        queueActive,
+        importedTotal,
+        importedActive
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_PARKVEH_EXACT_INFO, DIALOG_STYLE_MSGBOX, "Exact Offline Parked Vehicle Import", body, "Back", "Close");
     return 1;
 }
 
@@ -26344,7 +26492,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24A.2 Restore Last Interior Position");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24B Exact Offline Vehicle Importer");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -26353,7 +26501,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24A.2: restore posisi terakhir termasuk interior dan virtual world; freefall dicegah tanpa paksa balik spawn awal.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24B: exact offline parked vehicle importer via DB queue; restore interior position tetap aktif.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24B: Exact offline parked vehicle importer, /parkvehimportdb, /parkvehexactinfo.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24A: Curated offline-like parked vehicle template seeder, /parkvehseed, /parkvehclearseed, /parkvehseedinfo.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23F.3: Public interior checkpoint interaction, service point merah, exit fix.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23F.1: Public interior template fix, safer default coords, shared VW.");
@@ -26726,6 +26875,24 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/parkvehseedinfo", true))
     {
         ShowOfflineParkedVehicleSeedInfo(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/parkvehimportdb", true))
+    {
+        ImportExactOfflineParkedVehicleQueue(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/parkvehexactclear", true))
+    {
+        ClearExactOfflineParkedVehicleImport(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/parkvehexactinfo", true))
+    {
+        ShowExactOfflineParkedVehicleImportInfo(playerid);
         return 1;
     }
 

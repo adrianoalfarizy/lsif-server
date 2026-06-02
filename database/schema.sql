@@ -854,3 +854,50 @@ ALTER TABLE players
     ADD COLUMN IF NOT EXISTS pos_interior INT NOT NULL DEFAULT 0 AFTER pos_a,
     ADD COLUMN IF NOT EXISTS pos_virtual_world INT NOT NULL DEFAULT 0 AFTER pos_interior;
 
+-- SAIF / LSIF Dev v0.24B — Exact Offline Parked Vehicle Importer
+-- Purpose:
+-- 1) Keep v0.24A curated seed intact.
+-- 2) Add DB staging table for exact/offline extracted parked vehicle data.
+-- 3) Import rows into parked_vehicles in-game with /parkvehimportdb.
+
+ALTER TABLE parked_vehicles
+ADD COLUMN IF NOT EXISTS source_tag VARCHAR(64) NOT NULL DEFAULT 'manual';
+
+CREATE TABLE IF NOT EXISTS parked_vehicle_import_queue (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    batch_name VARCHAR(64) NOT NULL DEFAULT 'offline_exact_ls',
+    source_tag VARCHAR(64) NOT NULL DEFAULT 'offline_exact_ls',
+    modelid INT NOT NULL,
+    color1 INT NOT NULL DEFAULT 1,
+    color2 INT NOT NULL DEFAULT 1,
+    pos_x FLOAT NOT NULL,
+    pos_y FLOAT NOT NULL,
+    pos_z FLOAT NOT NULL,
+    pos_a FLOAT NOT NULL DEFAULT 0,
+    interior INT NOT NULL DEFAULT 0,
+    virtual_world INT NOT NULL DEFAULT 0,
+    respawn_delay INT NOT NULL DEFAULT 300,
+    locked TINYINT NOT NULL DEFAULT 0,
+    enabled TINYINT NOT NULL DEFAULT 1,
+    note VARCHAR(128) DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_parked_vehicle_import_queue_source_enabled
+ON parked_vehicle_import_queue (source_tag, enabled);
+
+CREATE INDEX IF NOT EXISTS idx_parked_vehicles_source_tag
+ON parked_vehicles (source_tag);
+
+-- SAMPLE ONLY. Do not run as final exact data unless you want sample rows.
+-- Exact workflow:
+-- 1. Extract/decompile offline parked vehicle generator data from your legal GTA SA copy.
+-- 2. Convert rows to INSERT INTO parked_vehicle_import_queue with source_tag='offline_exact_ls'.
+-- 3. Import in-game using /parkvehimportdb.
+--
+-- Example row format:
+-- INSERT INTO parked_vehicle_import_queue
+-- (batch_name, source_tag, modelid, color1, color2, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, respawn_delay, locked, enabled, note)
+-- VALUES
+-- ('offline_exact_ls', 'offline_exact_ls', 420, 6, 1, 1777.52, -1905.11, 13.23, 270.0, 0, 0, 300, 0, 1, 'sample taxi stand');
+

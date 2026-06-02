@@ -1361,9 +1361,11 @@ new Float:PublicInteriorIntA[MAX_PUBLIC_INTERIORS];
 new Float:PublicInteriorExitX[MAX_PUBLIC_INTERIORS];
 new Float:PublicInteriorExitY[MAX_PUBLIC_INTERIORS];
 new Float:PublicInteriorExitZ[MAX_PUBLIC_INTERIORS];
+new Float:PublicInteriorExitA[MAX_PUBLIC_INTERIORS];
 new Float:PublicInteriorServiceX[MAX_PUBLIC_INTERIORS];
 new Float:PublicInteriorServiceY[MAX_PUBLIC_INTERIORS];
 new Float:PublicInteriorServiceZ[MAX_PUBLIC_INTERIORS];
+new Float:PublicInteriorServiceA[MAX_PUBLIC_INTERIORS];
 new Float:PublicInteriorServiceRadius[MAX_PUBLIC_INTERIORS];
 new PublicInteriorType[MAX_PUBLIC_INTERIORS][PUBINT_TYPE_SIZE];
 new PublicInteriorName[MAX_PUBLIC_INTERIORS][PUBINT_NAME_SIZE];
@@ -9994,7 +9996,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24E.2 Public Interior Point Editor");
+    SetGameModeText("SAIF Dev v0.24E.3 Public Interior Facing Editor");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -10098,7 +10100,7 @@ public OnGameModeInit()
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24E.2 Public Interior Point Editor berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24E.3 Public Interior Facing Editor berhasil dijalankan.");
     return 1;
 }
 
@@ -15574,9 +15576,11 @@ stock ResetPublicInteriorArrays()
         PublicInteriorExitX[i] = 0.0;
         PublicInteriorExitY[i] = 0.0;
         PublicInteriorExitZ[i] = 0.0;
+        PublicInteriorExitA[i] = 0.0;
         PublicInteriorServiceX[i] = 0.0;
         PublicInteriorServiceY[i] = 0.0;
         PublicInteriorServiceZ[i] = 0.0;
+        PublicInteriorServiceA[i] = 0.0;
         PublicInteriorServiceRadius[i] = 0.0;
         format(PublicInteriorType[i], PUBINT_TYPE_SIZE, "");
         format(PublicInteriorName[i], PUBINT_NAME_SIZE, "");
@@ -15919,6 +15923,26 @@ stock Float:GetPublicInteriorServicePointRadius(index)
     return PUBLIC_INTERIOR_SERVICE_RADIUS;
 }
 
+stock Float:GetPublicInteriorExitFacing(index)
+{
+    if (index >= 0 && index < MAX_PUBLIC_INTERIORS)
+    {
+        if (PublicInteriorExitA[index] != 0.0) return PublicInteriorExitA[index];
+        return PublicInteriorIntA[index];
+    }
+    return 0.0;
+}
+
+stock Float:GetPublicInteriorServiceFacing(index)
+{
+    if (index >= 0 && index < MAX_PUBLIC_INTERIORS)
+    {
+        if (PublicInteriorServiceA[index] != 0.0) return PublicInteriorServiceA[index];
+        return PublicInteriorIntA[index];
+    }
+    return 0.0;
+}
+
 stock ShowPublicInteriorServiceCheckpoint(playerid, idx)
 {
     if (idx < 0 || idx >= PublicInteriorCount)
@@ -16076,7 +16100,7 @@ stock LoadPublicInteriors()
     ResetPublicInteriorArrays();
 
     mysql_tquery(g_SQL,
-                 "SELECT id, interior_type, display_name, exterior_x, exterior_y, exterior_z, exterior_a, exterior_interior, exterior_virtual_world, interior_id, interior_virtual_world, interior_x, interior_y, interior_z, interior_a, exit_x, exit_y, exit_z, service_x, service_y, service_z, service_radius, enabled FROM public_interiors WHERE enabled=1 ORDER BY id ASC LIMIT 80",
+                 "SELECT id, interior_type, display_name, exterior_x, exterior_y, exterior_z, exterior_a, exterior_interior, exterior_virtual_world, interior_id, interior_virtual_world, interior_x, interior_y, interior_z, interior_a, exit_x, exit_y, exit_z, exit_a, service_x, service_y, service_z, service_a, service_radius, enabled FROM public_interiors WHERE enabled=1 ORDER BY id ASC LIMIT 80",
                  "OnPublicInteriorsLoaded"
                 );
     return 1;
@@ -16113,9 +16137,11 @@ public OnPublicInteriorsLoaded()
         cache_get_value_name_float(i, "exit_x", PublicInteriorExitX[i]);
         cache_get_value_name_float(i, "exit_y", PublicInteriorExitY[i]);
         cache_get_value_name_float(i, "exit_z", PublicInteriorExitZ[i]);
+        cache_get_value_name_float(i, "exit_a", PublicInteriorExitA[i]);
         cache_get_value_name_float(i, "service_x", PublicInteriorServiceX[i]);
         cache_get_value_name_float(i, "service_y", PublicInteriorServiceY[i]);
         cache_get_value_name_float(i, "service_z", PublicInteriorServiceZ[i]);
+        cache_get_value_name_float(i, "service_a", PublicInteriorServiceA[i]);
         cache_get_value_name_float(i, "service_radius", PublicInteriorServiceRadius[i]);
         cache_get_value_name_int(i, "enabled", PublicInteriorEnabled[i]);
     }
@@ -16246,10 +16272,12 @@ stock CreatePublicInteriorAtPlayer(playerid, const rawType[], const rawName[])
     new Float:exitX = GetPublicInteriorDefaultExitX(type);
     new Float:exitY = GetPublicInteriorDefaultExitY(type);
     new Float:exitZ = GetPublicInteriorDefaultExitZ(type);
+    new Float:exitA = intA;
+    new Float:serviceA = intA;
 
-    new query[1024];
+    new query[1200];
     mysql_format(g_SQL, query, sizeof(query),
-                 "INSERT INTO public_interiors (interior_type, display_name, exterior_x, exterior_y, exterior_z, exterior_a, exterior_interior, exterior_virtual_world, interior_id, interior_virtual_world, interior_x, interior_y, interior_z, interior_a, exit_x, exit_y, exit_z, source_tag, enabled) VALUES ('%e', '%e', %f, %f, %f, %f, %d, %d, %d, 0, %f, %f, %f, %f, %f, %f, %f, '%e', 1)",
+                 "INSERT INTO public_interiors (interior_type, display_name, exterior_x, exterior_y, exterior_z, exterior_a, exterior_interior, exterior_virtual_world, interior_id, interior_virtual_world, interior_x, interior_y, interior_z, interior_a, exit_x, exit_y, exit_z, exit_a, service_a, source_tag, enabled) VALUES ('%e', '%e', %f, %f, %f, %f, %d, %d, %d, 0, %f, %f, %f, %f, %f, %f, %f, %f, %f, '%e', 1)",
                  type,
                  name,
                  x,
@@ -16266,6 +16294,8 @@ stock CreatePublicInteriorAtPlayer(playerid, const rawType[], const rawName[])
                  exitX,
                  exitY,
                  exitZ,
+                 exitA,
+                 serviceA,
                  PUBINT_SOURCE_MANUAL
                 );
     mysql_tquery(g_SQL, query, "OnPublicInteriorCreated", "i", playerid);
@@ -16394,7 +16424,7 @@ stock ShowPublicInteriorInfo(playerid, dbid)
     else format(customText, sizeof(customText), "No");
 
     format(body, sizeof(body),
-           "ID: %d\nType: %s\nName: %s\nEnabled: %d\n\nExterior Arrow: %.2f %.2f %.2f | A %.2f\nExterior Interior/VW: %d/%d\n\nInterior ID: %d\nShared Virtual World: %d\nInterior Spawn: %.2f %.2f %.2f | A %.2f\nExit Arrow: %.2f %.2f %.2f\nService Checkpoint: %.2f %.2f %.2f | Radius %.2f\nCustom Service Point: %s",
+           "ID: %d\nType: %s\nName: %s\nEnabled: %d\n\nExterior Arrow: %.2f %.2f %.2f | A %.2f\nExterior Interior/VW: %d/%d\n\nInterior ID: %d\nShared Virtual World: %d\nInterior Spawn: %.2f %.2f %.2f | A %.2f\nExit Arrow: %.2f %.2f %.2f | A %.2f\nService Checkpoint: %.2f %.2f %.2f | A %.2f | Radius %.2f\nCustom Service Point: %s",
            PublicInteriorDBID[idx],
            PublicInteriorType[idx],
            PublicInteriorName[idx],
@@ -16414,9 +16444,11 @@ stock ShowPublicInteriorInfo(playerid, dbid)
            PublicInteriorExitX[idx],
            PublicInteriorExitY[idx],
            PublicInteriorExitZ[idx],
+           GetPublicInteriorExitFacing(idx),
            GetPublicInteriorServicePointX(idx),
            GetPublicInteriorServicePointY(idx),
            GetPublicInteriorServicePointZ(idx),
+           GetPublicInteriorServiceFacing(idx),
            GetPublicInteriorServicePointRadius(idx),
            customText
           );
@@ -16461,10 +16493,10 @@ stock ShowPublicInteriorPointMenu(playerid, dbid)
     format(title, sizeof(title), "Point Editor ID %d", dbid);
     body[0] = EOS;
     strcat(body, "Info Points\n");
-    strcat(body, "Set Exterior Arrow = My Position\n");
-    strcat(body, "Set Interior Spawn = My Position\n");
-    strcat(body, "Set Exit Arrow = My Position\n");
-    strcat(body, "Set Service Checkpoint = My Position\n");
+    strcat(body, "Set Exterior Arrow + Facing = My Position\n");
+    strcat(body, "Set Interior Spawn + Facing = My Position\n");
+    strcat(body, "Set Exit Arrow + Facing = My Position\n");
+    strcat(body, "Set Service Checkpoint + Facing = My Position\n");
     strcat(body, "Set Service Radius\n");
     strcat(body, "Goto Interior Spawn\n");
     strcat(body, "Goto Exit Arrow\n");
@@ -16496,22 +16528,66 @@ stock UpdatePublicInteriorPointFromPlayer(playerid, dbid, pointType)
     if (pointType == 1)
     {
         mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET exterior_x=%f, exterior_y=%f, exterior_z=%f, exterior_a=%f, exterior_interior=%d, exterior_virtual_world=%d WHERE id=%d LIMIT 1", x, y, z, a, GetPlayerInterior(playerid), GetPlayerVirtualWorld(playerid), dbid);
-        SendClientMessage(playerid, COLOR_GREEN, "Exterior arrow public interior diset ke posisi kamu.");
+        SendClientMessage(playerid, COLOR_GREEN, "Exterior arrow public interior diset ke posisi dan arah hadap kamu.");
     }
     else if (pointType == 2)
     {
         mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET interior_id=%d, interior_x=%f, interior_y=%f, interior_z=%f, interior_a=%f WHERE id=%d LIMIT 1", GetPlayerInterior(playerid), x, y, z, a, dbid);
-        SendClientMessage(playerid, COLOR_GREEN, "Interior spawn public interior diset ke posisi kamu.");
+        SendClientMessage(playerid, COLOR_GREEN, "Interior spawn public interior diset ke posisi dan arah hadap kamu.");
     }
     else if (pointType == 3)
     {
-        mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET exit_x=%f, exit_y=%f, exit_z=%f WHERE id=%d LIMIT 1", x, y, z, dbid);
-        SendClientMessage(playerid, COLOR_GREEN, "Exit arrow public interior diset ke posisi kamu.");
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET exit_x=%f, exit_y=%f, exit_z=%f, exit_a=%f WHERE id=%d LIMIT 1", x, y, z, a, dbid);
+        SendClientMessage(playerid, COLOR_GREEN, "Exit arrow public interior diset ke posisi dan arah hadap kamu.");
     }
     else if (pointType == 4)
     {
-        mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET service_x=%f, service_y=%f, service_z=%f WHERE id=%d LIMIT 1", x, y, z, dbid);
-        SendClientMessage(playerid, COLOR_GREEN, "Service checkpoint public interior diset ke posisi kamu.");
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET service_x=%f, service_y=%f, service_z=%f, service_a=%f WHERE id=%d LIMIT 1", x, y, z, a, dbid);
+        SendClientMessage(playerid, COLOR_GREEN, "Service checkpoint public interior diset ke posisi dan arah hadap kamu.");
+    }
+    else return 0;
+
+    mysql_tquery(g_SQL, query, "OnPublicInteriorUpdated", "i", playerid);
+    return 1;
+}
+
+stock SetPublicInteriorPointFacingOnly(playerid, dbid, pointType)
+{
+    if (!IsAdminLevel(playerid, ADMIN_ADMIN))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak punya izin admin.");
+        return 0;
+    }
+
+    if (FindPublicInteriorIndexByDBID(dbid) == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Public interior tidak ditemukan.");
+        return 0;
+    }
+
+    new Float:a;
+    GetPlayerFacingAngle(playerid, a);
+
+    new query[256];
+    if (pointType == 1)
+    {
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET exterior_a=%f WHERE id=%d LIMIT 1", a, dbid);
+        SendClientMessage(playerid, COLOR_GREEN, "Facing saat keluar ke exterior diset dari arah hadap kamu.");
+    }
+    else if (pointType == 2)
+    {
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET interior_a=%f WHERE id=%d LIMIT 1", a, dbid);
+        SendClientMessage(playerid, COLOR_GREEN, "Facing saat masuk/spawn interior diset dari arah hadap kamu.");
+    }
+    else if (pointType == 3)
+    {
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET exit_a=%f WHERE id=%d LIMIT 1", a, dbid);
+        SendClientMessage(playerid, COLOR_GREEN, "Facing point panah exit diset dari arah hadap kamu.");
+    }
+    else if (pointType == 4)
+    {
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET service_a=%f WHERE id=%d LIMIT 1", a, dbid);
+        SendClientMessage(playerid, COLOR_GREEN, "Facing service checkpoint diset dari arah hadap kamu.");
     }
     else return 0;
 
@@ -16575,6 +16651,7 @@ stock GotoPublicInteriorPoint(playerid, dbid, pointType)
         SetPlayerInterior(playerid, PublicInteriorInteriorID[idx]);
         SetPlayerVirtualWorld(playerid, GetPublicInteriorRuntimeVW(idx));
         SetPlayerPos(playerid, PublicInteriorExitX[idx], PublicInteriorExitY[idx], PublicInteriorExitZ[idx] + 0.5);
+        SetPlayerFacingAngle(playerid, GetPublicInteriorExitFacing(idx));
         PlayerInsidePublicInteriorID[playerid] = PublicInteriorDBID[idx];
         ShowPublicInteriorServiceCheckpoint(playerid, idx);
     }
@@ -16583,6 +16660,7 @@ stock GotoPublicInteriorPoint(playerid, dbid, pointType)
         SetPlayerInterior(playerid, PublicInteriorInteriorID[idx]);
         SetPlayerVirtualWorld(playerid, GetPublicInteriorRuntimeVW(idx));
         SetPlayerPos(playerid, GetPublicInteriorServicePointX(idx), GetPublicInteriorServicePointY(idx), GetPublicInteriorServicePointZ(idx) + 0.5);
+        SetPlayerFacingAngle(playerid, GetPublicInteriorServiceFacing(idx));
         PlayerInsidePublicInteriorID[playerid] = PublicInteriorDBID[idx];
         ShowPublicInteriorServiceCheckpoint(playerid, idx);
     }
@@ -25868,6 +25946,29 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (strfind(cmdtext, "/pubintsetfacing ", true) == 0)
+    {
+        new idStr[16];
+        new pointStr[24];
+        new rest[64];
+        if (!GetFirstWordAndRest(cmdtext[17], idStr, sizeof(idStr), rest, sizeof(rest)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /pubintsetfacing [id] [exterior/spawn/exit/service]");
+            return 1;
+        }
+        if (!GetOneParam(rest, pointStr, sizeof(pointStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /pubintsetfacing [id] [exterior/spawn/exit/service]");
+            return 1;
+        }
+        if (!strcmp(pointStr, "exterior", true)) SetPublicInteriorPointFacingOnly(playerid, strval(idStr), 1);
+        else if (!strcmp(pointStr, "spawn", true)) SetPublicInteriorPointFacingOnly(playerid, strval(idStr), 2);
+        else if (!strcmp(pointStr, "exit", true)) SetPublicInteriorPointFacingOnly(playerid, strval(idStr), 3);
+        else if (!strcmp(pointStr, "service", true)) SetPublicInteriorPointFacingOnly(playerid, strval(idStr), 4);
+        else SendClientMessage(playerid, COLOR_YELLOW, "Point valid: exterior, spawn, exit, service.");
+        return 1;
+    }
+
     if (strfind(cmdtext, "/pubintserviceradius ", true) == 0)
     {
         new idStr[16];
@@ -27246,7 +27347,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24E.2 Public Interior Point Editor");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24E.3 Public Interior Facing Editor");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");

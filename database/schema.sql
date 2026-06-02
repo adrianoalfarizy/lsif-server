@@ -1358,3 +1358,20 @@ ALTER TABLE public_interiors
     ADD COLUMN IF NOT EXISTS service_z FLOAT NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS service_radius FLOAT NOT NULL DEFAULT 0;
 
+-- SAIF / LSIF Dev v0.24E.3 — Public Interior Facing Editor
+-- Adds facing/angle storage for public interior exit arrow and service checkpoint.
+-- exterior_a and interior_a already exist and are used for exit-to-exterior and enter-to-interior facing.
+
+ALTER TABLE public_interiors
+    ADD COLUMN IF NOT EXISTS exit_a FLOAT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS service_a FLOAT NOT NULL DEFAULT 0;
+
+-- Backfill existing interiors so old rows have sane facing defaults.
+UPDATE public_interiors
+SET exit_a = interior_a
+WHERE exit_a = 0;
+
+UPDATE public_interiors
+SET service_a = interior_a
+WHERE service_a = 0;
+

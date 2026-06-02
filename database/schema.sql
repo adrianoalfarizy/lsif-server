@@ -849,3 +849,8 @@ WHERE source_tag IS NULL OR source_tag = '';
 
 -- Optional helper index. If your MariaDB version rejects this, skip it; the feature still works.
 CREATE INDEX IF NOT EXISTS idx_parked_source_tag ON parked_vehicles (source_tag);
+
+ALTER TABLE players
+    ADD COLUMN IF NOT EXISTS pos_interior INT NOT NULL DEFAULT 0 AFTER pos_a,
+    ADD COLUMN IF NOT EXISTS pos_virtual_world INT NOT NULL DEFAULT 0 AFTER pos_interior;
+

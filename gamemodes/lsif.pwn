@@ -542,6 +542,8 @@ new Float:PlayerLastX[MAX_PLAYERS];
 new Float:PlayerLastY[MAX_PLAYERS];
 new Float:PlayerLastZ[MAX_PLAYERS];
 new Float:PlayerLastA[MAX_PLAYERS];
+new PlayerLastInterior[MAX_PLAYERS];
+new PlayerLastVirtualWorld[MAX_PLAYERS];
 
 new PlayerMoney[MAX_PLAYERS];
 new PlayerBankMoney[MAX_PLAYERS];
@@ -2228,6 +2230,8 @@ stock ResetPlayerAccountData(playerid)
     PlayerLastY[playerid] = SPAWN_Y;
     PlayerLastZ[playerid] = SPAWN_Z;
     PlayerLastA[playerid] = SPAWN_A;
+    PlayerLastInterior[playerid] = 0;
+    PlayerLastVirtualWorld[playerid] = 0;
 
     PlayerMoneyMismatchCount[playerid] = 0;
     PlayerLastACWarningTick[playerid] = 0;
@@ -2327,15 +2331,17 @@ stock SavePlayerData(playerid, notify = 0)
     }
 
     new Float:x, Float:y, Float:z, Float:a;
-    new query[512];
+    new interior;
+    new virtualWorld;
+    new query[768];
 
-    GetSafePlayerSavePosition(playerid, x, y, z, a);
+    GetSafePlayerSavePosition(playerid, x, y, z, a, interior, virtualWorld);
 
     mysql_format(
         g_SQL,
         query,
         sizeof(query),
-        "UPDATE players SET money=%d, bank_money=%d, xp=%d, level=%d, admin_level=%d, current_job=%d, spawn_house=%d, starter_pack_claimed=%d, weapon_license=%d, pos_x=%f, pos_y=%f, pos_z=%f, pos_a=%f WHERE id=%d LIMIT 1",
+        "UPDATE players SET money=%d, bank_money=%d, xp=%d, level=%d, admin_level=%d, current_job=%d, spawn_house=%d, starter_pack_claimed=%d, weapon_license=%d, pos_x=%f, pos_y=%f, pos_z=%f, pos_a=%f, pos_interior=%d, pos_virtual_world=%d WHERE id=%d LIMIT 1",
         PlayerMoney[playerid],
         PlayerBankMoney[playerid],
         PlayerXP[playerid],
@@ -2349,6 +2355,8 @@ stock SavePlayerData(playerid, notify = 0)
         y,
         z,
         a,
+        interior,
+        virtualWorld,
         PlayerDBID[playerid]
     );
 
@@ -2357,72 +2365,23 @@ stock SavePlayerData(playerid, notify = 0)
 }
 
 
-stock GetSafePlayerSavePosition(playerid, &Float:x, &Float:y, &Float:z, &Float:a)
+stock GetSafePlayerSavePosition(playerid, &Float:x, &Float:y, &Float:z, &Float:a, &interior, &virtualWorld)
 {
-    if (PlayerInsideHouse[playerid] && PlayerHouseIndex[playerid] != -1)
-    {
-        new houseIndex = PlayerHouseIndex[playerid];
-        x = HouseX[houseIndex];
-        y = HouseY[houseIndex];
-        z = HouseZ[houseIndex];
-        a = 0.0;
-        return 1;
-    }
-
-    if (PlayerInsidePublicInteriorID[playerid] > 0)
-    {
-        new pubIdx = FindPublicInteriorIndexByDBID(PlayerInsidePublicInteriorID[playerid]);
-        if (pubIdx != -1)
-        {
-            x = PublicInteriorExtX[pubIdx];
-            y = PublicInteriorExtY[pubIdx];
-            z = PublicInteriorExtZ[pubIdx] + 0.5;
-            a = PublicInteriorExtA[pubIdx];
-            return 1;
-        }
-    }
-
-    new detectedPubIdx = GetPlayerPublicInteriorIndex(playerid);
-    if (detectedPubIdx != -1)
-    {
-        x = PublicInteriorExtX[detectedPubIdx];
-        y = PublicInteriorExtY[detectedPubIdx];
-        z = PublicInteriorExtZ[detectedPubIdx] + 0.5;
-        a = PublicInteriorExtA[detectedPubIdx];
-        return 1;
-    }
-
-    if (PlayerInsideGangHQ[playerid] && PlayerInsideGangHQID[playerid] > 0)
-    {
-        new gangIndex = GetPresetGangIndexByID(PlayerInsideGangHQID[playerid]);
-        if (gangIndex != -1)
-        {
-            x = GangHQInteriorExitX[gangIndex];
-            y = GangHQInteriorExitY[gangIndex];
-            z = GangHQInteriorExitZ[gangIndex] + 0.5;
-            a = GangHQInteriorExitA[gangIndex];
-            return 1;
-        }
-    }
-
-    if (GetPlayerInterior(playerid) != 0 || GetPlayerVirtualWorld(playerid) != 0)
-    {
-        x = SPAWN_X;
-        y = SPAWN_Y;
-        z = SPAWN_Z;
-        a = SPAWN_A;
-        return 1;
-    }
-
     GetPlayerPos(playerid, x, y, z);
     GetPlayerFacingAngle(playerid, a);
+    interior = GetPlayerInterior(playerid);
+    virtualWorld = GetPlayerVirtualWorld(playerid);
 
-    if (z < -10.0)
+    // Jangan paksa interior ke exterior. Freefall sebelumnya terjadi karena interior/VW tidak ikut direstore.
+    // Yang perlu dihindari hanya koordinat exterior yang benar-benar jatuh di bawah map.
+    if (interior == 0 && virtualWorld == 0 && z < -10.0)
     {
         x = SPAWN_X;
         y = SPAWN_Y;
         z = SPAWN_Z;
         a = SPAWN_A;
+        interior = 0;
+        virtualWorld = 0;
     }
 
     return 1;
@@ -2431,18 +2390,66 @@ stock GetSafePlayerSavePosition(playerid, &Float:x, &Float:y, &Float:z, &Float:a
 
 stock SanitizeLoadedSpawnPosition(playerid)
 {
-    if (PlayerLastZ[playerid] < -10.0 || PlayerLastZ[playerid] > 200.0)
+    // Interior normal GTA SA sering memakai Z tinggi (contoh 1000+), jadi jangan dianggap tidak aman.
+    // Fallback hanya untuk posisi exterior yang jelas jatuh di bawah map.
+    if (PlayerLastInterior[playerid] == 0 && PlayerLastVirtualWorld[playerid] == 0 && PlayerLastZ[playerid] < -10.0)
     {
         PlayerLastX[playerid] = SPAWN_X;
         PlayerLastY[playerid] = SPAWN_Y;
         PlayerLastZ[playerid] = SPAWN_Z;
         PlayerLastA[playerid] = SPAWN_A;
-        SendClientMessage(playerid, COLOR_YELLOW, "Posisi terakhir terdeteksi tidak aman. Kamu dipindahkan ke spawn utama untuk mencegah freefall.");
+        PlayerLastInterior[playerid] = 0;
+        PlayerLastVirtualWorld[playerid] = 0;
+        SendClientMessage(playerid, COLOR_YELLOW, "Posisi exterior terakhir terdeteksi jatuh di bawah map. Kamu dipindahkan ke spawn utama.");
         return 1;
     }
 
     return 1;
 }
+
+stock RestorePlayerInteriorRuntimeState(playerid)
+{
+    PlayerInsidePublicInteriorID[playerid] = 0;
+    PlayerPublicInteriorServiceCheckpoint[playerid] = 0;
+    PlayerInsideGangHQ[playerid] = 0;
+    PlayerInsideGangHQID[playerid] = 0;
+
+    if (PlayerLastInterior[playerid] == 0 && PlayerLastVirtualWorld[playerid] == 0)
+    {
+        return 1;
+    }
+
+    new pubIdx = GetPlayerPublicInteriorIndex(playerid);
+    if (pubIdx != -1)
+    {
+        PlayerInsidePublicInteriorID[playerid] = PublicInteriorDBID[pubIdx];
+        ShowPublicInteriorServiceCheckpoint(playerid, pubIdx);
+        SendClientMessage(playerid, COLOR_WHITE, "Posisi interior public berhasil direstore. Gunakan /pubintexit atau panah exit untuk keluar.");
+        return 1;
+    }
+
+    new gangIdx = GetPlayerCurrentGangHQInteriorIndex(playerid);
+    if (gangIdx != -1)
+    {
+        PlayerInsideGangHQ[playerid] = 1;
+        PlayerInsideGangHQID[playerid] = PresetGangID[gangIdx];
+        SendClientMessage(playerid, COLOR_WHITE, "Posisi Gang HQ interior berhasil direstore. Gunakan /exitganghq atau panah exit untuk keluar.");
+        return 1;
+    }
+
+    if (PlayerLastInterior[playerid] == HOUSE_INTERIOR_ID && PlayerLastVirtualWorld[playerid] == GetPlayerHouseVirtualWorld(playerid))
+    {
+        PlayerInsideHouse[playerid] = 1;
+        PlayerInsideHouseOwner[playerid] = playerid;
+        CreatePlayerHouseExitPickup(playerid, playerid);
+        SendClientMessage(playerid, COLOR_WHITE, "Posisi rumah berhasil direstore. Gunakan /exithouse atau panah exit untuk keluar.");
+        return 1;
+    }
+
+    SendClientMessage(playerid, COLOR_YELLOW, "Posisi interior terakhir direstore. Jika tidak ada exit, gunakan command fallback/admin.");
+    return 1;
+}
+
 
 stock ApplyLoadedPlayerData(playerid)
 {
@@ -9966,7 +9973,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24A.1 Interior Spawn Safety");
+    SetGameModeText("SAIF Dev v0.24A.2 Restore Last Interior Position");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -10045,6 +10052,8 @@ public OnGameModeInit()
         PlayerLastY[i] = SPAWN_Y;
         PlayerLastZ[i] = SPAWN_Z;
         PlayerLastA[i] = SPAWN_A;
+        PlayerLastInterior[i] = 0;
+        PlayerLastVirtualWorld[i] = 0;
 
         PlayerMoneyMismatchCount[i] = 0;
         PlayerLastACWarningTick[i] = 0;
@@ -10068,7 +10077,7 @@ public OnGameModeInit()
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24A.1 Interior Spawn Safety berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24A.2 Restore Last Interior Position berhasil dijalankan.");
     return 1;
 }
 
@@ -10271,20 +10280,22 @@ public OnPlayerSpawn(playerid)
         SendClientMessage(playerid, COLOR_RED, "Kamu belum login.");
         return 1;
     }
-    SetPlayerInterior(playerid, 0);
-    SetPlayerVirtualWorld(playerid, 0);
-
     if (PlayerSpawnHouse[playerid] && PlayerHouseIndex[playerid] != -1)
     {
         new houseIndex = PlayerHouseIndex[playerid];
 
+        SetPlayerInterior(playerid, 0);
+        SetPlayerVirtualWorld(playerid, 0);
         SetPlayerPos(playerid, HouseX[houseIndex], HouseY[houseIndex], HouseZ[houseIndex]);
         SetPlayerFacingAngle(playerid, 0.0);
     }
     else
     {
+        SetPlayerInterior(playerid, PlayerLastInterior[playerid]);
+        SetPlayerVirtualWorld(playerid, PlayerLastVirtualWorld[playerid]);
         SetPlayerPos(playerid, PlayerLastX[playerid], PlayerLastY[playerid], PlayerLastZ[playerid]);
         SetPlayerFacingAngle(playerid, PlayerLastA[playerid]);
+        RestorePlayerInteriorRuntimeState(playerid);
     }
 
     ResetPlayerWeapons(playerid);
@@ -14073,7 +14084,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             g_SQL,
             query,
             sizeof(query),
-            "INSERT INTO players (username, password_hash, money, bank_money, xp, level, admin_level, current_job, starter_pack_claimed, weapon_license, pos_x, pos_y, pos_z, pos_a, last_ip, last_login) VALUES ('%e', SHA2('%e', 256), 500, 0, 0, 1, 0, 0, 0, %d, %f, %f, %f, %f, '%e', NOW())",
+            "INSERT INTO players (username, password_hash, money, bank_money, xp, level, admin_level, current_job, starter_pack_claimed, weapon_license, pos_x, pos_y, pos_z, pos_a, pos_interior, pos_virtual_world, last_ip, last_login) VALUES ('%e', SHA2('%e', 256), 500, 0, 0, 1, 0, 0, 0, %d, %f, %f, %f, %f, 0, 0, '%e', NOW())",
             username,
             inputtext,
             DEFAULT_WEAPON_LICENSE,
@@ -14105,7 +14116,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         }
 
         new username[MAX_PLAYER_NAME];
-        new query[512];
+        new query[768];
 
         GetPlayerAccountName(playerid, username, sizeof(username));
 
@@ -14113,7 +14124,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             g_SQL,
             query,
             sizeof(query),
-            "SELECT id, money, bank_money, xp, level, admin_level, skin, current_job, spawn_house, starter_pack_claimed, weapon_license, pos_x, pos_y, pos_z, pos_a FROM players WHERE username='%e' AND password_hash=SHA2('%e', 256) LIMIT 1",
+            "SELECT id, money, bank_money, xp, level, admin_level, skin, current_job, spawn_house, starter_pack_claimed, weapon_license, pos_x, pos_y, pos_z, pos_a, pos_interior, pos_virtual_world FROM players WHERE username='%e' AND password_hash=SHA2('%e', 256) LIMIT 1",
             username,
             inputtext
         );
@@ -14218,6 +14229,8 @@ public OnAccountLogin(playerid)
     cache_get_value_name_float(0, "pos_y", PlayerLastY[playerid]);
     cache_get_value_name_float(0, "pos_z", PlayerLastZ[playerid]);
     cache_get_value_name_float(0, "pos_a", PlayerLastA[playerid]);
+    cache_get_value_name_int(0, "pos_interior", PlayerLastInterior[playerid]);
+    cache_get_value_name_int(0, "pos_virtual_world", PlayerLastVirtualWorld[playerid]);
 
     SanitizeLoadedSpawnPosition(playerid);
 
@@ -26331,7 +26344,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24A.1 Interior Spawn Safety");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24A.2 Restore Last Interior Position");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -26340,7 +26353,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24A.1: Interior spawn safety fix; player tidak freefall setelah restart saat posisi terakhir di interior.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24A.2: restore posisi terakhir termasuk interior dan virtual world; freefall dicegah tanpa paksa balik spawn awal.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24A: Curated offline-like parked vehicle template seeder, /parkvehseed, /parkvehclearseed, /parkvehseedinfo.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23F.3: Public interior checkpoint interaction, service point merah, exit fix.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23F.1: Public interior template fix, safer default coords, shared VW.");

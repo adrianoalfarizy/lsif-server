@@ -10484,7 +10484,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24I Business Preset DB Config");
+    SetGameModeText("SAIF Dev v0.24I.1 Admin Menus Business Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -10596,7 +10596,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24I Business Preset DB Config berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24I.1 Admin Menus Business Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -11097,6 +11097,7 @@ stock ShowAdminToolsMenu(playerid)
     strcat(body, "Public Interior Editor\t/pubintmenu\tOwner\n", sizeof(body));
     strcat(body, "Turf Zone Editor\t/turfmenu\tOwner\n", sizeof(body));
     strcat(body, "Gang Preset DB Config\t/gangpresetmenu\tOwner\n", sizeof(body));
+    strcat(body, "Business Preset DB Config\t/bizpresetmenu\tOwner\n", sizeof(body));
     strcat(body, "Ammu-Nation Config\t/ammuconfig\tOwner\n", sizeof(body));
     strcat(body, "Public Service Config\t/serviceconfig\tOwner\n", sizeof(body));
     strcat(body, "Command Reference\t/amenus\tHelper+\n", sizeof(body));
@@ -29223,7 +29224,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24I Business Preset DB Config");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24I.1 Admin Menus Business Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");

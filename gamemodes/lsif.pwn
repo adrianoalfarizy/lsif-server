@@ -147,6 +147,18 @@
 #define DIALOG_OBJ_ROTATE_MENU 1127
 #define DIALOG_OBJ_ROT_Z_INPUT 1128
 #define DIALOG_OBJ_RENAME_INPUT 1129
+#define DIALOG_LOC_SELECT_INPUT 1130
+#define DIALOG_LOC_ACTION_MENU 1131
+#define DIALOG_LOC_RENAME_INPUT 1132
+#define DIALOG_LOC_TYPE_INPUT 1133
+#define DIALOG_LOC_LABEL_INPUT 1134
+#define DIALOG_LOC_ICON_INPUT 1135
+#define DIALOG_LOC_PICKUP_INPUT 1136
+#define DIALOG_LOC_OBJECT_INPUT 1137
+#define DIALOG_LOC_RADIUS_INPUT 1138
+#define DIALOG_LOC_INTERIOR_INPUT 1139
+#define DIALOG_LOC_ENABLE_MENU 1140
+#define DIALOG_LOC_DELETE_CONFIRM 1141
 
 
 
@@ -1255,6 +1267,7 @@ new Text3D:ParkedVehicleLabel[MAX_PARKED_VEHICLES];
 
 
 new PlayerPendingLocCreateType[MAX_PLAYERS][LOC_TYPE_SIZE];
+new PlayerEditingLocationID[MAX_PLAYERS];
 new PlayerPendingObjLocCreate[MAX_PLAYERS];
 new PlayerPendingObjLocType[MAX_PLAYERS][LOC_TYPE_SIZE];
 new PlayerPendingObjLocName[MAX_PLAYERS][LOC_NAME_SIZE];
@@ -9759,7 +9772,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.23C Object Editor UI");
+    SetGameModeText("SAIF Dev v0.23D.1 Location Compile Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -9859,7 +9872,7 @@ public OnGameModeInit()
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.23C Object Editor UI berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.23D.1 Location Compile Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -11407,20 +11420,14 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         {
             case 0: ShowDynamicLocationCreateTypeMenu(playerid);
             case 1: ShowDynamicLocationListDialog(playerid);
-            case 2: ShowDynamicLocationIconPresetDialog(playerid);
-            case 3:
+            case 2: ShowDynamicLocationSelectInput(playerid);
+            case 3: ShowDynamicLocationIconPresetDialog(playerid);
+            case 4:
             {
                 LoadDynamicLocations();
                 SendClientMessage(playerid, COLOR_GREEN, "Dynamic locations sedang direload dari database.");
             }
-            case 4: ShowDynamicLocationHelp(playerid);
-            case 5:
-            {
-                SendClientMessage(playerid, COLOR_YELLOW, "Remove/Delete Notes:");
-                SendClientMessage(playerid, COLOR_WHITE, "/locdisable [id] = hide/nonaktifkan lokasi, bisa dikembalikan dengan /locenable.");
-                SendClientMessage(playerid, COLOR_WHITE, "/locdelete atau /locremove [id] = hard delete dari database.");
-                SendClientMessage(playerid, COLOR_WHITE, "ID MySQL AUTO_INCREMENT tetap lanjut walau row dihapus. Itu normal dan aman.");
-            }
+            case 5: ShowDynamicLocationHelp(playerid);
         }
         return 1;
     }
@@ -11444,6 +11451,8 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 6: format(PlayerPendingLocCreateType[playerid], LOC_TYPE_SIZE, "business");
             case 7: format(PlayerPendingLocCreateType[playerid], LOC_TYPE_SIZE, "house");
             case 8: format(PlayerPendingLocCreateType[playerid], LOC_TYPE_SIZE, "interior");
+            case 9: format(PlayerPendingLocCreateType[playerid], LOC_TYPE_SIZE, "public_interior");
+            case 10: format(PlayerPendingLocCreateType[playerid], LOC_TYPE_SIZE, "pickup");
         }
 
         ShowDynamicLocationNameInput(playerid);
@@ -11469,17 +11478,331 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         return 1;
     }
 
-    if (dialogid == DIALOG_LOC_LIST || dialogid == DIALOG_LOC_ICON_PRESETS)
+    if (dialogid == DIALOG_LOC_LIST)
     {
-        if (response)
+        if (!response)
         {
             ShowDynamicLocationEditorMenu(playerid);
+            return 1;
+        }
+
+        if (listitem < 0 || listitem >= DynamicLocationCount)
+        {
+            ShowDynamicLocationEditorMenu(playerid);
+            return 1;
+        }
+
+        PlayerEditingLocationID[playerid] = DynamicLocationDBID[listitem];
+        ShowDynamicLocationActionMenu(playerid, PlayerEditingLocationID[playerid]);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_LOC_SELECT_INPUT)
+    {
+        if (!response)
+        {
+            ShowDynamicLocationEditorMenu(playerid);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Location ID harus angka.");
+            ShowDynamicLocationSelectInput(playerid);
+            return 1;
+        }
+
+        new locId = strval(inputtext);
+        if (FindDynamicLocationIndexByDBID(locId) == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Dynamic location ID tidak ditemukan atau belum aktif di runtime.");
+            ShowDynamicLocationSelectInput(playerid);
+            return 1;
+        }
+
+        PlayerEditingLocationID[playerid] = locId;
+        ShowDynamicLocationActionMenu(playerid, locId);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_LOC_ACTION_MENU)
+    {
+        if (!response)
+        {
+            return 1;
+        }
+
+        new locId = PlayerEditingLocationID[playerid];
+        if (FindDynamicLocationIndexByDBID(locId) == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Location yang dipilih sudah tidak ditemukan. Reload/list ulang location.");
+            ShowDynamicLocationEditorMenu(playerid);
+            return 1;
+        }
+
+        switch (listitem)
+        {
+            case 0: ShowDynamicLocationEditorInfoDialog(playerid, locId);
+            case 1:
+            {
+                GotoDynamicLocationByID(playerid, locId);
+                ShowDynamicLocationActionMenu(playerid, locId);
+            }
+            case 2:
+            {
+                MoveDynamicLocationToPlayer(playerid, locId);
+                ShowDynamicLocationActionMenu(playerid, locId);
+            }
+            case 3: ShowDynamicLocationRenameInput(playerid, locId);
+            case 4: ShowDynamicLocationTypeInput(playerid, locId);
+            case 5: ShowDynamicLocationLabelInput(playerid, locId);
+            case 6: ShowDynamicLocationIconInput(playerid, locId);
+            case 7: ShowDynamicLocationPickupInput(playerid, locId);
+            case 8: ShowDynamicLocationObjectInput(playerid, locId);
+            case 9: ShowDynamicLocationRadiusInput(playerid, locId);
+            case 10: ShowDynamicLocationInteriorInput(playerid, locId);
+            case 11: ShowDynamicLocationEnableMenu(playerid, locId);
+            case 12: ShowDynamicLocationDeleteConfirm(playerid, locId);
+            case 13:
+            {
+                LoadDynamicLocations();
+                SendClientMessage(playerid, COLOR_GREEN, "Dynamic locations sedang direload dari database.");
+            }
+            case 14: ShowDynamicLocationEditorMenu(playerid);
         }
         return 1;
     }
 
     if (dialogid == DIALOG_DYNAMIC_LOCATION_INFO)
     {
+        if (response)
+        {
+            ShowDynamicLocationActionMenu(playerid, PlayerEditingLocationID[playerid]);
+        }
+        else
+        {
+            ShowDynamicLocationEditorMenu(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_LOC_RENAME_INPUT)
+    {
+        if (!response)
+        {
+            ShowDynamicLocationActionMenu(playerid, PlayerEditingLocationID[playerid]);
+            return 1;
+        }
+
+        if (strlen(inputtext) < 2)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Nama location minimal 2 karakter.");
+            ShowDynamicLocationRenameInput(playerid, PlayerEditingLocationID[playerid]);
+            return 1;
+        }
+
+        new query[512];
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE world_locations SET display_name='%e', location_key='%e' WHERE id=%d LIMIT 1", inputtext, inputtext, PlayerEditingLocationID[playerid]);
+        mysql_tquery(g_SQL, query, "OnDynamicLocationUpdated", "i", playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_LOC_TYPE_INPUT)
+    {
+        if (!response)
+        {
+            ShowDynamicLocationActionMenu(playerid, PlayerEditingLocationID[playerid]);
+            return 1;
+        }
+
+        if (strlen(inputtext) < 2)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Type location minimal 2 karakter. Contoh: atm, dealer, ammunation, gang_hq, job.");
+            ShowDynamicLocationTypeInput(playerid, PlayerEditingLocationID[playerid]);
+            return 1;
+        }
+
+        new query[512];
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE world_locations SET location_type='%e' WHERE id=%d LIMIT 1", inputtext, PlayerEditingLocationID[playerid]);
+        mysql_tquery(g_SQL, query, "OnDynamicLocationUpdated", "i", playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_LOC_LABEL_INPUT)
+    {
+        if (!response)
+        {
+            ShowDynamicLocationActionMenu(playerid, PlayerEditingLocationID[playerid]);
+            return 1;
+        }
+
+        new query[512];
+        if (!strcmp(inputtext, "0", true) || !strcmp(inputtext, "off", true) || !strcmp(inputtext, "none", true) || !strcmp(inputtext, "hide", true))
+        {
+            mysql_format(g_SQL, query, sizeof(query), "UPDATE world_locations SET label_text='__hidden__' WHERE id=%d LIMIT 1", PlayerEditingLocationID[playerid]);
+        }
+        else if (!strcmp(inputtext, "auto", true) || !strcmp(inputtext, "default", true))
+        {
+            mysql_format(g_SQL, query, sizeof(query), "UPDATE world_locations SET label_text='' WHERE id=%d LIMIT 1", PlayerEditingLocationID[playerid]);
+        }
+        else
+        {
+            mysql_format(g_SQL, query, sizeof(query), "UPDATE world_locations SET label_text='%e' WHERE id=%d LIMIT 1", inputtext, PlayerEditingLocationID[playerid]);
+        }
+
+        mysql_tquery(g_SQL, query, "OnDynamicLocationUpdated", "i", playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_LOC_ICON_INPUT)
+    {
+        if (!response)
+        {
+            ShowDynamicLocationActionMenu(playerid, PlayerEditingLocationID[playerid]);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Map icon harus angka. Gunakan /lociconlist untuk preset.");
+            ShowDynamicLocationIconInput(playerid, PlayerEditingLocationID[playerid]);
+            return 1;
+        }
+
+        new query[256];
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE world_locations SET map_icon=%d WHERE id=%d LIMIT 1", strval(inputtext), PlayerEditingLocationID[playerid]);
+        mysql_tquery(g_SQL, query, "OnDynamicLocationUpdated", "i", playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_LOC_PICKUP_INPUT)
+    {
+        if (!response)
+        {
+            ShowDynamicLocationActionMenu(playerid, PlayerEditingLocationID[playerid]);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Pickup model harus angka. Gunakan 0 untuk hapus marker.");
+            ShowDynamicLocationPickupInput(playerid, PlayerEditingLocationID[playerid]);
+            return 1;
+        }
+
+        new query[256];
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE world_locations SET pickup_model=%d WHERE id=%d LIMIT 1", strval(inputtext), PlayerEditingLocationID[playerid]);
+        mysql_tquery(g_SQL, query, "OnDynamicLocationUpdated", "i", playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_LOC_OBJECT_INPUT)
+    {
+        if (!response)
+        {
+            ShowDynamicLocationActionMenu(playerid, PlayerEditingLocationID[playerid]);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Object model harus angka. Gunakan 0 untuk hapus object visual.");
+            ShowDynamicLocationObjectInput(playerid, PlayerEditingLocationID[playerid]);
+            return 1;
+        }
+
+        new query[256];
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE world_locations SET object_model=%d WHERE id=%d LIMIT 1", strval(inputtext), PlayerEditingLocationID[playerid]);
+        mysql_tquery(g_SQL, query, "OnDynamicLocationUpdated", "i", playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_LOC_RADIUS_INPUT)
+    {
+        if (!response)
+        {
+            ShowDynamicLocationActionMenu(playerid, PlayerEditingLocationID[playerid]);
+            return 1;
+        }
+
+        new Float:radius = floatstr(inputtext);
+        if (radius < 1.0 || radius > 50.0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Radius harus 1 sampai 50.");
+            ShowDynamicLocationRadiusInput(playerid, PlayerEditingLocationID[playerid]);
+            return 1;
+        }
+
+        new query[256];
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE world_locations SET interaction_radius=%f WHERE id=%d LIMIT 1", radius, PlayerEditingLocationID[playerid]);
+        mysql_tquery(g_SQL, query, "OnDynamicLocationUpdated", "i", playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_LOC_INTERIOR_INPUT)
+    {
+        if (!response)
+        {
+            ShowDynamicLocationActionMenu(playerid, PlayerEditingLocationID[playerid]);
+            return 1;
+        }
+
+        new interiorStr[16], vwStr[16];
+        if (!GetTwoParams(inputtext, interiorStr, sizeof(interiorStr), vwStr, sizeof(vwStr)) || !IsNumericString(interiorStr) || !IsNumericString(vwStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Format: interior virtual_world. Contoh: 0 0");
+            ShowDynamicLocationInteriorInput(playerid, PlayerEditingLocationID[playerid]);
+            return 1;
+        }
+
+        new query[256];
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE world_locations SET interior=%d, virtual_world=%d WHERE id=%d LIMIT 1", strval(interiorStr), strval(vwStr), PlayerEditingLocationID[playerid]);
+        mysql_tquery(g_SQL, query, "OnDynamicLocationUpdated", "i", playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_LOC_ENABLE_MENU)
+    {
+        if (!response)
+        {
+            ShowDynamicLocationActionMenu(playerid, PlayerEditingLocationID[playerid]);
+            return 1;
+        }
+
+        new query[256];
+        if (listitem == 0)
+        {
+            mysql_format(g_SQL, query, sizeof(query), "UPDATE world_locations SET enabled=1 WHERE id=%d LIMIT 1", PlayerEditingLocationID[playerid]);
+            mysql_tquery(g_SQL, query, "OnDynamicLocationUpdated", "i", playerid);
+        }
+        else
+        {
+            mysql_format(g_SQL, query, sizeof(query), "UPDATE world_locations SET enabled=0 WHERE id=%d LIMIT 1", PlayerEditingLocationID[playerid]);
+            mysql_tquery(g_SQL, query, "OnDynamicLocationDeleted", "i", playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_LOC_DELETE_CONFIRM)
+    {
+        if (!response)
+        {
+            ShowDynamicLocationActionMenu(playerid, PlayerEditingLocationID[playerid]);
+            return 1;
+        }
+
+        new cmd[64];
+        format(cmd, sizeof(cmd), "/locdelete %d", PlayerEditingLocationID[playerid]);
+        OnPlayerCommandText(playerid, cmd);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_LOC_ICON_PRESETS)
+    {
+        if (response)
+        {
+            ShowDynamicLocationEditorMenu(playerid);
+        }
         return 1;
     }
 
@@ -15778,8 +16101,8 @@ stock ShowDynamicLocationEditorMenu(playerid)
         playerid,
         DIALOG_LOC_MENU,
         DIALOG_STYLE_LIST,
-        "Dynamic World Location Editor",
-        "Create Location\nList Active Locations\nIcon Presets\nReload Locations\nCommand Help\nRemove/Delete Notes",
+        "Dynamic Location Editor",
+        "Create Location\nList / Select Location\nInput ID Manual\nIcon Presets\nReload Locations\nCommand Help",
         "Select",
         "Close"
     );
@@ -15793,7 +16116,7 @@ stock ShowDynamicLocationCreateTypeMenu(playerid)
         DIALOG_LOC_CREATE_TYPE,
         DIALOG_STYLE_LIST,
         "Create Dynamic Location - Type",
-        "atm\ndealer\nammunation\ngang_hq\njob\nrace\nbusiness\nhouse\ninterior",
+        "atm\ndealer\nammunation\ngang_hq\njob\nrace\nbusiness\nhouse\ninterior\npublic_interior\npickup",
         "Select",
         "Back"
     );
@@ -15848,26 +16171,330 @@ stock CreateDynamicLocationAtPlayer(playerid, const locType[], const locName[])
 
 stock ShowDynamicLocationListDialog(playerid)
 {
-    new body[2048];
-    new line[160];
-    new found = 0;
+    new body[4096];
+    new line[192];
 
-    format(body, sizeof(body), "ID\tType\tName\tIcon\tRadius\n");
-
-    for (new i = 0; i < DynamicLocationCount; i++)
+    if (DynamicLocationCount == 0)
     {
-        format(line, sizeof(line), "%d\t%s\t%s\t%d\t%.1f\n", DynamicLocationDBID[i], DynamicLocationType[i], DynamicLocationName[i], DynamicLocationMapIcon[i], DynamicLocationRadius[i]);
-        strcat(body, line, sizeof(body));
-        found++;
-    }
-
-    if (!found)
-    {
-        ShowPlayerDialog(playerid, DIALOG_LOC_LIST, DIALOG_STYLE_MSGBOX, "Dynamic Locations", "Belum ada lokasi aktif.", "Back", "Close");
+        ShowPlayerDialog(playerid, DIALOG_DYNAMIC_LOCATION_INFO, DIALOG_STYLE_MSGBOX, "Dynamic Locations", "Belum ada dynamic location aktif.", "Back", "Close");
         return 1;
     }
 
-    ShowPlayerDialog(playerid, DIALOG_LOC_LIST, DIALOG_STYLE_TABLIST_HEADERS, "Dynamic Locations", body, "Back", "Close");
+    format(body, sizeof(body), "ID\tType\tIcon\tRadius\tName\n");
+
+    for (new i = 0; i < DynamicLocationCount; i++)
+    {
+        format(line, sizeof(line), "%d\t%s\t%d\t%.1f\t%s\n", DynamicLocationDBID[i], DynamicLocationType[i], DynamicLocationMapIcon[i], DynamicLocationRadius[i], DynamicLocationName[i]);
+        strcat(body, line, sizeof(body));
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_LOC_LIST, DIALOG_STYLE_TABLIST_HEADERS, "Select Dynamic Location", body, "Select", "Back");
+    return 1;
+}
+
+stock ShowDynamicLocationSelectInput(playerid)
+{
+    ShowPlayerDialog(
+        playerid,
+        DIALOG_LOC_SELECT_INPUT,
+        DIALOG_STYLE_INPUT,
+        "Select Dynamic Location",
+        "Masukkan ID location yang ingin diedit.\n\nGunakan /loclist atau menu List untuk melihat ID aktif.",
+        "Select",
+        "Back"
+    );
+    return 1;
+}
+
+stock ShowDynamicLocationActionMenu(playerid, locId)
+{
+    new idx = FindDynamicLocationIndexByDBID(locId);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic location ID tidak ditemukan atau nonaktif.");
+        ShowDynamicLocationEditorMenu(playerid);
+        return 0;
+    }
+
+    PlayerEditingLocationID[playerid] = locId;
+
+    new title[96];
+    new body[768];
+
+    format(title, sizeof(title), "Location ID %d", locId);
+    format(body, sizeof(body), "Info\nGoto\nMove to My Position\nRename Location\nEdit Type\nEdit Label\nEdit Radar Icon\nEdit Pickup / Marker\nEdit Object Visual\nEdit ALT Radius\nEdit Interior / Virtual World\nEnable / Disable\nDelete Location\nReload All\nBack");
+
+    ShowPlayerDialog(playerid, DIALOG_LOC_ACTION_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Close");
+    return 1;
+}
+
+stock ShowDynamicLocationEditorInfoDialog(playerid, locId)
+{
+    new idx = FindDynamicLocationIndexByDBID(locId);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic location ID tidak ditemukan atau nonaktif.");
+        ShowDynamicLocationEditorMenu(playerid);
+        return 0;
+    }
+
+    PlayerEditingLocationID[playerid] = locId;
+
+    new body[1024];
+    format(
+        body,
+        sizeof(body),
+        "ID: %d\nType: %s\nName: %s\nLabel: %s\nInterior: %d\nVirtual World: %d\nPosition: %.2f %.2f %.2f\nAngle: %.2f\nMap Icon: %d\nPickup Model: %d\nObject Model: %d\nLinked Object ID: %d\nALT Radius: %.1f\nEnabled: %d",
+        DynamicLocationDBID[idx],
+        DynamicLocationType[idx],
+        DynamicLocationName[idx],
+        DynamicLocationLabelText[idx],
+        DynamicLocationInterior[idx],
+        DynamicLocationVirtualWorld[idx],
+        DynamicLocationX[idx],
+        DynamicLocationY[idx],
+        DynamicLocationZ[idx],
+        DynamicLocationA[idx],
+        DynamicLocationMapIcon[idx],
+        DynamicLocationPickupModel[idx],
+        DynamicLocationObjectModel[idx],
+        DynamicLocationLinkedObjectDBID[idx],
+        DynamicLocationRadius[idx],
+        DynamicLocationEnabled[idx]
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_DYNAMIC_LOCATION_INFO, DIALOG_STYLE_MSGBOX, "Dynamic Location Info", body, "Back", "Close");
+    return 1;
+}
+
+stock GotoDynamicLocationByID(playerid, locId)
+{
+    new idx = FindDynamicLocationIndexByDBID(locId);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic location tidak ditemukan/aktif.");
+        return 0;
+    }
+
+    SetPlayerInterior(playerid, DynamicLocationInterior[idx]);
+    SetPlayerVirtualWorld(playerid, DynamicLocationVirtualWorld[idx]);
+    SetPlayerPos(playerid, DynamicLocationX[idx], DynamicLocationY[idx], DynamicLocationZ[idx] + 1.0);
+    SetPlayerFacingAngle(playerid, DynamicLocationA[idx]);
+    SendClientMessage(playerid, COLOR_GREEN, "Teleport ke dynamic location berhasil.");
+    return 1;
+}
+
+stock MoveDynamicLocationToPlayer(playerid, locId)
+{
+    if (FindDynamicLocationIndexByDBID(locId) == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic location tidak ditemukan/aktif.");
+        return 0;
+    }
+
+    new Float:x, Float:y, Float:z, Float:a;
+    new query[512];
+    GetPlayerPos(playerid, x, y, z);
+    GetPlayerFacingAngle(playerid, a);
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "UPDATE world_locations SET pos_x=%f, pos_y=%f, pos_z=%f, pos_a=%f, interior=%d, virtual_world=%d WHERE id=%d LIMIT 1",
+        x,
+        y,
+        z,
+        a,
+        GetPlayerInterior(playerid),
+        GetPlayerVirtualWorld(playerid),
+        locId
+    );
+    mysql_tquery(g_SQL, query, "OnDynamicLocationUpdated", "i", playerid);
+    return 1;
+}
+
+stock ShowDynamicLocationRenameInput(playerid, locId)
+{
+    new idx = FindDynamicLocationIndexByDBID(locId);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic location ID tidak ditemukan.");
+        ShowDynamicLocationEditorMenu(playerid);
+        return 0;
+    }
+
+    PlayerEditingLocationID[playerid] = locId;
+
+    new body[256];
+    format(body, sizeof(body), "Nama sekarang: %s\n\nMasukkan nama/display name baru.", DynamicLocationName[idx]);
+    ShowPlayerDialog(playerid, DIALOG_LOC_RENAME_INPUT, DIALOG_STYLE_INPUT, "Rename Dynamic Location", body, "Save", "Back");
+    return 1;
+}
+
+stock ShowDynamicLocationTypeInput(playerid, locId)
+{
+    new idx = FindDynamicLocationIndexByDBID(locId);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic location ID tidak ditemukan.");
+        ShowDynamicLocationEditorMenu(playerid);
+        return 0;
+    }
+
+    PlayerEditingLocationID[playerid] = locId;
+
+    new body[384];
+    format(body, sizeof(body), "Type sekarang: %s\n\nMasukkan type baru.\nContoh: atm, dealer, ammunation, gang_hq, job, race, business, house, interior, public_interior, pickup", DynamicLocationType[idx]);
+    ShowPlayerDialog(playerid, DIALOG_LOC_TYPE_INPUT, DIALOG_STYLE_INPUT, "Edit Location Type", body, "Save", "Back");
+    return 1;
+}
+
+stock ShowDynamicLocationLabelInput(playerid, locId)
+{
+    new idx = FindDynamicLocationIndexByDBID(locId);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic location ID tidak ditemukan.");
+        ShowDynamicLocationEditorMenu(playerid);
+        return 0;
+    }
+
+    PlayerEditingLocationID[playerid] = locId;
+
+    new body[512];
+    format(body, sizeof(body), "Label sekarang:\n%s\n\nMasukkan label baru.\nGunakan off/hide untuk sembunyikan.\nGunakan auto/default untuk label otomatis.", DynamicLocationLabelText[idx]);
+    ShowPlayerDialog(playerid, DIALOG_LOC_LABEL_INPUT, DIALOG_STYLE_INPUT, "Edit Location Label", body, "Save", "Back");
+    return 1;
+}
+
+stock ShowDynamicLocationIconInput(playerid, locId)
+{
+    new idx = FindDynamicLocationIndexByDBID(locId);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic location ID tidak ditemukan.");
+        ShowDynamicLocationEditorMenu(playerid);
+        return 0;
+    }
+
+    PlayerEditingLocationID[playerid] = locId;
+
+    new body[384];
+    format(body, sizeof(body), "Map icon sekarang: %d\n\nMasukkan ID radar/map icon baru.\nPreset cepat:\nATM/Bank 52\nDealer 55\nJob 51\nRace 53\nAmmu-Nation 6\nGang HQ 19\nGunakan 0 untuk hilangkan icon.", DynamicLocationMapIcon[idx]);
+    ShowPlayerDialog(playerid, DIALOG_LOC_ICON_INPUT, DIALOG_STYLE_INPUT, "Edit Radar Icon", body, "Save", "Back");
+    return 1;
+}
+
+stock ShowDynamicLocationPickupInput(playerid, locId)
+{
+    new idx = FindDynamicLocationIndexByDBID(locId);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic location ID tidak ditemukan.");
+        ShowDynamicLocationEditorMenu(playerid);
+        return 0;
+    }
+
+    PlayerEditingLocationID[playerid] = locId;
+
+    new body[384];
+    format(body, sizeof(body), "Pickup/marker sekarang: %d\n\nMasukkan model pickup baru.\nContoh: 1239 info marker.\nGunakan 0 untuk hapus pickup/marker.", DynamicLocationPickupModel[idx]);
+    ShowPlayerDialog(playerid, DIALOG_LOC_PICKUP_INPUT, DIALOG_STYLE_INPUT, "Edit Pickup / Marker", body, "Save", "Back");
+    return 1;
+}
+
+stock ShowDynamicLocationObjectInput(playerid, locId)
+{
+    new idx = FindDynamicLocationIndexByDBID(locId);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic location ID tidak ditemukan.");
+        ShowDynamicLocationEditorMenu(playerid);
+        return 0;
+    }
+
+    PlayerEditingLocationID[playerid] = locId;
+
+    new body[384];
+    format(body, sizeof(body), "Object visual sekarang: %d\n\nMasukkan model object visual baru.\nContoh ATM object: 2942.\nGunakan 0 untuk hapus object visual location.", DynamicLocationObjectModel[idx]);
+    ShowPlayerDialog(playerid, DIALOG_LOC_OBJECT_INPUT, DIALOG_STYLE_INPUT, "Edit Object Visual", body, "Save", "Back");
+    return 1;
+}
+
+stock ShowDynamicLocationRadiusInput(playerid, locId)
+{
+    new idx = FindDynamicLocationIndexByDBID(locId);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic location ID tidak ditemukan.");
+        ShowDynamicLocationEditorMenu(playerid);
+        return 0;
+    }
+
+    PlayerEditingLocationID[playerid] = locId;
+
+    new body[256];
+    format(body, sizeof(body), "ALT radius sekarang: %.1f\n\nMasukkan radius baru 1 sampai 50.\nContoh: 3 atau 5", DynamicLocationRadius[idx]);
+    ShowPlayerDialog(playerid, DIALOG_LOC_RADIUS_INPUT, DIALOG_STYLE_INPUT, "Edit ALT Radius", body, "Save", "Back");
+    return 1;
+}
+
+stock ShowDynamicLocationInteriorInput(playerid, locId)
+{
+    new idx = FindDynamicLocationIndexByDBID(locId);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic location ID tidak ditemukan.");
+        ShowDynamicLocationEditorMenu(playerid);
+        return 0;
+    }
+
+    PlayerEditingLocationID[playerid] = locId;
+
+    new body[384];
+    format(body, sizeof(body), "Interior sekarang: %d\nVirtual World sekarang: %d\n\nMasukkan format:\ninterior virtual_world\n\nContoh public world: 0 0\nContoh custom world: 0 50001", DynamicLocationInterior[idx], DynamicLocationVirtualWorld[idx]);
+    ShowPlayerDialog(playerid, DIALOG_LOC_INTERIOR_INPUT, DIALOG_STYLE_INPUT, "Edit Interior / Virtual World", body, "Save", "Back");
+    return 1;
+}
+
+stock ShowDynamicLocationEnableMenu(playerid, locId)
+{
+    if (FindDynamicLocationIndexByDBID(locId) == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic location ID tidak ditemukan.");
+        ShowDynamicLocationEditorMenu(playerid);
+        return 0;
+    }
+
+    PlayerEditingLocationID[playerid] = locId;
+    ShowPlayerDialog(playerid, DIALOG_LOC_ENABLE_MENU, DIALOG_STYLE_LIST, "Enable / Disable Location", "Enable Location\nDisable / Hide Location", "Select", "Back");
+    return 1;
+}
+
+stock ShowDynamicLocationDeleteConfirm(playerid, locId)
+{
+    new idx = FindDynamicLocationIndexByDBID(locId);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic location ID tidak ditemukan.");
+        ShowDynamicLocationEditorMenu(playerid);
+        return 0;
+    }
+
+    PlayerEditingLocationID[playerid] = locId;
+
+    new body[512];
+    format(
+        body,
+        sizeof(body),
+        "Hapus dynamic location ID %d?\n\nType: %s\nName: %s\n\nIni akan menghapus ALT interaction, radar icon, marker/pickup, dan 3D label location.\nObject yang ditautkan tidak otomatis dihapus kecuali memakai object purge.",
+        locId,
+        DynamicLocationType[idx],
+        DynamicLocationName[idx]
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_LOC_DELETE_CONFIRM, DIALOG_STYLE_MSGBOX, "Delete Dynamic Location", body, "Delete", "Back");
     return 1;
 }
 
@@ -22140,7 +22767,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.23C Dynamic Object Dialog & Editor");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.23D.1 Dynamic Location Compile Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -22150,7 +22777,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23B: Parked vehicle dialog menu dan interactive editor.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.23C: Dynamic object dialog editor disamakan dengan parked vehicle editor.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.23D.1: Compile fix dynamic location editor tanpa mengubah fitur v0.23D.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23A.1: Parked vehicle engine default ON setelah create/reload.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22F.2: Gang HQ interior exit fix dan visitor access.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A.3: Runtime turf war config untuk balancing/testing.");
@@ -27238,7 +27865,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
-    if (!strcmp(cmdtext, "/locmenu", true))
+    if (!strcmp(cmdtext, "/locmenu", true) || !strcmp(cmdtext, "/locedit", true) || !strcmp(cmdtext, "/locationmenu", true))
     {
         ShowDynamicLocationEditorMenu(playerid);
         return 1;

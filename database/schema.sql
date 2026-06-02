@@ -735,3 +735,71 @@ CREATE TABLE IF NOT EXISTS world_pickups (
 -- source_tag disiapkan untuk bulk seed/importer offline-like nanti.
 -- Contoh source_tag: 'manual', 'offline_ls_bribe_seed', 'offline_health_seed', 'offline_hidden_seed'.
 
+-- SAIF / LSIF Dev v0.23E.1 — Offline Pickup Template Seeder
+-- Optional seed SQL. Tidak wajib dijalankan kalau memakai /wpickupseed in-game.
+-- Script ini refresh seed dengan source_tag='offline_template_ls'.
+
+UPDATE world_pickups SET enabled=0 WHERE source_tag='offline_template_ls';
+
+INSERT INTO world_pickups
+(pickup_type, display_name, model_id, pos_x, pos_y, pos_z, interior, virtual_world, amount, cooldown_seconds, source_tag, enabled)
+VALUES
+('bribe', 'LS Bribe - LSPD Alley', 1247, 1566.20, -1695.10, 5.90, 0, 0, 1, 180, 'offline_template_ls', 1),
+('bribe', 'LS Bribe - Pershing Square', 1247, 1484.30, -1744.60, 13.55, 0, 0, 1, 180, 'offline_template_ls', 1),
+('bribe', 'LS Bribe - Unity Station', 1247, 1815.60, -1893.80, 13.58, 0, 0, 1, 180, 'offline_template_ls', 1),
+('bribe', 'LS Bribe - Jefferson Backstreet', 1247, 2182.40, -1161.70, 23.82, 0, 0, 1, 180, 'offline_template_ls', 1),
+('bribe', 'LS Bribe - Ocean Docks', 1247, 2574.30, -2218.50, 13.54, 0, 0, 1, 180, 'offline_template_ls', 1),
+('bribe', 'LS Bribe - Market Alley', 1247, 1114.50, -1494.80, 15.79, 0, 0, 1, 180, 'offline_template_ls', 1),
+('bribe', 'LS Bribe - Santa Maria Beach', 1247, 367.50, -2048.70, 7.83, 0, 0, 1, 180, 'offline_template_ls', 1),
+('bribe', 'LS Bribe - LS Airport Lot', 1247, 1952.20, -2182.40, 13.55, 0, 0, 1, 180, 'offline_template_ls', 1),
+('health', 'LS Health - County General', 1240, 1176.70, -1323.80, 14.07, 0, 0, 35, 120, 'offline_template_ls', 1),
+('health', 'LS Health - Jefferson Hospital', 1240, 2034.20, -1403.40, 17.25, 0, 0, 35, 120, 'offline_template_ls', 1),
+('health', 'LS Health - Grove Street', 1240, 2495.30, -1687.90, 13.52, 0, 0, 35, 120, 'offline_template_ls', 1),
+('health', 'LS Health - Idlewood', 1240, 1957.40, -1714.20, 15.97, 0, 0, 35, 120, 'offline_template_ls', 1),
+('health', 'LS Health - Santa Maria', 1240, 332.80, -1809.40, 4.47, 0, 0, 35, 120, 'offline_template_ls', 1),
+('health', 'LS Health - East Beach', 1240, 2737.80, -1765.30, 44.67, 0, 0, 35, 120, 'offline_template_ls', 1),
+('armor', 'LS Armor - LSPD Garage', 1242, 1548.60, -1632.20, 13.38, 0, 0, 50, 240, 'offline_template_ls', 1),
+('armor', 'LS Armor - Grove Backyard', 1242, 2522.40, -1679.60, 15.50, 0, 0, 50, 240, 'offline_template_ls', 1),
+('armor', 'LS Armor - Ocean Docks Warehouse', 1242, 2465.80, -2117.40, 13.55, 0, 0, 50, 240, 'offline_template_ls', 1),
+('armor', 'LS Armor - East Los Santos', 1242, 2385.70, -1281.40, 25.13, 0, 0, 50, 240, 'offline_template_ls', 1),
+('armor', 'LS Armor - Verdant Bluffs', 1242, 1335.50, -631.80, 109.13, 0, 0, 50, 240, 'offline_template_ls', 1),
+('hidden', 'LS Hidden - Vinewood Sign Trail', 1274, 1382.90, -806.10, 86.12, 0, 0, 500, 300, 'offline_template_ls', 1),
+('hidden', 'LS Hidden - Mulholland Overlook', 1274, 1263.30, -781.20, 92.03, 0, 0, 500, 300, 'offline_template_ls', 1),
+('hidden', 'LS Hidden - Verona Beach Pier', 1274, 850.20, -2067.30, 12.86, 0, 0, 500, 300, 'offline_template_ls', 1),
+('hidden', 'LS Hidden - Airport Service Road', 1274, 1701.30, -2347.80, 13.55, 0, 0, 500, 300, 'offline_template_ls', 1),
+('hidden', 'LS Hidden - LS Docks Crane', 1274, 2773.90, -2455.30, 13.63, 0, 0, 500, 300, 'offline_template_ls', 1),
+('hidden', 'LS Hidden - Downtown Rooftop', 1274, 1407.30, -1367.50, 34.50, 0, 0, 500, 300, 'offline_template_ls', 1);
+
+-- Command in-game yang tersedia pada patch v0.23E.1:
+-- /wpickupseed       = refresh seed lewat server
+-- /wpickupclearseed  = nonaktifkan seed source_tag offline_template_ls
+-- /wpickupseedinfo   = cek jumlah seed aktif per type
+
+CREATE TABLE IF NOT EXISTS public_interiors (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    interior_type VARCHAR(32) NOT NULL,
+    display_name VARCHAR(64) NOT NULL,
+    exterior_x FLOAT NOT NULL,
+    exterior_y FLOAT NOT NULL,
+    exterior_z FLOAT NOT NULL,
+    exterior_a FLOAT NOT NULL DEFAULT 0,
+    exterior_interior INT NOT NULL DEFAULT 0,
+    exterior_virtual_world INT NOT NULL DEFAULT 0,
+    interior_id INT NOT NULL DEFAULT 0,
+    interior_virtual_world INT NOT NULL DEFAULT 0,
+    interior_x FLOAT NOT NULL,
+    interior_y FLOAT NOT NULL,
+    interior_z FLOAT NOT NULL,
+    interior_a FLOAT NOT NULL DEFAULT 0,
+    exit_x FLOAT NOT NULL,
+    exit_y FLOAT NOT NULL,
+    exit_z FLOAT NOT NULL,
+    source_tag VARCHAR(64) NOT NULL DEFAULT 'manual',
+    enabled TINYINT NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_public_interiors_enabled (enabled),
+    INDEX idx_public_interiors_type (interior_type),
+    INDEX idx_public_interiors_source (source_tag)
+);
+

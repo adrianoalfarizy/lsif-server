@@ -172,6 +172,16 @@
 #define DIALOG_WPICKUP_ENABLE_MENU 1152
 #define DIALOG_WPICKUP_DELETE_CONFIRM 1153
 #define DIALOG_WPICKUP_SEED_INFO 1154
+#define DIALOG_PUBINT_MENU 1155
+#define DIALOG_PUBINT_CREATE_TYPE 1156
+#define DIALOG_PUBINT_CREATE_NAME 1157
+#define DIALOG_PUBINT_LIST 1158
+#define DIALOG_PUBINT_SELECT_INPUT 1159
+#define DIALOG_PUBINT_ACTION_MENU 1160
+#define DIALOG_PUBINT_INFO 1161
+#define DIALOG_PUBINT_DELETE_CONFIRM 1162
+#define DIALOG_PUBINT_HELP 1163
+
 
 
 
@@ -463,6 +473,16 @@
 #define WORLD_PICKUP_DEFAULT_COOLDOWN 60
 #define WORLD_PICKUP_LABEL_DRAW_DISTANCE 18.0
 #define WORLD_PICKUP_OFFLINE_SEED_TAG "offline_template_ls"
+
+#define MAX_PUBLIC_INTERIORS 80
+#define PUBLIC_INTERIOR_PICKUP_MODEL 1318
+#define PUBLIC_INTERIOR_PICKUP_TYPE 1
+#define PUBLIC_INTERIOR_LABEL_DRAW_DISTANCE 18.0
+#define PUBLIC_INTERIOR_VW_BASE 43000
+#define PUBINT_TYPE_SIZE 32
+#define PUBINT_NAME_SIZE 64
+#define PUBINT_SOURCE_MANUAL "manual"
+
 #define DYN_OBJECT_NAME_SIZE 64
 #define MAPICON_BASE_DYNAMIC 80
 #define LOC_TYPE_SIZE 24
@@ -1302,6 +1322,31 @@ new Float:WorldPickupZ[MAX_WORLD_PICKUPS];
 new WorldPickupName[MAX_WORLD_PICKUPS][64];
 new Text3D:WorldPickupLabel[MAX_WORLD_PICKUPS];
 
+new PublicInteriorCount;
+new PublicInteriorDBID[MAX_PUBLIC_INTERIORS];
+new PublicInteriorEnabled[MAX_PUBLIC_INTERIORS];
+new PublicInteriorInteriorID[MAX_PUBLIC_INTERIORS];
+new PublicInteriorVirtualWorld[MAX_PUBLIC_INTERIORS];
+new PublicInteriorExteriorInterior[MAX_PUBLIC_INTERIORS];
+new PublicInteriorExteriorVirtualWorld[MAX_PUBLIC_INTERIORS];
+new PublicInteriorPickup[MAX_PUBLIC_INTERIORS];
+new PublicInteriorExitPickup[MAX_PUBLIC_INTERIORS];
+new Float:PublicInteriorExtX[MAX_PUBLIC_INTERIORS];
+new Float:PublicInteriorExtY[MAX_PUBLIC_INTERIORS];
+new Float:PublicInteriorExtZ[MAX_PUBLIC_INTERIORS];
+new Float:PublicInteriorExtA[MAX_PUBLIC_INTERIORS];
+new Float:PublicInteriorIntX[MAX_PUBLIC_INTERIORS];
+new Float:PublicInteriorIntY[MAX_PUBLIC_INTERIORS];
+new Float:PublicInteriorIntZ[MAX_PUBLIC_INTERIORS];
+new Float:PublicInteriorIntA[MAX_PUBLIC_INTERIORS];
+new Float:PublicInteriorExitX[MAX_PUBLIC_INTERIORS];
+new Float:PublicInteriorExitY[MAX_PUBLIC_INTERIORS];
+new Float:PublicInteriorExitZ[MAX_PUBLIC_INTERIORS];
+new PublicInteriorType[MAX_PUBLIC_INTERIORS][PUBINT_TYPE_SIZE];
+new PublicInteriorName[MAX_PUBLIC_INTERIORS][PUBINT_NAME_SIZE];
+new Text3D:PublicInteriorLabel[MAX_PUBLIC_INTERIORS];
+new Text3D:PublicInteriorExitLabel[MAX_PUBLIC_INTERIORS];
+
 
 
 new PlayerPendingLocCreateType[MAX_PLAYERS][LOC_TYPE_SIZE];
@@ -1318,6 +1363,10 @@ new PlayerPendingObjLocVirtualWorld[MAX_PLAYERS];
 new PlayerEditingObjectID[MAX_PLAYERS];
 new PlayerEditingParkedVehicleID[MAX_PLAYERS];
 new PlayerEditingWorldPickupID[MAX_PLAYERS];
+new PlayerEditingPublicInteriorID[MAX_PLAYERS];
+new PlayerPendingPublicInteriorType[MAX_PLAYERS][PUBINT_TYPE_SIZE];
+new PlayerInsidePublicInteriorID[MAX_PLAYERS];
+new PlayerLastPublicInteriorPickupTick[MAX_PLAYERS];
 new PlayerPendingObjectLinkType[MAX_PLAYERS][LOC_TYPE_SIZE];
 new PlayerPendingObjectLinkName[MAX_PLAYERS][LOC_NAME_SIZE];
 
@@ -1885,6 +1934,11 @@ forward OnWorldPickupSeedClearedForSeed(playerid);
 forward OnWorldPickupSeedCleared(playerid);
 forward OnWorldPickupSeedReloadDelayed(playerid);
 forward OnWorldPickupSeedInfoLoaded(playerid);
+forward OnPublicInteriorsLoaded();
+forward OnPublicInteriorCreated(playerid);
+forward OnPublicInteriorUpdated(playerid);
+forward OnPublicInteriorDeleted(playerid);
+forward ReloadPublicInteriorsDelayed(playerid);
 forward RespawnWorldPickupByDBID(dbid);
 forward ReloadDynamicLocationsDelayed(playerid);
 
@@ -9820,7 +9874,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.23E.1 Pickup Template Seeder");
+    SetGameModeText("SAIF Dev v0.23F Public Interior System");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -9860,6 +9914,7 @@ public OnGameModeInit()
     LoadDynamicObjects();
     LoadParkedVehicles();
     LoadWorldPickups();
+    LoadPublicInteriors();
 
     for (new i = 0; i < MAX_PLAYERS; i++)
     {
@@ -9921,7 +9976,7 @@ public OnGameModeInit()
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.23E.1 Pickup Template Seeder berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.23F Public Interior System berhasil dijalankan.");
     return 1;
 }
 
@@ -9956,6 +10011,7 @@ public OnGameModeExit()
 
     DestroyAllParkedVehicleRuntime();
     DestroyAllWorldPickupsRuntime();
+    DestroyAllPublicInteriorsRuntime();
     DestroyDynamicWorldObjects();
     DestroyWorldInteractionMarkers();
 
@@ -9979,6 +10035,9 @@ public OnPlayerConnect(playerid)
 {
     ResetPlayerAccountData(playerid);
     PlayerEditingWorldPickupID[playerid] = 0;
+    PlayerEditingPublicInteriorID[playerid] = 0;
+    PlayerInsidePublicInteriorID[playerid] = 0;
+    PlayerLastPublicInteriorPickupTick[playerid] = 0;
     CreatePlayerTurfHud(playerid);
 
     // Sembunyikan class selection/pilih skin sebelum login.
@@ -10027,6 +10086,7 @@ public OnPlayerDisconnect(playerid, reason)
     PlayerDBID[playerid] = 0;
     PlayerAuthDialogShown[playerid] = 0;
     PlayerFindingBank[playerid] = 0;
+    PlayerInsidePublicInteriorID[playerid] = 0;
     if (PlayerInsideGangHQ[playerid])
     {
         PlayerInsideGangHQ[playerid] = 0;
@@ -10650,6 +10710,152 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         }
 
         ExecuteNearbyInteraction(playerid, listitem);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PUBINT_MENU)
+    {
+        if (!response) return 1;
+
+        switch (listitem)
+        {
+            case 0: ShowPublicInteriorCreateTypeMenu(playerid);
+            case 1: ShowPublicInteriorListDialog(playerid);
+            case 2: ShowPublicInteriorSelectInput(playerid);
+            case 3:
+            {
+                LoadPublicInteriors();
+                SendClientMessage(playerid, COLOR_GREEN, "Public interiors direload dari database.");
+            }
+            case 4: ShowPublicInteriorHelp(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PUBINT_CREATE_TYPE)
+    {
+        if (!response)
+        {
+            ShowPublicInteriorMenu(playerid);
+            return 1;
+        }
+
+        if (!SetPendingPublicInteriorTypeByList(playerid, listitem))
+        {
+            ShowPublicInteriorCreateTypeMenu(playerid);
+            return 1;
+        }
+        ShowPublicInteriorCreateNameInput(playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PUBINT_CREATE_NAME)
+    {
+        if (!response)
+        {
+            ShowPublicInteriorCreateTypeMenu(playerid);
+            return 1;
+        }
+
+        CreatePublicInteriorAtPlayer(playerid, PlayerPendingPublicInteriorType[playerid], inputtext);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PUBINT_LIST)
+    {
+        if (!response)
+        {
+            ShowPublicInteriorMenu(playerid);
+            return 1;
+        }
+
+        if (listitem < 0 || listitem >= PublicInteriorCount)
+        {
+            ShowPublicInteriorMenu(playerid);
+            return 1;
+        }
+
+        PlayerEditingPublicInteriorID[playerid] = PublicInteriorDBID[listitem];
+        ShowPublicInteriorActionMenu(playerid, PlayerEditingPublicInteriorID[playerid]);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PUBINT_SELECT_INPUT)
+    {
+        if (!response)
+        {
+            ShowPublicInteriorMenu(playerid);
+            return 1;
+        }
+        if (!IsNumericString(inputtext))
+        {
+            ShowPublicInteriorSelectInput(playerid);
+            return 1;
+        }
+
+        new pubIntId = strval(inputtext);
+        if (FindPublicInteriorIndexByDBID(pubIntId) == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Public interior tidak ditemukan.");
+            ShowPublicInteriorSelectInput(playerid);
+            return 1;
+        }
+
+        PlayerEditingPublicInteriorID[playerid] = pubIntId;
+        ShowPublicInteriorActionMenu(playerid, pubIntId);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PUBINT_ACTION_MENU)
+    {
+        new pubIntId = PlayerEditingPublicInteriorID[playerid];
+        if (!response)
+        {
+            ShowPublicInteriorMenu(playerid);
+            return 1;
+        }
+
+        switch (listitem)
+        {
+            case 0: ShowPublicInteriorInfo(playerid, pubIntId);
+            case 1:
+            {
+                GotoPublicInterior(playerid, pubIntId);
+                ShowPublicInteriorActionMenu(playerid, pubIntId);
+            }
+            case 2:
+            {
+                EnterPublicInterior(playerid, pubIntId);
+            }
+            case 3: ShowPlayerDialog(playerid, DIALOG_PUBINT_DELETE_CONFIRM, DIALOG_STYLE_MSGBOX, "Delete Public Interior", "Yakin ingin menonaktifkan public interior ini?\nData tidak dihapus permanen, hanya enabled=0.", "Delete", "Back");
+            case 4:
+            {
+                LoadPublicInteriors();
+                SendClientMessage(playerid, COLOR_GREEN, "Public interiors direload dari database.");
+            }
+            case 5: ShowPublicInteriorMenu(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PUBINT_INFO || dialogid == DIALOG_PUBINT_HELP)
+    {
+        if (response)
+        {
+            if (PlayerEditingPublicInteriorID[playerid] > 0) ShowPublicInteriorActionMenu(playerid, PlayerEditingPublicInteriorID[playerid]);
+            else ShowPublicInteriorMenu(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PUBINT_DELETE_CONFIRM)
+    {
+        if (!response)
+        {
+            ShowPublicInteriorActionMenu(playerid, PlayerEditingPublicInteriorID[playerid]);
+            return 1;
+        }
+        DeletePublicInterior(playerid, PlayerEditingPublicInteriorID[playerid]);
         return 1;
     }
 
@@ -14995,6 +15201,847 @@ stock CreateWorldPickupRuntime(index)
                                   true
                               );
 
+    return 1;
+}
+
+
+stock ResetPublicInteriorArrays()
+{
+    PublicInteriorCount = 0;
+
+    for (new i = 0; i < MAX_PUBLIC_INTERIORS; i++)
+    {
+        PublicInteriorDBID[i] = 0;
+        PublicInteriorEnabled[i] = 0;
+        PublicInteriorInteriorID[i] = 0;
+        PublicInteriorVirtualWorld[i] = 0;
+        PublicInteriorExteriorInterior[i] = 0;
+        PublicInteriorExteriorVirtualWorld[i] = 0;
+        PublicInteriorPickup[i] = -1;
+        PublicInteriorExitPickup[i] = -1;
+        PublicInteriorLabel[i] = Text3D:INVALID_3DTEXT_ID;
+        PublicInteriorExitLabel[i] = Text3D:INVALID_3DTEXT_ID;
+        PublicInteriorExtX[i] = 0.0;
+        PublicInteriorExtY[i] = 0.0;
+        PublicInteriorExtZ[i] = 0.0;
+        PublicInteriorExtA[i] = 0.0;
+        PublicInteriorIntX[i] = 0.0;
+        PublicInteriorIntY[i] = 0.0;
+        PublicInteriorIntZ[i] = 0.0;
+        PublicInteriorIntA[i] = 0.0;
+        PublicInteriorExitX[i] = 0.0;
+        PublicInteriorExitY[i] = 0.0;
+        PublicInteriorExitZ[i] = 0.0;
+        format(PublicInteriorType[i], PUBINT_TYPE_SIZE, "");
+        format(PublicInteriorName[i], PUBINT_NAME_SIZE, "");
+    }
+
+    return 1;
+}
+
+stock DestroyPublicInteriorRuntime(index)
+{
+    if (index < 0 || index >= MAX_PUBLIC_INTERIORS)
+    {
+        return 0;
+    }
+
+    if (PublicInteriorPickup[index] != -1)
+    {
+        DestroyPickup(PublicInteriorPickup[index]);
+        PublicInteriorPickup[index] = -1;
+    }
+
+    if (PublicInteriorExitPickup[index] != -1)
+    {
+        DestroyPickup(PublicInteriorExitPickup[index]);
+        PublicInteriorExitPickup[index] = -1;
+    }
+
+    if (PublicInteriorLabel[index] != Text3D:INVALID_3DTEXT_ID)
+    {
+        Delete3DTextLabel(PublicInteriorLabel[index]);
+        PublicInteriorLabel[index] = Text3D:INVALID_3DTEXT_ID;
+    }
+
+    if (PublicInteriorExitLabel[index] != Text3D:INVALID_3DTEXT_ID)
+    {
+        Delete3DTextLabel(PublicInteriorExitLabel[index]);
+        PublicInteriorExitLabel[index] = Text3D:INVALID_3DTEXT_ID;
+    }
+
+    return 1;
+}
+
+stock DestroyAllPublicInteriorsRuntime()
+{
+    for (new i = 0; i < MAX_PUBLIC_INTERIORS; i++)
+    {
+        DestroyPublicInteriorRuntime(i);
+    }
+    return 1;
+}
+
+stock GetPublicInteriorRuntimeVW(index)
+{
+    if (index < 0 || index >= MAX_PUBLIC_INTERIORS)
+    {
+        return 0;
+    }
+
+    if (PublicInteriorVirtualWorld[index] > 0)
+    {
+        return PublicInteriorVirtualWorld[index];
+    }
+
+    return PUBLIC_INTERIOR_VW_BASE + PublicInteriorDBID[index];
+}
+
+stock NormalizePublicInteriorType(const input[], output[], size)
+{
+    if (!strcmp(input, "ammu", true) || !strcmp(input, "ammunation", true) || !strcmp(input, "ammu-nation", true))
+    {
+        format(output, size, "ammunation");
+        return 1;
+    }
+    if (!strcmp(input, "247", true) || !strcmp(input, "24/7", true) || !strcmp(input, "supermarket", true) || !strcmp(input, "store", true))
+    {
+        format(output, size, "247");
+        return 1;
+    }
+    if (!strcmp(input, "burger", true) || !strcmp(input, "burgershot", true) || !strcmp(input, "burger_shot", true))
+    {
+        format(output, size, "burgershot");
+        return 1;
+    }
+    if (!strcmp(input, "cluckin", true) || !strcmp(input, "cluckinbell", true) || !strcmp(input, "cluckin_bell", true))
+    {
+        format(output, size, "cluckinbell");
+        return 1;
+    }
+    if (!strcmp(input, "pizza", true) || !strcmp(input, "pizzastack", true) || !strcmp(input, "pizza_stack", true))
+    {
+        format(output, size, "pizzastack");
+        return 1;
+    }
+    if (!strcmp(input, "gym", true))
+    {
+        format(output, size, "gym");
+        return 1;
+    }
+    if (!strcmp(input, "barber", true) || !strcmp(input, "barbershop", true))
+    {
+        format(output, size, "barber");
+        return 1;
+    }
+    if (!strcmp(input, "tattoo", true) || !strcmp(input, "tattooshop", true))
+    {
+        format(output, size, "tattoo");
+        return 1;
+    }
+    if (!strcmp(input, "police", true) || !strcmp(input, "pd", true))
+    {
+        format(output, size, "police");
+        return 1;
+    }
+    if (!strcmp(input, "hospital", true))
+    {
+        format(output, size, "hospital");
+        return 1;
+    }
+    if (!strcmp(input, "cityhall", true) || !strcmp(input, "city_hall", true))
+    {
+        format(output, size, "cityhall");
+        return 1;
+    }
+    if (!strcmp(input, "casino", true))
+    {
+        format(output, size, "casino");
+        return 1;
+    }
+
+    return 0;
+}
+
+stock GetPublicInteriorDefaultName(const type[], output[], size)
+{
+    if (!strcmp(type, "ammunation", true)) format(output, size, "Ammu-Nation");
+    else if (!strcmp(type, "247", true)) format(output, size, "24/7 Supermarket");
+    else if (!strcmp(type, "burgershot", true)) format(output, size, "Burger Shot");
+    else if (!strcmp(type, "cluckinbell", true)) format(output, size, "Cluckin' Bell");
+    else if (!strcmp(type, "pizzastack", true)) format(output, size, "Pizza Stack");
+    else if (!strcmp(type, "gym", true)) format(output, size, "Gym");
+    else if (!strcmp(type, "barber", true)) format(output, size, "Barber Shop");
+    else if (!strcmp(type, "tattoo", true)) format(output, size, "Tattoo Shop");
+    else if (!strcmp(type, "police", true)) format(output, size, "Police Department");
+    else if (!strcmp(type, "hospital", true)) format(output, size, "Hospital");
+    else if (!strcmp(type, "cityhall", true)) format(output, size, "City Hall");
+    else if (!strcmp(type, "casino", true)) format(output, size, "Casino");
+    else format(output, size, "Public Interior");
+    return 1;
+}
+
+stock GetPublicInteriorDefaultInterior(const type[])
+{
+    if (!strcmp(type, "ammunation", true)) return 4;
+    if (!strcmp(type, "247", true)) return 6;
+    if (!strcmp(type, "burgershot", true)) return 10;
+    if (!strcmp(type, "cluckinbell", true)) return 9;
+    if (!strcmp(type, "pizzastack", true)) return 5;
+    if (!strcmp(type, "gym", true)) return 5;
+    if (!strcmp(type, "barber", true)) return 3;
+    if (!strcmp(type, "tattoo", true)) return 3;
+    if (!strcmp(type, "police", true)) return 6;
+    if (!strcmp(type, "hospital", true)) return 3;
+    if (!strcmp(type, "cityhall", true)) return 3;
+    if (!strcmp(type, "casino", true)) return 1;
+    return 0;
+}
+
+stock Float:GetPublicInteriorDefaultX(const type[])
+{
+    if (!strcmp(type, "ammunation", true)) return 286.1489;
+    if (!strcmp(type, "247", true)) return -27.3123;
+    if (!strcmp(type, "burgershot", true)) return 363.1348;
+    if (!strcmp(type, "cluckinbell", true)) return 364.9187;
+    if (!strcmp(type, "pizzastack", true)) return 372.3520;
+    if (!strcmp(type, "gym", true)) return 772.1119;
+    if (!strcmp(type, "barber", true)) return 418.6538;
+    if (!strcmp(type, "tattoo", true)) return -204.4399;
+    if (!strcmp(type, "police", true)) return 246.7839;
+    if (!strcmp(type, "hospital", true)) return 390.7699;
+    if (!strcmp(type, "cityhall", true)) return 386.5259;
+    if (!strcmp(type, "casino", true)) return 2233.9360;
+    return 0.0;
+}
+
+stock Float:GetPublicInteriorDefaultY(const type[])
+{
+    if (!strcmp(type, "ammunation", true)) return -40.6443;
+    if (!strcmp(type, "247", true)) return -29.2776;
+    if (!strcmp(type, "burgershot", true)) return -74.8465;
+    if (!strcmp(type, "cluckinbell", true)) return -11.6175;
+    if (!strcmp(type, "pizzastack", true)) return -133.5247;
+    if (!strcmp(type, "gym", true)) return -3.8986;
+    if (!strcmp(type, "barber", true)) return -82.6397;
+    if (!strcmp(type, "tattoo", true)) return -26.4539;
+    if (!strcmp(type, "police", true)) return 63.9001;
+    if (!strcmp(type, "hospital", true)) return 173.8039;
+    if (!strcmp(type, "cityhall", true)) return 173.6381;
+    if (!strcmp(type, "casino", true)) return 1711.8038;
+    return 0.0;
+}
+
+stock Float:GetPublicInteriorDefaultZ(const type[])
+{
+    if (!strcmp(type, "ammunation", true)) return 1001.5156;
+    if (!strcmp(type, "247", true)) return 1003.5573;
+    if (!strcmp(type, "burgershot", true)) return 1001.5078;
+    if (!strcmp(type, "cluckinbell", true)) return 1001.8516;
+    if (!strcmp(type, "pizzastack", true)) return 1001.4922;
+    if (!strcmp(type, "gym", true)) return 1000.7288;
+    if (!strcmp(type, "barber", true)) return 1001.8047;
+    if (!strcmp(type, "tattoo", true)) return 1002.2734;
+    if (!strcmp(type, "police", true)) return 1003.6406;
+    if (!strcmp(type, "hospital", true)) return 1008.3828;
+    if (!strcmp(type, "cityhall", true)) return 1008.3828;
+    if (!strcmp(type, "casino", true)) return 1011.6312;
+    return 3.0;
+}
+
+stock Float:GetPublicInteriorDefaultA(const type[])
+{
+    if (!strcmp(type, "ammunation", true)) return 90.0;
+    if (!strcmp(type, "247", true)) return 0.0;
+    if (!strcmp(type, "burgershot", true)) return 315.0;
+    if (!strcmp(type, "cluckinbell", true)) return 0.0;
+    if (!strcmp(type, "pizzastack", true)) return 0.0;
+    if (!strcmp(type, "gym", true)) return 90.0;
+    if (!strcmp(type, "barber", true)) return 0.0;
+    if (!strcmp(type, "tattoo", true)) return 0.0;
+    if (!strcmp(type, "police", true)) return 0.0;
+    if (!strcmp(type, "hospital", true)) return 0.0;
+    if (!strcmp(type, "cityhall", true)) return 0.0;
+    if (!strcmp(type, "casino", true)) return 180.0;
+    return 0.0;
+}
+
+stock IsPlayerInPublicInteriorPickupCooldown(playerid)
+{
+    if (GetTickCount() - PlayerLastPublicInteriorPickupTick[playerid] < 1500)
+    {
+        return 1;
+    }
+    return 0;
+}
+
+stock SetPlayerPublicInteriorPickupCooldown(playerid)
+{
+    PlayerLastPublicInteriorPickupTick[playerid] = GetTickCount();
+    return 1;
+}
+
+stock FindPublicInteriorIndexByDBID(dbid)
+{
+    for (new i = 0; i < PublicInteriorCount; i++)
+    {
+        if (PublicInteriorDBID[i] == dbid)
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+stock CreatePublicInteriorRuntime(index)
+{
+    if (index < 0 || index >= PublicInteriorCount)
+    {
+        return 0;
+    }
+
+    DestroyPublicInteriorRuntime(index);
+
+    if (!PublicInteriorEnabled[index])
+    {
+        return 1;
+    }
+
+    new labelText[160];
+    new exitLabel[160];
+    new runtimeVW = GetPublicInteriorRuntimeVW(index);
+
+    PublicInteriorPickup[index] = CreatePickup(
+                                      PUBLIC_INTERIOR_PICKUP_MODEL,
+                                      PUBLIC_INTERIOR_PICKUP_TYPE,
+                                      PublicInteriorExtX[index],
+                                      PublicInteriorExtY[index],
+                                      PublicInteriorExtZ[index],
+                                      PublicInteriorExteriorVirtualWorld[index]
+                                  );
+
+    format(labelText, sizeof(labelText), "[PUBLIC INTERIOR]\n%s\nPanah = Enter", PublicInteriorName[index]);
+    PublicInteriorLabel[index] = Create3DTextLabel(
+                                     labelText,
+                                     COLOR_CYAN,
+                                     PublicInteriorExtX[index],
+                                     PublicInteriorExtY[index],
+                                     PublicInteriorExtZ[index] + 0.8,
+                                     PUBLIC_INTERIOR_LABEL_DRAW_DISTANCE,
+                                     PublicInteriorExteriorVirtualWorld[index],
+                                     true
+                                 );
+
+    PublicInteriorExitPickup[index] = CreatePickup(
+                                          PUBLIC_INTERIOR_PICKUP_MODEL,
+                                          PUBLIC_INTERIOR_PICKUP_TYPE,
+                                          PublicInteriorExitX[index],
+                                          PublicInteriorExitY[index],
+                                          PublicInteriorExitZ[index],
+                                          runtimeVW
+                                      );
+
+    format(exitLabel, sizeof(exitLabel), "[EXIT]\n%s\nPanah = Exit", PublicInteriorName[index]);
+    PublicInteriorExitLabel[index] = Create3DTextLabel(
+                                         exitLabel,
+                                         COLOR_CYAN,
+                                         PublicInteriorExitX[index],
+                                         PublicInteriorExitY[index],
+                                         PublicInteriorExitZ[index] + 0.8,
+                                         PUBLIC_INTERIOR_LABEL_DRAW_DISTANCE,
+                                         runtimeVW,
+                                         true
+                                     );
+
+    return 1;
+}
+
+stock CreatePublicInteriorRuntimeAll()
+{
+    for (new i = 0; i < PublicInteriorCount; i++)
+    {
+        CreatePublicInteriorRuntime(i);
+    }
+    return 1;
+}
+
+stock LoadPublicInteriors()
+{
+    DestroyAllPublicInteriorsRuntime();
+    ResetPublicInteriorArrays();
+
+    mysql_tquery(g_SQL,
+                 "SELECT id, interior_type, display_name, exterior_x, exterior_y, exterior_z, exterior_a, exterior_interior, exterior_virtual_world, interior_id, interior_virtual_world, interior_x, interior_y, interior_z, interior_a, exit_x, exit_y, exit_z, enabled FROM public_interiors WHERE enabled=1 ORDER BY id ASC LIMIT 80",
+                 "OnPublicInteriorsLoaded"
+                );
+    return 1;
+}
+
+public OnPublicInteriorsLoaded()
+{
+    new rows;
+    cache_get_row_count(rows);
+
+    PublicInteriorCount = rows;
+    if (PublicInteriorCount > MAX_PUBLIC_INTERIORS)
+    {
+        PublicInteriorCount = MAX_PUBLIC_INTERIORS;
+    }
+
+    for (new i = 0; i < PublicInteriorCount; i++)
+    {
+        cache_get_value_name_int(i, "id", PublicInteriorDBID[i]);
+        cache_get_value_name(i, "interior_type", PublicInteriorType[i], PUBINT_TYPE_SIZE);
+        cache_get_value_name(i, "display_name", PublicInteriorName[i], PUBINT_NAME_SIZE);
+        cache_get_value_name_float(i, "exterior_x", PublicInteriorExtX[i]);
+        cache_get_value_name_float(i, "exterior_y", PublicInteriorExtY[i]);
+        cache_get_value_name_float(i, "exterior_z", PublicInteriorExtZ[i]);
+        cache_get_value_name_float(i, "exterior_a", PublicInteriorExtA[i]);
+        cache_get_value_name_int(i, "exterior_interior", PublicInteriorExteriorInterior[i]);
+        cache_get_value_name_int(i, "exterior_virtual_world", PublicInteriorExteriorVirtualWorld[i]);
+        cache_get_value_name_int(i, "interior_id", PublicInteriorInteriorID[i]);
+        cache_get_value_name_int(i, "interior_virtual_world", PublicInteriorVirtualWorld[i]);
+        cache_get_value_name_float(i, "interior_x", PublicInteriorIntX[i]);
+        cache_get_value_name_float(i, "interior_y", PublicInteriorIntY[i]);
+        cache_get_value_name_float(i, "interior_z", PublicInteriorIntZ[i]);
+        cache_get_value_name_float(i, "interior_a", PublicInteriorIntA[i]);
+        cache_get_value_name_float(i, "exit_x", PublicInteriorExitX[i]);
+        cache_get_value_name_float(i, "exit_y", PublicInteriorExitY[i]);
+        cache_get_value_name_float(i, "exit_z", PublicInteriorExitZ[i]);
+        cache_get_value_name_int(i, "enabled", PublicInteriorEnabled[i]);
+    }
+
+    CreatePublicInteriorRuntimeAll();
+
+    new msg[144];
+    format(msg, sizeof(msg), "[LSIF] Public interiors loaded: %d.", PublicInteriorCount);
+    print(msg);
+    return 1;
+}
+
+public OnPublicInteriorCreated(playerid)
+{
+    if (IsPlayerConnected(playerid))
+    {
+        new insertId = cache_insert_id();
+        new msg[144];
+        format(msg, sizeof(msg), "Public interior berhasil dibuat. ID: %d. Reloading interiors...", insertId);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+    }
+    LoadPublicInteriors();
+    SetTimerEx("ReloadPublicInteriorsDelayed", 700, false, "i", playerid);
+    return 1;
+}
+
+public OnPublicInteriorUpdated(playerid)
+{
+    if (IsPlayerConnected(playerid))
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "Public interior berhasil diupdate.");
+    }
+    LoadPublicInteriors();
+    return 1;
+}
+
+public OnPublicInteriorDeleted(playerid)
+{
+    if (IsPlayerConnected(playerid))
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "Public interior berhasil dinonaktifkan.");
+    }
+    LoadPublicInteriors();
+    return 1;
+}
+
+public ReloadPublicInteriorsDelayed(playerid)
+{
+    LoadPublicInteriors();
+    if (IsPlayerConnected(playerid))
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "Public interiors sudah disinkron ulang.");
+    }
+    return 1;
+}
+
+stock GetFirstWordAndRest(const input[], first[], firstSize, rest[], restSize)
+{
+    new len = strlen(input);
+    new pos = 0;
+    new idx = 0;
+
+    while (pos < len && input[pos] <= ' ')
+    {
+        pos++;
+    }
+
+    while (pos < len && input[pos] > ' ' && idx < firstSize - 1)
+    {
+        first[idx++] = input[pos++];
+    }
+    first[idx] = EOS;
+
+    while (pos < len && input[pos] <= ' ')
+    {
+        pos++;
+    }
+
+    idx = 0;
+    while (pos < len && idx < restSize - 1)
+    {
+        rest[idx++] = input[pos++];
+    }
+    rest[idx] = EOS;
+
+    if (strlen(first) < 1)
+    {
+        return 0;
+    }
+    return 1;
+}
+
+stock CreatePublicInteriorAtPlayer(playerid, const rawType[], const rawName[])
+{
+    if (!IsAdminLevel(playerid, ADMIN_ADMIN))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak punya izin admin untuk membuat public interior.");
+        return 0;
+    }
+
+    new type[PUBINT_TYPE_SIZE];
+    if (!NormalizePublicInteriorType(rawType, type, sizeof(type)))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Type public interior tidak valid.");
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan: ammunation, 247, burgershot, cluckinbell, pizzastack, gym, barber, tattoo, police, hospital, cityhall, casino.");
+        return 0;
+    }
+
+    new name[PUBINT_NAME_SIZE];
+    if (strlen(rawName) > 0)
+    {
+        format(name, sizeof(name), "%s", rawName);
+    }
+    else
+    {
+        GetPublicInteriorDefaultName(type, name, sizeof(name));
+    }
+
+    new Float:x, Float:y, Float:z, Float:a;
+    GetPlayerPos(playerid, x, y, z);
+    GetPlayerFacingAngle(playerid, a);
+
+    new interiorId = GetPublicInteriorDefaultInterior(type);
+    new Float:intX = GetPublicInteriorDefaultX(type);
+    new Float:intY = GetPublicInteriorDefaultY(type);
+    new Float:intZ = GetPublicInteriorDefaultZ(type);
+    new Float:intA = GetPublicInteriorDefaultA(type);
+    new Float:exitX = intX;
+    new Float:exitY = intY + 1.8;
+    new Float:exitZ = intZ;
+
+    new query[1024];
+    mysql_format(g_SQL, query, sizeof(query),
+                 "INSERT INTO public_interiors (interior_type, display_name, exterior_x, exterior_y, exterior_z, exterior_a, exterior_interior, exterior_virtual_world, interior_id, interior_virtual_world, interior_x, interior_y, interior_z, interior_a, exit_x, exit_y, exit_z, source_tag, enabled) VALUES ('%e', '%e', %f, %f, %f, %f, %d, %d, %d, 0, %f, %f, %f, %f, %f, %f, %f, '%e', 1)",
+                 type,
+                 name,
+                 x,
+                 y,
+                 z,
+                 a,
+                 GetPlayerInterior(playerid),
+                 GetPlayerVirtualWorld(playerid),
+                 interiorId,
+                 intX,
+                 intY,
+                 intZ,
+                 intA,
+                 exitX,
+                 exitY,
+                 exitZ,
+                 PUBINT_SOURCE_MANUAL
+                );
+    mysql_tquery(g_SQL, query, "OnPublicInteriorCreated", "i", playerid);
+    return 1;
+}
+
+stock EnterPublicInterior(playerid, dbid)
+{
+    new idx = FindPublicInteriorIndexByDBID(dbid);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Public interior tidak ditemukan.");
+        return 0;
+    }
+
+    if (PlayerWorking[playerid] || PlayerRace[playerid] != RACE_NONE)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Tidak bisa masuk public interior saat job/race aktif.");
+        return 0;
+    }
+
+    SetPlayerPublicInteriorPickupCooldown(playerid);
+    PlayerInsidePublicInteriorID[playerid] = PublicInteriorDBID[idx];
+    SetPlayerInterior(playerid, PublicInteriorInteriorID[idx]);
+    SetPlayerVirtualWorld(playerid, GetPublicInteriorRuntimeVW(idx));
+    SetPlayerPos(playerid, PublicInteriorIntX[idx], PublicInteriorIntY[idx], PublicInteriorIntZ[idx]);
+    SetPlayerFacingAngle(playerid, PublicInteriorIntA[idx]);
+
+    new msg[144];
+    format(msg, sizeof(msg), "Kamu masuk ke %s. Public interior ini shared untuk semua player.", PublicInteriorName[idx]);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    SendClientMessage(playerid, COLOR_WHITE, "Sentuh panah exit atau gunakan /pubintexit untuk keluar.");
+    return 1;
+}
+
+stock ExitPublicInterior(playerid)
+{
+    new dbid = PlayerInsidePublicInteriorID[playerid];
+    new idx = FindPublicInteriorIndexByDBID(dbid);
+
+    if (idx == -1)
+    {
+        for (new i = 0; i < PublicInteriorCount; i++)
+        {
+            if (GetPlayerVirtualWorld(playerid) == GetPublicInteriorRuntimeVW(i))
+            {
+                idx = i;
+                break;
+            }
+        }
+    }
+
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak sedang berada di public interior yang terdaftar.");
+        return 0;
+    }
+
+    SetPlayerPublicInteriorPickupCooldown(playerid);
+    PlayerInsidePublicInteriorID[playerid] = 0;
+    SetPlayerInterior(playerid, PublicInteriorExteriorInterior[idx]);
+    SetPlayerVirtualWorld(playerid, PublicInteriorExteriorVirtualWorld[idx]);
+    SetPlayerPos(playerid, PublicInteriorExtX[idx], PublicInteriorExtY[idx], PublicInteriorExtZ[idx]);
+    SetPlayerFacingAngle(playerid, PublicInteriorExtA[idx]);
+
+    SendClientMessage(playerid, COLOR_GREEN, "Kamu keluar dari public interior.");
+    return 1;
+}
+
+stock HandlePublicInteriorPickup(playerid, pickupid)
+{
+    for (new i = 0; i < PublicInteriorCount; i++)
+    {
+        if (!PublicInteriorEnabled[i]) continue;
+
+        if (PublicInteriorPickup[i] != -1 && pickupid == PublicInteriorPickup[i])
+        {
+            if (IsPlayerInPublicInteriorPickupCooldown(playerid)) return 1;
+            EnterPublicInterior(playerid, PublicInteriorDBID[i]);
+            return 1;
+        }
+
+        if (PublicInteriorExitPickup[i] != -1 && pickupid == PublicInteriorExitPickup[i])
+        {
+            if (IsPlayerInPublicInteriorPickupCooldown(playerid)) return 1;
+            ExitPublicInterior(playerid);
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+stock GotoPublicInterior(playerid, dbid)
+{
+    new idx = FindPublicInteriorIndexByDBID(dbid);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Public interior tidak ditemukan.");
+        return 0;
+    }
+
+    SetPlayerInterior(playerid, PublicInteriorExteriorInterior[idx]);
+    SetPlayerVirtualWorld(playerid, PublicInteriorExteriorVirtualWorld[idx]);
+    SetPlayerPos(playerid, PublicInteriorExtX[idx], PublicInteriorExtY[idx], PublicInteriorExtZ[idx] + 1.0);
+    SetPlayerFacingAngle(playerid, PublicInteriorExtA[idx]);
+    return 1;
+}
+
+stock ShowPublicInteriorInfo(playerid, dbid)
+{
+    new idx = FindPublicInteriorIndexByDBID(dbid);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Public interior tidak ditemukan.");
+        return 0;
+    }
+
+    new body[768];
+    format(body, sizeof(body),
+           "ID: %d\nType: %s\nName: %s\nEnabled: %d\n\nExterior: %.2f %.2f %.2f | A %.2f\nExterior Interior/VW: %d/%d\n\nInterior ID: %d\nShared Virtual World: %d\nInterior Spawn: %.2f %.2f %.2f | A %.2f\nExit Pickup: %.2f %.2f %.2f",
+           PublicInteriorDBID[idx],
+           PublicInteriorType[idx],
+           PublicInteriorName[idx],
+           PublicInteriorEnabled[idx],
+           PublicInteriorExtX[idx],
+           PublicInteriorExtY[idx],
+           PublicInteriorExtZ[idx],
+           PublicInteriorExtA[idx],
+           PublicInteriorExteriorInterior[idx],
+           PublicInteriorExteriorVirtualWorld[idx],
+           PublicInteriorInteriorID[idx],
+           GetPublicInteriorRuntimeVW(idx),
+           PublicInteriorIntX[idx],
+           PublicInteriorIntY[idx],
+           PublicInteriorIntZ[idx],
+           PublicInteriorIntA[idx],
+           PublicInteriorExitX[idx],
+           PublicInteriorExitY[idx],
+           PublicInteriorExitZ[idx]
+          );
+    ShowPlayerDialog(playerid, DIALOG_PUBINT_INFO, DIALOG_STYLE_MSGBOX, "Public Interior Info", body, "Back", "Close");
+    return 1;
+}
+
+stock DeletePublicInterior(playerid, dbid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_ADMIN))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak punya izin admin.");
+        return 0;
+    }
+
+    new idx = FindPublicInteriorIndexByDBID(dbid);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Public interior tidak ditemukan.");
+        return 0;
+    }
+
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET enabled=0 WHERE id=%d LIMIT 1", dbid);
+    mysql_tquery(g_SQL, query, "OnPublicInteriorDeleted", "i", playerid);
+    return 1;
+}
+
+stock ListPublicInteriorsToChat(playerid)
+{
+    SendClientMessage(playerid, COLOR_YELLOW, "========== PUBLIC INTERIORS ==========");
+    if (PublicInteriorCount <= 0)
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "Belum ada public interior aktif.");
+        return 1;
+    }
+
+    new line[160];
+    for (new i = 0; i < PublicInteriorCount; i++)
+    {
+        format(line, sizeof(line), "ID %d | %s | %s | VW %d", PublicInteriorDBID[i], PublicInteriorType[i], PublicInteriorName[i], GetPublicInteriorRuntimeVW(i));
+        SendClientMessage(playerid, COLOR_WHITE, line);
+    }
+    return 1;
+}
+
+stock ShowPublicInteriorMenu(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_ADMIN))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak punya izin admin.");
+        return 0;
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_PUBINT_MENU, DIALOG_STYLE_LIST, "Public Interior Editor", "Create Public Interior\nList / Select Interior\nInput ID Manual\nReload Public Interiors\nHelp", "Select", "Close");
+    return 1;
+}
+
+stock ShowPublicInteriorCreateTypeMenu(playerid)
+{
+    ShowPlayerDialog(playerid, DIALOG_PUBINT_CREATE_TYPE, DIALOG_STYLE_LIST, "Create Public Interior", "Ammu-Nation\n24/7 Supermarket\nBurger Shot\nCluckin' Bell\nPizza Stack\nGym\nBarber\nTattoo Shop\nPolice Department\nHospital\nCity Hall\nCasino", "Select", "Back");
+    return 1;
+}
+
+stock SetPendingPublicInteriorTypeByList(playerid, listitem)
+{
+    switch (listitem)
+    {
+        case 0: format(PlayerPendingPublicInteriorType[playerid], PUBINT_TYPE_SIZE, "ammunation");
+        case 1: format(PlayerPendingPublicInteriorType[playerid], PUBINT_TYPE_SIZE, "247");
+        case 2: format(PlayerPendingPublicInteriorType[playerid], PUBINT_TYPE_SIZE, "burgershot");
+        case 3: format(PlayerPendingPublicInteriorType[playerid], PUBINT_TYPE_SIZE, "cluckinbell");
+        case 4: format(PlayerPendingPublicInteriorType[playerid], PUBINT_TYPE_SIZE, "pizzastack");
+        case 5: format(PlayerPendingPublicInteriorType[playerid], PUBINT_TYPE_SIZE, "gym");
+        case 6: format(PlayerPendingPublicInteriorType[playerid], PUBINT_TYPE_SIZE, "barber");
+        case 7: format(PlayerPendingPublicInteriorType[playerid], PUBINT_TYPE_SIZE, "tattoo");
+        case 8: format(PlayerPendingPublicInteriorType[playerid], PUBINT_TYPE_SIZE, "police");
+        case 9: format(PlayerPendingPublicInteriorType[playerid], PUBINT_TYPE_SIZE, "hospital");
+        case 10: format(PlayerPendingPublicInteriorType[playerid], PUBINT_TYPE_SIZE, "cityhall");
+        case 11: format(PlayerPendingPublicInteriorType[playerid], PUBINT_TYPE_SIZE, "casino");
+        default:
+            return 0;
+    }
+    return 1;
+}
+
+stock ShowPublicInteriorCreateNameInput(playerid)
+{
+    new defaultName[PUBINT_NAME_SIZE];
+    GetPublicInteriorDefaultName(PlayerPendingPublicInteriorType[playerid], defaultName, sizeof(defaultName));
+
+    new body[256];
+    format(body, sizeof(body), "Type: %s\nDefault name: %s\n\nMasukkan nama public interior. Kosongkan untuk pakai default.", PlayerPendingPublicInteriorType[playerid], defaultName);
+    ShowPlayerDialog(playerid, DIALOG_PUBINT_CREATE_NAME, DIALOG_STYLE_INPUT, "Public Interior Name", body, "Create", "Back");
+    return 1;
+}
+
+stock ShowPublicInteriorListDialog(playerid)
+{
+    if (PublicInteriorCount <= 0)
+    {
+        ShowPlayerDialog(playerid, DIALOG_PUBINT_INFO, DIALOG_STYLE_MSGBOX, "Public Interiors", "Belum ada public interior aktif.", "Back", "Close");
+        return 1;
+    }
+
+    new body[2048];
+    new line[160];
+    format(body, sizeof(body), "ID\tType\tName\tVW\n");
+    for (new i = 0; i < PublicInteriorCount; i++)
+    {
+        format(line, sizeof(line), "%d\t%s\t%s\t%d\n", PublicInteriorDBID[i], PublicInteriorType[i], PublicInteriorName[i], GetPublicInteriorRuntimeVW(i));
+        strcat(body, line, sizeof(body));
+    }
+    ShowPlayerDialog(playerid, DIALOG_PUBINT_LIST, DIALOG_STYLE_TABLIST_HEADERS, "Select Public Interior", body, "Select", "Back");
+    return 1;
+}
+
+stock ShowPublicInteriorSelectInput(playerid)
+{
+    ShowPlayerDialog(playerid, DIALOG_PUBINT_SELECT_INPUT, DIALOG_STYLE_INPUT, "Select Public Interior", "Masukkan ID public interior.\nGunakan /pubintlist atau menu List untuk melihat ID aktif.", "Select", "Back");
+    return 1;
+}
+
+stock ShowPublicInteriorActionMenu(playerid, dbid)
+{
+    new idx = FindPublicInteriorIndexByDBID(dbid);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Public interior tidak ditemukan.");
+        ShowPublicInteriorMenu(playerid);
+        return 0;
+    }
+
+    PlayerEditingPublicInteriorID[playerid] = dbid;
+    new title[96];
+    new body[512];
+    format(title, sizeof(title), "Public Interior ID %d", dbid);
+    format(body, sizeof(body), "Info\nGoto Exterior\nEnter Interior\nDelete / Disable\nReload All\nBack");
+    ShowPlayerDialog(playerid, DIALOG_PUBINT_ACTION_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Close");
+    return 1;
+}
+
+stock ShowPublicInteriorHelp(playerid)
+{
+    new body[768];
+    format(body, sizeof(body), "Public Interior System\n\nPublic interiors = tempat umum shared virtual world.\nContoh: Ammu-Nation, 24/7, Burger Shot, Cluckin' Bell, Pizza Stack, Gym, Barber, Tattoo, Police, Hospital.\n\nCommand:\n/pubintmenu\n/pubintcreate [type] [name]\n/pubintlist\n/pubintinfo [id]\n/pubintgoto [id]\n/pubintenter [id]\n/pubintexit\n/pubintdelete [id]\n/pubintreload\n\nMasuk/keluar pakai pickup panah. Semua player masuk ke virtual world yang sama per lokasi.");
+    ShowPlayerDialog(playerid, DIALOG_PUBINT_HELP, DIALOG_STYLE_MSGBOX, "Public Interior Help", body, "Back", "Close");
     return 1;
 }
 
@@ -20346,6 +21393,11 @@ public OnPlayerPickUpPickup(playerid, pickupid)
         return 1;
     }
 
+    if (HandlePublicInteriorPickup(playerid, pickupid))
+    {
+        return 1;
+    }
+
     for (new i = 0; i < MAX_HOUSES; i++)
     {
         if (pickupid == HouseExteriorPickup[i])
@@ -22852,6 +23904,93 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/pubintmenu", true) || !strcmp(cmdtext, "/pubintedit", true))
+    {
+        ShowPublicInteriorMenu(playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/pubintcreate ", true) == 0)
+    {
+        new typeStr[PUBINT_TYPE_SIZE];
+        new nameStr[PUBINT_NAME_SIZE];
+        if (!GetFirstWordAndRest(cmdtext[14], typeStr, sizeof(typeStr), nameStr, sizeof(nameStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /pubintcreate [type] [name]");
+            SendClientMessage(playerid, COLOR_WHITE, "Type: ammunation, 247, burgershot, cluckinbell, pizzastack, gym, barber, tattoo, police, hospital, cityhall, casino.");
+            return 1;
+        }
+        CreatePublicInteriorAtPlayer(playerid, typeStr, nameStr);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/pubintlist", true))
+    {
+        ListPublicInteriorsToChat(playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/pubintinfo ", true) == 0)
+    {
+        new idStr[16];
+        if (!GetOneParam(cmdtext[12], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /pubintinfo [id]");
+            return 1;
+        }
+        ShowPublicInteriorInfo(playerid, strval(idStr));
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/pubintgoto ", true) == 0)
+    {
+        new idStr[16];
+        if (!GetOneParam(cmdtext[12], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /pubintgoto [id]");
+            return 1;
+        }
+        GotoPublicInterior(playerid, strval(idStr));
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/pubintenter ", true) == 0)
+    {
+        new idStr[16];
+        if (!GetOneParam(cmdtext[13], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /pubintenter [id]");
+            return 1;
+        }
+        EnterPublicInterior(playerid, strval(idStr));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/pubintexit", true))
+    {
+        ExitPublicInterior(playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/pubintdelete ", true) == 0)
+    {
+        new idStr[16];
+        if (!GetOneParam(cmdtext[14], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /pubintdelete [id]");
+            return 1;
+        }
+        DeletePublicInterior(playerid, strval(idStr));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/pubintreload", true))
+    {
+        LoadPublicInteriors();
+        SendClientMessage(playerid, COLOR_GREEN, "Public interiors direload dari database.");
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/wpickupmenu", true) || !strcmp(cmdtext, "/wpickupedit", true))
     {
         ShowWorldPickupMenu(playerid);
@@ -24132,7 +25271,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.23E.1 Pickup Template Seeder");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.23F Public Interior System");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -24141,6 +25280,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.23F: Public interior system, shared VW, enter/exit pickup.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23B: Parked vehicle dialog menu dan interactive editor.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23E.1: Offline pickup template seeder, /wpickupseed, /wpickupclearseed, /wpickupseedinfo.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23A.1: Parked vehicle engine default ON setelah create/reload.");

@@ -602,3 +602,46 @@ INSERT INTO server_settings (setting_key, setting_value) VALUES
 ('turf_grace_seconds', '30'),
 ('turf_cooldown_seconds', '900')
 ON DUPLICATE KEY UPDATE setting_value = setting_value;
+
+-- SAIF / LSIF Dev v0.22E — Gang Weapon Stash & HQ Utility
+-- Jalankan di database lsif_db sebelum compile/deploy v0.22E.
+
+CREATE TABLE IF NOT EXISTS gang_weapon_stash (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    gang_id INT NOT NULL,
+    weapon_id INT NOT NULL,
+    weapon_name VARCHAR(32) NOT NULL,
+    ammo INT NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_gang_weapon (gang_id, weapon_id),
+    KEY idx_gang_id (gang_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS gang_weapon_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    gang_id INT NOT NULL,
+    player_id INT NOT NULL,
+    player_name VARCHAR(24) NOT NULL,
+    action VARCHAR(24) NOT NULL,
+    weapon_id INT NOT NULL,
+    weapon_name VARCHAR(32) NOT NULL,
+    ammo INT NOT NULL DEFAULT 0,
+    cost INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_gang_id (gang_id),
+    KEY idx_player_id (player_id),
+    KEY idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Optional starter stock untuk beta test.
+-- Hapus/ubah sesuai kebutuhan balance.
+INSERT INTO gang_weapon_stash (gang_id, weapon_id, weapon_name, ammo) VALUES
+(1, 22, 'Colt 45', 300),
+(1, 25, 'Shotgun', 120),
+(2, 22, 'Colt 45', 300),
+(2, 28, 'Micro SMG', 300),
+(3, 22, 'Colt 45', 300),
+(3, 29, 'MP5', 240),
+(4, 22, 'Colt 45', 300),
+(4, 23, 'Silenced Pistol', 180)
+ON DUPLICATE KEY UPDATE weapon_name=VALUES(weapon_name);

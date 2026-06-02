@@ -130,6 +130,8 @@
 #define DIALOG_TURF_LOGS_DIALOG 1110
 #define DIALOG_GANG_TURF_LIST 1111
 #define DIALOG_INFO 1112
+#define DIALOG_GANG_STASH 1113
+#define DIALOG_GANG_STASH_ACTION 1114
 
 
 
@@ -328,6 +330,11 @@
 #define GANG_RANK_UNDERBOSS 4
 #define GANG_RANK_OG        GANG_RANK_UNDERBOSS
 #define GANG_RANK_LEADER    5
+
+#define GANG_STASH_TAKE_COOLDOWN_SECONDS 120
+#define GANG_STASH_MAX_AMMO_PER_WEAPON 3000
+#define GANG_STASH_RESTOCK_AMMO_SMALL 100
+#define GANG_STASH_RESTOCK_AMMO_LARGE 300
 
 #define TURF_WAR_STATE_NONE            0
 #define TURF_WAR_STATE_CAPTURING       1
@@ -904,6 +911,48 @@ new PlayerGangWars[MAX_PLAYERS];
 new PlayerSelectedGangTarget[MAX_PLAYERS];
 new PlayerDialogTerritoryIndex[MAX_PLAYERS];
 new PlayerDialogGangID[MAX_PLAYERS];
+new PlayerGangStashSelectedWeaponIndex[MAX_PLAYERS];
+new PlayerGangStashTakeCooldownUntil[MAX_PLAYERS];
+
+new GangWeaponStashAmmo[MAX_PRESET_GANGS][MAX_WEAPON_SHOP_ITEMS];
+new GangStashMinRank[MAX_WEAPON_SHOP_ITEMS] =
+{
+    GANG_RANK_MEMBER,   // Colt 45
+    GANG_RANK_SOLDIER,  // Silenced Pistol
+    GANG_RANK_ENFORCER, // Desert Eagle
+    GANG_RANK_MEMBER,   // Shotgun
+    GANG_RANK_SOLDIER,  // Micro SMG
+    GANG_RANK_SOLDIER,  // MP5
+    GANG_RANK_ENFORCER, // AK-47
+    GANG_RANK_OG,       // M4
+    GANG_RANK_OG        // Rifle
+};
+
+new GangStashDefaultTakeAmmo[MAX_WEAPON_SHOP_ITEMS] =
+{
+    30,
+    30,
+    15,
+    20,
+    60,
+    60,
+    75,
+    75,
+    20
+};
+
+new GangStashRestockCostPerAmmo[MAX_WEAPON_SHOP_ITEMS] =
+{
+    20,
+    35,
+    100,
+    80,
+    35,
+    50,
+    70,
+    85,
+    100
+};
 new PlayerSelectedTurfIndex[MAX_PLAYERS];
 new PlayerNearbyInteractionCount[MAX_PLAYERS];
 new PlayerNearbyInteractionType[MAX_PLAYERS][MAX_NEARBY_INTERACTIONS];
@@ -1698,6 +1747,8 @@ forward OnGangCreated(playerid);
 forward OnGangInviteAccepted(playerid);
 forward OnGangMembersLoaded(playerid);
 forward OnGangListLoaded(playerid);
+forward OnGangWeaponStashLoaded();
+forward OnGangRestockBankLoaded(playerid, gangid, weaponIndex, ammo, cost);
 forward OnDynamicLocationsLoaded();
 forward OnDynamicLocationCreated(playerid);
 forward OnDynamicLocationUpdated(playerid);
@@ -4836,6 +4887,8 @@ stock ResetPlayerGangData(playerid)
     PlayerSelectedGangTarget[playerid] = INVALID_PLAYER_ID;
     PlayerDialogTerritoryIndex[playerid] = -1;
     PlayerDialogGangID[playerid] = 0;
+    PlayerGangStashSelectedWeaponIndex[playerid] = -1;
+    PlayerGangStashTakeCooldownUntil[playerid] = 0;
     format(PlayerGangName[playerid], 64, "None");
     format(PlayerPendingGangName[playerid], 64, "None");
     ApplyPlayerGangNameColor(playerid);
@@ -5011,7 +5064,8 @@ stock ShowGangHQDialog(playerid, gangid)
         strcat(body, "Kick Member (Gang Boss)\n", sizeof(body));
         strcat(body, "Promote Member (Gang Boss)\n", sizeof(body));
         strcat(body, "Demote Member (Gang Boss)\n", sizeof(body));
-        strcat(body, "Leave Gang", sizeof(body));
+        strcat(body, "Leave Gang\n", sizeof(body));
+        strcat(body, "Weapon Stash", sizeof(body));
     }
     else
     {
@@ -6838,7 +6892,8 @@ stock ShowGangMenuDialog(playerid)
         strcat(body, "Promote Member (Gang Boss)\n", sizeof(body));
         strcat(body, "Demote Member (Gang Boss)\n", sizeof(body));
         strcat(body, "Leave Gang\n", sizeof(body));
-        strcat(body, "Preset Gangs / HQ List", sizeof(body));
+        strcat(body, "Preset Gangs / HQ List\n", sizeof(body));
+        strcat(body, "Weapon Stash", sizeof(body));
     }
 
     ShowPlayerDialog(
@@ -7003,6 +7058,463 @@ stock QueryGangTurfListDialog(playerid, gangid)
     mysql_format(g_SQL, query, sizeof(query), "SELECT territory_index, territory_name FROM gang_territories WHERE enabled=1 AND owner_gang_id=%d ORDER BY territory_name ASC LIMIT 30", gangid);
     mysql_tquery(g_SQL, query, "OnGangTurfListDialogLoaded", "ii", playerid, gangid);
     return 1;
+}
+
+
+stock ResetGangWeaponStashRuntime()
+{
+    for (new g = 0; g < MAX_PRESET_GANGS; g++)
+    {
+        for (new w = 0; w < MAX_WEAPON_SHOP_ITEMS; w++)
+        {
+            GangWeaponStashAmmo[g][w] = 0;
+        }
+    }
+    return 1;
+}
+
+stock LoadGangWeaponStash()
+{
+    ResetGangWeaponStashRuntime();
+    mysql_tquery(g_SQL, "SELECT gang_id, weapon_id, ammo FROM gang_weapon_stash ORDER BY gang_id ASC, weapon_id ASC", "OnGangWeaponStashLoaded");
+    return 1;
+}
+
+public OnGangWeaponStashLoaded()
+{
+    new rows = cache_num_rows();
+    new gangid;
+    new weaponid;
+    new ammo;
+    new gangIndex;
+    new weaponIndex;
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name_int(i, "gang_id", gangid);
+        cache_get_value_name_int(i, "weapon_id", weaponid);
+        cache_get_value_name_int(i, "ammo", ammo);
+
+        gangIndex = GetPresetGangIndexByID(gangid);
+        weaponIndex = GetWeaponShopIndexFromWeaponID(weaponid);
+
+        if (gangIndex == -1 || weaponIndex == -1)
+        {
+            continue;
+        }
+
+        if (ammo < 0)
+        {
+            ammo = 0;
+        }
+
+        if (ammo > GANG_STASH_MAX_AMMO_PER_WEAPON)
+        {
+            ammo = GANG_STASH_MAX_AMMO_PER_WEAPON;
+        }
+
+        GangWeaponStashAmmo[gangIndex][weaponIndex] = ammo;
+    }
+
+    printf("[SAIF] Gang weapon stash loaded: %d rows.", rows);
+    return 1;
+}
+
+stock GetPlayerGangHQIndex(playerid)
+{
+    if (PlayerGangID[playerid] <= 0)
+    {
+        return -1;
+    }
+
+    return GetPresetGangIndexByID(PlayerGangID[playerid]);
+}
+
+stock IsPlayerNearOwnGangHQ(playerid)
+{
+    new gangIndex = GetPlayerGangHQIndex(playerid);
+
+    if (gangIndex == -1)
+    {
+        return 0;
+    }
+
+    return IsPlayerNearGangHQ(playerid, gangIndex);
+}
+
+stock GetGangStashRestockCost(weaponIndex, ammo)
+{
+    if (weaponIndex < 0 || weaponIndex >= MAX_WEAPON_SHOP_ITEMS || ammo <= 0)
+    {
+        return 0;
+    }
+
+    return GangStashRestockCostPerAmmo[weaponIndex] * ammo;
+}
+
+stock SaveGangWeaponStash(gangid, weaponIndex)
+{
+    new gangIndex = GetPresetGangIndexByID(gangid);
+
+    if (gangIndex == -1 || weaponIndex < 0 || weaponIndex >= MAX_WEAPON_SHOP_ITEMS)
+    {
+        return 0;
+    }
+
+    new query[512];
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO gang_weapon_stash (gang_id, weapon_id, weapon_name, ammo) VALUES (%d, %d, '%e', %d) ON DUPLICATE KEY UPDATE weapon_name=VALUES(weapon_name), ammo=VALUES(ammo), updated_at=NOW()",
+        gangid,
+        WeaponShopWeaponID[weaponIndex],
+        WeaponShopName[weaponIndex],
+        GangWeaponStashAmmo[gangIndex][weaponIndex]
+    );
+    mysql_tquery(g_SQL, query);
+    return 1;
+}
+
+stock LogGangWeaponStashAction(gangid, playerid, const action[], weaponIndex, ammo, cost)
+{
+    if (weaponIndex < 0 || weaponIndex >= MAX_WEAPON_SHOP_ITEMS)
+    {
+        return 0;
+    }
+
+    new playerName[MAX_PLAYER_NAME];
+    new query[640];
+    GetPlayerName(playerid, playerName, sizeof(playerName));
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO gang_weapon_logs (gang_id, player_id, player_name, action, weapon_id, weapon_name, ammo, cost) VALUES (%d, %d, '%e', '%e', %d, '%e', %d, %d)",
+        gangid,
+        PlayerDBID[playerid],
+        playerName,
+        action,
+        WeaponShopWeaponID[weaponIndex],
+        WeaponShopName[weaponIndex],
+        ammo,
+        cost
+    );
+    mysql_tquery(g_SQL, query);
+    return 1;
+}
+
+stock ShowGangWeaponStashDialog(playerid)
+{
+    if (PlayerGangID[playerid] <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum tergabung dalam gang.");
+        return 0;
+    }
+
+    if (!IsPlayerNearOwnGangHQ(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang weapon stash hanya bisa diakses di HQ gang kamu.");
+        SendClientMessage(playerid, COLOR_WHITE, "Datang ke HQ gang lalu tekan ALT atau gunakan /gangstash di sana.");
+        return 0;
+    }
+
+    new gangIndex = GetPlayerGangHQIndex(playerid);
+    new body[1536];
+    new line[160];
+    new rankName[32];
+
+    format(body, sizeof(body), "Weapon\tStock\tMin Rank\tRestock\n");
+
+    for (new i = 0; i < MAX_WEAPON_SHOP_ITEMS; i++)
+    {
+        GetGangRankName(GangStashMinRank[i], rankName, sizeof(rankName));
+        format(
+            line,
+            sizeof(line),
+            "%s\t%d\t%s\t$%d/ammo\n",
+            WeaponShopName[i],
+            GangWeaponStashAmmo[gangIndex][i],
+            rankName,
+            GangStashRestockCostPerAmmo[i]
+        );
+        strcat(body, line, sizeof(body));
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_GANG_STASH, DIALOG_STYLE_TABLIST_HEADERS, "Gang Weapon Stash", body, "Select", "Close");
+    return 1;
+}
+
+stock ShowGangStashActionDialog(playerid, weaponIndex)
+{
+    if (weaponIndex < 0 || weaponIndex >= MAX_WEAPON_SHOP_ITEMS)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Weapon stash tidak valid.");
+        return 0;
+    }
+
+    if (!IsPlayerNearOwnGangHQ(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu sudah terlalu jauh dari HQ gang.");
+        return 0;
+    }
+
+    PlayerGangStashSelectedWeaponIndex[playerid] = weaponIndex;
+
+    new gangIndex = GetPlayerGangHQIndex(playerid);
+    new title[64];
+    new body[512];
+    new rankName[32];
+    new takeSmall = GangStashDefaultTakeAmmo[weaponIndex];
+    new takeLarge = takeSmall * 2;
+    new restockSmallCost = GetGangStashRestockCost(weaponIndex, GANG_STASH_RESTOCK_AMMO_SMALL);
+    new restockLargeCost = GetGangStashRestockCost(weaponIndex, GANG_STASH_RESTOCK_AMMO_LARGE);
+    new infoMsg[160];
+
+    GetGangRankName(GangStashMinRank[weaponIndex], rankName, sizeof(rankName));
+    format(title, sizeof(title), "Stash: %s", WeaponShopName[weaponIndex]);
+    format(infoMsg, sizeof(infoMsg), "Stock %s: %d ammo | Min rank take: %s", WeaponShopName[weaponIndex], GangWeaponStashAmmo[gangIndex][weaponIndex], rankName);
+    SendClientMessage(playerid, COLOR_WHITE, infoMsg);
+    format(
+        body,
+        sizeof(body),
+        "Take %d ammo\nTake %d ammo\nRestock %d ammo - $%d (Gang Boss)\nRestock %d ammo - $%d (Gang Boss)\nRefresh Stash",
+        takeSmall,
+        takeLarge,
+        GANG_STASH_RESTOCK_AMMO_SMALL,
+        restockSmallCost,
+        GANG_STASH_RESTOCK_AMMO_LARGE,
+        restockLargeCost
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_GANG_STASH_ACTION, DIALOG_STYLE_LIST, title, body, "Select", "Back");
+    return 1;
+}
+
+stock TryGangTakeWeapon(playerid, weaponIndex, ammo)
+{
+    if (PlayerGangID[playerid] <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum tergabung dalam gang.");
+        return 0;
+    }
+
+    if (!IsPlayerNearOwnGangHQ(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada di HQ gang untuk mengambil weapon stash.");
+        return 0;
+    }
+
+    if (weaponIndex < 0 || weaponIndex >= MAX_WEAPON_SHOP_ITEMS)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Weapon ID tidak valid untuk gang stash.");
+        return 0;
+    }
+
+    if (ammo <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Ammo harus lebih dari 0.");
+        return 0;
+    }
+
+    if (PlayerGangRank[playerid] < GangStashMinRank[weaponIndex])
+    {
+        new rankName[32];
+        new msg[144];
+        GetGangRankName(GangStashMinRank[weaponIndex], rankName, sizeof(rankName));
+        format(msg, sizeof(msg), "Rank kamu belum cukup. Minimal %s untuk mengambil %s.", rankName, WeaponShopName[weaponIndex]);
+        SendClientMessage(playerid, COLOR_RED, msg);
+        return 0;
+    }
+
+    new now = gettime();
+    if (PlayerGangStashTakeCooldownUntil[playerid] > now)
+    {
+        new msg[128];
+        format(msg, sizeof(msg), "Cooldown take weapon masih %d detik.", PlayerGangStashTakeCooldownUntil[playerid] - now);
+        SendClientMessage(playerid, COLOR_YELLOW, msg);
+        return 0;
+    }
+
+    new gangIndex = GetPlayerGangHQIndex(playerid);
+    if (gangIndex == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang kamu tidak valid.");
+        return 0;
+    }
+
+    if (GangWeaponStashAmmo[gangIndex][weaponIndex] < ammo)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Ammo di stash tidak cukup.");
+        return 0;
+    }
+
+    GangWeaponStashAmmo[gangIndex][weaponIndex] -= ammo;
+    PlayerGangStashTakeCooldownUntil[playerid] = now + GANG_STASH_TAKE_COOLDOWN_SECONDS;
+
+    GivePlayerWeapon(playerid, t_WEAPON:WeaponShopWeaponID[weaponIndex], ammo);
+    SaveGangWeaponStash(PlayerGangID[playerid], weaponIndex);
+    LogGangWeaponStashAction(PlayerGangID[playerid], playerid, "TAKE", weaponIndex, ammo, 0);
+
+    new msg[160];
+    format(msg, sizeof(msg), "Gang stash: kamu mengambil %s ammo %d. Weapon ini tidak masuk saved loadout pribadi.", WeaponShopName[weaponIndex], ammo);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    SendClientMessage(playerid, COLOR_WHITE, "Weapon stash bersifat gang/turf war utility, bukan pembelian permanen Ammu-Nation.");
+    return 1;
+}
+
+stock RequestGangRestockWeapon(playerid, weaponIndex, ammo)
+{
+    if (PlayerGangID[playerid] <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum tergabung dalam gang.");
+        return 0;
+    }
+
+    if (!IsGangLeader(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Gang Boss yang bisa restock weapon stash.");
+        return 0;
+    }
+
+    if (!IsPlayerNearOwnGangHQ(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Restock hanya bisa dilakukan di HQ gang kamu.");
+        return 0;
+    }
+
+    if (weaponIndex < 0 || weaponIndex >= MAX_WEAPON_SHOP_ITEMS)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Weapon ID tidak valid untuk gang stash.");
+        return 0;
+    }
+
+    if (ammo <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Ammo restock harus lebih dari 0.");
+        return 0;
+    }
+
+    new gangIndex = GetPlayerGangHQIndex(playerid);
+    if (gangIndex == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang kamu tidak valid.");
+        return 0;
+    }
+
+    if (GangWeaponStashAmmo[gangIndex][weaponIndex] + ammo > GANG_STASH_MAX_AMMO_PER_WEAPON)
+    {
+        new msg[160];
+        format(msg, sizeof(msg), "Batas stash %s adalah %d ammo per gang.", WeaponShopName[weaponIndex], GANG_STASH_MAX_AMMO_PER_WEAPON);
+        SendClientMessage(playerid, COLOR_RED, msg);
+        return 0;
+    }
+
+    new cost = GetGangStashRestockCost(weaponIndex, ammo);
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "SELECT bank_money FROM gangs WHERE id=%d LIMIT 1", PlayerGangID[playerid]);
+    mysql_tquery(g_SQL, query, "OnGangRestockBankLoaded", "iiiii", playerid, PlayerGangID[playerid], weaponIndex, ammo, cost);
+    return 1;
+}
+
+public OnGangRestockBankLoaded(playerid, gangid, weaponIndex, ammo, cost)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
+    {
+        return 1;
+    }
+
+    if (PlayerGangID[playerid] != gangid || !IsGangLeader(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Restock dibatalkan: status gang/rank berubah.");
+        return 1;
+    }
+
+    if (!IsPlayerNearOwnGangHQ(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Restock dibatalkan: kamu sudah jauh dari HQ gang.");
+        return 1;
+    }
+
+    if (weaponIndex < 0 || weaponIndex >= MAX_WEAPON_SHOP_ITEMS || ammo <= 0 || cost <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Restock dibatalkan: data weapon/ammo tidak valid.");
+        return 1;
+    }
+
+    if (cache_num_rows() <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Data bank gang tidak ditemukan.");
+        return 1;
+    }
+
+    new bankMoney;
+    cache_get_value_name_int(0, "bank_money", bankMoney);
+
+    if (bankMoney < cost)
+    {
+        new msg[160];
+        format(msg, sizeof(msg), "Gang bank tidak cukup. Butuh $%d, saldo gang bank $%d.", cost, bankMoney);
+        SendClientMessage(playerid, COLOR_RED, msg);
+        return 1;
+    }
+
+    new gangIndex = GetPresetGangIndexByID(gangid);
+    if (gangIndex == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang ID tidak valid.");
+        return 1;
+    }
+
+    if (GangWeaponStashAmmo[gangIndex][weaponIndex] + ammo > GANG_STASH_MAX_AMMO_PER_WEAPON)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Restock dibatalkan: stash melewati batas maksimum.");
+        return 1;
+    }
+
+    GangWeaponStashAmmo[gangIndex][weaponIndex] += ammo;
+
+    new query[384];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE gangs SET bank_money=bank_money-%d WHERE id=%d AND bank_money >= %d LIMIT 1", cost, gangid, cost);
+    mysql_tquery(g_SQL, query);
+
+    SaveGangWeaponStash(gangid, weaponIndex);
+    LogGangWeaponStashAction(gangid, playerid, "RESTOCK", weaponIndex, ammo, cost);
+
+    new msg[192];
+    format(msg, sizeof(msg), "Gang stash: %s direstock %d ammo. Biaya $%d dari gang bank.", WeaponShopName[weaponIndex], ammo, cost);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    SendMessageToGang(gangid, COLOR_YELLOW, msg);
+    return 1;
+}
+
+stock ProcessGangTakeWeaponCommand(playerid, weaponid, ammo)
+{
+    new weaponIndex = GetWeaponShopIndexFromWeaponID(weaponid);
+
+    if (weaponIndex == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Weapon ID tidak tersedia di gang stash.");
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan /weaponinfo atau /gangstash di HQ untuk melihat daftar weapon.");
+        return 0;
+    }
+
+    return TryGangTakeWeapon(playerid, weaponIndex, ammo);
+}
+
+stock ProcessGangRestockCommand(playerid, weaponid, ammo)
+{
+    new weaponIndex = GetWeaponShopIndexFromWeaponID(weaponid);
+
+    if (weaponIndex == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Weapon ID tidak tersedia di gang stash.");
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan /weaponinfo atau /gangstash di HQ untuk melihat daftar weapon.");
+        return 0;
+    }
+
+    return RequestGangRestockWeapon(playerid, weaponIndex, ammo);
 }
 
 stock ShowGangCreateDialog(playerid)
@@ -8754,7 +9266,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.22D.2 Turf Config DB");
+    SetGameModeText("SAIF Dev v0.22E Gang Weapon Stash");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -8788,6 +9300,7 @@ public OnGameModeInit()
     CreateHouseExteriorPickups();
     CreateWorldInteractionMarkers();
     LoadGangTerritories();
+    LoadGangWeaponStash();
     LoadDynamicLocations();
     LoadDynamicObjects();
 
@@ -9446,6 +9959,7 @@ stock ShowHelpCategory(playerid, category)
             format(title, sizeof(title), "Help - Gang & Turf War");
             strcat(body, "Gang = preset offline-like, join lewat ALT di HQ.\n", sizeof(body));
             strcat(body, "/gangmenu, /gangs, /ganginfo, /gangmembers.\n", sizeof(body));
+            strcat(body, "/gangstash, /gangtakeweapon [weaponid] [ammo], /gangrestock [weaponid] [ammo].\n", sizeof(body));
             strcat(body, "/leavegang: keluar gang.\n", sizeof(body));
             strcat(body, "/kickgang [id]: Gang Boss only.\n", sizeof(body));
             strcat(body, "/turfmap, /territories: lihat territory.\n", sizeof(body));
@@ -10723,6 +11237,63 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 
 
 
+
+    if (dialogid == DIALOG_GANG_STASH)
+    {
+        if (!response)
+        {
+            return 1;
+        }
+
+        ShowGangStashActionDialog(playerid, listitem);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_GANG_STASH_ACTION)
+    {
+        if (!response)
+        {
+            ShowGangWeaponStashDialog(playerid);
+            return 1;
+        }
+
+        new weaponIndex = PlayerGangStashSelectedWeaponIndex[playerid];
+
+        if (weaponIndex < 0 || weaponIndex >= MAX_WEAPON_SHOP_ITEMS)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Pilihan weapon stash tidak valid.");
+            return 1;
+        }
+
+        if (listitem == 0)
+        {
+            TryGangTakeWeapon(playerid, weaponIndex, GangStashDefaultTakeAmmo[weaponIndex]);
+            return 1;
+        }
+        if (listitem == 1)
+        {
+            TryGangTakeWeapon(playerid, weaponIndex, GangStashDefaultTakeAmmo[weaponIndex] * 2);
+            return 1;
+        }
+        if (listitem == 2)
+        {
+            RequestGangRestockWeapon(playerid, weaponIndex, GANG_STASH_RESTOCK_AMMO_SMALL);
+            return 1;
+        }
+        if (listitem == 3)
+        {
+            RequestGangRestockWeapon(playerid, weaponIndex, GANG_STASH_RESTOCK_AMMO_LARGE);
+            return 1;
+        }
+        if (listitem == 4)
+        {
+            ShowGangWeaponStashDialog(playerid);
+            return 1;
+        }
+
+        return 1;
+    }
+
     if (dialogid == DIALOG_GANG_MENU)
     {
         if (!response)
@@ -10850,6 +11421,11 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             mysql_tquery(g_SQL, "SELECT id, name, leader_name, reputation FROM gangs WHERE id BETWEEN 1 AND 4 ORDER BY id ASC", "OnGangListLoaded", "i", playerid);
             return 1;
         }
+        if (listitem == 14)
+        {
+            ShowGangWeaponStashDialog(playerid);
+            return 1;
+        }
 
         return 1;
     }
@@ -10944,6 +11520,11 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             if (listitem == 11)
             {
                 ShowPlayerDialog(playerid, DIALOG_GANG_LEAVE_CONFIRM, DIALOG_STYLE_MSGBOX, "Leave Gang", "Yakin ingin keluar dari gang?", "Leave", "Back");
+                return 1;
+            }
+            if (listitem == 12)
+            {
+                ShowGangWeaponStashDialog(playerid);
                 return 1;
             }
         }
@@ -13751,7 +14332,7 @@ stock CreateWorldInteractionMarkers()
     for (new i = 0; i < MAX_PRESET_GANGS; i++)
     {
         GangHQPickup[i] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, GangHQX[i], GangHQY[i], GangHQZ[i], 0);
-        format(labelText, sizeof(labelText), "[GANG HQ] %s\nALT: Join / Gang Menu", PresetGangShortName[i]);
+        format(labelText, sizeof(labelText), "[GANG HQ] %s\nALT: Join / Gang Menu / Stash", PresetGangShortName[i]);
         // Offset lebih tinggi agar tidak tumpuk dengan marker/label ALT lain di lokasi yang berdekatan.
         GangHQLabel[i] = Create3DTextLabel(labelText, PresetGangColor[i], GangHQX[i], GangHQY[i], GangHQZ[i] + 2.2, 16.0, 0, true);
     }
@@ -19439,6 +20020,69 @@ public OnPlayerCommandText(playerid, cmdtext[])
         DestroyTerritoryRuntime();
         LoadGangTerritories();
         SendClientMessage(playerid, COLOR_GREEN, "Turf runtime dibersihkan dan direload dari database.");
+        return 1;
+    }
+
+
+    if (!strcmp(cmdtext, "/gangstash", true))
+    {
+        ShowGangWeaponStashDialog(playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/gangtakeweapon ", true) == 0)
+    {
+        new weaponStr[16];
+        new ammoStr[16];
+
+        if (!GetTwoParams(cmdtext[16], weaponStr, sizeof(weaponStr), ammoStr, sizeof(ammoStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangtakeweapon [weapon_id] [ammo]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /gangtakeweapon 30 75");
+            return 1;
+        }
+
+        if (!IsNumericString(weaponStr) || !IsNumericString(ammoStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Weapon ID dan ammo harus angka.");
+            return 1;
+        }
+
+        ProcessGangTakeWeaponCommand(playerid, strval(weaponStr), strval(ammoStr));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/gangtakeweapon", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangtakeweapon [weapon_id] [ammo]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/gangrestock ", true) == 0)
+    {
+        new weaponStr[16];
+        new ammoStr[16];
+
+        if (!GetTwoParams(cmdtext[13], weaponStr, sizeof(weaponStr), ammoStr, sizeof(ammoStr)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangrestock [weapon_id] [ammo]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /gangrestock 31 300");
+            return 1;
+        }
+
+        if (!IsNumericString(weaponStr) || !IsNumericString(ammoStr))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Weapon ID dan ammo harus angka.");
+            return 1;
+        }
+
+        ProcessGangRestockCommand(playerid, strval(weaponStr), strval(ammoStr));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/gangrestock", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangrestock [weapon_id] [ammo]");
         return 1;
     }
 

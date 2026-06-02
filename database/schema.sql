@@ -901,3 +901,173 @@ ON parked_vehicles (source_tag);
 -- VALUES
 -- ('offline_exact_ls', 'offline_exact_ls', 420, 6, 1, 1777.52, -1905.11, 13.23, 270.0, 0, 0, 300, 0, 1, 'sample taxi stand');
 
+-- SAIF / LSIF v0.24B Exact Offline Parked Vehicle Queue - Safe Land Only
+-- Generated from uploaded main.scm by extracting literal 014B / 09E2 parked car generator opcodes.
+-- Candidate rows included: 132
+-- Run only one queue SQL option at a time. This file uses source_tag='offline_exact_ls'.
+
+UPDATE parked_vehicle_import_queue SET enabled=0 WHERE source_tag='offline_exact_ls';
+
+INSERT INTO parked_vehicle_import_queue
+(batch_name, source_tag, modelid, color1, color2, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, respawn_delay, locked, enabled, note)
+VALUES
+('offline_exact_ls','offline_exact_ls',463,-1,-1,1174.759644,1364.831909,10.1203,280.035492,0,0,300,0,1,'SCM literal 014B offset 201916, Freeway, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',521,-1,-1,1174.998779,1366.478516,10.1203,282.2258,0,0,300,0,1,'SCM literal 014B offset 201959, FCR-900, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',522,-1,-1,1174.467041,1368.358521,10.1203,283.054596,0,0,300,0,1,'SCM literal 014B offset 202002, NRG-500, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',556,-1,-1,2692.028564,-1674.024292,9.4656,178.827896,0,0,300,0,1,'SCM literal 014B offset 215198, Monster A, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',494,-1,-1,2676.695312,-1673.756104,9.4038,178.827896,0,0,300,0,1,'SCM literal 014B offset 215255, Hotring Racer, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',424,-1,-1,1104.932251,1614.807617,12.5546,85.643501,0,0,300,0,1,'SCM literal 014B offset 215312, BF Injection, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',468,-1,-1,-1460.869873,-1566.736816,101.057899,2,0,0,300,0,1,'SCM literal 014B offset 215369, Sanchez, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',478,-1,-1,-1446.239014,-1494.731445,101.051399,6,0,0,300,0,1,'SCM literal 014B offset 215426, Walton, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',531,-1,-1,-1439.642822,-1576.822998,101.0578,264.118286,0,0,300,0,1,'SCM literal 014B offset 215483, Tractor, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',481,-1,-1,2412.52002,-1326.48999,23.74,177.919998,0,0,300,0,1,'SCM literal 014B offset 215658, BMX, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',542,-1,-1,2445.5,-1340.800049,23.5,180,0,0,300,0,1,'SCM literal 014B offset 215715, Clover, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',481,-1,-1,2499.179932,-1648.26001,13,158.610001,0,0,300,0,1,'SCM literal 014B offset 215765, BMX, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',567,-1,-1,2685.980713,-2016.209717,12.5501,0.337,0,0,300,0,1,'SCM literal 014B offset 215815, Savanna, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',536,-1,-1,1772.095947,-2125.102783,13.0469,0.3441,0,0,300,0,1,'SCM literal 014B offset 215865, Blade, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',468,-1,-1,-2048.855957,-2521.275635,31.125,171.023193,0,0,300,0,1,'SCM literal 014B offset 215915, Sanchez, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',558,-1,-1,-1956.300049,297.700012,34.299999,64.800003,0,0,300,0,1,'SCM literal 014B offset 215965, Uranus, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',562,-1,-1,-1952.599976,265.700012,39.900002,292.799988,0,0,300,0,1,'SCM literal 014B offset 216008, Elegy, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',560,-1,-1,-1957.699951,277,34.299999,133.399994,0,0,300,0,1,'SCM literal 014B offset 216051, Sultan, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',567,-1,-1,-1952.800049,258.799988,39.900002,259.100006,0,0,300,0,1,'SCM literal 014B offset 216094, Savanna, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',561,-1,-1,-1950.5,259.700012,34.299999,53.799999,0,0,300,0,1,'SCM literal 014B offset 216137, Stratum, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',544,-1,-1,-2057,58,28,90,0,0,300,0,1,'SCM literal 014B offset 216432, Firetruck Ladder, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',407,-1,-1,-2057,64,28,90,0,0,300,0,1,'SCM literal 014B offset 216482, Firetruck, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',407,-1,-1,1763.824463,2075.756592,9.9093,179.475296,0,0,300,0,1,'SCM literal 014B offset 216532, Firetruck, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',407,-1,-1,1751.511719,-1455.101562,12.5547,263.558899,0,0,300,0,1,'SCM literal 014B offset 216582, Firetruck, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',416,-1,-1,2033.887939,-1432.6698,16.6453,177.828995,0,0,300,0,1,'SCM literal 014B offset 216632, Ambulance, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',416,-1,-1,1178.047729,-1338.175415,13.405,269.49231,0,0,300,0,1,'SCM literal 014B offset 216682, Ambulance, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',416,-1,-1,-303.781403,1032.325562,19.086,268.501587,0,0,300,0,1,'SCM literal 014B offset 216732, Ambulance, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',416,-1,-1,-1507.164185,2525.455322,55.1875,358.572815,0,0,300,0,1,'SCM literal 014B offset 216782, Ambulance, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',416,-1,-1,1229.664795,297.688293,19.054701,154.955307,0,0,300,0,1,'SCM literal 014B offset 216832, Ambulance, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',416,-1,-1,-2202.519531,-2315.985596,30.117201,319.681488,0,0,300,0,1,'SCM literal 014B offset 216882, Ambulance, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',402,-1,-1,886.378174,-25.667101,63.243999,157.621201,0,0,300,0,1,'SCM literal 014B offset 216932, Buffalo, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',406,-1,-1,687.373291,890.669983,-40.428501,35.139999,0,0,300,0,1,'SCM literal 014B offset 217026, Dumper, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',486,-1,-1,620.882019,861.245178,-43.9534,298.742798,0,0,300,0,1,'SCM literal 014B offset 217076, Dozer, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',468,-1,-1,623.34021,887.094421,-43.5625,347.296692,0,0,300,0,1,'SCM literal 014B offset 217126, Sanchez, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',468,-1,-1,-2486.045654,59.183998,24.8284,180,0,0,300,0,1,'SCM literal 014B offset 217176, Sanchez, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',492,-1,-1,2216.902344,-1160.403442,24.7265,270.8013,0,0,300,0,1,'SCM literal 014B offset 217446, Greenwood, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',492,-1,-1,2216.902344,-1160.403442,24.7265,270.8013,0,0,300,0,1,'SCM literal 014B offset 217489, Greenwood, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',481,-1,-1,2229.001465,-1173.79834,24.733101,90.5569,0,0,300,0,1,'SCM literal 014B offset 217532, BMX, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',609,-1,-1,2251.028076,-1788.661011,12.7625,358.959106,0,0,300,0,1,'SCM literal 014B offset 217575, Boxburg, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',609,-1,-1,-2118.170654,-4.0948,35.020302,270.141998,0,0,300,0,1,'SCM literal 014B offset 217625, Boxburg, original_delay=0, alarm=0, door=0');
+
+INSERT INTO parked_vehicle_import_queue
+(batch_name, source_tag, modelid, color1, color2, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, respawn_delay, locked, enabled, note)
+VALUES
+('offline_exact_ls','offline_exact_ls',609,-1,-1,2596.74707,1444.245239,10.3203,178.271194,0,0,300,0,1,'SCM literal 014B offset 217675, Boxburg, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',545,83,1,2408.15625,-1719.463013,13.6665,0.5881,0,0,300,1,1,'SCM literal 014B offset 217725, Hustler, original_delay=0, alarm=0, door=100'),
+('offline_exact_ls','offline_exact_ls',557,-1,-1,-1778.177734,1207.074463,25.1194,91.935699,0,0,300,1,1,'SCM literal 014B offset 217768, Monster B, original_delay=0, alarm=0, door=100'),
+('offline_exact_ls','offline_exact_ls',599,-1,-1,-1399.717407,2628.589844,55.782299,271.794098,0,0,300,1,1,'SCM literal 014B offset 217811, Police Ranger, original_delay=0, alarm=0, door=100'),
+('offline_exact_ls','offline_exact_ls',568,-1,-1,-379.5,-1443.115356,25.726601,88.9244,0,0,300,1,1,'SCM literal 014B offset 217854, Bandito, original_delay=0, alarm=0, door=100'),
+('offline_exact_ls','offline_exact_ls',442,1,1,-2572.039795,1148.564453,55.733299,337.843414,0,0,300,1,1,'SCM literal 014B offset 217897, Romero, original_delay=0, alarm=0, door=100'),
+('offline_exact_ls','offline_exact_ls',589,126,1,2028.445923,2731.102051,10.53,268.993988,0,0,300,1,1,'SCM literal 014B offset 217940, Club, original_delay=0, alarm=0, door=100'),
+('offline_exact_ls','offline_exact_ls',402,-1,-1,-1673.939941,439.019989,7.01,136,0,0,300,1,1,'SCM literal 014B offset 218427, Buffalo, original_delay=0, alarm=70, door=40'),
+('offline_exact_ls','offline_exact_ls',405,-1,-1,926.450012,-1292.290039,13.6,270,0,0,300,1,1,'SCM literal 014B offset 218470, Sentinel, original_delay=0, alarm=60, door=30'),
+('offline_exact_ls','offline_exact_ls',411,-1,-1,-2665.439941,990.77002,64.449997,51,0,0,300,1,1,'SCM literal 014B offset 218513, Infernus, original_delay=0, alarm=80, door=50'),
+('offline_exact_ls','offline_exact_ls',483,-1,-1,-2516.5979,1228.919189,36.428299,211.5,0,0,300,1,1,'SCM literal 014B offset 218556, Camper, original_delay=0, alarm=30, door=10'),
+('offline_exact_ls','offline_exact_ls',445,-1,-1,1122.290039,-1699.76001,13.43,270,0,0,300,1,1,'SCM literal 014B offset 218599, Admiral, original_delay=0, alarm=50, door=10'),
+('offline_exact_ls','offline_exact_ls',470,-1,-1,-1006.409973,-628.27002,32,270,0,0,300,1,1,'SCM literal 014B offset 218642, Patriot, original_delay=0, alarm=50, door=10'),
+('offline_exact_ls','offline_exact_ls',468,-1,-1,-2085.22998,-2437.52002,30.309999,142,0,0,300,1,1,'SCM literal 014B offset 218685, Sanchez, original_delay=0, alarm=50, door=10'),
+('offline_exact_ls','offline_exact_ls',409,-1,-1,-1922.189941,288.339996,40.84,180,0,0,300,1,1,'SCM literal 014B offset 218728, Stretch, original_delay=0, alarm=50, door=10'),
+('offline_exact_ls','offline_exact_ls',533,-1,-1,-16.66,-2521.169922,36.369999,210,0,0,300,1,1,'SCM literal 014B offset 218771, Feltzer, original_delay=0, alarm=50, door=10'),
+('offline_exact_ls','offline_exact_ls',534,-1,-1,1803.380005,-1931.050049,13.66,0,0,0,300,1,1,'SCM literal 014B offset 218814, Remington, original_delay=0, alarm=50, door=10'),
+('offline_exact_ls','offline_exact_ls',415,-1,-1,1272.23999,2603.030029,10.49,117,0,0,300,1,1,'SCM literal 014B offset 218857, Cheetah, original_delay=0, alarm=90, door=30'),
+('offline_exact_ls','offline_exact_ls',489,-1,-1,-112.400002,-41.82,3.26,160,0,0,300,1,1,'SCM literal 014B offset 218900, Rancher, original_delay=0, alarm=50, door=10'),
+('offline_exact_ls','offline_exact_ls',439,-1,-1,-2456.100098,741.650024,34.919998,180,0,0,300,1,1,'SCM literal 014B offset 218943, Stallion, original_delay=0, alarm=50, door=10'),
+('offline_exact_ls','offline_exact_ls',514,-1,-1,-1951.810059,2393.830078,50.080002,292,0,0,300,1,1,'SCM literal 014B offset 218986, Tanker, original_delay=0, alarm=50, door=10'),
+('offline_exact_ls','offline_exact_ls',480,-1,-1,-2751.790039,-281.5,6.81,0,0,0,300,1,1,'SCM literal 014B offset 219029, Comet, original_delay=0, alarm=90, door=40'),
+('offline_exact_ls','offline_exact_ls',535,-1,-1,1923.930054,-2118.889893,13.35,0,0,0,300,1,1,'SCM literal 014B offset 219072, Slamvan, original_delay=0, alarm=50, door=10'),
+('offline_exact_ls','offline_exact_ls',496,-1,-1,-1675.939941,-618.73999,13.86,256,0,0,300,1,1,'SCM literal 014B offset 219115, Blista Compact, original_delay=0, alarm=50, door=10'),
+('offline_exact_ls','offline_exact_ls',580,-1,-1,-2430.219971,320.839996,34.970001,245,0,0,300,1,1,'SCM literal 014B offset 219158, Stafford, original_delay=0, alarm=50, door=10'),
+('offline_exact_ls','offline_exact_ls',475,-1,-1,-2265.330078,200.649994,34.970001,270,0,0,300,1,1,'SCM literal 014B offset 219201, Sabre, original_delay=0, alarm=50, door=10'),
+('offline_exact_ls','offline_exact_ls',521,-1,-1,2282.699951,2535.879883,10.39,180,0,0,300,1,1,'SCM literal 014B offset 219244, FCR-900, original_delay=0, alarm=50, door=10'),
+('offline_exact_ls','offline_exact_ls',429,-1,-1,2133.040039,1009.75,10.49,270,0,0,300,1,1,'SCM literal 014B offset 219287, Banshee, original_delay=0, alarm=90, door=50'),
+('offline_exact_ls','offline_exact_ls',506,-1,-1,2229.300049,1402.98999,10.82,180,0,0,300,1,1,'SCM literal 014B offset 219330, Super GT, original_delay=0, alarm=90, door=50'),
+('offline_exact_ls','offline_exact_ls',508,-1,-1,-1550.400024,2687.540039,56.220001,90,0,0,300,1,1,'SCM literal 014B offset 219373, Journey, original_delay=0, alarm=50, door=10'),
+('offline_exact_ls','offline_exact_ls',579,-1,-1,-2068.689941,-83.75,35.099998,0,0,0,300,1,1,'SCM literal 014B offset 219416, Huntley, original_delay=0, alarm=50, door=10'),
+('offline_exact_ls','offline_exact_ls',424,-1,-1,682.169983,-1867.459961,4.82,180,0,0,300,1,1,'SCM literal 014B offset 219459, BF Injection, original_delay=0, alarm=70, door=10'),
+('offline_exact_ls','offline_exact_ls',536,-1,-1,1747.869995,-2098.030029,13.28,180,0,0,300,1,1,'SCM literal 014B offset 219502, Blade, original_delay=0, alarm=80, door=10'),
+('offline_exact_ls','offline_exact_ls',463,-1,-1,1144.459961,-1101.26001,25.35,300,0,0,300,1,1,'SCM literal 014B offset 219545, Freeway, original_delay=0, alarm=50, door=10'),
+('offline_exact_ls','offline_exact_ls',500,-1,-1,-2406.25,-2180.840088,33.389999,180,0,0,300,1,1,'SCM literal 014B offset 219588, Mesa, original_delay=0, alarm=70, door=10'),
+('offline_exact_ls','offline_exact_ls',477,-1,-1,2163.790039,1810.22998,10.58,180,0,0,300,1,1,'SCM literal 014B offset 219631, ZR-350, original_delay=0, alarm=80, door=10'),
+('offline_exact_ls','offline_exact_ls',587,-1,-1,2207.429932,1286.130005,10.57,180,0,0,300,1,1,'SCM literal 014B offset 219674, Euros, original_delay=0, alarm=50, door=10'),
+('offline_exact_ls','offline_exact_ls',532,-1,-1,-540.044128,-1396.146729,15,0,0,0,300,1,1,'SCM literal 014B offset 219927, Combine Harvester, original_delay=0, alarm=0, door=100'),
+('offline_exact_ls','offline_exact_ls',532,-1,-1,-289.551697,-1389.627319,10,0,0,0,300,1,1,'SCM literal 014B offset 219970, Combine Harvester, original_delay=0, alarm=0, door=100'),
+('offline_exact_ls','offline_exact_ls',532,-1,-1,-192.899994,-1331.306763,21.5,0,0,0,300,1,1,'SCM literal 014B offset 220013, Combine Harvester, original_delay=0, alarm=0, door=100');
+
+INSERT INTO parked_vehicle_import_queue
+(batch_name, source_tag, modelid, color1, color2, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, respawn_delay, locked, enabled, note)
+VALUES
+('offline_exact_ls','offline_exact_ls',531,-1,-1,-273.962891,-1507.596069,5,0,0,0,300,1,1,'SCM literal 014B offset 220056, Tractor, original_delay=0, alarm=0, door=100'),
+('offline_exact_ls','offline_exact_ls',531,-1,-1,-395.19519,-1293.189697,30.799999,0,0,0,300,1,1,'SCM literal 014B offset 220099, Tractor, original_delay=0, alarm=0, door=100'),
+('offline_exact_ls','offline_exact_ls',531,-1,-1,-186.649399,-1339.2146,6,0,0,0,300,1,1,'SCM literal 014B offset 220142, Tractor, original_delay=0, alarm=0, door=100'),
+('offline_exact_ls','offline_exact_ls',532,-1,-1,-1030.248901,-1050.18811,129,0,0,0,300,1,1,'SCM literal 014B offset 220185, Combine Harvester, original_delay=0, alarm=0, door=100'),
+('offline_exact_ls','offline_exact_ls',532,-1,-1,-1169.425171,-989.63092,129,0,0,0,300,1,1,'SCM literal 014B offset 220228, Combine Harvester, original_delay=0, alarm=0, door=100'),
+('offline_exact_ls','offline_exact_ls',531,-1,-1,-1110.789795,-947.79248,129,0,0,0,300,1,1,'SCM literal 014B offset 220271, Tractor, original_delay=0, alarm=0, door=100'),
+('offline_exact_ls','offline_exact_ls',532,-1,-1,16.876801,49.991001,3,0,0,0,300,1,1,'SCM literal 014B offset 220314, Combine Harvester, original_delay=0, alarm=0, door=100'),
+('offline_exact_ls','offline_exact_ls',532,-1,-1,81.051003,3.3203,1.5,0,0,0,300,1,1,'SCM literal 014B offset 220357, Combine Harvester, original_delay=0, alarm=0, door=100'),
+('offline_exact_ls','offline_exact_ls',532,-1,-1,-15.2986,-84.653297,3,0,0,0,300,1,1,'SCM literal 014B offset 220400, Combine Harvester, original_delay=0, alarm=0, door=100'),
+('offline_exact_ls','offline_exact_ls',531,-1,-1,81.053299,3.3234,1.5,0,0,0,300,1,1,'SCM literal 014B offset 220443, Tractor, original_delay=0, alarm=0, door=100'),
+('offline_exact_ls','offline_exact_ls',506,31,0,-2093.899902,-83.699997,33.900002,359.100006,0,0,300,0,1,'SCM literal 014B offset 269871, Super GT, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',541,15,15,-2076.800049,-84,33.700001,1.1,0,0,300,0,1,'SCM literal 014B offset 269921, Bullet, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',504,-1,-1,-2151,-409.100006,34.099998,307.200012,0,0,300,0,1,'SCM literal 014B offset 270151, Bloodring Banger, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',457,-1,-1,927.721313,-1185.04187,16.5,123.305496,0,0,300,0,1,'SCM literal 014B offset 272401, Caddy, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',457,-1,-1,927.523315,-1182.365112,16.5,123.305496,0,0,300,0,1,'SCM literal 014B offset 272444, Caddy, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',457,-1,-1,926.917908,-1178.949951,16.5,123.305496,0,0,300,0,1,'SCM literal 014B offset 272487, Caddy, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',457,-1,-1,861.353516,-1240.758911,14.5,180.130798,0,0,300,0,1,'SCM literal 014B offset 272530, Caddy, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',508,-1,-1,837.74939,-1206.573608,16.5,153.263199,0,0,300,0,1,'SCM literal 014B offset 272573, Journey, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',508,-1,-1,897.516785,-1207.991211,16.5,86.5989,0,0,300,0,1,'SCM literal 014B offset 272616, Journey, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',508,-1,-1,736.239807,-1334.19519,13.5411,267.810913,0,0,300,0,1,'SCM literal 014B offset 272659, Journey, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',508,-1,-1,736.96228,-1343.90686,13.5197,273.772095,0,0,300,0,1,'SCM literal 014B offset 272702, Journey, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',468,-1,-1,-2408.510986,-2186.023926,32.889999,321.691986,0,0,300,0,1,'SCM literal 014B offset 272905, Sanchez, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',510,-1,-1,-2407.605713,-2177.092041,32.889999,321.691986,0,0,300,0,1,'SCM literal 014B offset 272948, Mountain Bike, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',508,-1,-1,-2338.56543,-1593.832886,482.945099,20.750999,0,0,300,0,1,'SCM literal 014B offset 272991, Journey, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',483,-1,-1,-2343.370361,-1613.942993,482.975708,105.529999,0,0,300,0,1,'SCM literal 014B offset 273034, Camper, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',571,-1,-1,-2213.555908,112.767097,34.9203,88.472,0,0,300,0,1,'SCM literal 014B offset 273105, Kart, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',571,-1,-1,-2693.385986,-139.456406,3.93359,90.085602,0,0,300,0,1,'SCM literal 014B offset 273148, Kart, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',571,-1,-1,-2796.467529,-94.178802,6.9875,42.6945,0,0,300,0,1,'SCM literal 014B offset 273191, Kart, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',571,-1,-1,-2206.050781,701.216125,48.945301,183.417404,0,0,300,0,1,'SCM literal 014B offset 273234, Kart, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',571,-1,-1,-810.559875,2430.362793,156.964905,336.53299,0,0,300,0,1,'SCM literal 014B offset 273277, Kart, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',571,-1,-1,-1693.441284,432.285187,6.9914,300.903015,0,0,300,0,1,'SCM literal 014B offset 273320, Kart, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',571,-1,-1,-2116.138428,924.806824,85.979103,94.929298,0,0,300,0,1,'SCM literal 014B offset 273363, Kart, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',571,-1,-1,-1483.689941,2614.835449,58.2812,337.938293,0,0,300,0,1,'SCM literal 014B offset 273406, Kart, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',571,-1,-1,1419.698364,1947.995972,10.9531,6.9689,0,0,300,0,1,'SCM literal 014B offset 273449, Kart, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',571,-1,-1,1567.389038,2691.118408,10.265,279.987488,0,0,300,0,1,'SCM literal 014B offset 273492, Kart, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',571,-1,-1,-2087.366699,-2519.015869,29.924999,90.917801,0,0,300,0,1,'SCM literal 014B offset 273535, Kart, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',571,-1,-1,2615.317139,1939.700684,10.129,148.175705,0,0,300,0,1,'SCM literal 014B offset 273578, Kart, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',571,-1,-1,1074.963989,1395.417725,5.303,36.7673,0,0,300,0,1,'SCM literal 014B offset 273621, Kart, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',571,-1,-1,2615.23877,-1731.225342,5.9486,140.821304,0,0,300,0,1,'SCM literal 014B offset 273664, Kart, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',571,-1,-1,1305.175781,-796.695496,83.947701,185.991135,0,0,300,0,1,'SCM literal 014B offset 273707, Kart, original_delay=0, alarm=0, door=0');
+
+INSERT INTO parked_vehicle_import_queue
+(batch_name, source_tag, modelid, color1, color2, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, respawn_delay, locked, enabled, note)
+VALUES
+('offline_exact_ls','offline_exact_ls',539,-1,-1,-2294.926025,2546.978271,5.9175,290.933899,0,0,300,0,1,'SCM literal 014B offset 273855, Vortex, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',539,-1,-1,714.343628,-1488.272705,0.9343,270,0,0,300,0,1,'SCM literal 014B offset 273898, Vortex, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',539,-1,-1,-1426.411987,506.839111,2.9463,144.610001,0,0,300,0,1,'SCM literal 014B offset 273941, Vortex, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',539,-1,-1,1971.919678,1560.665283,10.9635,262.61499,0,0,300,0,1,'SCM literal 014B offset 273984, Vortex, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',539,-1,-1,-535.412598,-60.888401,63.592201,276.975586,0,0,300,0,1,'SCM literal 014B offset 274027, Vortex, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',539,-1,-1,-910.27002,2699.060059,42.799999,110.873802,0,0,300,0,1,'SCM literal 014B offset 274070, Vortex, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',461,-1,-1,435.275085,2527.522705,16.371,90,0,0,300,0,1,'SCM literal 014B offset 274205, PCJ-600, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',573,-1,-1,1091.890015,1612.630005,13,206.758301,0,0,300,0,1,'SCM literal 014B offset 274262, Dune, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',412,-1,-1,1772.660034,-2096.590088,13.99,182.758301,0,0,300,0,1,'SCM literal 014B offset 274312, Voodoo, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',515,-1,-1,-2000.241943,-2415.509033,29.767,-132,0,0,300,0,1,'SCM literal 014B offset 274509, Roadtrain, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',578,-1,-1,-1969.80603,-2437.938965,29.767,-82.5,0,0,300,0,1,'SCM literal 014B offset 274552, DFT-30, original_delay=0, alarm=0, door=0'),
+('offline_exact_ls','offline_exact_ls',530,-1,-1,-1969.80603,-2443.907959,29.767,-19,0,0,300,0,1,'SCM literal 014B offset 274595, Forklift, original_delay=0, alarm=0, door=0');
+
+-- SAIF / LSIF Dev v0.24C — Offline Source Cleanup & Curated Template Disable
+-- Purpose: disable inaccurate self-made curated templates and make exact offline-source import the default workflow.
+
+UPDATE parked_vehicles
+SET enabled = 0
+WHERE source_tag = 'offline_template_ls';
+
+UPDATE world_pickups
+SET enabled = 0
+WHERE source_tag = 'offline_template_ls';
+
+-- Manual rows and exact imported rows are intentionally preserved.
+-- Manual source_tag is usually manual/empty. Exact parked vehicle import uses offline_exact_ls.
+
+

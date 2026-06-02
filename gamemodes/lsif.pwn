@@ -9975,7 +9975,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24B Exact Offline Vehicle Importer");
+    SetGameModeText("SAIF Dev v0.24C Offline Source Cleanup");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -10079,7 +10079,7 @@ public OnGameModeInit()
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24B Exact Offline Vehicle Importer berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24C Offline Source Cleanup berhasil dijalankan.");
     return 1;
 }
 
@@ -17394,17 +17394,35 @@ stock SeedOfflinePickupTemplate(playerid)
 {
     if (!IsAdminLevel(playerid, ADMIN_OWNER))
     {
-        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa seed offline pickup template.");
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa menjalankan cleanup curated pickup seed.");
         return 0;
     }
 
+    SendClientMessage(playerid, COLOR_YELLOW, "Offline-first policy aktif: curated pickup seed sudah deprecated.");
+    SendClientMessage(playerid, COLOR_WHITE, "Curated source_tag offline_template_ls akan dinonaktifkan. Gunakan exact SCM/IPL import untuk data offline asli.");
+
     new query[256];
     mysql_format(g_SQL, query, sizeof(query), "UPDATE world_pickups SET enabled=0 WHERE source_tag='%e'", WORLD_PICKUP_OFFLINE_SEED_TAG);
-    mysql_tquery(g_SQL, query, "OnWorldPickupSeedClearedForSeed", "i", playerid);
-
-    SendClientMessage(playerid, COLOR_YELLOW, "Offline pickup template seed dimulai. Template lama dari source yang sama akan di-refresh.");
+    mysql_tquery(g_SQL, query, "OnWorldPickupSeedDeprecatedDisabled", "i", playerid);
     return 1;
 }
+
+public OnWorldPickupSeedDeprecatedDisabled(playerid)
+{
+    new affectedRows = cache_affected_rows();
+    LoadWorldPickups();
+
+    if (IsPlayerConnected(playerid))
+    {
+        new msg[144];
+        format(msg, sizeof(msg), "Curated pickup seed disabled. Rows affected: %d", affectedRows);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+        SendClientMessage(playerid, COLOR_WHITE, "Manual pickup tidak ikut dinonaktifkan. Exact-source pickup akan jadi standar utama.");
+    }
+
+    return 1;
+}
+
 
 public OnWorldPickupSeedClearedForSeed(playerid)
 {
@@ -17479,13 +17497,13 @@ public OnWorldPickupSeedInfoLoaded(playerid)
     new typeText[32];
     new total;
 
-    strcat(body, "Offline Pickup Template Seed\n\n", sizeof(body));
-    strcat(body, "source_tag: offline_template_ls\n", sizeof(body));
-    strcat(body, "Isi awal: bribe, health, armor, hidden/world reward area Los Santos.\n\n", sizeof(body));
+    strcat(body, "Offline Pickup Source Policy\n\n", sizeof(body));
+    strcat(body, "Deprecated curated source_tag: offline_template_ls\n", sizeof(body));
+    strcat(body, "Status: curated template disabled by offline-first policy.\nExact SCM/IPL import should be used when available.\n\n", sizeof(body));
 
     if (rows <= 0)
     {
-        strcat(body, "Belum ada seed aktif. Gunakan /wpickupseed.\n", sizeof(body));
+        strcat(body, "Tidak ada curated seed aktif. Ini kondisi yang diinginkan.\n", sizeof(body));
     }
     else
     {
@@ -17498,8 +17516,8 @@ public OnWorldPickupSeedInfoLoaded(playerid)
         }
     }
 
-    strcat(body, "\nCatatan: ini curated offline-like seed, bukan full dump main.scm.\nImporter template offline yang lebih lengkap bisa ditambah setelah ini.", sizeof(body));
-    ShowPlayerDialog(playerid, DIALOG_WPICKUP_SEED_INFO, DIALOG_STYLE_MSGBOX, "Offline Pickup Seed Info", body, "OK", "Close");
+    strcat(body, "\nCatatan: curated seed deprecated. Gunakan source exact dari main.scm / IPL / ENEX bila memungkinkan.", sizeof(body));
+    ShowPlayerDialog(playerid, DIALOG_WPICKUP_SEED_INFO, DIALOG_STYLE_MSGBOX, "Offline Pickup Source Policy / Curated Info", body, "OK", "Close");
     return 1;
 }
 
@@ -17511,7 +17529,7 @@ stock ShowWorldPickupMenu(playerid)
         return 0;
     }
 
-    ShowPlayerDialog(playerid, DIALOG_WPICKUP_MENU, DIALOG_STYLE_LIST, "Offline World Pickup Editor", "Create Pickup\nList / Select Pickup\nInput ID Manual\nSeed Curated Offline-like Template\nClear Curated Seed\nSeed Info\nReload Pickups\nHelp", "Select", "Close");
+    ShowPlayerDialog(playerid, DIALOG_WPICKUP_MENU, DIALOG_STYLE_LIST, "Offline World Pickup Editor", "Create Pickup\nList / Select Pickup\nInput ID Manual\nDEPRECATED: Disable Curated Seed\nClear Curated Seed\nSource Policy / Curated Info\nReload Pickups\nHelp", "Select", "Close");
     return 1;
 }
 
@@ -17637,7 +17655,7 @@ stock ShowWorldPickupHelp(playerid)
     strcat(body, "- hidden: reward cash/world pickup\n\n", sizeof(body));
     strcat(body, "Command fallback:\n", sizeof(body));
     strcat(body, "/wpickupmenu, /wpickupcreate, /wpickuplist, /wpickupinfo, /wpickupgoto, /wpickupdelete, /wpickupreload\n", sizeof(body));
-    strcat(body, "/wpickupseed, /wpickupclearseed, /wpickupseedinfo\n\n", sizeof(body));
+    strcat(body, "/wpickupseed deprecated-disable, /wpickupclearseed, /wpickupseedinfo\n\n", sizeof(body));
     strcat(body, "Template seed: police bribe, health, armor, dan hidden pickup bisa di-seed massal agar tidak input satu-satu.", sizeof(body));
     ShowPlayerDialog(playerid, DIALOG_WPICKUP_INFO, DIALOG_STYLE_MSGBOX, "World Pickup Help", body, "Back", "Close");
     return 1;
@@ -18123,7 +18141,7 @@ stock ShowParkedVehicleMenu(playerid)
     }
 
     new dialogText[768];
-    format(dialogText, sizeof(dialogText), "Create Parked Vehicle\nList / Select Parked Vehicle\nInput ID Manual\nReload Parked Vehicles\nSeed Curated Offline-like Template\nClear Curated Seed\nCurated Seed Info\nImport Exact Offline Queue\nClear Exact Import\nExact Import Info\nHelp");
+    format(dialogText, sizeof(dialogText), "Create Parked Vehicle\nList / Select Parked Vehicle\nInput ID Manual\nReload Parked Vehicles\nDEPRECATED: Disable Curated Seed\nClear Curated Seed\nSource Policy / Curated Info\nImport Exact Offline Queue\nClear Exact Import\nExact Import Info\nHelp");
     ShowPlayerDialog(playerid, DIALOG_PARKVEH_MENU, DIALOG_STYLE_LIST, "Parked Vehicle Editor", dialogText, "Select", "Close");
     return 1;
 }
@@ -18313,9 +18331,9 @@ stock ShowParkedVehicleEditorHelp(playerid)
     SendClientMessage(playerid, COLOR_WHITE, "/parkvehmenu - dialog editor utama.");
     SendClientMessage(playerid, COLOR_WHITE, "/parkvehcreate [modelid] - create dari posisi admin.");
     SendClientMessage(playerid, COLOR_WHITE, "/parkvehrotate [id] [angle] - rotate arah parkir.");
-    SendClientMessage(playerid, COLOR_WHITE, "/parkvehseed - seed curated offline-like parked vehicles massal.");
+    SendClientMessage(playerid, COLOR_WHITE, "/parkvehseed - DEPRECATED: disable curated parked vehicle seed.");
     SendClientMessage(playerid, COLOR_WHITE, "/parkvehclearseed - disable hanya parked vehicle hasil curated seed.");
-    SendClientMessage(playerid, COLOR_WHITE, "/parkvehseedinfo - cek status curated seed.");
+    SendClientMessage(playerid, COLOR_WHITE, "/parkvehseedinfo - cek source policy dan status curated seed.");
     SendClientMessage(playerid, COLOR_WHITE, "/parkvehimportdb - import exact offline queue dari DB staging.");
     SendClientMessage(playerid, COLOR_WHITE, "/parkvehexactclear - disable hasil exact import.");
     SendClientMessage(playerid, COLOR_WHITE, "/parkvehexactinfo - cek queue/import exact offline.");
@@ -18330,18 +18348,35 @@ stock SeedOfflineParkedVehicleTemplate(playerid)
 {
     if (!IsAdminLevel(playerid, ADMIN_OWNER))
     {
-        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa seed curated parked vehicle template.");
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa menjalankan cleanup curated parked vehicle seed.");
         return 0;
     }
 
+    SendClientMessage(playerid, COLOR_YELLOW, "Offline-first policy aktif: curated parked vehicle seed sudah deprecated.");
+    SendClientMessage(playerid, COLOR_WHITE, "Curated source_tag offline_template_ls akan dinonaktifkan. Gunakan /parkvehimportdb untuk exact offline import.");
+
     new query[256];
     mysql_format(g_SQL, query, sizeof(query), "UPDATE parked_vehicles SET enabled=0 WHERE source_tag='%e'", PARKED_VEHICLE_OFFLINE_SEED_TAG);
-    mysql_tquery(g_SQL, query, "OnParkedVehicleOfflineSeedCleared", "i", playerid);
-
-    SendClientMessage(playerid, COLOR_YELLOW, "Menyiapkan curated offline-like parked vehicle seed...");
-    SendClientMessage(playerid, COLOR_WHITE, "Seed lama dengan source_tag offline_template_ls dinonaktifkan dulu agar tidak double aktif.");
+    mysql_tquery(g_SQL, query, "OnParkedVehicleCuratedSeedDeprecatedDisabled", "i", playerid);
     return 1;
 }
+
+public OnParkedVehicleCuratedSeedDeprecatedDisabled(playerid)
+{
+    new affectedRows = cache_affected_rows();
+    LoadParkedVehicles();
+
+    if (IsPlayerConnected(playerid))
+    {
+        new msg[144];
+        format(msg, sizeof(msg), "Curated parked vehicle seed disabled. Rows affected: %d", affectedRows);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+        SendClientMessage(playerid, COLOR_WHITE, "Manual vehicle dan exact import tidak ikut dinonaktifkan. Exact-source import jadi standar utama.");
+    }
+
+    return 1;
+}
+
 
 public OnParkedVehicleOfflineSeedCleared(playerid)
 {
@@ -18524,14 +18559,14 @@ public OnParkedVehicleOfflineSeedInfoLoaded(playerid)
     format(
         body,
         sizeof(body),
-        "Source Tag: %s\n\nDB Total Seed Rows: %d\nActive Seed Rows: %d\nDisabled Seed Rows: %d\n\nTemplate v0.24A awal (curated/offline-like, belum exact main.scm):\n- Taxi stand / bus terminal: 10\n- Gang/neighborhood cars: 10\n- Police / hospital / fire station: 10\n- Truck depot / industrial: 10\n- Beach / parking lots: 10\n\nCommands:\n/parkvehseed\n/parkvehclearseed\n/parkvehseedinfo",
+        "Deprecated Curated Source Tag: %s\n\nDB Total Curated Rows: %d\nActive Curated Rows: %d\nDisabled Curated Rows: %d\n\nOffline-first policy:\n- Curated v0.24A template is deprecated.\n- Use exact source import from SCM / IPL when possible.\n- Manual admin vehicles are only for correction/temporary placeholders.\n\nCommands:\n/parkvehseed = disable deprecated curated seed\n/parkvehclearseed = clear curated seed\n/parkvehseedinfo = source policy info\n/parkvehimportdb = exact offline import",
         PARKED_VEHICLE_OFFLINE_SEED_TAG,
         totalSeed,
         activeSeed,
         disabledSeed
     );
 
-    ShowPlayerDialog(playerid, DIALOG_PARKVEH_SEED_INFO, DIALOG_STYLE_MSGBOX, "Curated Parked Vehicle Seed Info", body, "Back", "Close");
+    ShowPlayerDialog(playerid, DIALOG_PARKVEH_SEED_INFO, DIALOG_STYLE_MSGBOX, "Curated Parked Vehicle Source Policy / Curated Info", body, "Back", "Close");
     return 1;
 }
 
@@ -18654,7 +18689,7 @@ public OnExactOfflineParkedVehicleImportInfoLoaded(playerid)
     format(
         body,
         sizeof(body),
-        "Exact Offline Import Tag: %s\n\nQueue Total Rows: %d\nQueue Active Rows: %d\nImported Total Rows: %d\nImported Active Rows: %d\n\nWorkflow:\n1. Extract/generate exact parked vehicle rows dari source offline milikmu.\n2. INSERT rows ke parked_vehicle_import_queue dengan source_tag offline_exact_ls.\n3. Jalankan /parkvehimportdb.\n4. Cek hasil dengan /parkvehlist.\n\nCommands:\n/parkvehimportdb\n/parkvehexactclear\n/parkvehexactinfo",
+        "Exact Offline Import Tag: %s\n\nQueue Total Rows: %d\nQueue Active Rows: %d\nImported Total Rows: %d\nImported Active Rows: %d\n\nWorkflow exact-source-first:\n1. Extract exact parked vehicles from GTA SA offline source owned by server dev.\n2. INSERT rows ke parked_vehicle_import_queue dengan source_tag offline_exact_ls.\n3. Jalankan /parkvehimportdb.\n4. Cek hasil dengan /parkvehlist.\n\nCurated template is deprecated and should stay disabled.\n\nCommands:\n/parkvehimportdb\n/parkvehexactclear\n/parkvehexactinfo",
         PARKED_VEHICLE_EXACT_IMPORT_TAG,
         queueTotal,
         queueActive,
@@ -26492,7 +26527,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24B Exact Offline Vehicle Importer");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24C Offline Source Cleanup");
+        SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -26501,13 +26537,13 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24B: exact offline parked vehicle importer via DB queue; restore interior position tetap aktif.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24C: offline-first cleanup, curated templates deprecated/disabled; exact source import jadi jalur utama.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24B: Exact offline parked vehicle importer, /parkvehimportdb, /parkvehexactinfo.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24A: Curated offline-like parked vehicle template seeder, /parkvehseed, /parkvehclearseed, /parkvehseedinfo.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24A: Curated parked vehicle seed is deprecated; use exact offline import when possible.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23F.3: Public interior checkpoint interaction, service point merah, exit fix.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23F.1: Public interior template fix, safer default coords, shared VW.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23B: Parked vehicle dialog menu dan interactive editor.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.23E.1: Offline pickup template seeder, /wpickupseed, /wpickupclearseed, /wpickupseedinfo.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.23E.1: Curated pickup seed is deprecated; use exact SCM/IPL pickup import when available.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23A.1: Parked vehicle engine default ON setelah create/reload.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22F.2: Gang HQ interior exit fix dan visitor access.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A.3: Runtime turf war config untuk balancing/testing.");

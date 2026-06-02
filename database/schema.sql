@@ -1348,3 +1348,13 @@ VALUES
 -- /pubintexactinfo
 -- /pubintimportdb
 -- /pubintlist
+
+-- SAIF / LSIF Dev v0.24E.2 — Public Interior Point Editor
+-- Adds custom service checkpoint override columns for public interiors.
+
+ALTER TABLE public_interiors
+    ADD COLUMN IF NOT EXISTS service_x FLOAT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS service_y FLOAT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS service_z FLOAT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS service_radius FLOAT NOT NULL DEFAULT 0;
+

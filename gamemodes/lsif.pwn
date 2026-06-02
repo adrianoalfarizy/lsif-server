@@ -409,6 +409,11 @@
 
 #define MAX_DYNAMIC_LOCATIONS 15
 #define MAX_DYNAMIC_OBJECTS 300
+#define MAX_PARKED_VEHICLES 200
+#define PARKED_VEHICLE_DEFAULT_RESPAWN 300
+#define PARKED_VEHICLE_DEFAULT_COLOR1 1
+#define PARKED_VEHICLE_DEFAULT_COLOR2 1
+#define PARKED_VEHICLE_LABEL_DRAW_DISTANCE 18.0
 #define DYN_OBJECT_NAME_SIZE 64
 #define MAPICON_BASE_DYNAMIC 80
 #define LOC_TYPE_SIZE 24
@@ -1215,6 +1220,24 @@ new Float:DynamicObjectRY[MAX_DYNAMIC_OBJECTS];
 new Float:DynamicObjectRZ[MAX_DYNAMIC_OBJECTS];
 new DynamicObjectName[MAX_DYNAMIC_OBJECTS][DYN_OBJECT_NAME_SIZE];
 
+new ParkedVehicleCount;
+new ParkedVehicleDBID[MAX_PARKED_VEHICLES];
+new ParkedVehicleEnabled[MAX_PARKED_VEHICLES];
+new ParkedVehicleRuntimeID[MAX_PARKED_VEHICLES];
+new ParkedVehicleModel[MAX_PARKED_VEHICLES];
+new ParkedVehicleColor1[MAX_PARKED_VEHICLES];
+new ParkedVehicleColor2[MAX_PARKED_VEHICLES];
+new ParkedVehicleRespawnDelay[MAX_PARKED_VEHICLES];
+new ParkedVehicleLocked[MAX_PARKED_VEHICLES];
+new ParkedVehicleInterior[MAX_PARKED_VEHICLES];
+new ParkedVehicleVirtualWorld[MAX_PARKED_VEHICLES];
+new Float:ParkedVehicleX[MAX_PARKED_VEHICLES];
+new Float:ParkedVehicleY[MAX_PARKED_VEHICLES];
+new Float:ParkedVehicleZ[MAX_PARKED_VEHICLES];
+new Float:ParkedVehicleA[MAX_PARKED_VEHICLES];
+new Text3D:ParkedVehicleLabel[MAX_PARKED_VEHICLES];
+
+
 
 new PlayerPendingLocCreateType[MAX_PLAYERS][LOC_TYPE_SIZE];
 new PlayerPendingObjLocCreate[MAX_PLAYERS];
@@ -1782,6 +1805,10 @@ forward OnDynamicObjectCreated(playerid);
 forward OnDynamicObjectUpdated(playerid);
 forward OnDynamicObjectDeleted(playerid);
 forward OnDynamicObjectPurgeLocationsDeleted(playerid, objectId);
+forward OnParkedVehiclesLoaded();
+forward OnParkedVehicleCreated(playerid);
+forward OnParkedVehicleUpdated(playerid);
+forward OnParkedVehicleDeleted(playerid);
 forward ReloadDynamicLocationsDelayed(playerid);
 
 
@@ -9716,7 +9743,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.22F.2 Gang HQ Interior Exit Fix");
+    SetGameModeText("SAIF Dev v0.23A Dynamic Parked Vehicle");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -9754,6 +9781,7 @@ public OnGameModeInit()
     LoadGangHQInteriors();
     LoadDynamicLocations();
     LoadDynamicObjects();
+    LoadParkedVehicles();
 
     for (new i = 0; i < MAX_PLAYERS; i++)
     {
@@ -9814,7 +9842,8 @@ public OnGameModeInit()
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
-    print("[SAIF] Gamemode v0.22F.2 Gang HQ Interior Exit Fix berhasil dijalankan.");
+    print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
+    print("[SAIF] Gamemode v0.23A Dynamic Parked Vehicle berhasil dijalankan.");
     return 1;
 }
 
@@ -9847,6 +9876,7 @@ public OnGameModeExit()
         g_TurfWarTimer = 0;
     }
 
+    DestroyAllParkedVehicleRuntime();
     DestroyDynamicWorldObjects();
     DestroyWorldInteractionMarkers();
 
@@ -13755,6 +13785,463 @@ stock GetFourParams(const input[], p1[], s1, p2[], s2, p3[], s3, p4[], s4)
         return 0;
     }
 
+    return 1;
+}
+
+
+stock ResetParkedVehicleArrays()
+{
+    ParkedVehicleCount = 0;
+
+    for (new i = 0; i < MAX_PARKED_VEHICLES; i++)
+    {
+        ParkedVehicleDBID[i] = 0;
+        ParkedVehicleEnabled[i] = 0;
+        ParkedVehicleRuntimeID[i] = INVALID_VEHICLE_ID;
+        ParkedVehicleModel[i] = 0;
+        ParkedVehicleColor1[i] = PARKED_VEHICLE_DEFAULT_COLOR1;
+        ParkedVehicleColor2[i] = PARKED_VEHICLE_DEFAULT_COLOR2;
+        ParkedVehicleRespawnDelay[i] = PARKED_VEHICLE_DEFAULT_RESPAWN;
+        ParkedVehicleLocked[i] = 0;
+        ParkedVehicleInterior[i] = 0;
+        ParkedVehicleVirtualWorld[i] = 0;
+        ParkedVehicleX[i] = 0.0;
+        ParkedVehicleY[i] = 0.0;
+        ParkedVehicleZ[i] = 0.0;
+        ParkedVehicleA[i] = 0.0;
+        ParkedVehicleLabel[i] = Text3D:INVALID_3DTEXT_ID;
+    }
+
+    return 1;
+}
+
+stock DestroyParkedVehicleRuntime(index)
+{
+    if (index < 0 || index >= MAX_PARKED_VEHICLES)
+    {
+        return 0;
+    }
+
+    if (ParkedVehicleLabel[index] != Text3D:INVALID_3DTEXT_ID)
+    {
+        Delete3DTextLabel(ParkedVehicleLabel[index]);
+        ParkedVehicleLabel[index] = Text3D:INVALID_3DTEXT_ID;
+    }
+
+    if (ParkedVehicleRuntimeID[index] != INVALID_VEHICLE_ID)
+    {
+        DestroyVehicle(ParkedVehicleRuntimeID[index]);
+        ParkedVehicleRuntimeID[index] = INVALID_VEHICLE_ID;
+    }
+
+    return 1;
+}
+
+stock DestroyAllParkedVehicleRuntime()
+{
+    for (new i = 0; i < MAX_PARKED_VEHICLES; i++)
+    {
+        DestroyParkedVehicleRuntime(i);
+    }
+
+    return 1;
+}
+
+stock GetParkedVehicleIndexByDBID(dbid)
+{
+    for (new i = 0; i < ParkedVehicleCount; i++)
+    {
+        if (ParkedVehicleDBID[i] == dbid)
+        {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+stock GetParkedVehicleIndexByRuntimeID(vehicleid)
+{
+    for (new i = 0; i < ParkedVehicleCount; i++)
+    {
+        if (ParkedVehicleRuntimeID[i] == vehicleid)
+        {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+stock CreateParkedVehicleRuntime(index)
+{
+    if (index < 0 || index >= ParkedVehicleCount)
+    {
+        return 0;
+    }
+
+    DestroyParkedVehicleRuntime(index);
+
+    if (!ParkedVehicleEnabled[index])
+    {
+        return 1;
+    }
+
+    if (ParkedVehicleModel[index] < 400 || ParkedVehicleModel[index] > 611)
+    {
+        return 0;
+    }
+
+    if (ParkedVehicleRespawnDelay[index] < 30)
+    {
+        ParkedVehicleRespawnDelay[index] = 30;
+    }
+
+    ParkedVehicleRuntimeID[index] = CreateVehicle(
+                                        ParkedVehicleModel[index],
+                                        ParkedVehicleX[index],
+                                        ParkedVehicleY[index],
+                                        ParkedVehicleZ[index],
+                                        ParkedVehicleA[index],
+                                        ParkedVehicleColor1[index],
+                                        ParkedVehicleColor2[index],
+                                        ParkedVehicleRespawnDelay[index]
+                                    );
+
+    if (ParkedVehicleRuntimeID[index] == INVALID_VEHICLE_ID)
+    {
+        return 0;
+    }
+
+    LinkVehicleToInterior(ParkedVehicleRuntimeID[index], ParkedVehicleInterior[index]);
+    SetVehicleVirtualWorld(ParkedVehicleRuntimeID[index], ParkedVehicleVirtualWorld[index]);
+
+    new doors = ParkedVehicleLocked[index] ? 1 : 0;
+    SetVehicleParamsEx(ParkedVehicleRuntimeID[index], 0, 0, 0, doors, 0, 0, 0);
+
+    new labelText[128];
+    format(labelText, sizeof(labelText), "[PARKED VEHICLE]\nID: %d | Model: %d", ParkedVehicleDBID[index], ParkedVehicleModel[index]);
+    ParkedVehicleLabel[index] = Create3DTextLabel(
+                                    labelText,
+                                    COLOR_GREY,
+                                    ParkedVehicleX[index],
+                                    ParkedVehicleY[index],
+                                    ParkedVehicleZ[index] + 1.2,
+                                    PARKED_VEHICLE_LABEL_DRAW_DISTANCE,
+                                    ParkedVehicleVirtualWorld[index],
+                                    true
+                                );
+
+    return 1;
+}
+
+stock LoadParkedVehicles()
+{
+    DestroyAllParkedVehicleRuntime();
+    ResetParkedVehicleArrays();
+    mysql_tquery(g_SQL, "SELECT id, modelid, color1, color2, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, respawn_delay, locked, enabled FROM parked_vehicles WHERE enabled=1 ORDER BY id ASC LIMIT 200", "OnParkedVehiclesLoaded");
+    return 1;
+}
+
+public OnParkedVehiclesLoaded()
+{
+    new rows = cache_num_rows();
+    new loaded = 0;
+
+    for (new i = 0; i < rows && i < MAX_PARKED_VEHICLES; i++)
+    {
+        ParkedVehicleDBID[loaded] = 0;
+        cache_get_value_name_int(i, "id", ParkedVehicleDBID[loaded]);
+        cache_get_value_name_int(i, "modelid", ParkedVehicleModel[loaded]);
+        cache_get_value_name_int(i, "color1", ParkedVehicleColor1[loaded]);
+        cache_get_value_name_int(i, "color2", ParkedVehicleColor2[loaded]);
+        cache_get_value_name_float(i, "pos_x", ParkedVehicleX[loaded]);
+        cache_get_value_name_float(i, "pos_y", ParkedVehicleY[loaded]);
+        cache_get_value_name_float(i, "pos_z", ParkedVehicleZ[loaded]);
+        cache_get_value_name_float(i, "pos_a", ParkedVehicleA[loaded]);
+        cache_get_value_name_int(i, "interior", ParkedVehicleInterior[loaded]);
+        cache_get_value_name_int(i, "virtual_world", ParkedVehicleVirtualWorld[loaded]);
+        cache_get_value_name_int(i, "respawn_delay", ParkedVehicleRespawnDelay[loaded]);
+        cache_get_value_name_int(i, "locked", ParkedVehicleLocked[loaded]);
+        cache_get_value_name_int(i, "enabled", ParkedVehicleEnabled[loaded]);
+
+        if (ParkedVehicleModel[loaded] < 400 || ParkedVehicleModel[loaded] > 611)
+        {
+            continue;
+        }
+
+        loaded++;
+    }
+
+    ParkedVehicleCount = loaded;
+
+    for (new idx = 0; idx < ParkedVehicleCount; idx++)
+    {
+        CreateParkedVehicleRuntime(idx);
+    }
+
+    printf("[SAIF] Dynamic parked vehicles loaded: %d rows, %d runtime.", rows, ParkedVehicleCount);
+    return 1;
+}
+
+stock CreateParkedVehicleAtPlayer(playerid, modelid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuat parked vehicle.");
+        return 0;
+    }
+
+    if (modelid < 400 || modelid > 611)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Model kendaraan tidak valid. Gunakan model ID 400 sampai 611.");
+        return 0;
+    }
+
+    new Float:x;
+    new Float:y;
+    new Float:z;
+    new Float:a;
+    new query[768];
+
+    GetPlayerPos(playerid, x, y, z);
+    GetPlayerFacingAngle(playerid, a);
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO parked_vehicles (modelid, color1, color2, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, respawn_delay, locked, enabled) VALUES (%d, %d, %d, %f, %f, %f, %f, %d, %d, %d, %d, 1)",
+        modelid,
+        PARKED_VEHICLE_DEFAULT_COLOR1,
+        PARKED_VEHICLE_DEFAULT_COLOR2,
+        x,
+        y,
+        z,
+        a,
+        GetPlayerInterior(playerid),
+        GetPlayerVirtualWorld(playerid),
+        PARKED_VEHICLE_DEFAULT_RESPAWN,
+        0
+    );
+    mysql_tquery(g_SQL, query, "OnParkedVehicleCreated", "i", playerid);
+    return 1;
+}
+
+public OnParkedVehicleCreated(playerid)
+{
+    if (IsPlayerConnected(playerid))
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "Parked vehicle berhasil dibuat dan disimpan ke database.");
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan /parkvehlist untuk melihat ID, atau /parkvehinfo [id] untuk detail.");
+    }
+
+    LoadParkedVehicles();
+    return 1;
+}
+
+public OnParkedVehicleUpdated(playerid)
+{
+    if (IsPlayerConnected(playerid))
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "Parked vehicle berhasil diupdate. Runtime direload.");
+    }
+
+    LoadParkedVehicles();
+    return 1;
+}
+
+public OnParkedVehicleDeleted(playerid)
+{
+    if (IsPlayerConnected(playerid))
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "Parked vehicle berhasil dihapus/nonaktifkan. Runtime direload.");
+    }
+
+    LoadParkedVehicles();
+    return 1;
+}
+
+stock ListParkedVehiclesToChat(playerid)
+{
+    new msg[192];
+
+    SendClientMessage(playerid, COLOR_YELLOW, "========== PARKED VEHICLES ==========");
+
+    if (ParkedVehicleCount <= 0)
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "Belum ada parked vehicle aktif.");
+        return 1;
+    }
+
+    for (new i = 0; i < ParkedVehicleCount; i++)
+    {
+        format(msg, sizeof(msg), "ID %d | Model %d | Color %d/%d | Locked %d | Respawn %ds | VW %d", ParkedVehicleDBID[i], ParkedVehicleModel[i], ParkedVehicleColor1[i], ParkedVehicleColor2[i], ParkedVehicleLocked[i], ParkedVehicleRespawnDelay[i], ParkedVehicleVirtualWorld[i]);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+    }
+
+    return 1;
+}
+
+stock ShowParkedVehicleInfo(playerid, dbid)
+{
+    new index = GetParkedVehicleIndexByDBID(dbid);
+    new msg[192];
+
+    if (index == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Parked vehicle ID tidak ditemukan atau belum aktif.");
+        return 0;
+    }
+
+    SendClientMessage(playerid, COLOR_YELLOW, "========== PARKED VEHICLE INFO ==========");
+    format(msg, sizeof(msg), "ID: %d | Runtime: %d | Model: %d | Enabled: %d", ParkedVehicleDBID[index], ParkedVehicleRuntimeID[index], ParkedVehicleModel[index], ParkedVehicleEnabled[index]);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+    format(msg, sizeof(msg), "Color: %d/%d | Locked: %d | Respawn: %d seconds", ParkedVehicleColor1[index], ParkedVehicleColor2[index], ParkedVehicleLocked[index], ParkedVehicleRespawnDelay[index]);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+    format(msg, sizeof(msg), "Pos: %.2f %.2f %.2f | A %.2f | Interior %d | VW %d", ParkedVehicleX[index], ParkedVehicleY[index], ParkedVehicleZ[index], ParkedVehicleA[index], ParkedVehicleInterior[index], ParkedVehicleVirtualWorld[index]);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+    SendClientMessage(playerid, COLOR_CYAN, "Commands: /parkvehgoto, /parkvehmove, /parkvehcolor, /parkvehrespawn, /parkvehlock, /parkvehdelete");
+    return 1;
+}
+
+stock GotoParkedVehicle(playerid, dbid)
+{
+    new index = GetParkedVehicleIndexByDBID(dbid);
+
+    if (index == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Parked vehicle ID tidak ditemukan.");
+        return 0;
+    }
+
+    SetPlayerInterior(playerid, ParkedVehicleInterior[index]);
+    SetPlayerVirtualWorld(playerid, ParkedVehicleVirtualWorld[index]);
+    SetPlayerPos(playerid, ParkedVehicleX[index] + 2.0, ParkedVehicleY[index], ParkedVehicleZ[index]);
+    SetPlayerFacingAngle(playerid, ParkedVehicleA[index]);
+    SendClientMessage(playerid, COLOR_GREEN, "Kamu teleport ke parked vehicle.");
+    return 1;
+}
+
+stock MoveParkedVehicleToPlayer(playerid, dbid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa memindahkan parked vehicle.");
+        return 0;
+    }
+
+    if (GetParkedVehicleIndexByDBID(dbid) == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Parked vehicle ID tidak ditemukan.");
+        return 0;
+    }
+
+    new Float:x;
+    new Float:y;
+    new Float:z;
+    new Float:a;
+    new query[512];
+
+    GetPlayerPos(playerid, x, y, z);
+    GetPlayerFacingAngle(playerid, a);
+
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE parked_vehicles SET pos_x=%f, pos_y=%f, pos_z=%f, pos_a=%f, interior=%d, virtual_world=%d WHERE id=%d LIMIT 1", x, y, z, a, GetPlayerInterior(playerid), GetPlayerVirtualWorld(playerid), dbid);
+    mysql_tquery(g_SQL, query, "OnParkedVehicleUpdated", "i", playerid);
+    return 1;
+}
+
+stock UpdateParkedVehicleColors(playerid, dbid, color1, color2)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa mengubah color parked vehicle.");
+        return 0;
+    }
+
+    if (GetParkedVehicleIndexByDBID(dbid) == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Parked vehicle ID tidak ditemukan.");
+        return 0;
+    }
+
+    if (color1 < 0 || color1 > 255 || color2 < 0 || color2 > 255)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Color ID harus 0 sampai 255.");
+        return 0;
+    }
+
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE parked_vehicles SET color1=%d, color2=%d WHERE id=%d LIMIT 1", color1, color2, dbid);
+    mysql_tquery(g_SQL, query, "OnParkedVehicleUpdated", "i", playerid);
+    return 1;
+}
+
+stock UpdateParkedVehicleRespawn(playerid, dbid, seconds)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa mengubah respawn parked vehicle.");
+        return 0;
+    }
+
+    if (GetParkedVehicleIndexByDBID(dbid) == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Parked vehicle ID tidak ditemukan.");
+        return 0;
+    }
+
+    if (seconds < 30 || seconds > 3600)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Respawn delay harus 30 sampai 3600 detik.");
+        return 0;
+    }
+
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE parked_vehicles SET respawn_delay=%d WHERE id=%d LIMIT 1", seconds, dbid);
+    mysql_tquery(g_SQL, query, "OnParkedVehicleUpdated", "i", playerid);
+    return 1;
+}
+
+stock UpdateParkedVehicleLock(playerid, dbid, locked)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa lock/unlock parked vehicle.");
+        return 0;
+    }
+
+    if (GetParkedVehicleIndexByDBID(dbid) == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Parked vehicle ID tidak ditemukan.");
+        return 0;
+    }
+
+    locked = locked ? 1 : 0;
+
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE parked_vehicles SET locked=%d WHERE id=%d LIMIT 1", locked, dbid);
+    mysql_tquery(g_SQL, query, "OnParkedVehicleUpdated", "i", playerid);
+    return 1;
+}
+
+stock DeleteParkedVehicle(playerid, dbid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa menghapus parked vehicle.");
+        return 0;
+    }
+
+    if (GetParkedVehicleIndexByDBID(dbid) == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Parked vehicle ID tidak ditemukan.");
+        return 0;
+    }
+
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE parked_vehicles SET enabled=0 WHERE id=%d LIMIT 1", dbid);
+    mysql_tquery(g_SQL, query, "OnParkedVehicleDeleted", "i", playerid);
     return 1;
 }
 
@@ -20911,7 +21398,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.22F.1 Gang HQ Interior Visitor Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.23A Dynamic Parked Vehicle");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -20920,7 +21407,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.22F.1: Gang HQ entry arrow + public visitor entry fix.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.23A: Dynamic parked vehicle system untuk offline-like world.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.22F.2: Gang HQ interior exit fix dan visitor access.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A.3: Runtime turf war config untuk balancing/testing.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A.2: Turf HUD compact menggunakan TextDraw kecil.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A: Basic turf war system.");
@@ -21260,6 +21748,155 @@ public OnPlayerCommandText(playerid, cmdtext[])
         DestroyVehicle(PlayerVehicle[playerid]);
         PlayerVehicle[playerid] = INVALID_VEHICLE_ID;
         SendClientMessage(playerid, COLOR_GREEN, "Kendaraan sementara berhasil dihapus.");
+        return 1;
+    }
+
+
+    if (!strcmp(cmdtext, "/parkvehlist", true))
+    {
+        ListParkedVehiclesToChat(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/parkvehreload", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa reload parked vehicle.");
+            return 1;
+        }
+
+        LoadParkedVehicles();
+        SendClientMessage(playerid, COLOR_GREEN, "Reload dynamic parked vehicles dari database.");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/parkvehcreate ", true) == 0)
+    {
+        new modelStr[16];
+
+        if (!GetOneParam(cmdtext[15], modelStr, sizeof(modelStr)) || !IsNumericString(modelStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /parkvehcreate [modelid]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /parkvehcreate 420 untuk taxi stand.");
+            return 1;
+        }
+
+        CreateParkedVehicleAtPlayer(playerid, strval(modelStr));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/parkvehcreate", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /parkvehcreate [modelid]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/parkvehinfo ", true) == 0)
+    {
+        new idStr[16];
+
+        if (!GetOneParam(cmdtext[13], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /parkvehinfo [id]");
+            return 1;
+        }
+
+        ShowParkedVehicleInfo(playerid, strval(idStr));
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/parkvehgoto ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa goto parked vehicle.");
+            return 1;
+        }
+
+        new idStr[16];
+
+        if (!GetOneParam(cmdtext[13], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /parkvehgoto [id]");
+            return 1;
+        }
+
+        GotoParkedVehicle(playerid, strval(idStr));
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/parkvehmove ", true) == 0)
+    {
+        new idStr[16];
+
+        if (!GetOneParam(cmdtext[13], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /parkvehmove [id]");
+            return 1;
+        }
+
+        MoveParkedVehicleToPlayer(playerid, strval(idStr));
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/parkvehdelete ", true) == 0)
+    {
+        new idStr[16];
+
+        if (!GetOneParam(cmdtext[15], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /parkvehdelete [id]");
+            return 1;
+        }
+
+        DeleteParkedVehicle(playerid, strval(idStr));
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/parkvehcolor ", true) == 0)
+    {
+        new idStr[16];
+        new color1Str[16];
+        new color2Str[16];
+
+        if (!GetThreeParams(cmdtext[14], idStr, sizeof(idStr), color1Str, sizeof(color1Str), color2Str, sizeof(color2Str)) || !IsNumericString(idStr) || !IsNumericString(color1Str) || !IsNumericString(color2Str))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /parkvehcolor [id] [color1] [color2]");
+            return 1;
+        }
+
+        UpdateParkedVehicleColors(playerid, strval(idStr), strval(color1Str), strval(color2Str));
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/parkvehrespawn ", true) == 0)
+    {
+        new idStr[16];
+        new secondsStr[16];
+
+        if (!GetTwoParams(cmdtext[16], idStr, sizeof(idStr), secondsStr, sizeof(secondsStr)) || !IsNumericString(idStr) || !IsNumericString(secondsStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /parkvehrespawn [id] [seconds]");
+            return 1;
+        }
+
+        UpdateParkedVehicleRespawn(playerid, strval(idStr), strval(secondsStr));
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/parkvehlock ", true) == 0)
+    {
+        new idStr[16];
+        new lockedStr[16];
+
+        if (!GetTwoParams(cmdtext[13], idStr, sizeof(idStr), lockedStr, sizeof(lockedStr)) || !IsNumericString(idStr) || !IsNumericString(lockedStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /parkvehlock [id] [0/1]");
+            return 1;
+        }
+
+        UpdateParkedVehicleLock(playerid, strval(idStr), strval(lockedStr));
         return 1;
     }
 

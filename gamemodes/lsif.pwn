@@ -10058,7 +10058,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24F.1 Configurable Ammu-Nation");
+    SetGameModeText("SAIF Dev v0.24F.2 Ammu Config Dialog Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -10163,7 +10163,7 @@ public OnGameModeInit()
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24F.1 Configurable Ammu-Nation berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24F.2 Ammu Config Dialog Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -23298,21 +23298,21 @@ stock ShowWeaponPurchaseMenuDialog(playerid, weaponIndex)
     PlayerDialogWeaponIndex[playerid] = weaponIndex;
 
     new dialogText[512];
+    new title[96];
+
+    format(title, sizeof(title), "Buy %s | Cash $%d", WeaponShopName[weaponIndex], PlayerMoney[playerid]);
     format(
         dialogText,
         sizeof(dialogText),
-        "Weapon: %s\nPrice/pack: $%d\nAmmo/pack: %d\nCash kamu: $%d\n\nBuy 1 Pack - Ammo %d - $%d\nBuy 5 Packs - Ammo %d - $%d\nCustom Pack Amount\nBack to Catalog",
-        WeaponShopName[weaponIndex],
-        WeaponShopPrice[weaponIndex],
-        WeaponShopAmmo[weaponIndex],
-        PlayerMoney[playerid],
+        "Buy 1 Pack - Ammo %d - $%d\nBuy 5 Packs - Ammo %d - $%d\nCustom Pack Amount\nBack to Catalog",
         WeaponShopAmmo[weaponIndex],
         WeaponShopPrice[weaponIndex],
         WeaponShopAmmo[weaponIndex] * 5,
         WeaponShopPrice[weaponIndex] * 5
     );
 
-    ShowPlayerDialog(playerid, DIALOG_WEAPON_PURCHASE_MENU, DIALOG_STYLE_LIST, "Ammu-Nation Purchase", dialogText, "Pilih", "Back");
+    SendClientMessage(playerid, COLOR_YELLOW, "Ammu-Nation: pilih pack. Setelah beli, menu ini tetap terbuka untuk pembelian berikutnya.");
+    ShowPlayerDialog(playerid, DIALOG_WEAPON_PURCHASE_MENU, DIALOG_STYLE_LIST, title, dialogText, "Pilih", "Back");
     return 1;
 }
 
@@ -23430,8 +23430,12 @@ stock ShowAmmuConfigAction(playerid, weaponIndex)
     PlayerEditingWeaponShopIndex[playerid] = weaponIndex;
 
     new body[512];
-    format(body, sizeof(body), "Weapon: %s\nWeapon ID: %d\nPrice/pack: $%d\nAmmo/pack: %d\nStatus: %s\n\nEdit Price\nEdit Ammo Per Pack\nToggle Enable/Disable\nBack to List", WeaponShopName[weaponIndex], WeaponShopWeaponID[weaponIndex], WeaponShopPrice[weaponIndex], WeaponShopAmmo[weaponIndex], WeaponShopEnabled[weaponIndex] ? ("ON") : ("OFF"));
-    ShowPlayerDialog(playerid, DIALOG_AMMU_CONFIG_ACTION, DIALOG_STYLE_LIST, "Weapon Config Action", body, "Pilih", "Back");
+    new title[96];
+
+    format(title, sizeof(title), "Config %s | ID %d", WeaponShopName[weaponIndex], WeaponShopWeaponID[weaponIndex]);
+    format(body, sizeof(body), "Edit Price - Current $%d\nEdit Ammo Per Pack - Current %d\nToggle Enable/Disable - Current %s\nBack to Weapon List", WeaponShopPrice[weaponIndex], WeaponShopAmmo[weaponIndex], WeaponShopEnabled[weaponIndex] ? ("ON") : ("OFF"));
+    SendClientMessage(playerid, COLOR_YELLOW, "Ammu Config: pilih Edit Price atau Edit Ammo, lalu input value baru.");
+    ShowPlayerDialog(playerid, DIALOG_AMMU_CONFIG_ACTION, DIALOG_STYLE_LIST, title, body, "Pilih", "Back");
     return 1;
 }
 
@@ -27892,7 +27896,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24F Offline Ammu-Nation Weapon Menu");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24F.2 Ammu Config Dialog Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -27902,6 +27906,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24F.2: Ammu config dialog fix, edit price/ammo/select action now responds correctly.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24F.1: Configurable Ammu-Nation price/ammo and repeat purchase.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24F: Offline-like Ammu-Nation weapon catalog/pricing, expanded saved loadout.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24E.4: Public interior facing apply fix.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24D: SCM exact pickup import queue, weapon pickups, curated pickup seed tetap deprecated.");

@@ -171,6 +171,7 @@
 #define DIALOG_WPICKUP_COOLDOWN_INPUT 1151
 #define DIALOG_WPICKUP_ENABLE_MENU 1152
 #define DIALOG_WPICKUP_DELETE_CONFIRM 1153
+#define DIALOG_WPICKUP_SEED_INFO 1154
 
 
 
@@ -461,6 +462,7 @@
 #define WORLD_PICKUP_TYPE_HIDDEN 4
 #define WORLD_PICKUP_DEFAULT_COOLDOWN 60
 #define WORLD_PICKUP_LABEL_DRAW_DISTANCE 18.0
+#define WORLD_PICKUP_OFFLINE_SEED_TAG "offline_template_ls"
 #define DYN_OBJECT_NAME_SIZE 64
 #define MAPICON_BASE_DYNAMIC 80
 #define LOC_TYPE_SIZE 24
@@ -1879,6 +1881,10 @@ forward OnWorldPickupsLoaded();
 forward OnWorldPickupCreated(playerid);
 forward OnWorldPickupUpdated(playerid);
 forward OnWorldPickupDeleted(playerid);
+forward OnWorldPickupSeedClearedForSeed(playerid);
+forward OnWorldPickupSeedCleared(playerid);
+forward OnWorldPickupSeedReloadDelayed(playerid);
+forward OnWorldPickupSeedInfoLoaded(playerid);
 forward RespawnWorldPickupByDBID(dbid);
 forward ReloadDynamicLocationsDelayed(playerid);
 
@@ -9814,7 +9820,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.23E Offline Pickup System");
+    SetGameModeText("SAIF Dev v0.23E.1 Pickup Template Seeder");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -9915,7 +9921,7 @@ public OnGameModeInit()
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.23E Offline Pickup System berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.23E.1 Pickup Template Seeder berhasil dijalankan.");
     return 1;
 }
 
@@ -11861,12 +11867,15 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 0: ShowWorldPickupCreateTypeInput(playerid);
             case 1: ShowWorldPickupListDialog(playerid);
             case 2: ShowWorldPickupSelectInput(playerid);
-            case 3:
+            case 3: SeedOfflinePickupTemplate(playerid);
+            case 4: ClearOfflinePickupSeed(playerid);
+            case 5: ShowOfflinePickupSeedInfo(playerid);
+            case 6:
             {
                 LoadWorldPickups();
                 SendClientMessage(playerid, COLOR_GREEN, "World pickups direload dari database.");
             }
-            case 4: ShowWorldPickupHelp(playerid);
+            case 7: ShowWorldPickupHelp(playerid);
         }
         return 1;
     }
@@ -15420,6 +15429,185 @@ stock DeleteWorldPickup(playerid, dbid)
     return UpdateWorldPickupEnabled(playerid, dbid, 0);
 }
 
+
+stock SeedOfflinePickupRow(const typeText[], const displayName[], modelid, Float:x, Float:y, Float:z, amount, cooldown)
+{
+    new query[768];
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO world_pickups (pickup_type, display_name, model_id, pos_x, pos_y, pos_z, interior, virtual_world, amount, cooldown_seconds, source_tag, enabled) VALUES ('%e', '%e', %d, %f, %f, %f, 0, 0, %d, %d, '%e', 1)",
+        typeText,
+        displayName,
+        modelid,
+        x,
+        y,
+        z,
+        amount,
+        cooldown,
+        WORLD_PICKUP_OFFLINE_SEED_TAG
+    );
+
+    mysql_tquery(g_SQL, query);
+    return 1;
+}
+
+stock InsertOfflinePickupTemplateRows()
+{
+    // Curated Los Santos offline-like seed. Ini bukan dump mentah main.scm.
+    // Nanti bisa diganti/ditambah dari importer template offline yang lebih lengkap.
+
+    // Police bribe / wanted-star style pickups.
+    SeedOfflinePickupRow("bribe", "LS Bribe - LSPD Alley", 1247, 1566.20, -1695.10, 5.90, 1, 180);
+    SeedOfflinePickupRow("bribe", "LS Bribe - Pershing Square", 1247, 1484.30, -1744.60, 13.55, 1, 180);
+    SeedOfflinePickupRow("bribe", "LS Bribe - Unity Station", 1247, 1815.60, -1893.80, 13.58, 1, 180);
+    SeedOfflinePickupRow("bribe", "LS Bribe - Jefferson Backstreet", 1247, 2182.40, -1161.70, 23.82, 1, 180);
+    SeedOfflinePickupRow("bribe", "LS Bribe - Ocean Docks", 1247, 2574.30, -2218.50, 13.54, 1, 180);
+    SeedOfflinePickupRow("bribe", "LS Bribe - Market Alley", 1247, 1114.50, -1494.80, 15.79, 1, 180);
+    SeedOfflinePickupRow("bribe", "LS Bribe - Santa Maria Beach", 1247, 367.50, -2048.70, 7.83, 1, 180);
+    SeedOfflinePickupRow("bribe", "LS Bribe - LS Airport Lot", 1247, 1952.20, -2182.40, 13.55, 1, 180);
+
+    // Health pickups around public/safe spots.
+    SeedOfflinePickupRow("health", "LS Health - County General", 1240, 1176.70, -1323.80, 14.07, 35, 120);
+    SeedOfflinePickupRow("health", "LS Health - Jefferson Hospital", 1240, 2034.20, -1403.40, 17.25, 35, 120);
+    SeedOfflinePickupRow("health", "LS Health - Grove Street", 1240, 2495.30, -1687.90, 13.52, 35, 120);
+    SeedOfflinePickupRow("health", "LS Health - Idlewood", 1240, 1957.40, -1714.20, 15.97, 35, 120);
+    SeedOfflinePickupRow("health", "LS Health - Santa Maria", 1240, 332.80, -1809.40, 4.47, 35, 120);
+    SeedOfflinePickupRow("health", "LS Health - East Beach", 1240, 2737.80, -1765.30, 44.67, 35, 120);
+
+    // Armor pickups as rare safety/combat preparation points.
+    SeedOfflinePickupRow("armor", "LS Armor - LSPD Garage", 1242, 1548.60, -1632.20, 13.38, 50, 240);
+    SeedOfflinePickupRow("armor", "LS Armor - Grove Backyard", 1242, 2522.40, -1679.60, 15.50, 50, 240);
+    SeedOfflinePickupRow("armor", "LS Armor - Ocean Docks Warehouse", 1242, 2465.80, -2117.40, 13.55, 50, 240);
+    SeedOfflinePickupRow("armor", "LS Armor - East Los Santos", 1242, 2385.70, -1281.40, 25.13, 50, 240);
+    SeedOfflinePickupRow("armor", "LS Armor - Verdant Bluffs", 1242, 1335.50, -631.80, 109.13, 50, 240);
+
+    // Hidden/world pickups for exploration rewards.
+    SeedOfflinePickupRow("hidden", "LS Hidden - Vinewood Sign Trail", 1274, 1382.90, -806.10, 86.12, 500, 300);
+    SeedOfflinePickupRow("hidden", "LS Hidden - Mulholland Overlook", 1274, 1263.30, -781.20, 92.03, 500, 300);
+    SeedOfflinePickupRow("hidden", "LS Hidden - Verona Beach Pier", 1274, 850.20, -2067.30, 12.86, 500, 300);
+    SeedOfflinePickupRow("hidden", "LS Hidden - Airport Service Road", 1274, 1701.30, -2347.80, 13.55, 500, 300);
+    SeedOfflinePickupRow("hidden", "LS Hidden - LS Docks Crane", 1274, 2773.90, -2455.30, 13.63, 500, 300);
+    SeedOfflinePickupRow("hidden", "LS Hidden - Downtown Rooftop", 1274, 1407.30, -1367.50, 34.50, 500, 300);
+
+    return 1;
+}
+
+stock SeedOfflinePickupTemplate(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa seed offline pickup template.");
+        return 0;
+    }
+
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE world_pickups SET enabled=0 WHERE source_tag='%e'", WORLD_PICKUP_OFFLINE_SEED_TAG);
+    mysql_tquery(g_SQL, query, "OnWorldPickupSeedClearedForSeed", "i", playerid);
+
+    SendClientMessage(playerid, COLOR_YELLOW, "Offline pickup template seed dimulai. Template lama dari source yang sama akan di-refresh.");
+    return 1;
+}
+
+public OnWorldPickupSeedClearedForSeed(playerid)
+{
+    InsertOfflinePickupTemplateRows();
+    SetTimerEx("OnWorldPickupSeedReloadDelayed", 1500, false, "i", playerid);
+    return 1;
+}
+
+public OnWorldPickupSeedReloadDelayed(playerid)
+{
+    LoadWorldPickups();
+
+    if (IsPlayerConnected(playerid))
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "Offline pickup template berhasil di-seed dan world pickups direload.");
+        SendClientMessage(playerid, COLOR_WHITE, "Gunakan /wpickuplist atau /wpickupmenu untuk review/edit pickup hasil seed.");
+    }
+
+    return 1;
+}
+
+stock ClearOfflinePickupSeed(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa clear offline pickup seed.");
+        return 0;
+    }
+
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE world_pickups SET enabled=0 WHERE source_tag='%e'", WORLD_PICKUP_OFFLINE_SEED_TAG);
+    mysql_tquery(g_SQL, query, "OnWorldPickupSeedCleared", "i", playerid);
+    return 1;
+}
+
+public OnWorldPickupSeedCleared(playerid)
+{
+    LoadWorldPickups();
+
+    if (IsPlayerConnected(playerid))
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "Offline pickup seed dinonaktifkan. Manual pickup tidak ikut dihapus.");
+    }
+
+    return 1;
+}
+
+stock ShowOfflinePickupSeedInfo(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa cek offline pickup seed info.");
+        return 0;
+    }
+
+    new query[256];
+    mysql_format(g_SQL, query, sizeof(query), "SELECT pickup_type, COUNT(*) AS total FROM world_pickups WHERE source_tag='%e' AND enabled=1 GROUP BY pickup_type ORDER BY pickup_type ASC", WORLD_PICKUP_OFFLINE_SEED_TAG);
+    mysql_tquery(g_SQL, query, "OnWorldPickupSeedInfoLoaded", "i", playerid);
+    return 1;
+}
+
+public OnWorldPickupSeedInfoLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    new rows = cache_num_rows();
+    new body[1024];
+    new line[128];
+    new typeText[32];
+    new total;
+
+    strcat(body, "Offline Pickup Template Seed\n\n", sizeof(body));
+    strcat(body, "source_tag: offline_template_ls\n", sizeof(body));
+    strcat(body, "Isi awal: bribe, health, armor, hidden/world reward area Los Santos.\n\n", sizeof(body));
+
+    if (rows <= 0)
+    {
+        strcat(body, "Belum ada seed aktif. Gunakan /wpickupseed.\n", sizeof(body));
+    }
+    else
+    {
+        for (new i = 0; i < rows; i++)
+        {
+            cache_get_value_name(i, "pickup_type", typeText, sizeof(typeText));
+            cache_get_value_name_int(i, "total", total);
+            format(line, sizeof(line), "%s: %d pickup\n", typeText, total);
+            strcat(body, line, sizeof(body));
+        }
+    }
+
+    strcat(body, "\nCatatan: ini curated offline-like seed, bukan full dump main.scm.\nImporter template offline yang lebih lengkap bisa ditambah setelah ini.", sizeof(body));
+    ShowPlayerDialog(playerid, DIALOG_WPICKUP_SEED_INFO, DIALOG_STYLE_MSGBOX, "Offline Pickup Seed Info", body, "OK", "Close");
+    return 1;
+}
+
 stock ShowWorldPickupMenu(playerid)
 {
     if (!IsAdminLevel(playerid, ADMIN_OWNER))
@@ -15428,7 +15616,7 @@ stock ShowWorldPickupMenu(playerid)
         return 0;
     }
 
-    ShowPlayerDialog(playerid, DIALOG_WPICKUP_MENU, DIALOG_STYLE_LIST, "Offline World Pickup Editor", "Create Pickup\nList / Select Pickup\nInput ID Manual\nReload Pickups\nHelp", "Select", "Close");
+    ShowPlayerDialog(playerid, DIALOG_WPICKUP_MENU, DIALOG_STYLE_LIST, "Offline World Pickup Editor", "Create Pickup\nList / Select Pickup\nInput ID Manual\nSeed Offline Template\nClear Offline Seed\nSeed Info\nReload Pickups\nHelp", "Select", "Close");
     return 1;
 }
 
@@ -15553,8 +15741,9 @@ stock ShowWorldPickupHelp(playerid)
     strcat(body, "- armor: menambah armor\n", sizeof(body));
     strcat(body, "- hidden: reward cash/world pickup\n\n", sizeof(body));
     strcat(body, "Command fallback:\n", sizeof(body));
-    strcat(body, "/wpickupmenu, /wpickupcreate, /wpickuplist, /wpickupinfo, /wpickupgoto, /wpickupdelete, /wpickupreload\n\n", sizeof(body));
-    strcat(body, "Roadmap: offline template/importer akan dibuat agar police bribe, health, armor, dan hidden pickup bisa di-seed massal.", sizeof(body));
+    strcat(body, "/wpickupmenu, /wpickupcreate, /wpickuplist, /wpickupinfo, /wpickupgoto, /wpickupdelete, /wpickupreload\n", sizeof(body));
+    strcat(body, "/wpickupseed, /wpickupclearseed, /wpickupseedinfo\n\n", sizeof(body));
+    strcat(body, "Template seed: police bribe, health, armor, dan hidden pickup bisa di-seed massal agar tidak input satu-satu.", sizeof(body));
     ShowPlayerDialog(playerid, DIALOG_WPICKUP_INFO, DIALOG_STYLE_MSGBOX, "World Pickup Help", body, "Back", "Close");
     return 1;
 }
@@ -22731,6 +22920,25 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+
+    if (!strcmp(cmdtext, "/wpickupseed", true))
+    {
+        SeedOfflinePickupTemplate(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/wpickupclearseed", true))
+    {
+        ClearOfflinePickupSeed(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/wpickupseedinfo", true))
+    {
+        ShowOfflinePickupSeedInfo(playerid);
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/wpickupreload", true))
     {
         if (!IsAdminLevel(playerid, ADMIN_OWNER))
@@ -23924,7 +24132,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.23E Offline Pickup System");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.23E.1 Pickup Template Seeder");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -23934,7 +24142,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23B: Parked vehicle dialog menu dan interactive editor.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.23E: Offline pickup system, health/armor/bribe/hidden pickup, cooldown, dan editor dialog.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.23E.1: Offline pickup template seeder, /wpickupseed, /wpickupclearseed, /wpickupseedinfo.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23A.1: Parked vehicle engine default ON setelah create/reload.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22F.2: Gang HQ interior exit fix dan visitor access.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A.3: Runtime turf war config untuk balancing/testing.");

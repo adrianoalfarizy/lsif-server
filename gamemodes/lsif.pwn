@@ -9743,7 +9743,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.23A Dynamic Parked Vehicle");
+    SetGameModeText("SAIF Dev v0.23A.1 Parked Vehicle Engine Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -9843,7 +9843,7 @@ public OnGameModeInit()
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.23A Dynamic Parked Vehicle berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.23A.1 Parked Vehicle Engine Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -13917,7 +13917,16 @@ stock CreateParkedVehicleRuntime(index)
     SetVehicleVirtualWorld(ParkedVehicleRuntimeID[index], ParkedVehicleVirtualWorld[index]);
 
     new doors = ParkedVehicleLocked[index] ? 1 : 0;
-    SetVehicleParamsEx(ParkedVehicleRuntimeID[index], 0, 0, 0, doors, 0, 0, 0);
+    SetVehicleParamsEx(
+        ParkedVehicleRuntimeID[index],
+        1, // engine ON supaya parked vehicle langsung bisa dipakai
+        0, // lights OFF
+        0, // alarm OFF
+        doors,
+        0, // bonnet CLOSED
+        0, // boot CLOSED
+        0  // objective OFF
+    );
 
     new labelText[128];
     format(labelText, sizeof(labelText), "[PARKED VEHICLE]\nID: %d | Model: %d", ParkedVehicleDBID[index], ParkedVehicleModel[index]);
@@ -21398,7 +21407,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.23A Dynamic Parked Vehicle");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.23A.1 Parked Vehicle Engine Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -21407,7 +21416,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.23A: Dynamic parked vehicle system untuk offline-like world.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.23A.1: Parked vehicle engine default ON setelah create/reload.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22F.2: Gang HQ interior exit fix dan visitor access.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A.3: Runtime turf war config untuk balancing/testing.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A.2: Turf HUD compact menggunakan TextDraw kecil.");

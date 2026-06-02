@@ -200,6 +200,15 @@
 #define DIALOG_AMMU_CONFIG_AMMO_INPUT 1180
 #define DIALOG_AMMU_CONFIG_ENABLE_MENU 1181
 #define DIALOG_AMMU_CONFIG_INFO 1182
+#define DIALOG_SERVICE_CONFIG_MENU 1183
+#define DIALOG_SERVICE_CONFIG_LIST 1184
+#define DIALOG_SERVICE_CONFIG_ACTION 1185
+#define DIALOG_SERVICE_CONFIG_PRICE_INPUT 1186
+#define DIALOG_SERVICE_CONFIG_HEALTH_INPUT 1187
+#define DIALOG_SERVICE_CONFIG_ARMOR_INPUT 1188
+#define DIALOG_SERVICE_CONFIG_XP_INPUT 1189
+#define DIALOG_SERVICE_CONFIG_WANTED_INPUT 1190
+#define DIALOG_SERVICE_CONFIG_INFO 1191
 
 
 
@@ -444,6 +453,21 @@
 
 #define MAX_AMMUNATIONS 3
 #define AMMUNATION_ACCESS_RADIUS 7.0
+#define MAX_PUBLIC_SERVICE_ITEMS 64
+
+new PublicServiceDBID[MAX_PUBLIC_SERVICE_ITEMS];
+new PublicServiceType[MAX_PUBLIC_SERVICE_ITEMS][32];
+new PublicServiceKey[MAX_PUBLIC_SERVICE_ITEMS][32];
+new PublicServiceName[MAX_PUBLIC_SERVICE_ITEMS][48];
+new PublicServicePrice[MAX_PUBLIC_SERVICE_ITEMS];
+new Float:PublicServiceHealth[MAX_PUBLIC_SERVICE_ITEMS];
+new Float:PublicServiceArmor[MAX_PUBLIC_SERVICE_ITEMS];
+new PublicServiceXP[MAX_PUBLIC_SERVICE_ITEMS];
+new PublicServiceWantedReduce[MAX_PUBLIC_SERVICE_ITEMS];
+new PublicServiceEnabled[MAX_PUBLIC_SERVICE_ITEMS];
+new PublicServiceSortOrder[MAX_PUBLIC_SERVICE_ITEMS];
+new PublicServiceCount;
+
 #define MAX_WEAPON_SHOP_ITEMS 15
 #define MAX_SAVED_WEAPON_LOADOUT MAX_WEAPON_SHOP_ITEMS
 #define DEFAULT_WEAPON_LICENSE 1
@@ -1492,6 +1516,7 @@ new PlayerDialogBusinessIndex[MAX_PLAYERS];
 new PlayerDialogGarageSlot[MAX_PLAYERS];
 new PlayerDialogWeaponIndex[MAX_PLAYERS];
 new PlayerEditingWeaponShopIndex[MAX_PLAYERS];
+new PlayerEditingPublicServiceIndex[MAX_PLAYERS];
 new PlayerWeaponLicense[MAX_PLAYERS];
 new PlayerSavedWeaponOwned[MAX_PLAYERS][MAX_SAVED_WEAPON_LOADOUT];
 new PlayerSavedWeaponAmmo[MAX_PLAYERS][MAX_SAVED_WEAPON_LOADOUT];
@@ -10058,7 +10083,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24F.2 Ammu Config Dialog Fix");
+    SetGameModeText("SAIF Dev v0.24G Public Service Config");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -10077,6 +10102,7 @@ public OnGameModeInit()
     }
     LoadTurfConfigFromDB();
     LoadWeaponShopConfigFromDB();
+    LoadPublicServiceConfigFromDB();
 
     AddPlayerClass(
         0,
@@ -10797,6 +10823,7 @@ stock ShowHelpCategory(playerid, category)
             strcat(body, "/reloadout: apply ulang saved loadout.\n", sizeof(body));
             strcat(body, "/givelicense [id]: Owner only.\n", sizeof(body));
             strcat(body, "/ammuconfig: Owner config harga/ammo Ammu-Nation.", sizeof(body));
+            strcat(body, "\n/serviceconfig: Owner config harga/efek public shops/services.", sizeof(body));
         }
         case 9:
         {
@@ -13925,6 +13952,91 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
     if (dialogid == DIALOG_AMMU_CONFIG_INFO)
     {
         ShowAmmuConfigMenu(playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_SERVICE_CONFIG_MENU)
+    {
+        if (!response) return 1;
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa mengatur public service config.");
+            return 1;
+        }
+        if (listitem == 0) ShowPublicServiceConfigList(playerid);
+        else if (listitem == 1)
+        {
+            LoadPublicServiceConfigFromDB();
+            SendClientMessage(playerid, COLOR_GREEN, "Public service config reload dari DB diminta.");
+            ShowPublicServiceConfigMenu(playerid);
+        }
+        else ShowPublicServiceConfigInfo(playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_SERVICE_CONFIG_LIST)
+    {
+        if (!response)
+        {
+            ShowPublicServiceConfigMenu(playerid);
+            return 1;
+        }
+        ShowPublicServiceConfigAction(playerid, listitem);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_SERVICE_CONFIG_ACTION)
+    {
+        new serviceIndex = PlayerEditingPublicServiceIndex[playerid];
+        if (!response)
+        {
+            ShowPublicServiceConfigList(playerid);
+            return 1;
+        }
+        if (listitem == 0) ShowPlayerDialog(playerid, DIALOG_SERVICE_CONFIG_PRICE_INPUT, DIALOG_STYLE_INPUT, "Edit Service Price", "Masukkan harga baru.", "Save", "Back");
+        else if (listitem == 1) ShowPlayerDialog(playerid, DIALOG_SERVICE_CONFIG_HEALTH_INPUT, DIALOG_STYLE_INPUT, "Edit Health Add", "Masukkan health add. Contoh: 25", "Save", "Back");
+        else if (listitem == 2) ShowPlayerDialog(playerid, DIALOG_SERVICE_CONFIG_ARMOR_INPUT, DIALOG_STYLE_INPUT, "Edit Armor Add", "Masukkan armor add. Contoh: 25", "Save", "Back");
+        else if (listitem == 3) ShowPlayerDialog(playerid, DIALOG_SERVICE_CONFIG_XP_INPUT, DIALOG_STYLE_INPUT, "Edit XP Reward", "Masukkan XP reward.", "Save", "Back");
+        else if (listitem == 4) ShowPlayerDialog(playerid, DIALOG_SERVICE_CONFIG_WANTED_INPUT, DIALOG_STYLE_INPUT, "Edit Wanted Reduce", "Masukkan wanted reduce. Contoh: 1", "Save", "Back");
+        else if (listitem == 5)
+        {
+            PublicServiceEnabled[serviceIndex] = PublicServiceEnabled[serviceIndex] ? 0 : 1;
+            SavePublicServiceConfigItem(serviceIndex);
+            SendClientMessage(playerid, COLOR_GREEN, "Status service berhasil diubah dan disimpan.");
+            ShowPublicServiceConfigAction(playerid, serviceIndex);
+        }
+        else ShowPublicServiceConfigList(playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_SERVICE_CONFIG_PRICE_INPUT || dialogid == DIALOG_SERVICE_CONFIG_HEALTH_INPUT || dialogid == DIALOG_SERVICE_CONFIG_ARMOR_INPUT || dialogid == DIALOG_SERVICE_CONFIG_XP_INPUT || dialogid == DIALOG_SERVICE_CONFIG_WANTED_INPUT)
+    {
+        new serviceIndex = PlayerEditingPublicServiceIndex[playerid];
+        if (!response)
+        {
+            ShowPublicServiceConfigAction(playerid, serviceIndex);
+            return 1;
+        }
+        if (!IsNumericString(inputtext) || strval(inputtext) < 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Value harus angka minimal 0.");
+            ShowPublicServiceConfigAction(playerid, serviceIndex);
+            return 1;
+        }
+        if (dialogid == DIALOG_SERVICE_CONFIG_PRICE_INPUT) PublicServicePrice[serviceIndex] = strval(inputtext);
+        else if (dialogid == DIALOG_SERVICE_CONFIG_HEALTH_INPUT) PublicServiceHealth[serviceIndex] = floatstr(inputtext);
+        else if (dialogid == DIALOG_SERVICE_CONFIG_ARMOR_INPUT) PublicServiceArmor[serviceIndex] = floatstr(inputtext);
+        else if (dialogid == DIALOG_SERVICE_CONFIG_XP_INPUT) PublicServiceXP[serviceIndex] = strval(inputtext);
+        else if (dialogid == DIALOG_SERVICE_CONFIG_WANTED_INPUT) PublicServiceWantedReduce[serviceIndex] = strval(inputtext);
+        SavePublicServiceConfigItem(serviceIndex);
+        SendClientMessage(playerid, COLOR_GREEN, "Public service config berhasil disimpan.");
+        ShowPublicServiceConfigAction(playerid, serviceIndex);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_SERVICE_CONFIG_INFO)
+    {
+        ShowPublicServiceConfigMenu(playerid);
         return 1;
     }
 
@@ -17330,9 +17442,231 @@ stock OpenPublicInteriorMainService(playerid)
     return 1;
 }
 
+stock ResetPublicServiceConfigArrays()
+{
+    PublicServiceCount = 0;
+    for (new i = 0; i < MAX_PUBLIC_SERVICE_ITEMS; i++)
+    {
+        PublicServiceDBID[i] = 0;
+        PublicServiceType[i][0] = EOS;
+        PublicServiceKey[i][0] = EOS;
+        PublicServiceName[i][0] = EOS;
+        PublicServicePrice[i] = 0;
+        PublicServiceHealth[i] = 0.0;
+        PublicServiceArmor[i] = 0.0;
+        PublicServiceXP[i] = 0;
+        PublicServiceWantedReduce[i] = 0;
+        PublicServiceEnabled[i] = 0;
+        PublicServiceSortOrder[i] = 0;
+    }
+    return 1;
+}
+
+stock AddDefaultPublicServiceConfig(const type[], const key[], const name[], price, Float:health, Float:armor, xp, wanted, enabled, sortOrder)
+{
+    if (PublicServiceCount >= MAX_PUBLIC_SERVICE_ITEMS) return 0;
+
+    new idx = PublicServiceCount++;
+    PublicServiceDBID[idx] = 0;
+    format(PublicServiceType[idx], 32, "%s", type);
+    format(PublicServiceKey[idx], 32, "%s", key);
+    format(PublicServiceName[idx], 48, "%s", name);
+    PublicServicePrice[idx] = price;
+    PublicServiceHealth[idx] = health;
+    PublicServiceArmor[idx] = armor;
+    PublicServiceXP[idx] = xp;
+    PublicServiceWantedReduce[idx] = wanted;
+    PublicServiceEnabled[idx] = enabled;
+    PublicServiceSortOrder[idx] = sortOrder;
+    return 1;
+}
+
+stock LoadDefaultPublicServiceConfig()
+{
+    ResetPublicServiceConfigArrays();
+
+    AddDefaultPublicServiceConfig("247", "sprunk", "Sprunk", 25, 5.0, 0.0, 0, 0, 1, 1);
+    AddDefaultPublicServiceConfig("247", "snack", "Snack", 35, 8.0, 0.0, 0, 0, 1, 2);
+    AddDefaultPublicServiceConfig("247", "first_aid", "First Aid", 150, 25.0, 0.0, 0, 0, 1, 3);
+    AddDefaultPublicServiceConfig("247", "armor_vest", "Armor Vest", 600, 0.0, 25.0, 0, 0, 1, 4);
+
+    AddDefaultPublicServiceConfig("burgershot", "kids_meal", "Moo Kids Meal", 45, 10.0, 0.0, 0, 0, 1, 1);
+    AddDefaultPublicServiceConfig("burgershot", "beef_tower", "Beef Tower", 80, 20.0, 0.0, 0, 0, 1, 2);
+    AddDefaultPublicServiceConfig("burgershot", "meat_stack", "Meat Stack", 120, 35.0, 0.0, 0, 0, 1, 3);
+    AddDefaultPublicServiceConfig("burgershot", "big_meal", "Burger Shot Big Meal", 160, 50.0, 0.0, 0, 0, 1, 4);
+
+    AddDefaultPublicServiceConfig("cluckinbell", "little_meal", "Cluckin' Little Meal", 45, 10.0, 0.0, 0, 0, 1, 1);
+    AddDefaultPublicServiceConfig("cluckinbell", "big_meal", "Cluckin' Big Meal", 80, 20.0, 0.0, 0, 0, 1, 2);
+    AddDefaultPublicServiceConfig("cluckinbell", "huge_meal", "Cluckin' Huge Meal", 120, 35.0, 0.0, 0, 0, 1, 3);
+    AddDefaultPublicServiceConfig("cluckinbell", "salad_meal", "Salad Meal", 90, 18.0, 0.0, 0, 0, 1, 4);
+
+    AddDefaultPublicServiceConfig("pizzastack", "pizza_slice", "Pizza Slice", 40, 10.0, 0.0, 0, 0, 1, 1);
+    AddDefaultPublicServiceConfig("pizzastack", "small_pizza", "Small Pizza", 75, 20.0, 0.0, 0, 0, 1, 2);
+    AddDefaultPublicServiceConfig("pizzastack", "full_rack", "Full Rack", 120, 35.0, 0.0, 0, 0, 1, 3);
+    AddDefaultPublicServiceConfig("pizzastack", "buster_meal", "Buster Meal", 160, 50.0, 0.0, 0, 0, 1, 4);
+
+    AddDefaultPublicServiceConfig("gym", "light_training", "Light Training", 100, 0.0, 0.0, 10, 0, 1, 1);
+    AddDefaultPublicServiceConfig("gym", "boxing", "Boxing Session", 150, 5.0, 0.0, 15, 0, 1, 2);
+    AddDefaultPublicServiceConfig("gym", "full_workout", "Full Workout", 250, 10.0, 0.0, 25, 0, 1, 3);
+
+    AddDefaultPublicServiceConfig("barber", "basic", "Basic Haircut", 150, 0.0, 0.0, 0, 0, 1, 1);
+    AddDefaultPublicServiceConfig("barber", "clean_cut", "Clean Cut", 250, 0.0, 0.0, 0, 0, 1, 2);
+    AddDefaultPublicServiceConfig("barber", "premium", "Premium Style", 500, 0.0, 0.0, 0, 0, 1, 3);
+
+    AddDefaultPublicServiceConfig("tattoo", "small", "Small Tattoo", 250, 0.0, 0.0, 0, 0, 1, 1);
+    AddDefaultPublicServiceConfig("tattoo", "gang", "Gang Tattoo", 500, 0.0, 0.0, 0, 0, 1, 2);
+    AddDefaultPublicServiceConfig("tattoo", "full_body", "Full Body Tattoo", 1000, 0.0, 0.0, 0, 0, 1, 3);
+
+    AddDefaultPublicServiceConfig("hospital", "checkup", "Medical Checkup", 150, 35.0, 0.0, 0, 0, 1, 1);
+    AddDefaultPublicServiceConfig("hospital", "emergency", "Emergency Treatment", 350, 100.0, 0.0, 0, 0, 1, 2);
+    AddDefaultPublicServiceConfig("hospital", "armor_patch", "Armor Patch", 500, 0.0, 20.0, 0, 0, 1, 3);
+
+    AddDefaultPublicServiceConfig("police", "wanted_status", "Ask Wanted Status", 0, 0.0, 0.0, 0, 0, 1, 1);
+    AddDefaultPublicServiceConfig("police", "small_fine", "Pay Small Fine", 500, 0.0, 0.0, 0, 1, 1, 2);
+    AddDefaultPublicServiceConfig("police", "safety_info", "Public Safety Info", 0, 0.0, 0.0, 0, 0, 1, 3);
+
+    AddDefaultPublicServiceConfig("cityhall", "citizen_info", "Citizen Service Info", 0, 0.0, 0.0, 0, 0, 1, 1);
+    AddDefaultPublicServiceConfig("cityhall", "permit_info", "Business Permit Info", 0, 0.0, 0.0, 0, 0, 1, 2);
+    AddDefaultPublicServiceConfig("cityhall", "license_info", "License Info", 0, 0.0, 0.0, 0, 0, 1, 3);
+
+    AddDefaultPublicServiceConfig("casino", "casino_info", "Casino Info", 0, 0.0, 0.0, 0, 0, 1, 1);
+    AddDefaultPublicServiceConfig("casino", "lucky_snack", "Lucky Snack", 100, 10.0, 0.0, 0, 0, 1, 2);
+    AddDefaultPublicServiceConfig("casino", "vip_service", "VIP Service Placeholder", 1000, 0.0, 0.0, 20, 0, 1, 3);
+    return 1;
+}
+
+stock LoadPublicServiceConfigFromDB()
+{
+    LoadDefaultPublicServiceConfig();
+    mysql_tquery(g_SQL, "SELECT id, service_type, service_key, display_name, price, health_add, armor_add, xp_reward, wanted_reduce, enabled, sort_order FROM public_service_config ORDER BY service_type ASC, sort_order ASC, id ASC", "OnPublicServiceConfigLoaded");
+    return 1;
+}
+
+forward OnPublicServiceConfigLoaded();
+public OnPublicServiceConfigLoaded()
+{
+    new rows = cache_num_rows();
+    if (rows <= 0)
+    {
+        printf("[SAIF] Public service config DB empty/unavailable, using defaults: %d items.", PublicServiceCount);
+        return 1;
+    }
+
+    ResetPublicServiceConfigArrays();
+
+    for (new i = 0; i < rows && i < MAX_PUBLIC_SERVICE_ITEMS; i++)
+    {
+        cache_get_value_name_int(i, "id", PublicServiceDBID[i]);
+        cache_get_value_name(i, "service_type", PublicServiceType[i], 32);
+        cache_get_value_name(i, "service_key", PublicServiceKey[i], 32);
+        cache_get_value_name(i, "display_name", PublicServiceName[i], 48);
+        cache_get_value_name_int(i, "price", PublicServicePrice[i]);
+        cache_get_value_name_float(i, "health_add", PublicServiceHealth[i]);
+        cache_get_value_name_float(i, "armor_add", PublicServiceArmor[i]);
+        cache_get_value_name_int(i, "xp_reward", PublicServiceXP[i]);
+        cache_get_value_name_int(i, "wanted_reduce", PublicServiceWantedReduce[i]);
+        cache_get_value_name_int(i, "enabled", PublicServiceEnabled[i]);
+        cache_get_value_name_int(i, "sort_order", PublicServiceSortOrder[i]);
+        PublicServiceCount++;
+    }
+
+    printf("[SAIF] Public service config loaded: %d rows.", PublicServiceCount);
+    return 1;
+}
+
+stock GetPublicServiceMenuTypeForPlayer(playerid, output[], size)
+{
+    new idx = GetPlayerPublicInteriorIndex(playerid);
+    if (idx == -1)
+    {
+        output[0] = EOS;
+        return 0;
+    }
+
+    if (!strcmp(PublicInteriorType[idx], "247", true)) format(output, size, "247");
+    else if (!strcmp(PublicInteriorType[idx], "burgershot", true)) format(output, size, "burgershot");
+    else if (!strcmp(PublicInteriorType[idx], "cluckinbell", true)) format(output, size, "cluckinbell");
+    else if (!strcmp(PublicInteriorType[idx], "pizzastack", true)) format(output, size, "pizzastack");
+    else format(output, size, "%s", PublicInteriorType[idx]);
+    return 1;
+}
+
+stock GetPublicServiceIndexByTypeAndListitem(const type[], listitem)
+{
+    new visible = 0;
+    for (new i = 0; i < PublicServiceCount; i++)
+    {
+        if (!PublicServiceEnabled[i]) continue;
+        if (strcmp(PublicServiceType[i], type, true)) continue;
+
+        if (visible == listitem) return i;
+        visible++;
+    }
+    return -1;
+}
+
+stock CountPublicServiceItemsForType(const type[])
+{
+    new count = 0;
+    for (new i = 0; i < PublicServiceCount; i++)
+    {
+        if (!PublicServiceEnabled[i]) continue;
+        if (strcmp(PublicServiceType[i], type, true)) continue;
+        count++;
+    }
+    return count;
+}
+
+stock BuildPublicServiceMenuText(const type[], body[], size)
+{
+    body[0] = EOS;
+    new line[160];
+    new count = 0;
+
+    for (new i = 0; i < PublicServiceCount; i++)
+    {
+        if (!PublicServiceEnabled[i]) continue;
+        if (strcmp(PublicServiceType[i], type, true)) continue;
+
+        format(line, sizeof(line), "%s - $%d", PublicServiceName[i], PublicServicePrice[i]);
+        strcat(body, line, size);
+
+        if (PublicServiceHealth[i] > 0.0)
+        {
+            format(line, sizeof(line), " - Health +%.0f", PublicServiceHealth[i]);
+            strcat(body, line, size);
+        }
+        if (PublicServiceArmor[i] > 0.0)
+        {
+            format(line, sizeof(line), " - Armor +%.0f", PublicServiceArmor[i]);
+            strcat(body, line, size);
+        }
+        if (PublicServiceXP[i] > 0)
+        {
+            format(line, sizeof(line), " - XP +%d", PublicServiceXP[i]);
+            strcat(body, line, size);
+        }
+        if (PublicServiceWantedReduce[i] > 0)
+        {
+            format(line, sizeof(line), " - Wanted -%d", PublicServiceWantedReduce[i]);
+            strcat(body, line, size);
+        }
+        strcat(body, "\n", size);
+        count++;
+    }
+
+    if (count == 0)
+    {
+        strcat(body, "Belum ada service aktif untuk tipe ini.\n", size);
+    }
+    return count;
+}
+
 stock ShowPublicInteriorStoreMenu(playerid)
 {
-    ShowPlayerDialog(playerid, DIALOG_PUBINT_STORE_MENU, DIALOG_STYLE_LIST, "24/7 Supermarket", "Sprunk - $25 - Health +5\nSnack - $35 - Health +8\nFirst Aid - $150 - Health +25\nArmor Vest - $600 - Armor +25", "Buy", "Back");
+    new body[1024];
+    BuildPublicServiceMenuText("247", body, sizeof(body));
+    ShowPlayerDialog(playerid, DIALOG_PUBINT_STORE_MENU, DIALOG_STYLE_LIST, "24/7 Supermarket", body, "Buy", "Back");
     return 1;
 }
 
@@ -17341,23 +17675,10 @@ stock ShowPublicInteriorFoodMenu(playerid)
     new idx = GetPlayerPublicInteriorIndex(playerid);
     if (idx == -1) return 0;
 
-    new title[64];
-    new body[384];
+    new type[32], title[64], body[1024];
+    GetPublicServiceMenuTypeForPlayer(playerid, type, sizeof(type));
     format(title, sizeof(title), "%s", PublicInteriorName[idx]);
-
-    if (!strcmp(PublicInteriorType[idx], "burgershot", true))
-    {
-        format(body, sizeof(body), "Moo Kids Meal - $45 - Health +10\nBeef Tower - $80 - Health +20\nMeat Stack - $120 - Health +35\nBurger Shot Big Meal - $160 - Health +50");
-    }
-    else if (!strcmp(PublicInteriorType[idx], "cluckinbell", true))
-    {
-        format(body, sizeof(body), "Cluckin' Little Meal - $45 - Health +10\nCluckin' Big Meal - $80 - Health +20\nCluckin' Huge Meal - $120 - Health +35\nSalad Meal - $90 - Health +18");
-    }
-    else
-    {
-        format(body, sizeof(body), "Pizza Slice - $40 - Health +10\nSmall Pizza - $75 - Health +20\nFull Rack - $120 - Health +35\nBuster Meal - $160 - Health +50");
-    }
-
+    BuildPublicServiceMenuText(type, body, sizeof(body));
     ShowPlayerDialog(playerid, DIALOG_PUBINT_FOOD_MENU, DIALOG_STYLE_LIST, title, body, "Buy", "Back");
     return 1;
 }
@@ -17367,44 +17688,83 @@ stock ShowPublicInteriorServiceMenu(playerid)
     new idx = GetPlayerPublicInteriorIndex(playerid);
     if (idx == -1) return 0;
 
-    new title[64];
-    new body[384];
+    new type[32], title[64], body[1024];
+    GetPublicServiceMenuTypeForPlayer(playerid, type, sizeof(type));
     format(title, sizeof(title), "%s", PublicInteriorName[idx]);
-
-    if (!strcmp(PublicInteriorType[idx], "gym", true))
-    {
-        format(body, sizeof(body), "Light Training - $100 - XP +10\nBoxing Session - $150 - XP +15 / Health +5\nFull Workout - $250 - XP +25 / Health +10");
-    }
-    else if (!strcmp(PublicInteriorType[idx], "barber", true))
-    {
-        format(body, sizeof(body), "Basic Haircut - $150 - RP style service\nClean Cut - $250 - RP style service\nPremium Style - $500 - RP style service");
-    }
-    else if (!strcmp(PublicInteriorType[idx], "tattoo", true))
-    {
-        format(body, sizeof(body), "Small Tattoo - $250 - RP style service\nGang Tattoo - $500 - RP style service\nFull Body Tattoo - $1000 - RP style service");
-    }
-    else if (!strcmp(PublicInteriorType[idx], "hospital", true))
-    {
-        format(body, sizeof(body), "Medical Checkup - $150 - Health +35\nEmergency Treatment - $350 - Health 100\nArmor Patch - $500 - Armor +20");
-    }
-    else if (!strcmp(PublicInteriorType[idx], "police", true))
-    {
-        format(body, sizeof(body), "Ask Wanted Status - Free\nPay Small Fine - $500 - Reduce wanted 1\nPublic Safety Info - Free");
-    }
-    else if (!strcmp(PublicInteriorType[idx], "cityhall", true))
-    {
-        format(body, sizeof(body), "Citizen Service Info - Free\nBusiness Permit Info - Free\nVehicle/Weapon License Info - Free");
-    }
-    else if (!strcmp(PublicInteriorType[idx], "casino", true))
-    {
-        format(body, sizeof(body), "Casino Info - Free\nLucky Snack - $100 - Health +10\nVIP Service Placeholder - $1000");
-    }
-    else
-    {
-        format(body, sizeof(body), "Public Service Info - Free");
-    }
-
+    BuildPublicServiceMenuText(type, body, sizeof(body));
     ShowPlayerDialog(playerid, DIALOG_PUBINT_SERVICE_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Back");
+    return 1;
+}
+
+stock ProcessPublicServicePurchase(playerid, const type[], listitem)
+{
+    new idx = GetPlayerPublicInteriorIndex(playerid);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak sedang berada di public interior.");
+        return 0;
+    }
+
+    new serviceIndex = GetPublicServiceIndexByTypeAndListitem(type, listitem);
+    if (serviceIndex == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Service tidak tersedia atau sedang disabled.");
+        return 0;
+    }
+
+    if (!strcmp(PublicServiceKey[serviceIndex], "wanted_status", true))
+    {
+        new msgWanted[96];
+        format(msgWanted, sizeof(msgWanted), "Wanted level kamu saat ini: %d.", GetPlayerWantedLevel(playerid));
+        SendClientMessage(playerid, COLOR_WHITE, msgWanted);
+        return 1;
+    }
+
+    if (!strcmp(PublicServiceKey[serviceIndex], "safety_info", true))
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "Police Department: patuhi hukum, bayar fine, atau cari police bribe untuk mengurangi wanted.");
+        return 1;
+    }
+
+    if (!strcmp(PublicServiceKey[serviceIndex], "citizen_info", true) || !strcmp(PublicServiceKey[serviceIndex], "permit_info", true) || !strcmp(PublicServiceKey[serviceIndex], "license_info", true))
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "City Hall: layanan administrasi dan license akan dikembangkan bertahap mengikuti sistem offline-first.");
+        return 1;
+    }
+
+    if (!strcmp(PublicServiceKey[serviceIndex], "casino_info", true))
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "Casino: service interior aktif. Minigame/gambling belum diaktifkan.");
+        return 1;
+    }
+
+    new price = PublicServicePrice[serviceIndex];
+    if (price > 0 && !TakePlayerCash(playerid, price))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Cash kamu tidak cukup.");
+        return 0;
+    }
+
+    if (PublicServiceXP[serviceIndex] > 0) GivePlayerXPEx(playerid, PublicServiceXP[serviceIndex]);
+    if (PublicServiceHealth[serviceIndex] > 0.0)
+    {
+        if (PublicServiceHealth[serviceIndex] >= 100.0) SetPlayerHealth(playerid, 100.0);
+        else AddPublicInteriorHealth(playerid, PublicServiceHealth[serviceIndex]);
+    }
+    if (PublicServiceArmor[serviceIndex] > 0.0) AddPublicInteriorArmour(playerid, PublicServiceArmor[serviceIndex]);
+    if (PublicServiceWantedReduce[serviceIndex] > 0)
+    {
+        new wanted = GetPlayerWantedLevel(playerid);
+        wanted -= PublicServiceWantedReduce[serviceIndex];
+        if (wanted < 0) wanted = 0;
+        SetPlayerWantedLevel(playerid, wanted);
+    }
+
+    SavePlayerData(playerid);
+
+    new msg[160];
+    format(msg, sizeof(msg), "%s: kamu menggunakan %s seharga $%d.", PublicInteriorName[idx], PublicServiceName[serviceIndex], price);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
     return 1;
 }
 
@@ -17415,308 +17775,84 @@ stock ProcessPublicInteriorStorePurchase(playerid, listitem)
         SendClientMessage(playerid, COLOR_RED, "Kamu tidak sedang berada di 24/7 Supermarket.");
         return 0;
     }
-
-    new price = 25;
-    new Float:healthAdd = 5.0;
-    new Float:armorAdd = 0.0;
-    new itemName[32];
-
-    switch (listitem)
-    {
-        case 0:
-        {
-            price = 25;
-            healthAdd = 5.0;
-            format(itemName, sizeof(itemName), "Sprunk");
-        }
-        case 1:
-        {
-            price = 35;
-            healthAdd = 8.0;
-            format(itemName, sizeof(itemName), "Snack");
-        }
-        case 2:
-        {
-            price = 150;
-            healthAdd = 25.0;
-            format(itemName, sizeof(itemName), "First Aid");
-        }
-        case 3:
-        {
-            price = 600;
-            healthAdd = 0.0;
-            armorAdd = 25.0;
-            format(itemName, sizeof(itemName), "Armor Vest");
-        }
-        default:
-            return 0;
-    }
-
-    if (!TakePlayerCash(playerid, price))
-    {
-        SendClientMessage(playerid, COLOR_RED, "Cash kamu tidak cukup.");
-        ShowPublicInteriorStoreMenu(playerid);
-        return 0;
-    }
-
-    if (healthAdd > 0.0) AddPublicInteriorHealth(playerid, healthAdd);
-    if (armorAdd > 0.0) AddPublicInteriorArmour(playerid, armorAdd);
-    SavePlayerData(playerid);
-
-    new msg[144];
-    format(msg, sizeof(msg), "24/7: kamu membeli %s seharga $%d.", itemName, price);
-    SendClientMessage(playerid, COLOR_GREEN, msg);
-    return 1;
+    new result = ProcessPublicServicePurchase(playerid, "247", listitem);
+    ShowPublicInteriorStoreMenu(playerid);
+    return result;
 }
 
 stock ProcessPublicInteriorFoodPurchase(playerid, listitem)
 {
-    new idx = GetPlayerPublicInteriorIndex(playerid);
-    if (idx == -1 || !IsPublicInteriorRestaurantType(PublicInteriorType[idx]))
-    {
-        SendClientMessage(playerid, COLOR_RED, "Kamu tidak sedang berada di restoran public interior.");
-        return 0;
-    }
-
-    new price;
-    new Float:healthAdd;
-    new itemName[48];
-
-    switch (listitem)
-    {
-        case 0:
-        {
-            price = 45;
-            healthAdd = 10.0;
-            format(itemName, sizeof(itemName), "small meal");
-        }
-        case 1:
-        {
-            price = 80;
-            healthAdd = 20.0;
-            format(itemName, sizeof(itemName), "regular meal");
-        }
-        case 2:
-        {
-            price = 120;
-            healthAdd = 35.0;
-            format(itemName, sizeof(itemName), "large meal");
-        }
-        case 3:
-        {
-            price = 160;
-            healthAdd = 50.0;
-            format(itemName, sizeof(itemName), "big meal");
-        }
-        default:
-            return 0;
-    }
-
-    if (!TakePlayerCash(playerid, price))
-    {
-        SendClientMessage(playerid, COLOR_RED, "Cash kamu tidak cukup.");
-        ShowPublicInteriorFoodMenu(playerid);
-        return 0;
-    }
-
-    AddPublicInteriorHealth(playerid, healthAdd);
-    SavePlayerData(playerid);
-
-    new msg[160];
-    format(msg, sizeof(msg), "%s: kamu membeli %s seharga $%d. Health bertambah.", PublicInteriorName[idx], itemName, price);
-    SendClientMessage(playerid, COLOR_GREEN, msg);
-    return 1;
+    new type[32];
+    if (!GetPublicServiceMenuTypeForPlayer(playerid, type, sizeof(type))) return 0;
+    new result = ProcessPublicServicePurchase(playerid, type, listitem);
+    ShowPublicInteriorFoodMenu(playerid);
+    return result;
 }
 
 stock ProcessPublicInteriorService(playerid, listitem)
 {
-    new idx = GetPlayerPublicInteriorIndex(playerid);
-    if (idx == -1)
+    new type[32];
+    if (!GetPublicServiceMenuTypeForPlayer(playerid, type, sizeof(type))) return 0;
+    new result = ProcessPublicServicePurchase(playerid, type, listitem);
+    ShowPublicInteriorServiceMenu(playerid);
+    return result;
+}
+
+stock SavePublicServiceConfigItem(serviceIndex)
+{
+    if (serviceIndex < 0 || serviceIndex >= PublicServiceCount) return 0;
+    new query[1024];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE public_service_config SET price=%d, health_add=%f, armor_add=%f, xp_reward=%d, wanted_reduce=%d, enabled=%d WHERE service_key='%e' AND service_type='%e'", PublicServicePrice[serviceIndex], PublicServiceHealth[serviceIndex], PublicServiceArmor[serviceIndex], PublicServiceXP[serviceIndex], PublicServiceWantedReduce[serviceIndex], PublicServiceEnabled[serviceIndex], PublicServiceKey[serviceIndex], PublicServiceType[serviceIndex]);
+    mysql_tquery(g_SQL, query);
+    return 1;
+}
+
+stock ShowPublicServiceConfigMenu(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
     {
-        SendClientMessage(playerid, COLOR_RED, "Kamu tidak sedang berada di public interior.");
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa mengatur public service config.");
+        return 0;
+    }
+    ShowPlayerDialog(playerid, DIALOG_SERVICE_CONFIG_MENU, DIALOG_STYLE_LIST, "Public Service Config", "List / Edit Service Config\nReload Config From DB\nInfo", "Pilih", "Tutup");
+    return 1;
+}
+
+stock ShowPublicServiceConfigList(playerid)
+{
+    new body[4096];
+    new line[192];
+    body[0] = EOS;
+    for (new i = 0; i < PublicServiceCount; i++)
+    {
+        format(line, sizeof(line), "%s | %s | $%d | H %.0f | A %.0f | XP %d | W -%d | %s\n", PublicServiceType[i], PublicServiceName[i], PublicServicePrice[i], PublicServiceHealth[i], PublicServiceArmor[i], PublicServiceXP[i], PublicServiceWantedReduce[i], PublicServiceEnabled[i] ? ("ON") : ("OFF"));
+        strcat(body, line, sizeof(body));
+    }
+    ShowPlayerDialog(playerid, DIALOG_SERVICE_CONFIG_LIST, DIALOG_STYLE_LIST, "Edit Public Service", body, "Pilih", "Back");
+    return 1;
+}
+
+stock ShowPublicServiceConfigAction(playerid, serviceIndex)
+{
+    if (serviceIndex < 0 || serviceIndex >= PublicServiceCount)
+    {
+        ShowPublicServiceConfigList(playerid);
         return 0;
     }
 
-    new price = 0;
-    new serviceName[64];
-    new xpReward = 0;
-    new Float:healthAdd = 0.0;
-    new Float:armorAdd = 0.0;
-    new setFullHealth = 0;
-    new reduceWanted = 0;
-    new handled = 1;
+    PlayerEditingPublicServiceIndex[playerid] = serviceIndex;
+    new title[96], body[512];
+    format(title, sizeof(title), "%s / %s", PublicServiceType[serviceIndex], PublicServiceName[serviceIndex]);
+    format(body, sizeof(body), "Edit Price - Current $%d\nEdit Health Add - Current %.0f\nEdit Armor Add - Current %.0f\nEdit XP Reward - Current %d\nEdit Wanted Reduce - Current %d\nToggle Enable/Disable - Current %s\nBack to Service List", PublicServicePrice[serviceIndex], PublicServiceHealth[serviceIndex], PublicServiceArmor[serviceIndex], PublicServiceXP[serviceIndex], PublicServiceWantedReduce[serviceIndex], PublicServiceEnabled[serviceIndex] ? ("ON") : ("OFF"));
+    ShowPlayerDialog(playerid, DIALOG_SERVICE_CONFIG_ACTION, DIALOG_STYLE_LIST, title, body, "Pilih", "Back");
+    return 1;
+}
 
-    if (!strcmp(PublicInteriorType[idx], "gym", true))
-    {
-        switch (listitem)
-        {
-            case 0:
-            {
-                price = 100;
-                xpReward = 10;
-                format(serviceName, sizeof(serviceName), "Light Training");
-            }
-            case 1:
-            {
-                price = 150;
-                xpReward = 15;
-                healthAdd = 5.0;
-                format(serviceName, sizeof(serviceName), "Boxing Session");
-            }
-            case 2:
-            {
-                price = 250;
-                xpReward = 25;
-                healthAdd = 10.0;
-                format(serviceName, sizeof(serviceName), "Full Workout");
-            }
-            default:
-                handled = 0;
-        }
-    }
-    else if (!strcmp(PublicInteriorType[idx], "barber", true))
-    {
-        switch (listitem)
-        {
-            case 0:
-            {
-                price = 150;
-                format(serviceName, sizeof(serviceName), "Basic Haircut");
-            }
-            case 1:
-            {
-                price = 250;
-                format(serviceName, sizeof(serviceName), "Clean Cut");
-            }
-            case 2:
-            {
-                price = 500;
-                format(serviceName, sizeof(serviceName), "Premium Style");
-            }
-            default:
-                handled = 0;
-        }
-    }
-    else if (!strcmp(PublicInteriorType[idx], "tattoo", true))
-    {
-        switch (listitem)
-        {
-            case 0:
-            {
-                price = 250;
-                format(serviceName, sizeof(serviceName), "Small Tattoo");
-            }
-            case 1:
-            {
-                price = 500;
-                format(serviceName, sizeof(serviceName), "Gang Tattoo");
-            }
-            case 2:
-            {
-                price = 1000;
-                format(serviceName, sizeof(serviceName), "Full Body Tattoo");
-            }
-            default:
-                handled = 0;
-        }
-    }
-    else if (!strcmp(PublicInteriorType[idx], "hospital", true))
-    {
-        switch (listitem)
-        {
-            case 0:
-            {
-                price = 150;
-                healthAdd = 35.0;
-                format(serviceName, sizeof(serviceName), "Medical Checkup");
-            }
-            case 1:
-            {
-                price = 350;
-                setFullHealth = 1;
-                format(serviceName, sizeof(serviceName), "Emergency Treatment");
-            }
-            case 2:
-            {
-                price = 500;
-                armorAdd = 20.0;
-                format(serviceName, sizeof(serviceName), "Armor Patch");
-            }
-            default:
-                handled = 0;
-        }
-    }
-    else if (!strcmp(PublicInteriorType[idx], "police", true))
-    {
-        if (listitem == 0)
-        {
-            new msg[96];
-            format(msg, sizeof(msg), "Wanted level kamu saat ini: %d.", GetPlayerWantedLevel(playerid));
-            SendClientMessage(playerid, COLOR_WHITE, msg);
-            return 1;
-        }
-        if (listitem == 1)
-        {
-            price = 500;
-            reduceWanted = 1;
-            format(serviceName, sizeof(serviceName), "Small Fine");
-        }
-        else if (listitem == 2)
-        {
-            SendClientMessage(playerid, COLOR_WHITE, "Police Department: patuhi hukum, kurangi wanted level dengan police bribe atau bayar fine.");
-            return 1;
-        }
-        else handled = 0;
-    }
-    else if (!strcmp(PublicInteriorType[idx], "cityhall", true))
-    {
-        SendClientMessage(playerid, COLOR_WHITE, "City Hall: layanan administrasi, license info, business permit, dan civic service akan dikembangkan bertahap.");
-        return 1;
-    }
-    else if (!strcmp(PublicInteriorType[idx], "casino", true))
-    {
-        if (listitem == 1)
-        {
-            price = 100;
-            healthAdd = 10.0;
-            format(serviceName, sizeof(serviceName), "Lucky Snack");
-        }
-        else
-        {
-            SendClientMessage(playerid, COLOR_WHITE, "Casino: gambling/minigame belum diaktifkan. Interior dan public service sudah siap.");
-            return 1;
-        }
-    }
-    else
-    {
-        SendClientMessage(playerid, COLOR_WHITE, "Public service tersedia, detail fitur akan dikembangkan bertahap.");
-        return 1;
-    }
-
-    if (!handled) return 0;
-
-    if (price > 0 && !TakePlayerCash(playerid, price))
-    {
-        SendClientMessage(playerid, COLOR_RED, "Cash kamu tidak cukup.");
-        ShowPublicInteriorServiceMenu(playerid);
-        return 0;
-    }
-
-    if (xpReward > 0) GivePlayerXPEx(playerid, xpReward);
-    if (healthAdd > 0.0) AddPublicInteriorHealth(playerid, healthAdd);
-    if (armorAdd > 0.0) AddPublicInteriorArmour(playerid, armorAdd);
-    if (setFullHealth) SetPlayerHealth(playerid, 100.0);
-    if (reduceWanted)
-    {
-        new wanted = GetPlayerWantedLevel(playerid);
-        if (wanted > 0) SetPlayerWantedLevel(playerid, wanted - 1);
-    }
-
-    SavePlayerData(playerid);
-
-    new msg[160];
-    format(msg, sizeof(msg), "%s: kamu menggunakan layanan %s seharga $%d.", PublicInteriorName[idx], serviceName, price);
-    SendClientMessage(playerid, COLOR_GREEN, msg);
+stock ShowPublicServiceConfigInfo(playerid)
+{
+    new body[768];
+    format(body, sizeof(body), "Public service config disimpan di DB table public_service_config.\n\nItem ini mengatur menu 24/7, restaurant, gym, barber, tattoo, hospital, police, cityhall, casino.\n\nYang bisa diedit:\n- price\n- health add\n- armor add\n- XP reward\n- wanted reduce\n- enable/disable\n\nCommand:\n/serviceconfig\n/servicereload\n\nPlayer biasa hanya bisa membeli/menggunakan service dari checkpoint merah.");
+    ShowPlayerDialog(playerid, DIALOG_SERVICE_CONFIG_INFO, DIALOG_STYLE_MSGBOX, "Public Service Config Info", body, "OK", "Back");
     return 1;
 }
 
@@ -27309,6 +27445,24 @@ public OnPlayerCommandText(playerid, cmdtext[])
         WeaponShopAmmo[weaponIndex] = strval(ammoStr);
         SaveWeaponShopConfigItem(weaponIndex);
         SendClientMessage(playerid, COLOR_GREEN, "Ammo per pack Ammu-Nation weapon berhasil disimpan.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/serviceconfig", true))
+    {
+        ShowPublicServiceConfigMenu(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/servicereload", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa reload public service config.");
+            return 1;
+        }
+        LoadPublicServiceConfigFromDB();
+        SendClientMessage(playerid, COLOR_GREEN, "Public service config reload dari database diminta.");
         return 1;
     }
 

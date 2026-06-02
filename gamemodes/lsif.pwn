@@ -2329,20 +2329,7 @@ stock SavePlayerData(playerid, notify = 0)
     new Float:x, Float:y, Float:z, Float:a;
     new query[512];
 
-    if (PlayerInsideHouse[playerid] && PlayerHouseIndex[playerid] != -1)
-    {
-        new houseIndex = PlayerHouseIndex[playerid];
-
-        x = HouseX[houseIndex];
-        y = HouseY[houseIndex];
-        z = HouseZ[houseIndex];
-        a = 0.0;
-    }
-    else
-    {
-        GetPlayerPos(playerid, x, y, z);
-        GetPlayerFacingAngle(playerid, a);
-    }
+    GetSafePlayerSavePosition(playerid, x, y, z, a);
 
     mysql_format(
         g_SQL,
@@ -2366,6 +2353,94 @@ stock SavePlayerData(playerid, notify = 0)
     );
 
     mysql_tquery(g_SQL, query, "OnPlayerDataSaved", "ii", playerid, notify);
+    return 1;
+}
+
+
+stock GetSafePlayerSavePosition(playerid, &Float:x, &Float:y, &Float:z, &Float:a)
+{
+    if (PlayerInsideHouse[playerid] && PlayerHouseIndex[playerid] != -1)
+    {
+        new houseIndex = PlayerHouseIndex[playerid];
+        x = HouseX[houseIndex];
+        y = HouseY[houseIndex];
+        z = HouseZ[houseIndex];
+        a = 0.0;
+        return 1;
+    }
+
+    if (PlayerInsidePublicInteriorID[playerid] > 0)
+    {
+        new pubIdx = FindPublicInteriorIndexByDBID(PlayerInsidePublicInteriorID[playerid]);
+        if (pubIdx != -1)
+        {
+            x = PublicInteriorExtX[pubIdx];
+            y = PublicInteriorExtY[pubIdx];
+            z = PublicInteriorExtZ[pubIdx] + 0.5;
+            a = PublicInteriorExtA[pubIdx];
+            return 1;
+        }
+    }
+
+    new detectedPubIdx = GetPlayerPublicInteriorIndex(playerid);
+    if (detectedPubIdx != -1)
+    {
+        x = PublicInteriorExtX[detectedPubIdx];
+        y = PublicInteriorExtY[detectedPubIdx];
+        z = PublicInteriorExtZ[detectedPubIdx] + 0.5;
+        a = PublicInteriorExtA[detectedPubIdx];
+        return 1;
+    }
+
+    if (PlayerInsideGangHQ[playerid] && PlayerInsideGangHQID[playerid] > 0)
+    {
+        new gangIndex = GetPresetGangIndexByID(PlayerInsideGangHQID[playerid]);
+        if (gangIndex != -1)
+        {
+            x = GangHQInteriorExitX[gangIndex];
+            y = GangHQInteriorExitY[gangIndex];
+            z = GangHQInteriorExitZ[gangIndex] + 0.5;
+            a = GangHQInteriorExitA[gangIndex];
+            return 1;
+        }
+    }
+
+    if (GetPlayerInterior(playerid) != 0 || GetPlayerVirtualWorld(playerid) != 0)
+    {
+        x = SPAWN_X;
+        y = SPAWN_Y;
+        z = SPAWN_Z;
+        a = SPAWN_A;
+        return 1;
+    }
+
+    GetPlayerPos(playerid, x, y, z);
+    GetPlayerFacingAngle(playerid, a);
+
+    if (z < -10.0)
+    {
+        x = SPAWN_X;
+        y = SPAWN_Y;
+        z = SPAWN_Z;
+        a = SPAWN_A;
+    }
+
+    return 1;
+}
+
+
+stock SanitizeLoadedSpawnPosition(playerid)
+{
+    if (PlayerLastZ[playerid] < -10.0 || PlayerLastZ[playerid] > 200.0)
+    {
+        PlayerLastX[playerid] = SPAWN_X;
+        PlayerLastY[playerid] = SPAWN_Y;
+        PlayerLastZ[playerid] = SPAWN_Z;
+        PlayerLastA[playerid] = SPAWN_A;
+        SendClientMessage(playerid, COLOR_YELLOW, "Posisi terakhir terdeteksi tidak aman. Kamu dipindahkan ke spawn utama untuk mencegah freefall.");
+        return 1;
+    }
+
     return 1;
 }
 
@@ -9891,7 +9966,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24A Offline Parked Vehicle Seeder");
+    SetGameModeText("SAIF Dev v0.24A.1 Interior Spawn Safety");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -9993,7 +10068,7 @@ public OnGameModeInit()
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24A Offline Parked Vehicle Seeder berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24A.1 Interior Spawn Safety berhasil dijalankan.");
     return 1;
 }
 
@@ -14144,6 +14219,8 @@ public OnAccountLogin(playerid)
     cache_get_value_name_float(0, "pos_z", PlayerLastZ[playerid]);
     cache_get_value_name_float(0, "pos_a", PlayerLastA[playerid]);
 
+    SanitizeLoadedSpawnPosition(playerid);
+
     PlayerLoggedIn[playerid] = 1;
 
     ApplyLoadedPlayerData(playerid);
@@ -17407,7 +17484,7 @@ stock ShowWorldPickupMenu(playerid)
         return 0;
     }
 
-    ShowPlayerDialog(playerid, DIALOG_WPICKUP_MENU, DIALOG_STYLE_LIST, "Offline World Pickup Editor", "Create Pickup\nList / Select Pickup\nInput ID Manual\nSeed Offline Template\nClear Offline Seed\nSeed Info\nReload Pickups\nHelp", "Select", "Close");
+    ShowPlayerDialog(playerid, DIALOG_WPICKUP_MENU, DIALOG_STYLE_LIST, "Offline World Pickup Editor", "Create Pickup\nList / Select Pickup\nInput ID Manual\nSeed Curated Offline-like Template\nClear Curated Seed\nSeed Info\nReload Pickups\nHelp", "Select", "Close");
     return 1;
 }
 
@@ -18019,7 +18096,7 @@ stock ShowParkedVehicleMenu(playerid)
     }
 
     new dialogText[768];
-    format(dialogText, sizeof(dialogText), "Create Parked Vehicle\nList / Select Parked Vehicle\nInput ID Manual\nReload Parked Vehicles\nSeed Offline Template\nClear Offline Seed\nSeed Info\nHelp");
+    format(dialogText, sizeof(dialogText), "Create Parked Vehicle\nList / Select Parked Vehicle\nInput ID Manual\nReload Parked Vehicles\nSeed Curated Offline-like Template\nClear Curated Seed\nSeed Info\nHelp");
     ShowPlayerDialog(playerid, DIALOG_PARKVEH_MENU, DIALOG_STYLE_LIST, "Parked Vehicle Editor", dialogText, "Select", "Close");
     return 1;
 }
@@ -18213,7 +18290,7 @@ stock ShowParkedVehicleEditorHelp(playerid)
     SendClientMessage(playerid, COLOR_WHITE, "/parkvehclearseed - disable hanya parked vehicle hasil seed.");
     SendClientMessage(playerid, COLOR_WHITE, "/parkvehseedinfo - cek status seed offline-like.");
     SendClientMessage(playerid, COLOR_WHITE, "Command lama tetap aktif sebagai fallback/debug.");
-    SendClientMessage(playerid, COLOR_CYAN, "Cocok untuk taxi stand, bus terminal, depot, police/hospital/fire station.");
+    SendClientMessage(playerid, COLOR_CYAN, "Cocok untuk taxi stand, bus terminal, depot, police/hospital/fire station. Catatan: seed v0.24A masih curated/offline-like, belum exact posisi original main.scm.");
     return 1;
 }
 
@@ -18223,7 +18300,7 @@ stock SeedOfflineParkedVehicleTemplate(playerid)
 {
     if (!IsAdminLevel(playerid, ADMIN_OWNER))
     {
-        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa seed offline parked vehicle template.");
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa seed curated parked vehicle template.");
         return 0;
     }
 
@@ -18231,7 +18308,7 @@ stock SeedOfflineParkedVehicleTemplate(playerid)
     mysql_format(g_SQL, query, sizeof(query), "UPDATE parked_vehicles SET enabled=0 WHERE source_tag='%e'", PARKED_VEHICLE_OFFLINE_SEED_TAG);
     mysql_tquery(g_SQL, query, "OnParkedVehicleOfflineSeedCleared", "i", playerid);
 
-    SendClientMessage(playerid, COLOR_YELLOW, "Menyiapkan offline parked vehicle template seed...");
+    SendClientMessage(playerid, COLOR_YELLOW, "Menyiapkan curated offline-like parked vehicle seed...");
     SendClientMessage(playerid, COLOR_WHITE, "Seed lama dengan source_tag offline_template_ls dinonaktifkan dulu agar tidak double aktif.");
     return 1;
 }
@@ -18347,7 +18424,7 @@ public OnParkedVehicleOfflineSeedFinished(playerid)
 
     if (IsPlayerConnected(playerid))
     {
-        SendClientMessage(playerid, COLOR_GREEN, "Offline parked vehicle template berhasil di-seed.");
+        SendClientMessage(playerid, COLOR_GREEN, "Curated parked vehicle template berhasil di-seed.");
         SendClientMessage(playerid, COLOR_WHITE, "Total seed awal: 50 vehicle. Gunakan /parkvehseedinfo dan /parkvehlist untuk cek.");
     }
 
@@ -18405,7 +18482,7 @@ public OnParkedVehicleOfflineSeedInfoLoaded(playerid)
     new totalSeed = 0;
     new activeSeed = 0;
     new disabledSeed = 0;
-    new body[768];
+    new body[1024];
 
     if (cache_num_rows() > 0)
     {
@@ -18417,14 +18494,14 @@ public OnParkedVehicleOfflineSeedInfoLoaded(playerid)
     format(
         body,
         sizeof(body),
-        "Source Tag: %s\n\nDB Total Seed Rows: %d\nActive Seed Rows: %d\nDisabled Seed Rows: %d\n\nTemplate v0.24A awal:\n- Taxi stand / bus terminal: 10\n- Gang/neighborhood cars: 10\n- Police / hospital / fire station: 10\n- Truck depot / industrial: 10\n- Beach / parking lots: 10\n\nCommands:\n/parkvehseed\n/parkvehclearseed\n/parkvehseedinfo",
+        "Source Tag: %s\n\nDB Total Seed Rows: %d\nActive Seed Rows: %d\nDisabled Seed Rows: %d\n\nTemplate v0.24A awal (curated/offline-like, belum exact main.scm):\n- Taxi stand / bus terminal: 10\n- Gang/neighborhood cars: 10\n- Police / hospital / fire station: 10\n- Truck depot / industrial: 10\n- Beach / parking lots: 10\n\nCommands:\n/parkvehseed\n/parkvehclearseed\n/parkvehseedinfo",
         PARKED_VEHICLE_OFFLINE_SEED_TAG,
         totalSeed,
         activeSeed,
         disabledSeed
     );
 
-    ShowPlayerDialog(playerid, DIALOG_PARKVEH_SEED_INFO, DIALOG_STYLE_MSGBOX, "Offline Parked Vehicle Seed Info", body, "Back", "Close");
+    ShowPlayerDialog(playerid, DIALOG_PARKVEH_SEED_INFO, DIALOG_STYLE_MSGBOX, "Curated Parked Vehicle Seed Info", body, "Back", "Close");
     return 1;
 }
 
@@ -26254,7 +26331,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24A Offline Parked Vehicle Seeder");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24A.1 Interior Spawn Safety");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -26263,7 +26340,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24A: Offline parked vehicle template seeder, /parkvehseed, /parkvehclearseed, /parkvehseedinfo.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24A.1: Interior spawn safety fix; player tidak freefall setelah restart saat posisi terakhir di interior.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24A: Curated offline-like parked vehicle template seeder, /parkvehseed, /parkvehclearseed, /parkvehseedinfo.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23F.3: Public interior checkpoint interaction, service point merah, exit fix.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23F.1: Public interior template fix, safer default coords, shared VW.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23B: Parked vehicle dialog menu dan interactive editor.");

@@ -229,6 +229,7 @@
 #define DIALOG_BUSINESS_PRESET_INCOME_INPUT 1209
 #define DIALOG_GANG_PRESET_ENABLE_INPUT 1210
 #define DIALOG_GANG_PRESET_STATUS 1211
+#define DIALOG_SOURCE_AUDIT 1212
 
 
 
@@ -2153,6 +2154,7 @@ forward OnGangRestockBankLoaded(playerid, gangid, weaponIndex, ammo, cost);
 forward OnGangHQInteriorsLoaded();
 forward OnGangPresetConfigLoaded();
 forward OnBusinessPresetConfigLoaded();
+forward OnSourceAuditSummaryLoaded(playerid);
 forward OnDynamicLocationsLoaded();
 forward OnDynamicLocationCreated(playerid);
 forward OnDynamicLocationUpdated(playerid);
@@ -10644,7 +10646,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K Gang Preset Finalization");
+    SetGameModeText("SAIF Dev v0.24L Source Audit Tools");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -10757,7 +10759,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K Gang Preset Finalization berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24L Source Audit Tools berhasil dijalankan.");
     return 1;
 }
 
@@ -11346,6 +11348,7 @@ stock ShowAdminToolsMenu(playerid)
     strcat(body, "Business Preset DB Config\t/bizpresetmenu\tOwner\n", sizeof(body));
     strcat(body, "Ammu-Nation Config\t/ammuconfig\tOwner\n", sizeof(body));
     strcat(body, "Public Service Config\t/serviceconfig\tOwner\n", sizeof(body));
+    strcat(body, "Offline Source Audit\t/sourceaudit\tOwner\n", sizeof(body));
     strcat(body, "Command Reference\t/amenus\tHelper+\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_ADMIN_TOOLS_MENU, DIALOG_STYLE_TABLIST_HEADERS, "SAIF Admin Menus Hub", body, "Open", "Close");
@@ -11360,12 +11363,133 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "SAIF Admin Menus Hub (/amenus)\n\n", sizeof(body));
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/turfmenu | /turfedit\n\n", sizeof(body));
-    strcat(body, "Offline/Exact Source Tools:\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
+    strcat(body, "Offline/Exact Source Tools:\n/sourceaudit | /saifaudit | /exactaudit | /sourcecheck\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
     strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id]\n\n", sizeof(body));
-    strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
+    strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat exact/manual/deprecated data sebelum cleanup.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "SAIF Admin Menu Reference", body, "Back", "Close");
+    return 1;
+}
+
+stock GetSourceAuditClass(sourceTag[], className[], len)
+{
+    if (strfind(sourceTag, "offline_exact", true) != -1 || strfind(sourceTag, "exact", true) != -1)
+    {
+        format(className, len, "EXACT");
+        return 1;
+    }
+
+    if (strfind(sourceTag, "template", true) != -1 || strfind(sourceTag, "curated", true) != -1 || strfind(sourceTag, "legacy_static", true) != -1)
+    {
+        format(className, len, "DEPRECATED");
+        return 1;
+    }
+
+    if (strfind(sourceTag, "manual", true) != -1 || strfind(sourceTag, "db_editor", true) != -1)
+    {
+        format(className, len, "MANUAL");
+        return 1;
+    }
+
+    format(className, len, "UNKNOWN");
+    return 1;
+}
+
+stock ShowOfflineSourceAudit(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka offline/source audit.");
+        return 0;
+    }
+
+    new query[4096];
+    query[0] = EOS;
+
+    strcat(query, "SELECT 'world_locations' AS dataset, ", sizeof(query));
+    strcat(query, "COALESCE(NULLIF(source_tag,''),'unknown') AS source_tag, ", sizeof(query));
+    strcat(query, "COUNT(*) AS total, SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END) AS active ", sizeof(query));
+    strcat(query, "FROM world_locations GROUP BY COALESCE(NULLIF(source_tag,''),'unknown') ", sizeof(query));
+
+    strcat(query, "UNION ALL SELECT 'world_objects', ", sizeof(query));
+    strcat(query, "COALESCE(NULLIF(source_tag,''),'unknown'), COUNT(*), ", sizeof(query));
+    strcat(query, "SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END) ", sizeof(query));
+    strcat(query, "FROM world_objects GROUP BY COALESCE(NULLIF(source_tag,''),'unknown') ", sizeof(query));
+
+    strcat(query, "UNION ALL SELECT 'parked_vehicles', ", sizeof(query));
+    strcat(query, "COALESCE(NULLIF(source_tag,''),'unknown'), COUNT(*), ", sizeof(query));
+    strcat(query, "SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END) ", sizeof(query));
+    strcat(query, "FROM parked_vehicles GROUP BY COALESCE(NULLIF(source_tag,''),'unknown') ", sizeof(query));
+
+    strcat(query, "UNION ALL SELECT 'world_pickups', ", sizeof(query));
+    strcat(query, "COALESCE(NULLIF(source_tag,''),'unknown'), COUNT(*), ", sizeof(query));
+    strcat(query, "SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END) ", sizeof(query));
+    strcat(query, "FROM world_pickups GROUP BY COALESCE(NULLIF(source_tag,''),'unknown') ", sizeof(query));
+
+    strcat(query, "UNION ALL SELECT 'public_interiors', ", sizeof(query));
+    strcat(query, "COALESCE(NULLIF(source_tag,''),'unknown'), COUNT(*), ", sizeof(query));
+    strcat(query, "SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END) ", sizeof(query));
+    strcat(query, "FROM public_interiors GROUP BY COALESCE(NULLIF(source_tag,''),'unknown') ", sizeof(query));
+
+    strcat(query, "UNION ALL SELECT 'gang_preset_config', ", sizeof(query));
+    strcat(query, "COALESCE(NULLIF(source_tag,''),'unknown'), COUNT(*), ", sizeof(query));
+    strcat(query, "SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END) ", sizeof(query));
+    strcat(query, "FROM gang_preset_config GROUP BY COALESCE(NULLIF(source_tag,''),'unknown') ", sizeof(query));
+
+    strcat(query, "UNION ALL SELECT 'business_preset_config', ", sizeof(query));
+    strcat(query, "COALESCE(NULLIF(source_tag,''),'unknown'), COUNT(*), ", sizeof(query));
+    strcat(query, "SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END) ", sizeof(query));
+    strcat(query, "FROM business_preset_config GROUP BY COALESCE(NULLIF(source_tag,''),'unknown') ", sizeof(query));
+
+    strcat(query, "ORDER BY dataset ASC, source_tag ASC", sizeof(query));
+
+    mysql_tquery(g_SQL, query, "OnSourceAuditSummaryLoaded", "i", playerid);
+    SendClientMessage(playerid, COLOR_YELLOW, "Memuat SAIF offline/source audit dari database...");
+    return 1;
+}
+
+public OnSourceAuditSummaryLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+
+    new rows = cache_num_rows();
+    new body[4096];
+    new line[256];
+    new dataset[48];
+    new sourceTag[80];
+    new className[24];
+    new total;
+    new active;
+
+    body[0] = EOS;
+    strcat(body, "Dataset\tSource Tag\tClass\tTotal/Active\n", sizeof(body));
+
+    if (rows <= 0)
+    {
+        strcat(body, "-\tTidak ada data audit atau query gagal. Pastikan SQL v0.24L sudah dijalankan.\t-\t-\n", sizeof(body));
+    }
+    else
+    {
+        for (new i = 0; i < rows; i++)
+        {
+            cache_get_value_name(i, "dataset", dataset, sizeof(dataset));
+            cache_get_value_name(i, "source_tag", sourceTag, sizeof(sourceTag));
+            cache_get_value_name_int(i, "total", total);
+            cache_get_value_name_int(i, "active", active);
+
+            GetSourceAuditClass(sourceTag, className, sizeof(className));
+            format(line, sizeof(line), "%s\t%s\t%s\t%d/%d\n", dataset, sourceTag, className, total, active);
+
+            if ((strlen(body) + strlen(line)) < 3900)
+            {
+                strcat(body, line, sizeof(body));
+            }
+        }
+    }
+
+    strcat(body, "\nPolicy:\tEXACT = prioritas. MANUAL = editor/admin. DEPRECATED = template/legacy yang harus diaudit.\t-\t-", sizeof(body));
+    ShowPlayerDialog(playerid, DIALOG_SOURCE_AUDIT, DIALOG_STYLE_TABLIST_HEADERS, "SAIF Offline Source Audit", body, "Back", "Close");
     return 1;
 }
 
@@ -11847,11 +11971,22 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 9: ShowBusinessPresetMenu(playerid);
             case 10: ShowAmmuConfigMenu(playerid);
             case 11: ShowPublicServiceConfigMenu(playerid);
-            case 12: ShowAdminToolsReference(playerid);
+            case 12: ShowOfflineSourceAudit(playerid);
+            case 13: ShowAdminToolsReference(playerid);
         }
         return 1;
     }
 
+
+
+    if (dialogid == DIALOG_SOURCE_AUDIT)
+    {
+        if (response)
+        {
+            ShowAdminToolsMenu(playerid);
+        }
+        return 1;
+    }
 
 
     if (dialogid == DIALOG_BUSINESS_PRESET_MENU)
@@ -21850,7 +21985,7 @@ stock CreateDynamicObjectAtPlayer(playerid, modelid)
         g_SQL,
         query,
         sizeof(query),
-        "INSERT INTO world_objects (object_name, model_id, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z, interior, virtual_world, enabled) VALUES ('%e', %d, %f, %f, %f, 0.0, 0.0, %f, %d, %d, 1)",
+        "INSERT INTO world_objects (object_name, model_id, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z, interior, virtual_world, enabled, source_tag) VALUES ('%e', %d, %f, %f, %f, 0.0, 0.0, %f, %d, %d, 1, 'manual')",
         objectName,
         modelid,
         x,
@@ -21884,7 +22019,7 @@ stock CreateDynamicLocationAtCoordsLinked(playerid, const locType[], const locNa
         g_SQL,
         query,
         sizeof(query),
-        "INSERT INTO world_locations (location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled) VALUES ('%e', '%e', '%e', %f, %f, %f, %f, %d, %d, %d, 0, 0, %d, '%e', 3.0, 1)",
+        "INSERT INTO world_locations (location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled, source_tag) VALUES ('%e', '%e', '%e', %f, %f, %f, %f, %d, %d, %d, 0, 0, %d, '%e', 3.0, 1, 'manual')",
         locName,
         locType,
         locName,
@@ -21938,7 +22073,7 @@ stock CreateDynamicLocationAtCoords(playerid, const locType[], const locName[], 
         g_SQL,
         query,
         sizeof(query),
-        "INSERT INTO world_locations (location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, label_text, interaction_radius, enabled) VALUES ('%e', '%e', '%e', %f, %f, %f, %f, %d, %d, %d, %d, 0, '%e', 3.0, 1)",
+        "INSERT INTO world_locations (location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, label_text, interaction_radius, enabled, source_tag) VALUES ('%e', '%e', '%e', %f, %f, %f, %f, %d, %d, %d, %d, 0, '%e', 3.0, 1, 'manual')",
         locName,
         locType,
         locName,
@@ -21977,7 +22112,7 @@ stock CreateDynamicObjectAtCoords(playerid, modelid, const objectName[], Float:x
         g_SQL,
         query,
         sizeof(query),
-        "INSERT INTO world_objects (object_name, model_id, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z, interior, virtual_world, enabled) VALUES ('%e', %d, %f, %f, %f, 0.0, 0.0, %f, %d, %d, 1)",
+        "INSERT INTO world_objects (object_name, model_id, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z, interior, virtual_world, enabled, source_tag) VALUES ('%e', %d, %f, %f, %f, 0.0, 0.0, %f, %d, %d, 1, 'manual')",
         objectName,
         modelid,
         x,
@@ -22168,7 +22303,7 @@ stock CreateDynamicLocationAtPlayer(playerid, const locType[], const locName[])
         g_SQL,
         query,
         sizeof(query),
-        "INSERT INTO world_locations (location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, label_text, interaction_radius, enabled) VALUES ('%e', '%e', '%e', %f, %f, %f, %f, %d, %d, %d, %d, 0, '%e', 3.0, 1)",
+        "INSERT INTO world_locations (location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, label_text, interaction_radius, enabled, source_tag) VALUES ('%e', '%e', '%e', %f, %f, %f, %f, %d, %d, %d, %d, 0, '%e', 3.0, 1, 'manual')",
         locName,
         locType,
         locName,
@@ -27800,6 +27935,12 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/sourceaudit", true) || !strcmp(cmdtext, "/saifaudit", true) || !strcmp(cmdtext, "/exactaudit", true) || !strcmp(cmdtext, "/sourcecheck", true))
+    {
+        ShowOfflineSourceAudit(playerid);
+        return 1;
+    }
+
 
     if (!strcmp(cmdtext, "/bizpresetmenu", true) || !strcmp(cmdtext, "/businessdbmenu", true) || !strcmp(cmdtext, "/bizdbmenu", true))
     {
@@ -29558,7 +29699,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K Gang Preset Finalization");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24L Source Audit Tools");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -29568,6 +29709,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24L: Offline/source audit tools, source_tag validation summary, and /amenus audit entry.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K: Gang preset active status, enable/disable, runtime hide, and /amenus command reference cleanup.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24J.4: Business array compile fix after MAX_BUSINESSES 64 expansion.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24F.2: Ammu config dialog fix, edit price/ammo/select action now responds correctly.");
@@ -31144,6 +31286,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/recentlogs - Admin log terbaru");
         SendClientMessage(playerid, COLOR_WHITE, "/adminmenu - Dashboard admin berbasis dialog");
         SendClientMessage(playerid, COLOR_WHITE, "/betamenu - Dashboard beta/whitelist berbasis dialog");
+        SendClientMessage(playerid, COLOR_WHITE, "/amenus - Admin menus hub");
+        SendClientMessage(playerid, COLOR_WHITE, "/sourceaudit - Audit source_tag exact/manual/deprecated, Owner only");
         SendClientMessage(playerid, COLOR_WHITE, "/version, /changelog, /credits, /staff - Release info commands");
 
         return 1;

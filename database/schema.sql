@@ -1875,3 +1875,23 @@ INSERT INTO gang_hq_interiors
 (gang_id, gang_name, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, enabled)
 SELECT 9, 'Russian Mafia', 3, 42009, 2496.0498, -1695.2382, 1014.7422, 180.0, 2520.3000, 2311.2000, 10.8203, 90.0, 1
 WHERE NOT EXISTS (SELECT 1 FROM gang_hq_interiors WHERE gang_id=9);
+
+
+-- SAIF / LSIF Dev v0.24L - Source Audit Tools
+-- Purpose: make source_tag available for audit tools without overwriting exact-source data.
+-- Add this to database/schema.sql and run once before testing /sourceaudit.
+
+ALTER TABLE world_locations
+    ADD COLUMN IF NOT EXISTS source_tag VARCHAR(64) NOT NULL DEFAULT 'manual' AFTER enabled;
+
+ALTER TABLE world_objects
+    ADD COLUMN IF NOT EXISTS source_tag VARCHAR(64) NOT NULL DEFAULT 'manual' AFTER enabled;
+
+UPDATE world_locations
+SET source_tag = 'manual'
+WHERE source_tag IS NULL OR source_tag = '';
+
+UPDATE world_objects
+SET source_tag = 'manual'
+WHERE source_tag IS NULL OR source_tag = '';
+

@@ -645,3 +645,35 @@ INSERT INTO gang_weapon_stash (gang_id, weapon_id, weapon_name, ammo) VALUES
 (4, 22, 'Colt 45', 300),
 (4, 23, 'Silenced Pistol', 180)
 ON DUPLICATE KEY UPDATE weapon_name=VALUES(weapon_name);
+
+-- SAIF / LSIF Dev v0.22F — Gang HQ Interior & Shared Utility
+-- Jalankan / gabungkan ke database/schema.sql sebelum deploy.
+
+CREATE TABLE IF NOT EXISTS gang_hq_interiors (
+    gang_id INT NOT NULL PRIMARY KEY,
+    gang_name VARCHAR(64) NOT NULL,
+    interior_id INT NOT NULL DEFAULT 3,
+    virtual_world INT NOT NULL DEFAULT 0,
+    int_x FLOAT NOT NULL DEFAULT 2496.0498,
+    int_y FLOAT NOT NULL DEFAULT -1695.2382,
+    int_z FLOAT NOT NULL DEFAULT 1014.7422,
+    int_a FLOAT NOT NULL DEFAULT 180.0000,
+    exit_x FLOAT NOT NULL DEFAULT 0,
+    exit_y FLOAT NOT NULL DEFAULT 0,
+    exit_z FLOAT NOT NULL DEFAULT 0,
+    exit_a FLOAT NOT NULL DEFAULT 0,
+    enabled TINYINT NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+INSERT INTO gang_hq_interiors
+(gang_id, gang_name, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, enabled)
+VALUES
+(1, 'Grove Street Families', 3, 42001, 2496.0498, -1695.2382, 1014.7422, 180.0000, 2495.4094, -1686.1682, 13.5153, 0.0000, 1),
+(2, 'Ballas', 3, 42002, 2496.0498, -1695.2382, 1014.7422, 180.0000, 2229.3215, -1159.7343, 25.7331, 0.0000, 1),
+(3, 'Los Santos Vagos', 3, 42003, 2496.0498, -1695.2382, 1014.7422, 180.0000, 2421.5427, -1224.3597, 25.3828, 0.0000, 1),
+(4, 'Varrios Los Aztecas', 3, 42004, 2496.0498, -1695.2382, 1014.7422, 180.0000, 1766.6000, -1918.3000, 13.5600, 0.0000, 1)
+ON DUPLICATE KEY UPDATE
+    gang_name = VALUES(gang_name),
+    updated_at = NOW();

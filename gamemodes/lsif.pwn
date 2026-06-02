@@ -336,6 +336,12 @@
 #define GANG_STASH_RESTOCK_AMMO_SMALL 100
 #define GANG_STASH_RESTOCK_AMMO_LARGE 300
 
+#define GANG_HQ_INTERIOR_PICKUP_MODEL 1318
+#define GANG_HQ_INTERIOR_PICKUP_TYPE 1
+#define GANG_HQ_INTERIOR_PICKUP_COOLDOWN_MS 3000
+#define GANG_HQ_INTERIOR_EXIT_Y_OFFSET -2.0
+#define GANG_HQ_VW_OFFSET 42000
+
 #define TURF_WAR_STATE_NONE            0
 #define TURF_WAR_STATE_CAPTURING       1
 #define TURF_WAR_STATE_CONTESTED       2
@@ -913,6 +919,9 @@ new PlayerDialogTerritoryIndex[MAX_PLAYERS];
 new PlayerDialogGangID[MAX_PLAYERS];
 new PlayerGangStashSelectedWeaponIndex[MAX_PLAYERS];
 new PlayerGangStashTakeCooldownUntil[MAX_PLAYERS];
+new PlayerInsideGangHQ[MAX_PLAYERS];
+new PlayerInsideGangHQID[MAX_PLAYERS];
+new PlayerLastGangHQPickupTick[MAX_PLAYERS];
 
 new GangWeaponStashAmmo[MAX_PRESET_GANGS][MAX_WEAPON_SHOP_ITEMS];
 new GangStashMinRank[MAX_WEAPON_SHOP_ITEMS] =
@@ -961,6 +970,19 @@ new PlayerNearbyInteractionLabel[MAX_PLAYERS][MAX_NEARBY_INTERACTIONS][64];
 
 new GangHQPickup[MAX_PRESET_GANGS];
 new Text3D:GangHQLabel[MAX_PRESET_GANGS];
+new GangHQInteriorExitPickup[MAX_PRESET_GANGS];
+new Text3D:GangHQInteriorExitLabel[MAX_PRESET_GANGS];
+new GangHQInteriorEnabled[MAX_PRESET_GANGS];
+new GangHQInteriorID[MAX_PRESET_GANGS];
+new GangHQInteriorVirtualWorld[MAX_PRESET_GANGS];
+new Float:GangHQInteriorX[MAX_PRESET_GANGS];
+new Float:GangHQInteriorY[MAX_PRESET_GANGS];
+new Float:GangHQInteriorZ[MAX_PRESET_GANGS];
+new Float:GangHQInteriorA[MAX_PRESET_GANGS];
+new Float:GangHQInteriorExitX[MAX_PRESET_GANGS];
+new Float:GangHQInteriorExitY[MAX_PRESET_GANGS];
+new Float:GangHQInteriorExitZ[MAX_PRESET_GANGS];
+new Float:GangHQInteriorExitA[MAX_PRESET_GANGS];
 
 new TerritoryPickup[MAX_TERRITORIES];
 new Text3D:TerritoryLabel[MAX_TERRITORIES];
@@ -1749,6 +1771,7 @@ forward OnGangMembersLoaded(playerid);
 forward OnGangListLoaded(playerid);
 forward OnGangWeaponStashLoaded();
 forward OnGangRestockBankLoaded(playerid, gangid, weaponIndex, ammo, cost);
+forward OnGangHQInteriorsLoaded();
 forward OnDynamicLocationsLoaded();
 forward OnDynamicLocationCreated(playerid);
 forward OnDynamicLocationUpdated(playerid);
@@ -4889,6 +4912,9 @@ stock ResetPlayerGangData(playerid)
     PlayerDialogGangID[playerid] = 0;
     PlayerGangStashSelectedWeaponIndex[playerid] = -1;
     PlayerGangStashTakeCooldownUntil[playerid] = 0;
+    PlayerInsideGangHQ[playerid] = 0;
+    PlayerInsideGangHQID[playerid] = 0;
+    PlayerLastGangHQPickupTick[playerid] = 0;
     format(PlayerGangName[playerid], 64, "None");
     format(PlayerPendingGangName[playerid], 64, "None");
     ApplyPlayerGangNameColor(playerid);
@@ -5065,6 +5091,7 @@ stock ShowGangHQDialog(playerid, gangid)
         strcat(body, "Promote Member (Gang Boss)\n", sizeof(body));
         strcat(body, "Demote Member (Gang Boss)\n", sizeof(body));
         strcat(body, "Leave Gang\n", sizeof(body));
+        strcat(body, "Enter HQ Interior\n", sizeof(body));
         strcat(body, "Weapon Stash", sizeof(body));
     }
     else
@@ -6893,6 +6920,7 @@ stock ShowGangMenuDialog(playerid)
         strcat(body, "Demote Member (Gang Boss)\n", sizeof(body));
         strcat(body, "Leave Gang\n", sizeof(body));
         strcat(body, "Preset Gangs / HQ List\n", sizeof(body));
+        strcat(body, "Enter HQ Interior\n", sizeof(body));
         strcat(body, "Weapon Stash", sizeof(body));
     }
 
@@ -7130,6 +7158,49 @@ stock GetPlayerGangHQIndex(playerid)
     return GetPresetGangIndexByID(PlayerGangID[playerid]);
 }
 
+stock GetGangHQVirtualWorld(gangid)
+{
+    return GANG_HQ_VW_OFFSET + gangid;
+}
+
+stock IsPlayerInGangHQPickupCooldown(playerid)
+{
+    new nowTick = GetTickCount();
+
+    if (PlayerLastGangHQPickupTick[playerid] != 0 && nowTick - PlayerLastGangHQPickupTick[playerid] < GANG_HQ_INTERIOR_PICKUP_COOLDOWN_MS)
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
+stock SetPlayerGangHQPickupCooldown(playerid)
+{
+    PlayerLastGangHQPickupTick[playerid] = GetTickCount();
+    return 1;
+}
+
+stock IsPlayerInsideOwnGangHQInterior(playerid)
+{
+    if (!PlayerInsideGangHQ[playerid])
+    {
+        return 0;
+    }
+
+    if (PlayerGangID[playerid] <= 0)
+    {
+        return 0;
+    }
+
+    if (PlayerInsideGangHQID[playerid] != PlayerGangID[playerid])
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
 stock IsPlayerNearOwnGangHQ(playerid)
 {
     new gangIndex = GetPlayerGangHQIndex(playerid);
@@ -7139,7 +7210,362 @@ stock IsPlayerNearOwnGangHQ(playerid)
         return 0;
     }
 
+    if (IsPlayerInsideOwnGangHQInterior(playerid))
+    {
+        return 1;
+    }
+
     return IsPlayerNearGangHQ(playerid, gangIndex);
+}
+
+stock InitGangHQInteriorDefaults()
+{
+    for (new i = 0; i < MAX_PRESET_GANGS; i++)
+    {
+        GangHQInteriorEnabled[i] = 1;
+        GangHQInteriorID[i] = 3;
+        GangHQInteriorVirtualWorld[i] = GetGangHQVirtualWorld(PresetGangID[i]);
+        GangHQInteriorX[i] = 2496.0498;
+        GangHQInteriorY[i] = -1695.2382;
+        GangHQInteriorZ[i] = 1014.7422;
+        GangHQInteriorA[i] = 180.0000;
+        GangHQInteriorExitX[i] = GangHQX[i];
+        GangHQInteriorExitY[i] = GangHQY[i];
+        GangHQInteriorExitZ[i] = GangHQZ[i];
+        GangHQInteriorExitA[i] = 0.0000;
+    }
+
+    return 1;
+}
+
+stock DestroyGangHQInteriorRuntime(gangIndex)
+{
+    if (gangIndex < 0 || gangIndex >= MAX_PRESET_GANGS)
+    {
+        return 0;
+    }
+
+    if (GangHQInteriorExitPickup[gangIndex] != -1)
+    {
+        DestroyPickup(GangHQInteriorExitPickup[gangIndex]);
+        GangHQInteriorExitPickup[gangIndex] = -1;
+    }
+
+    if (GangHQInteriorExitLabel[gangIndex] != Text3D:INVALID_3DTEXT_ID)
+    {
+        Delete3DTextLabel(GangHQInteriorExitLabel[gangIndex]);
+        GangHQInteriorExitLabel[gangIndex] = Text3D:INVALID_3DTEXT_ID;
+    }
+
+    return 1;
+}
+
+stock CreateGangHQInteriorRuntime(gangIndex)
+{
+    if (gangIndex < 0 || gangIndex >= MAX_PRESET_GANGS)
+    {
+        return 0;
+    }
+
+    DestroyGangHQInteriorRuntime(gangIndex);
+
+    if (!GangHQInteriorEnabled[gangIndex])
+    {
+        return 1;
+    }
+
+    new Float:exitPickupY = GangHQInteriorY[gangIndex] + GANG_HQ_INTERIOR_EXIT_Y_OFFSET;
+    new labelText[144];
+
+    GangHQInteriorExitPickup[gangIndex] = CreatePickup(
+            GANG_HQ_INTERIOR_PICKUP_MODEL,
+            GANG_HQ_INTERIOR_PICKUP_TYPE,
+            GangHQInteriorX[gangIndex],
+            exitPickupY,
+            GangHQInteriorZ[gangIndex],
+            GangHQInteriorVirtualWorld[gangIndex]
+                                          );
+
+    format(labelText, sizeof(labelText), "[EXIT] %s HQ\nPanah = Exit HQ\nALT = Stash / Gang Utility", PresetGangShortName[gangIndex]);
+    GangHQInteriorExitLabel[gangIndex] = Create3DTextLabel(
+            labelText,
+            PresetGangColor[gangIndex],
+            GangHQInteriorX[gangIndex],
+            exitPickupY,
+            GangHQInteriorZ[gangIndex] + 0.8,
+            16.0,
+            GangHQInteriorVirtualWorld[gangIndex],
+            true
+                                         );
+
+    return 1;
+}
+
+stock CreateAllGangHQInteriorRuntime()
+{
+    for (new i = 0; i < MAX_PRESET_GANGS; i++)
+    {
+        CreateGangHQInteriorRuntime(i);
+    }
+
+    return 1;
+}
+
+stock DestroyAllGangHQInteriorRuntime()
+{
+    for (new i = 0; i < MAX_PRESET_GANGS; i++)
+    {
+        DestroyGangHQInteriorRuntime(i);
+    }
+
+    return 1;
+}
+
+stock LoadGangHQInteriors()
+{
+    InitGangHQInteriorDefaults();
+    mysql_tquery(g_SQL, "SELECT gang_id, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, enabled FROM gang_hq_interiors WHERE gang_id BETWEEN 1 AND 4 ORDER BY gang_id ASC", "OnGangHQInteriorsLoaded");
+    return 1;
+}
+
+public OnGangHQInteriorsLoaded()
+{
+    new rows = cache_num_rows();
+    new gangid;
+    new gangIndex;
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name_int(i, "gang_id", gangid);
+        gangIndex = GetPresetGangIndexByID(gangid);
+
+        if (gangIndex == -1)
+        {
+            continue;
+        }
+
+        cache_get_value_name_int(i, "interior_id", GangHQInteriorID[gangIndex]);
+        cache_get_value_name_int(i, "virtual_world", GangHQInteriorVirtualWorld[gangIndex]);
+        cache_get_value_name_float(i, "int_x", GangHQInteriorX[gangIndex]);
+        cache_get_value_name_float(i, "int_y", GangHQInteriorY[gangIndex]);
+        cache_get_value_name_float(i, "int_z", GangHQInteriorZ[gangIndex]);
+        cache_get_value_name_float(i, "int_a", GangHQInteriorA[gangIndex]);
+        cache_get_value_name_float(i, "exit_x", GangHQInteriorExitX[gangIndex]);
+        cache_get_value_name_float(i, "exit_y", GangHQInteriorExitY[gangIndex]);
+        cache_get_value_name_float(i, "exit_z", GangHQInteriorExitZ[gangIndex]);
+        cache_get_value_name_float(i, "exit_a", GangHQInteriorExitA[gangIndex]);
+        cache_get_value_name_int(i, "enabled", GangHQInteriorEnabled[gangIndex]);
+
+        if (GangHQInteriorVirtualWorld[gangIndex] <= 0)
+        {
+            GangHQInteriorVirtualWorld[gangIndex] = GetGangHQVirtualWorld(gangid);
+        }
+    }
+
+    CreateAllGangHQInteriorRuntime();
+    printf("[SAIF] Gang HQ interiors loaded: %d rows.", rows);
+    return 1;
+}
+
+stock SaveGangHQInterior(gangid)
+{
+    new gangIndex = GetPresetGangIndexByID(gangid);
+
+    if (gangIndex == -1)
+    {
+        return 0;
+    }
+
+    new query[1024];
+    mysql_format(g_SQL, query, sizeof(query), "REPLACE INTO gang_hq_interiors (gang_id, gang_name, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, enabled) VALUES (%d, '%e', %d, %d, %f, %f, %f, %f, %f, %f, %f, %f, %d)", gangid, PresetGangName[gangIndex], GangHQInteriorID[gangIndex], GangHQInteriorVirtualWorld[gangIndex], GangHQInteriorX[gangIndex], GangHQInteriorY[gangIndex], GangHQInteriorZ[gangIndex], GangHQInteriorA[gangIndex], GangHQInteriorExitX[gangIndex], GangHQInteriorExitY[gangIndex], GangHQInteriorExitZ[gangIndex], GangHQInteriorExitA[gangIndex], GangHQInteriorEnabled[gangIndex]);
+    mysql_tquery(g_SQL, query);
+    return 1;
+}
+
+stock EnterPlayerGangHQInterior(playerid, gangid)
+{
+    new gangIndex = GetPresetGangIndexByID(gangid);
+
+    if (gangIndex == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang HQ tidak valid.");
+        return 0;
+    }
+
+    if (PlayerGangID[playerid] != gangid)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu hanya bisa masuk ke interior HQ gang sendiri.");
+        return 0;
+    }
+
+    if (!GangHQInteriorEnabled[gangIndex])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Interior HQ gang ini belum aktif.");
+        return 0;
+    }
+
+    if (PlayerInsideGangHQ[playerid])
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Kamu sudah berada di dalam Gang HQ.");
+        return 0;
+    }
+
+    if (IsPlayerInGangHQPickupCooldown(playerid))
+    {
+        return 0;
+    }
+
+    if (PlayerWorking[playerid] || PlayerRace[playerid] != RACE_NONE)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Tidak bisa masuk Gang HQ saat job/race aktif.");
+        return 0;
+    }
+
+    if (!IsPlayerNearGangHQ(playerid, gangIndex))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada di luar HQ gang sendiri untuk masuk interior.");
+        return 0;
+    }
+
+    PlayerInsideGangHQ[playerid] = 1;
+    PlayerInsideGangHQID[playerid] = gangid;
+    SetPlayerGangHQPickupCooldown(playerid);
+
+    SetPlayerInterior(playerid, GangHQInteriorID[gangIndex]);
+    SetPlayerVirtualWorld(playerid, GangHQInteriorVirtualWorld[gangIndex]);
+    SetPlayerPos(playerid, GangHQInteriorX[gangIndex], GangHQInteriorY[gangIndex], GangHQInteriorZ[gangIndex]);
+    SetPlayerFacingAngle(playerid, GangHQInteriorA[gangIndex]);
+
+    SendClientMessage(playerid, COLOR_GREEN, "Kamu masuk ke interior Gang HQ.");
+    SendClientMessage(playerid, COLOR_WHITE, "Sentuh panah keluar atau gunakan /exitganghq. Gunakan /gangstash untuk weapon stash.");
+    return 1;
+}
+
+stock ExitPlayerGangHQInterior(playerid)
+{
+    if (!PlayerInsideGangHQ[playerid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak sedang berada di interior Gang HQ.");
+        return 0;
+    }
+
+    new gangid = PlayerInsideGangHQID[playerid];
+    new gangIndex = GetPresetGangIndexByID(gangid);
+
+    SetPlayerGangHQPickupCooldown(playerid);
+    PlayerInsideGangHQ[playerid] = 0;
+    PlayerInsideGangHQID[playerid] = 0;
+
+    SetPlayerInterior(playerid, 0);
+    SetPlayerVirtualWorld(playerid, 0);
+
+    if (gangIndex == -1)
+    {
+        SetPlayerPos(playerid, SPAWN_X, SPAWN_Y, SPAWN_Z);
+        SetPlayerFacingAngle(playerid, SPAWN_A);
+    }
+    else
+    {
+        SetPlayerPos(playerid, GangHQInteriorExitX[gangIndex], GangHQInteriorExitY[gangIndex], GangHQInteriorExitZ[gangIndex]);
+        SetPlayerFacingAngle(playerid, GangHQInteriorExitA[gangIndex]);
+    }
+
+    SendClientMessage(playerid, COLOR_GREEN, "Kamu keluar dari interior Gang HQ.");
+    return 1;
+}
+
+stock SetGangInteriorFromPlayer(playerid, gangid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa set gang interior.");
+        return 0;
+    }
+
+    new gangIndex = GetPresetGangIndexByID(gangid);
+
+    if (gangIndex == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang ID tidak valid. Gunakan /gangs.");
+        return 0;
+    }
+
+    new Float:x;
+    new Float:y;
+    new Float:z;
+    new Float:a;
+
+    GetPlayerPos(playerid, x, y, z);
+    GetPlayerFacingAngle(playerid, a);
+
+    GangHQInteriorEnabled[gangIndex] = 1;
+    GangHQInteriorID[gangIndex] = GetPlayerInterior(playerid);
+    GangHQInteriorVirtualWorld[gangIndex] = GetGangHQVirtualWorld(gangid);
+    GangHQInteriorX[gangIndex] = x;
+    GangHQInteriorY[gangIndex] = y;
+    GangHQInteriorZ[gangIndex] = z;
+    GangHQInteriorA[gangIndex] = a;
+    GangHQInteriorExitX[gangIndex] = GangHQX[gangIndex];
+    GangHQInteriorExitY[gangIndex] = GangHQY[gangIndex];
+    GangHQInteriorExitZ[gangIndex] = GangHQZ[gangIndex];
+    GangHQInteriorExitA[gangIndex] = 0.0;
+
+    SaveGangHQInterior(gangid);
+    CreateGangHQInteriorRuntime(gangIndex);
+
+    new msg[192];
+    format(msg, sizeof(msg), "Interior HQ %s diset. Interior %d | VW shared %d.", PresetGangShortName[gangIndex], GangHQInteriorID[gangIndex], GangHQInteriorVirtualWorld[gangIndex]);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    SendClientMessage(playerid, COLOR_WHITE, "Semua member gang ini akan masuk ke interior shared yang sama.");
+    return 1;
+}
+
+stock ShowGangInteriorInfo(playerid, gangid)
+{
+    new gangIndex = GetPresetGangIndexByID(gangid);
+
+    if (gangIndex == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang ID tidak valid. Gunakan /gangs.");
+        return 0;
+    }
+
+    new msg[192];
+    SendClientMessage(playerid, COLOR_YELLOW, "========== GANG HQ INTERIOR ==========");
+    format(msg, sizeof(msg), "Gang: %s | Enabled: %d | Interior: %d | VW: %d", PresetGangName[gangIndex], GangHQInteriorEnabled[gangIndex], GangHQInteriorID[gangIndex], GangHQInteriorVirtualWorld[gangIndex]);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+    format(msg, sizeof(msg), "Enter pos: %.2f %.2f %.2f | A %.2f", GangHQInteriorX[gangIndex], GangHQInteriorY[gangIndex], GangHQInteriorZ[gangIndex], GangHQInteriorA[gangIndex]);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+    format(msg, sizeof(msg), "Exit pos: %.2f %.2f %.2f | A %.2f", GangHQInteriorExitX[gangIndex], GangHQInteriorExitY[gangIndex], GangHQInteriorExitZ[gangIndex], GangHQInteriorExitA[gangIndex]);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+    SendClientMessage(playerid, COLOR_CYAN, "Command: /enterganghq, /exitganghq, /gangstash, /setganginterior [gang_id]");
+    return 1;
+}
+
+stock ShowGangHQUtilityInfo(playerid)
+{
+    if (PlayerGangID[playerid] <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu belum tergabung dalam gang. Datang ke HQ gang lalu tekan ALT untuk join.");
+        return 0;
+    }
+
+    new gangIndex = GetPlayerGangHQIndex(playerid);
+
+    if (gangIndex == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang kamu tidak valid.");
+        return 0;
+    }
+
+    new msg[192];
+    SendClientMessage(playerid, COLOR_YELLOW, "========== GANG HQ UTILITY ==========");
+    format(msg, sizeof(msg), "Gang: %s | HQ: %.2f %.2f %.2f", PresetGangName[gangIndex], GangHQX[gangIndex], GangHQY[gangIndex], GangHQZ[gangIndex]);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+    SendClientMessage(playerid, COLOR_WHITE, "/enterganghq = masuk interior HQ jika dekat HQ.");
+    SendClientMessage(playerid, COLOR_WHITE, "/exitganghq = keluar interior HQ.");
+    SendClientMessage(playerid, COLOR_WHITE, "/gangstash = weapon stash, bisa dari HQ luar atau interior HQ.");
+    return 1;
 }
 
 stock GetGangStashRestockCost(weaponIndex, ammo)
@@ -9266,7 +9692,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.22E Gang Weapon Stash");
+    SetGameModeText("SAIF Dev v0.22F Gang HQ Interior");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -9301,6 +9727,7 @@ public OnGameModeInit()
     CreateWorldInteractionMarkers();
     LoadGangTerritories();
     LoadGangWeaponStash();
+    LoadGangHQInteriors();
     LoadDynamicLocations();
     LoadDynamicObjects();
 
@@ -9363,7 +9790,7 @@ public OnGameModeInit()
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
-    print("[SAIF] Gamemode v0.22D.2 Persistent Turf Config berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.22F Gang HQ Interior & Shared Utility berhasil dijalankan.");
     return 1;
 }
 
@@ -9466,6 +9893,11 @@ public OnPlayerDisconnect(playerid, reason)
     PlayerDBID[playerid] = 0;
     PlayerAuthDialogShown[playerid] = 0;
     PlayerFindingBank[playerid] = 0;
+    if (PlayerInsideGangHQ[playerid])
+    {
+        PlayerInsideGangHQ[playerid] = 0;
+        PlayerInsideGangHQID[playerid] = 0;
+    }
     ResetPlayerOrgData(playerid);
     ResetPlayerGangData(playerid);
 
@@ -11423,6 +11855,11 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         }
         if (listitem == 14)
         {
+            EnterPlayerGangHQInterior(playerid, PlayerGangID[playerid]);
+            return 1;
+        }
+        if (listitem == 15)
+        {
             ShowGangWeaponStashDialog(playerid);
             return 1;
         }
@@ -11523,6 +11960,11 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
                 return 1;
             }
             if (listitem == 12)
+            {
+                EnterPlayerGangHQInterior(playerid, gangid);
+                return 1;
+            }
+            if (listitem == 13)
             {
                 ShowGangWeaponStashDialog(playerid);
                 return 1;
@@ -14252,6 +14694,8 @@ stock InitWorldMarkerArrays()
     {
         GangHQPickup[i] = -1;
         GangHQLabel[i] = Text3D:INVALID_3DTEXT_ID;
+        GangHQInteriorExitPickup[i] = -1;
+        GangHQInteriorExitLabel[i] = Text3D:INVALID_3DTEXT_ID;
     }
 
     ResetDynamicLocationArrays();
@@ -14332,7 +14776,7 @@ stock CreateWorldInteractionMarkers()
     for (new i = 0; i < MAX_PRESET_GANGS; i++)
     {
         GangHQPickup[i] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, GangHQX[i], GangHQY[i], GangHQZ[i], 0);
-        format(labelText, sizeof(labelText), "[GANG HQ] %s\nALT: Join / Gang Menu / Stash", PresetGangShortName[i]);
+        format(labelText, sizeof(labelText), "[GANG HQ] %s\nALT: Menu / Stash\nPanah: Enter HQ", PresetGangShortName[i]);
         // Offset lebih tinggi agar tidak tumpuk dengan marker/label ALT lain di lokasi yang berdekatan.
         GangHQLabel[i] = Create3DTextLabel(labelText, PresetGangColor[i], GangHQX[i], GangHQY[i], GangHQZ[i] + 2.2, 16.0, 0, true);
     }
@@ -14474,6 +14918,8 @@ stock DestroyWorldInteractionMarkers()
             GangHQLabel[i] = Text3D:INVALID_3DTEXT_ID;
         }
     }
+
+    DestroyAllGangHQInteriorRuntime();
 
     if (RaceStartPickup != -1)
     {
@@ -16596,6 +17042,13 @@ stock HandleWorldInteractKey(playerid)
         return 1;
     }
 
+    if (PlayerInsideGangHQ[playerid])
+    {
+        ResetNearbyInteractions(playerid);
+        AddNearbyInteraction(playerid, INTERACT_TYPE_GANG_HQ, PlayerInsideGangHQID[playerid], "Gang HQ Interior Utility");
+        return ShowNearbyInteractionDialog(playerid);
+    }
+
     if (PlayerWorking[playerid] || PlayerRace[playerid] != RACE_NONE)
     {
         SendClientMessage(playerid, COLOR_RED, "Tidak bisa memakai ALT interaction saat job/race aktif.");
@@ -16712,6 +17165,34 @@ public OnPlayerPickUpPickup(playerid, pickupid)
 
         ExitPlayerHouse(playerid);
         return 1;
+    }
+
+    for (new g = 0; g < MAX_PRESET_GANGS; g++)
+    {
+        if (GangHQInteriorExitPickup[g] != -1 && pickupid == GangHQInteriorExitPickup[g])
+        {
+            if (IsPlayerInGangHQPickupCooldown(playerid))
+            {
+                return 1;
+            }
+
+            ExitPlayerGangHQInterior(playerid);
+            return 1;
+        }
+    }
+
+    for (new g = 0; g < MAX_PRESET_GANGS; g++)
+    {
+        if (GangHQPickup[g] != -1 && pickupid == GangHQPickup[g])
+        {
+            if (IsPlayerInGangHQPickupCooldown(playerid))
+            {
+                return 1;
+            }
+
+            EnterPlayerGangHQInterior(playerid, PresetGangID[g]);
+            return 1;
+        }
     }
 
     for (new i = 0; i < MAX_HOUSES; i++)
@@ -20024,6 +20505,73 @@ public OnPlayerCommandText(playerid, cmdtext[])
     }
 
 
+    if (!strcmp(cmdtext, "/ganghq", true))
+    {
+        ShowGangHQUtilityInfo(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/enterganghq", true))
+    {
+        if (PlayerGangID[playerid] <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu belum tergabung dalam gang.");
+            return 1;
+        }
+        EnterPlayerGangHQInterior(playerid, PlayerGangID[playerid]);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/exitganghq", true))
+    {
+        ExitPlayerGangHQInterior(playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/setganginterior ", true) == 0)
+    {
+        new gangStr[16];
+        if (!GetOneParam(cmdtext[17], gangStr, sizeof(gangStr)) || !IsNumericString(gangStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setganginterior [gang_id]");
+            SendClientMessage(playerid, COLOR_WHITE, "Berdiri di posisi interior yang akan menjadi titik masuk HQ gang.");
+            return 1;
+        }
+        SetGangInteriorFromPlayer(playerid, strval(gangStr));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/setganginterior", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setganginterior [gang_id]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/ganginteriorinfo ", true) == 0)
+    {
+        new gangStr[16];
+        if (!GetOneParam(cmdtext[18], gangStr, sizeof(gangStr)) || !IsNumericString(gangStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /ganginteriorinfo [gang_id]");
+            return 1;
+        }
+        ShowGangInteriorInfo(playerid, strval(gangStr));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/ganginteriorinfo", true))
+    {
+        if (PlayerGangID[playerid] > 0)
+        {
+            ShowGangInteriorInfo(playerid, PlayerGangID[playerid]);
+        }
+        else
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /ganginteriorinfo [gang_id]");
+        }
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/gangstash", true))
     {
         ShowGangWeaponStashDialog(playerid);
@@ -20338,7 +20886,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.22D.1 Gang Rank (SAIF candidate)");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.22F Gang HQ Interior & Shared Utility");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -20347,7 +20895,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.22D: Gang rank progression, respect, promote/demote, and turf reward polish.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.22F: Gang HQ shared interior, enter/exit pickup, interior stash access.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A.3: Runtime turf war config untuk balancing/testing.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A.2: Turf HUD compact menggunakan TextDraw kecil.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.22A: Basic turf war system.");

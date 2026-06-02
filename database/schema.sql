@@ -803,3 +803,21 @@ CREATE TABLE IF NOT EXISTS public_interiors (
     INDEX idx_public_interiors_source (source_tag)
 );
 
+-- SAIF / LSIF Dev v0.23F.1 — Public Interior Template Fix
+-- Fix existing public_interiors rows created by v0.23F so they use safer SA-MP interior-id + coordinate pairs.
+-- This keeps exterior positions, names, shared virtual worlds, and enabled state unchanged.
+
+UPDATE public_interiors SET interior_id=1,  interior_x=286.1489,  interior_y=-40.6443,   interior_z=1001.5156, interior_a=90.0,  exit_x=286.1489,  exit_y=-38.8443,   exit_z=1001.5156 WHERE interior_type='ammunation';
+UPDATE public_interiors SET interior_id=17, interior_x=-25.8845,  interior_y=-185.8690,  interior_z=1003.5469, interior_a=0.0,   exit_x=-25.8845,  exit_y=-184.0690,  exit_z=1003.5469 WHERE interior_type='247';
+UPDATE public_interiors SET interior_id=10, interior_x=363.1348,  interior_y=-74.8465,   interior_z=1001.5078, interior_a=315.0, exit_x=363.1348,  exit_y=-73.0465,   exit_z=1001.5078 WHERE interior_type='burgershot';
+UPDATE public_interiors SET interior_id=9,  interior_x=364.9583,  interior_y=-11.7446,   interior_z=1001.8516, interior_a=0.0,   exit_x=364.9583,  exit_y=-9.9446,    exit_z=1001.8516 WHERE interior_type='cluckinbell';
+UPDATE public_interiors SET interior_id=5,  interior_x=372.3520,  interior_y=-133.5247,  interior_z=1001.4922, interior_a=0.0,   exit_x=372.3520,  exit_y=-131.7247,  exit_z=1001.4922 WHERE interior_type='pizzastack';
+UPDATE public_interiors SET interior_id=5,  interior_x=772.1119,  interior_y=-3.8986,    interior_z=1000.7288, interior_a=90.0,  exit_x=772.1119,  exit_y=-2.0986,    exit_z=1000.7288 WHERE interior_type='gym';
+UPDATE public_interiors SET interior_id=2,  interior_x=411.6260,  interior_y=-21.4333,   interior_z=1001.8047, interior_a=0.0,   exit_x=411.6260,  exit_y=-19.6333,   exit_z=1001.8047 WHERE interior_type='barber';
+UPDATE public_interiors SET interior_id=16, interior_x=-204.4399, interior_y=-26.4539,   interior_z=1002.2734, interior_a=0.0,   exit_x=-204.4399, exit_y=-24.6539,   exit_z=1002.2734 WHERE interior_type='tattoo';
+UPDATE public_interiors SET interior_id=6,  interior_x=246.7839,  interior_y=63.9001,    interior_z=1003.6406, interior_a=0.0,   exit_x=246.7839,  exit_y=65.7001,    exit_z=1003.6406 WHERE interior_type='police';
+UPDATE public_interiors SET interior_id=3,  interior_x=390.7699,  interior_y=173.8040,   interior_z=1008.3828, interior_a=0.0,   exit_x=390.7699,  exit_y=175.6040,   exit_z=1008.3828 WHERE interior_type='hospital';
+UPDATE public_interiors SET interior_id=3,  interior_x=386.5259,  interior_y=173.6381,   interior_z=1008.3828, interior_a=0.0,   exit_x=386.5259,  exit_y=175.4381,   exit_z=1008.3828 WHERE interior_type='cityhall';
+UPDATE public_interiors SET interior_id=1,  interior_x=2233.9360, interior_y=1711.8038,  interior_z=1011.6312, interior_a=180.0, exit_x=2233.9360, exit_y=1713.6038,  exit_z=1011.6312 WHERE interior_type='casino';
+
+

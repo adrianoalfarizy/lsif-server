@@ -9874,7 +9874,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.23F Public Interior System");
+    SetGameModeText("SAIF Dev v0.23F.1 Public Interior Template Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -9976,7 +9976,7 @@ public OnGameModeInit()
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.23F Public Interior System berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.23F.1 Public Interior Template Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -15383,14 +15383,14 @@ stock GetPublicInteriorDefaultName(const type[], output[], size)
 
 stock GetPublicInteriorDefaultInterior(const type[])
 {
-    if (!strcmp(type, "ammunation", true)) return 4;
-    if (!strcmp(type, "247", true)) return 6;
+    if (!strcmp(type, "ammunation", true)) return 1;
+    if (!strcmp(type, "247", true)) return 17;
     if (!strcmp(type, "burgershot", true)) return 10;
     if (!strcmp(type, "cluckinbell", true)) return 9;
     if (!strcmp(type, "pizzastack", true)) return 5;
     if (!strcmp(type, "gym", true)) return 5;
-    if (!strcmp(type, "barber", true)) return 3;
-    if (!strcmp(type, "tattoo", true)) return 3;
+    if (!strcmp(type, "barber", true)) return 2;
+    if (!strcmp(type, "tattoo", true)) return 16;
     if (!strcmp(type, "police", true)) return 6;
     if (!strcmp(type, "hospital", true)) return 3;
     if (!strcmp(type, "cityhall", true)) return 3;
@@ -15401,12 +15401,12 @@ stock GetPublicInteriorDefaultInterior(const type[])
 stock Float:GetPublicInteriorDefaultX(const type[])
 {
     if (!strcmp(type, "ammunation", true)) return 286.1489;
-    if (!strcmp(type, "247", true)) return -27.3123;
+    if (!strcmp(type, "247", true)) return -25.8845;
     if (!strcmp(type, "burgershot", true)) return 363.1348;
-    if (!strcmp(type, "cluckinbell", true)) return 364.9187;
+    if (!strcmp(type, "cluckinbell", true)) return 364.9583;
     if (!strcmp(type, "pizzastack", true)) return 372.3520;
     if (!strcmp(type, "gym", true)) return 772.1119;
-    if (!strcmp(type, "barber", true)) return 418.6538;
+    if (!strcmp(type, "barber", true)) return 411.6260;
     if (!strcmp(type, "tattoo", true)) return -204.4399;
     if (!strcmp(type, "police", true)) return 246.7839;
     if (!strcmp(type, "hospital", true)) return 390.7699;
@@ -15418,15 +15418,15 @@ stock Float:GetPublicInteriorDefaultX(const type[])
 stock Float:GetPublicInteriorDefaultY(const type[])
 {
     if (!strcmp(type, "ammunation", true)) return -40.6443;
-    if (!strcmp(type, "247", true)) return -29.2776;
+    if (!strcmp(type, "247", true)) return -185.8690;
     if (!strcmp(type, "burgershot", true)) return -74.8465;
-    if (!strcmp(type, "cluckinbell", true)) return -11.6175;
+    if (!strcmp(type, "cluckinbell", true)) return -11.7446;
     if (!strcmp(type, "pizzastack", true)) return -133.5247;
     if (!strcmp(type, "gym", true)) return -3.8986;
-    if (!strcmp(type, "barber", true)) return -82.6397;
+    if (!strcmp(type, "barber", true)) return -21.4333;
     if (!strcmp(type, "tattoo", true)) return -26.4539;
     if (!strcmp(type, "police", true)) return 63.9001;
-    if (!strcmp(type, "hospital", true)) return 173.8039;
+    if (!strcmp(type, "hospital", true)) return 173.8040;
     if (!strcmp(type, "cityhall", true)) return 173.6381;
     if (!strcmp(type, "casino", true)) return 1711.8038;
     return 0.0;
@@ -15435,7 +15435,7 @@ stock Float:GetPublicInteriorDefaultY(const type[])
 stock Float:GetPublicInteriorDefaultZ(const type[])
 {
     if (!strcmp(type, "ammunation", true)) return 1001.5156;
-    if (!strcmp(type, "247", true)) return 1003.5573;
+    if (!strcmp(type, "247", true)) return 1003.5469;
     if (!strcmp(type, "burgershot", true)) return 1001.5078;
     if (!strcmp(type, "cluckinbell", true)) return 1001.8516;
     if (!strcmp(type, "pizzastack", true)) return 1001.4922;
@@ -15784,6 +15784,7 @@ stock EnterPublicInterior(playerid, dbid)
     SetPlayerVirtualWorld(playerid, GetPublicInteriorRuntimeVW(idx));
     SetPlayerPos(playerid, PublicInteriorIntX[idx], PublicInteriorIntY[idx], PublicInteriorIntZ[idx]);
     SetPlayerFacingAngle(playerid, PublicInteriorIntA[idx]);
+    SetCameraBehindPlayer(playerid);
 
     new msg[144];
     format(msg, sizeof(msg), "Kamu masuk ke %s. Public interior ini shared untuk semua player.", PublicInteriorName[idx]);
@@ -25271,7 +25272,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.23F Public Interior System");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.23F.1 Public Interior Template Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
         return 1;
@@ -25280,7 +25281,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.23F: Public interior system, shared VW, enter/exit pickup.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.23F.1: Public interior template fix, safer default coords, shared VW.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23B: Parked vehicle dialog menu dan interactive editor.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23E.1: Offline pickup template seeder, /wpickupseed, /wpickupclearseed, /wpickupseedinfo.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.23A.1: Parked vehicle engine default ON setelah create/reload.");

@@ -629,6 +629,7 @@ new PlayerLastInterior[MAX_PLAYERS];
 new PlayerLastVirtualWorld[MAX_PLAYERS];
 
 new PlayerDeathRespawnState[MAX_PLAYERS];
+new PlayerDeathRespawnLockSeq[MAX_PLAYERS];
 new Float:PlayerHospitalRespawnX[MAX_PLAYERS];
 new Float:PlayerHospitalRespawnY[MAX_PLAYERS];
 new Float:PlayerHospitalRespawnZ[MAX_PLAYERS];
@@ -2212,6 +2213,7 @@ forward OnBusinessPresetConfigLoaded();
 forward RespawnPlayerAtNearestHospital(playerid);
 forward HideClassSelectionForHospitalRespawn(playerid);
 forward ClearDeathRespawnState(playerid);
+forward ReapplyDeathHospitalRespawnLock(playerid, seq);
 forward ForceSpawnLoggedPlayerFromClass(playerid);
 forward ApplyGangHQExitPositionDelayed(playerid, Float:x, Float:y, Float:z, Float:a);
 forward UnfreezePlayerAfterGangHQExit(playerid);
@@ -2536,6 +2538,7 @@ stock ResetPlayerAccountData(playerid)
     PlayerLastInterior[playerid] = 0;
     PlayerLastVirtualWorld[playerid] = 0;
     PlayerDeathRespawnState[playerid] = DEATH_RESPAWN_NONE;
+    PlayerDeathRespawnLockSeq[playerid] = 0;
     PlayerHospitalRespawnX[playerid] = SPAWN_X;
     PlayerHospitalRespawnY[playerid] = SPAWN_Y;
     PlayerHospitalRespawnZ[playerid] = SPAWN_Z;
@@ -11010,7 +11013,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.14.1 Compile Fix No CJ Fallback");
+    SetGameModeText("SAIF Dev v0.24K.15 Death Respawn Lock No CJ");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11035,7 +11038,7 @@ public OnGameModeInit()
     LoadBusinessPresetConfigFromDB();
 
     AddPlayerClass(
-        0,
+        DEFAULT_SKIN,
         SPAWN_X,
         SPAWN_Y,
         SPAWN_Z,
@@ -11098,6 +11101,7 @@ public OnGameModeInit()
         PlayerLastInterior[i] = 0;
         PlayerLastVirtualWorld[i] = 0;
         PlayerDeathRespawnState[i] = DEATH_RESPAWN_NONE;
+        PlayerDeathRespawnLockSeq[i] = 0;
         PlayerHospitalRespawnX[i] = SPAWN_X;
         PlayerHospitalRespawnY[i] = SPAWN_Y;
         PlayerHospitalRespawnZ[i] = SPAWN_Z;
@@ -11128,7 +11132,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.14.1 Compile Fix No CJ Fallback berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.15 Death Respawn Lock No CJ berhasil dijalankan.");
     return 1;
 }
 
@@ -11293,6 +11297,7 @@ stock PrepareDeathHospitalRespawn(playerid)
 
     FindNearestHospitalRespawn(x, y, z, PlayerHospitalRespawnX[playerid], PlayerHospitalRespawnY[playerid], PlayerHospitalRespawnZ[playerid], PlayerHospitalRespawnA[playerid]);
 
+    PlayerDeathRespawnLockSeq[playerid]++;
     PlayerDeathRespawnState[playerid] = DEATH_RESPAWN_WAITING;
     PlayerLastX[playerid] = PlayerHospitalRespawnX[playerid];
     PlayerLastY[playerid] = PlayerHospitalRespawnY[playerid];
@@ -11373,6 +11378,7 @@ public RespawnPlayerAtNearestHospital(playerid)
         return 0;
     }
 
+    new seq = PlayerDeathRespawnLockSeq[playerid];
     PlayerDeathRespawnState[playerid] = DEATH_RESPAWN_SPAWNING;
 
     SetSpawnInfo(
@@ -11390,6 +11396,41 @@ public RespawnPlayerAtNearestHospital(playerid)
 
     TogglePlayerSpectating(playerid, false);
     SpawnPlayer(playerid);
+
+    // Native/open.mp kadang masih menjalankan delayed death/class fallback sekitar 2 detik.
+    // Lock ini menjaga posisi/skin/weapon tetap hospital selama window itu.
+    SetTimerEx("ReapplyDeathHospitalRespawnLock", 100, false, "ii", playerid, seq);
+    SetTimerEx("ReapplyDeathHospitalRespawnLock", 350, false, "ii", playerid, seq);
+    SetTimerEx("ReapplyDeathHospitalRespawnLock", 750, false, "ii", playerid, seq);
+    SetTimerEx("ReapplyDeathHospitalRespawnLock", 1200, false, "ii", playerid, seq);
+    SetTimerEx("ReapplyDeathHospitalRespawnLock", 1700, false, "ii", playerid, seq);
+    SetTimerEx("ReapplyDeathHospitalRespawnLock", 2100, false, "ii", playerid, seq);
+    SetTimerEx("ReapplyDeathHospitalRespawnLock", 2600, false, "ii", playerid, seq);
+    SetTimerEx("ReapplyDeathHospitalRespawnLock", 3500, false, "ii", playerid, seq);
+    SetTimerEx("ReapplyDeathHospitalRespawnLock", 5000, false, "ii", playerid, seq);
+    SetTimerEx("ReapplyDeathHospitalRespawnLock", 8000, false, "ii", playerid, seq);
+    SetTimerEx("ReapplyDeathHospitalRespawnLock", 12000, false, "ii", playerid, seq);
+    return 1;
+}
+
+public ReapplyDeathHospitalRespawnLock(playerid, seq)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
+    {
+        return 0;
+    }
+
+    if (seq != PlayerDeathRespawnLockSeq[playerid])
+    {
+        return 0;
+    }
+
+    if (PlayerDeathRespawnState[playerid] == DEATH_RESPAWN_NONE)
+    {
+        return 0;
+    }
+
+    ApplyDeathHospitalRespawnPosition(playerid, 0);
     return 1;
 }
 
@@ -11403,6 +11444,7 @@ public ClearDeathRespawnState(playerid)
     if (PlayerDeathRespawnState[playerid] != DEATH_RESPAWN_NONE)
     {
         PlayerDeathRespawnState[playerid] = DEATH_RESPAWN_NONE;
+        PlayerDeathRespawnLockSeq[playerid]++;
     }
     return 1;
 }
@@ -11442,7 +11484,7 @@ public OnPlayerDeath(playerid, killerid, WEAPON:reason)
 
     PrepareDeathHospitalRespawn(playerid);
 
-    // v0.24K.13: langsung respawn ke hospital, tanpa layar class/spawn/reconnect-style.
+    // v0.24K.15: langsung respawn ke hospital, tanpa layar class/spawn/reconnect-style.
     // Delay pendek hanya memberi waktu callback death selesai; tidak memakai TogglePlayerSpectating(true).
     SetTimerEx("RespawnPlayerAtNearestHospital", HOSPITAL_RESPAWN_DELAY_MS, false, "i", playerid);
     return 1;
@@ -11478,6 +11520,7 @@ public OnPlayerDisconnect(playerid, reason)
     PlayerAuthDialogShown[playerid] = 0;
     PlayerFindingBank[playerid] = 0;
     PlayerDeathRespawnState[playerid] = DEATH_RESPAWN_NONE;
+    PlayerDeathRespawnLockSeq[playerid]++;
 
     PlayerInsidePublicInteriorID[playerid] = 0;
     PlayerPublicInteriorServiceCheckpoint[playerid] = 0;
@@ -11592,9 +11635,15 @@ public OnPlayerSpawn(playerid)
     if (PlayerDeathRespawnState[playerid] == DEATH_RESPAWN_SPAWNING || PlayerDeathRespawnState[playerid] == DEATH_RESPAWN_WAITING || PlayerDeathRespawnState[playerid] == DEATH_RESPAWN_PROTECT)
     {
         deathHospitalSpawn = 1;
+        new seq = PlayerDeathRespawnLockSeq[playerid];
         TogglePlayerSpectating(playerid, false);
         ApplyDeathHospitalRespawnPosition(playerid, 1);
         PlayerDeathRespawnState[playerid] = DEATH_RESPAWN_PROTECT;
+        SetTimerEx("ReapplyDeathHospitalRespawnLock", 250, false, "ii", playerid, seq);
+        SetTimerEx("ReapplyDeathHospitalRespawnLock", 900, false, "ii", playerid, seq);
+        SetTimerEx("ReapplyDeathHospitalRespawnLock", 1900, false, "ii", playerid, seq);
+        SetTimerEx("ReapplyDeathHospitalRespawnLock", 2900, false, "ii", playerid, seq);
+        SetTimerEx("ReapplyDeathHospitalRespawnLock", 6000, false, "ii", playerid, seq);
         SetTimerEx("ClearDeathRespawnState", 30000, false, "i", playerid);
         ApplyLSIFMapIcons(playerid);
         SendClientMessage(playerid, COLOR_GREEN, "Kamu respawn di rumah sakit terdekat.");
@@ -30328,7 +30377,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.14.1 Compile Fix No CJ Fallback");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.15 Death Respawn Lock No CJ");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");

@@ -1895,3 +1895,25 @@ UPDATE world_objects
 SET source_tag = 'manual'
 WHERE source_tag IS NULL OR source_tag = '';
 
+
+-- SAIF / LSIF Dev v0.24K.4
+-- Grove HQ exterior/exit coordinate safety fix.
+-- Aman dijalankan berulang. Tidak menghapus data.
+
+UPDATE gang_preset_config
+SET
+    hq_x = 2495.4094,
+    hq_y = -1686.1682,
+    hq_z = 13.5153,
+    hq_a = 180.0000,
+    hq_radius = IF(hq_radius IS NULL OR hq_radius < 2.0, 3.0, hq_radius),
+    updated_at = NOW()
+WHERE gang_id = 1;
+
+UPDATE gang_hq_interiors
+SET
+    exit_x = 2495.4094,
+    exit_y = -1686.1682,
+    exit_z = 13.5153,
+    exit_a = 180.0000
+WHERE gang_id = 1;

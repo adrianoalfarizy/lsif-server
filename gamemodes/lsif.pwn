@@ -260,10 +260,10 @@
 #define BETA_MOTD_TEXT "Selamat datang di LSIF Closed Beta. Fitur masih dalam tahap testing. Laporkan bug dengan /report."
 
 
-#define SPAWN_X         1958.3783
-#define SPAWN_Y         1343.1572
-#define SPAWN_Z         15.3746
-#define SPAWN_A         269.1425
+#define SPAWN_X         1172.3447
+#define SPAWN_Y         -1323.3228
+#define SPAWN_Z         15.4020
+#define SPAWN_A         270.0
 
 #define MAX_HOSPITAL_RESPAWNS 6
 #define HOSPITAL_RESPAWN_DELAY_MS 700
@@ -273,7 +273,7 @@
 #define DEATH_RESPAWN_SPAWNING 2
 #define DEATH_RESPAWN_PROTECT 3
 
-#define DEFAULT_SKIN 0
+#define DEFAULT_SKIN 299
 
 #define MAX_PAY_AMOUNT  50000
 
@@ -2212,6 +2212,7 @@ forward OnBusinessPresetConfigLoaded();
 forward RespawnPlayerAtNearestHospital(playerid);
 forward HideClassSelectionForHospitalRespawn(playerid);
 forward ClearDeathRespawnState(playerid);
+forward ForceSpawnLoggedPlayerFromClass(playerid);
 forward ApplyGangHQExitPositionDelayed(playerid, Float:x, Float:y, Float:z, Float:a);
 forward UnfreezePlayerAfterGangHQExit(playerid);
 forward OnDynamicLocationsLoaded();
@@ -11009,7 +11010,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.13 No CJ Spawn Final");
+    SetGameModeText("SAIF Dev v0.24K.14.1 Compile Fix No CJ Fallback");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11127,7 +11128,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.13 No CJ Spawn Final berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.14.1 Compile Fix No CJ Fallback berhasil dijalankan.");
     return 1;
 }
 
@@ -11326,6 +11327,7 @@ stock ApplyDeathHospitalRespawnPosition(playerid, saveNow = 0)
     SetPlayerHealth(playerid, 100.0);
     SetPlayerArmour(playerid, 0.0);
     ResetPlayerWeapons(playerid);
+    SetPlayerSkin(playerid, DEFAULT_SKIN);
     SetCameraBehindPlayer(playerid);
 
     PlayerLastX[playerid] = PlayerHospitalRespawnX[playerid];
@@ -11545,12 +11547,10 @@ public ForceSpawnLoggedPlayerFromClass(playerid)
 
 public OnPlayerRequestSpawn(playerid)
 {
-    // SAIF tidak memakai tombol Spawn/class selection sama sekali.
-    // Jangan izinkan spawn bawaan engine karena bisa menarik player ke CJ/default class.
-    if (PlayerDeathRespawnState[playerid] == DEATH_RESPAWN_WAITING)
-    {
-        RespawnPlayerAtNearestHospital(playerid);
-    }
+    #pragma unused playerid
+
+    // Tombol Spawn bawaan SA-MP/open.mp dimatikan total.
+    // Jangan spawn dari sini supaya tidak ada fallback CJ/default class.
     return 0;
 }
 
@@ -11558,29 +11558,24 @@ public OnPlayerRequestClass(playerid, classid)
 {
     #pragma unused classid
 
-    // ROOT FIX v0.24K.13:
+    // v0.24K.14:
     // SAIF tidak memakai class selection/open.mp spawn screen sama sekali.
-    // Callback ini hanya untuk memblok layar bawaan engine.
-    // Jangan SpawnPlayer, jangan SetPlayerPos ke CJ, jangan SetCamera, dan jangan ForceSpawn.
+    // Callback ini murni BLOCKER. Jangan spawn dari sini.
+    // Spawn hanya boleh dari:
+    // - login/register: SpawnLoggedPlayer()
+    // - death: RespawnPlayerAtNearestHospitalEx()
     if (!PlayerLoggedIn[playerid])
     {
         return 0;
     }
 
-    if (PlayerDeathRespawnState[playerid] == DEATH_RESPAWN_WAITING)
-    {
-        RespawnPlayerAtNearestHospital(playerid);
-        return 0;
-    }
-
-    if (PlayerDeathRespawnState[playerid] == DEATH_RESPAWN_SPAWNING ||
-        PlayerDeathRespawnState[playerid] == DEATH_RESPAWN_PROTECT)
+    // Kalau engine mencoba masuk class selection setelah death,
+    // jangan lakukan apa pun selain blok layar bawaan.
+    if (PlayerDeathRespawnState[playerid] != DEATH_RESPAWN_NONE)
     {
         return 0;
     }
 
-    // Login/register normal sudah spawn lewat SpawnLoggedPlayer().
-    // Jangan spawn ulang dari callback ini karena itu penyebab hospital -> CJ + botol.
     return 0;
 }
 
@@ -11600,7 +11595,7 @@ public OnPlayerSpawn(playerid)
         TogglePlayerSpectating(playerid, false);
         ApplyDeathHospitalRespawnPosition(playerid, 1);
         PlayerDeathRespawnState[playerid] = DEATH_RESPAWN_PROTECT;
-        SetTimerEx("ClearDeathRespawnState", 8000, false, "i", playerid);
+        SetTimerEx("ClearDeathRespawnState", 30000, false, "i", playerid);
         ApplyLSIFMapIcons(playerid);
         SendClientMessage(playerid, COLOR_GREEN, "Kamu respawn di rumah sakit terdekat.");
         return 1;
@@ -30333,7 +30328,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.13 No CJ Spawn Final");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.14.1 Compile Fix No CJ Fallback");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");

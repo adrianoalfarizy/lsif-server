@@ -2042,3 +2042,50 @@ UPDATE gang_hq_interiors
 SET door_pickup_model = 1318
 WHERE door_pickup_model IS NULL OR door_pickup_model <= 0;
 
+-- SAIF / LSIF Dev v0.24K.21.2
+-- Public Interior Map Icon Slot Fix
+--
+-- Catatan map icon SA-MP/open.mp:
+-- Player map icon slot aman hanya 0..99.
+-- Patch PWN membagi:
+--   Dynamic Location: 80..89
+--   Public Interior: 90..99
+-- Public interior yang tampil diprioritaskan dari data terbaru/urutan belakang.
+
+ALTER TABLE public_interiors
+    ADD COLUMN IF NOT EXISTS exterior_map_icon INT NOT NULL DEFAULT 52;
+
+UPDATE public_interiors
+SET exterior_map_icon = CASE
+    WHEN interior_type = 'ammunation' THEN 6
+    WHEN interior_type IN ('burgershot', 'cluckinbell', 'pizzastack') THEN 10
+    WHEN interior_type = 'barber' THEN 7
+    WHEN interior_type = 'tattoo' THEN 39
+    WHEN interior_type = 'police' THEN 30
+    WHEN interior_type = 'hospital' THEN 22
+    ELSE 52
+END
+WHERE exterior_map_icon IS NULL OR exterior_map_icon <= 0;
+
+-- SAIF / LSIF Dev v0.24K.21.3
+-- Public Interior Icon Load Visible Fix
+--
+-- PWN fix:
+-- 1) LoadPublicInteriors ORDER BY id DESC LIMIT 80, supaya public interior yang baru dibuat ikut runtime/icon.
+-- 2) Public interior icons memakai slot 90..99 dan style GLOBAL_CHECKPOINT agar terlihat jelas.
+-- 3) /pubintrefreshicons ditambahkan untuk refresh manual map icon player online.
+
+ALTER TABLE public_interiors
+    ADD COLUMN IF NOT EXISTS exterior_map_icon INT NOT NULL DEFAULT 52;
+
+UPDATE public_interiors
+SET exterior_map_icon = CASE
+    WHEN interior_type = 'ammunation' THEN 6
+    WHEN interior_type IN ('burgershot', 'cluckinbell', 'pizzastack') THEN 10
+    WHEN interior_type = 'barber' THEN 7
+    WHEN interior_type = 'tattoo' THEN 39
+    WHEN interior_type = 'police' THEN 30
+    WHEN interior_type = 'hospital' THEN 22
+    ELSE 52
+END
+WHERE exterior_map_icon IS NULL OR exterior_map_icon <= 0;

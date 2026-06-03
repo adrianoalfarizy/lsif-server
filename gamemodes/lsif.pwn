@@ -266,11 +266,12 @@
 #define SPAWN_A         269.1425
 
 #define MAX_HOSPITAL_RESPAWNS 6
-#define HOSPITAL_RESPAWN_DELAY_MS 1400
-#define HOSPITAL_RESPAWN_HIDE_CLASS_MS 0
+#define HOSPITAL_RESPAWN_DELAY_MS 3000
+#define HOSPITAL_RESPAWN_HIDE_CLASS_MS 900
 #define DEATH_RESPAWN_NONE 0
 #define DEATH_RESPAWN_WAITING 1
 #define DEATH_RESPAWN_SPAWNING 2
+#define DEATH_RESPAWN_PROTECT 3
 
 #define DEFAULT_SKIN 0
 
@@ -11008,7 +11009,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.9 Death Anim No CJ");
+    SetGameModeText("SAIF Dev v0.24K.11 No Spawn Screen Root Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11126,7 +11127,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.9 Death Anim No CJ berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.11 No Spawn Screen Root Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -11351,7 +11352,7 @@ public HideClassSelectionForHospitalRespawn(playerid)
 
     if (PlayerDeathRespawnState[playerid] == DEATH_RESPAWN_WAITING)
     {
-        // Safety fallback only: normal K9 flow respawns before class selection appears.
+        // Hide only after a short death-animation window, not immediately on death.
         TogglePlayerSpectating(playerid, true);
     }
     return 1;
@@ -11396,7 +11397,7 @@ public ClearDeathRespawnState(playerid)
         return 0;
     }
 
-    if (PlayerDeathRespawnState[playerid] == DEATH_RESPAWN_SPAWNING)
+    if (PlayerDeathRespawnState[playerid] != DEATH_RESPAWN_NONE)
     {
         PlayerDeathRespawnState[playerid] = DEATH_RESPAWN_NONE;
     }
@@ -11438,9 +11439,9 @@ public OnPlayerDeath(playerid, killerid, WEAPON:reason)
 
     PrepareDeathHospitalRespawn(playerid);
 
-    // Jangan TogglePlayerSpectating di OnPlayerDeath.
-    // Ini membiarkan animasi mati GTA SA tetap terlihat.
-    // Respawn dipercepat sebelum class selection default sempat tampil di CJ.
+    // Jangan panggil TogglePlayerSpectating di OnPlayerDeath.
+    // Biarkan animasi mati GTA SA terlihat natural. Jika engine mencoba membuka class selection,
+    // OnPlayerRequestClass akan memblok total layar spawn/CJ tanpa mengubah posisi ke default.
     SetTimerEx("RespawnPlayerAtNearestHospital", HOSPITAL_RESPAWN_DELAY_MS, false, "i", playerid);
     return 1;
 }
@@ -11534,49 +11535,59 @@ public OnPlayerDisconnect(playerid, reason)
     return 1;
 }
 
-public OnPlayerRequestSpawn(playerid)
+public ForceSpawnLoggedPlayerFromClass(playerid)
 {
-    if (!PlayerLoggedIn[playerid])
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
     {
-        SendClientMessage(playerid, COLOR_RED, "Kamu harus login/register terlebih dahulu.");
         return 0;
     }
 
-    // Death respawn ditangani oleh timer RespawnPlayerAtNearestHospital.
-    // Jangan izinkan tombol Spawn class selection mengambil alih ke default CJ.
     if (PlayerDeathRespawnState[playerid] != DEATH_RESPAWN_NONE)
     {
         return 0;
     }
 
+    SpawnLoggedPlayer(playerid);
     return 1;
+}
+
+public OnPlayerRequestSpawn(playerid)
+{
+    // SAIF tidak memakai tombol Spawn/class selection sama sekali.
+    // Login/register/death respawn semuanya dikendalikan script lewat SpawnLoggedPlayer/RespawnPlayerAtNearestHospital.
+    #pragma unused playerid
+    return 0;
 }
 
 public OnPlayerRequestClass(playerid, classid)
 {
     #pragma unused classid
 
+    // Ini callback bawaan SA-MP/open.mp saat engine mau menampilkan class selection.
+    // Di SAIF layar ini tidak dipakai. Jangan pernah set posisi/camera ke SPAWN_X/Y/Z di sini.
     if (!PlayerLoggedIn[playerid])
     {
         TogglePlayerSpectating(playerid, true);
         return 0;
     }
 
-    // Jika engine mencoba masuk class selection setelah player mati,
-    // jangan set posisi/camera ke CJ. Ini hanya safety fallback; timer hospital harus lebih cepat.
-    if (PlayerDeathRespawnState[playerid] != DEATH_RESPAWN_NONE)
+    if (PlayerDeathRespawnState[playerid] == DEATH_RESPAWN_WAITING || PlayerDeathRespawnState[playerid] == DEATH_RESPAWN_SPAWNING)
     {
         TogglePlayerSpectating(playerid, true);
         return 0;
     }
 
-    SetPlayerPos(playerid, SPAWN_X, SPAWN_Y, SPAWN_Z);
-    SetPlayerFacingAngle(playerid, SPAWN_A);
+    if (PlayerDeathRespawnState[playerid] == DEATH_RESPAWN_PROTECT)
+    {
+        ApplyDeathHospitalRespawnPosition(playerid, 0);
+        return 0;
+    }
 
-    SetPlayerCameraPos(playerid, 1962.0000, 1343.0000, 17.0000);
-    SetPlayerCameraLookAt(playerid, SPAWN_X, SPAWN_Y, SPAWN_Z);
-
-    return 1;
+    // Safety fallback: kalau engine memanggil class selection setelah login/register,
+    // langsung spawn via flow SAIF, bukan menampilkan tombol << >> Spawn.
+    TogglePlayerSpectating(playerid, true);
+    SetTimerEx("ForceSpawnLoggedPlayerFromClass", 250, false, "i", playerid);
+    return 0;
 }
 
 public OnPlayerSpawn(playerid)
@@ -11594,8 +11605,8 @@ public OnPlayerSpawn(playerid)
         deathHospitalSpawn = 1;
         TogglePlayerSpectating(playerid, false);
         ApplyDeathHospitalRespawnPosition(playerid, 1);
-        PlayerDeathRespawnState[playerid] = DEATH_RESPAWN_NONE;
-        SetTimerEx("ClearDeathRespawnState", 2500, false, "i", playerid);
+        PlayerDeathRespawnState[playerid] = DEATH_RESPAWN_PROTECT;
+        SetTimerEx("ClearDeathRespawnState", 3500, false, "i", playerid);
         ApplyLSIFMapIcons(playerid);
         SendClientMessage(playerid, COLOR_GREEN, "Kamu respawn di rumah sakit terdekat.");
         return 1;
@@ -30328,7 +30339,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.9 Death Anim No CJ");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.11 No Spawn Screen Root Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -30338,7 +30349,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.9: Death animation kept; hospital respawn now happens before default CJ class screen; Gang HQ point editor retained.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.11: Class selection/spawn button is disabled globally. Register/login spawns directly, death keeps animation then respawns to hospital without CJ/default spawn screen.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K: Gang preset active status, enable/disable, runtime hide, and /amenus command reference cleanup.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24J.4: Business array compile fix after MAX_BUSINESSES 64 expansion.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24F.2: Ammu config dialog fix, edit price/ammo/select action now responds correctly.");

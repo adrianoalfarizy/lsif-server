@@ -229,6 +229,8 @@
 #define DIALOG_BUSINESS_PRESET_INCOME_INPUT 1209
 #define DIALOG_GANG_PRESET_ENABLE_INPUT 1210
 #define DIALOG_GANG_PRESET_STATUS 1211
+#define DIALOG_GANG_INTERIOR_POINT_MENU 1212
+
 
 
 
@@ -264,7 +266,8 @@
 #define SPAWN_A         269.1425
 
 #define MAX_HOSPITAL_RESPAWNS 6
-#define HOSPITAL_RESPAWN_DELAY_MS 750
+#define HOSPITAL_RESPAWN_DELAY_MS 2600
+#define HOSPITAL_RESPAWN_HIDE_CLASS_MS 1900
 #define DEATH_RESPAWN_NONE 0
 #define DEATH_RESPAWN_WAITING 1
 #define DEATH_RESPAWN_SPAWNING 2
@@ -2206,6 +2209,7 @@ forward OnGangHQInteriorsLoaded();
 forward OnGangPresetConfigLoaded();
 forward OnBusinessPresetConfigLoaded();
 forward RespawnPlayerAtNearestHospital(playerid);
+forward HideClassSelectionForHospitalRespawn(playerid);
 forward ClearDeathRespawnState(playerid);
 forward ApplyGangHQExitPositionDelayed(playerid, Float:x, Float:y, Float:z, Float:a);
 forward UnfreezePlayerAfterGangHQExit(playerid);
@@ -8052,8 +8056,8 @@ stock GetSafeGangHQExteriorExit(gangIndex, &Float:x, &Float:y, &Float:z, &Float:
 {
     if (gangIndex >= 0 && gangIndex < MAX_PRESET_GANGS)
     {
-        // Utamakan titik exterior/exit yang memang tersimpan.
-        // Untuk Grove, jangan geser X/Y terlalu jauh; cukup naikkan Z agar tidak jatuh/freefall saat keluar interior.
+        // Kembalikan ke flow awal: pakai titik exit exterior yang tersimpan.
+        // Kalau titiknya kurang pas, Owner bisa ubah sendiri lewat /gangintpoints.
         x = GangHQInteriorExitX[gangIndex];
         y = GangHQInteriorExitY[gangIndex];
         z = GangHQInteriorExitZ[gangIndex];
@@ -8076,14 +8080,6 @@ stock GetSafeGangHQExteriorExit(gangIndex, &Float:x, &Float:y, &Float:z, &Float:
             return 0;
         }
 
-        if (gangIndex == 0)
-        {
-            z += 2.5;
-        }
-        else
-        {
-            z += 0.8;
-        }
         return 1;
     }
 
@@ -8159,14 +8155,32 @@ stock ExitPlayerGangHQInterior(playerid)
     PlayerInsideGangHQ[playerid] = 0;
     PlayerInsideGangHQID[playerid] = 0;
 
-    new Float:exitX, Float:exitY, Float:exitZ, Float:exitA;
-    GetSafeGangHQExteriorExit(gangIndex, exitX, exitY, exitZ, exitA);
+    SetPlayerInterior(playerid, 0);
+    SetPlayerVirtualWorld(playerid, 0);
+    SetPlayerVelocity(playerid, 0.0, 0.0, 0.0);
 
-    TogglePlayerControllable(playerid, false);
-    ApplyGangHQExitPosition(playerid, exitX, exitY, exitZ, exitA, 1);
-    SetTimerEx("ApplyGangHQExitPositionDelayed", 350, false, "iffff", playerid, exitX, exitY, exitZ, exitA);
-    SetTimerEx("UnfreezePlayerAfterGangHQExit", 900, false, "i", playerid);
+    if (gangIndex == -1)
+    {
+        SetPlayerPos(playerid, SPAWN_X, SPAWN_Y, SPAWN_Z);
+        SetPlayerFacingAngle(playerid, SPAWN_A);
+    }
+    else
+    {
+        // Flow dikembalikan seperti awal: pakai titik exit yang tersimpan.
+        // Kalau titik kurang tinggi/kurang pas, Owner bisa edit lewat /gangintpoints.
+        SetPlayerPos(playerid, GangHQInteriorExitX[gangIndex], GangHQInteriorExitY[gangIndex], GangHQInteriorExitZ[gangIndex]);
+        SetPlayerFacingAngle(playerid, GangHQInteriorExitA[gangIndex]);
 
+        PlayerLastX[playerid] = GangHQInteriorExitX[gangIndex];
+        PlayerLastY[playerid] = GangHQInteriorExitY[gangIndex];
+        PlayerLastZ[playerid] = GangHQInteriorExitZ[gangIndex];
+        PlayerLastA[playerid] = GangHQInteriorExitA[gangIndex];
+        PlayerLastInterior[playerid] = 0;
+        PlayerLastVirtualWorld[playerid] = 0;
+        SavePlayerData(playerid);
+    }
+
+    SetCameraBehindPlayer(playerid);
     SendClientMessage(playerid, COLOR_GREEN, "Kamu keluar dari interior Gang HQ.");
     return 1;
 }
@@ -8235,7 +8249,212 @@ stock ShowGangInteriorInfo(playerid, gangid)
     SendClientMessage(playerid, COLOR_WHITE, msg);
     format(msg, sizeof(msg), "Exit pos: %.2f %.2f %.2f | A %.2f", GangHQInteriorExitX[gangIndex], GangHQInteriorExitY[gangIndex], GangHQInteriorExitZ[gangIndex], GangHQInteriorExitA[gangIndex]);
     SendClientMessage(playerid, COLOR_WHITE, msg);
-    SendClientMessage(playerid, COLOR_CYAN, "Command: /enterganghq, /exitganghq, /gangstash, /setganginterior [gang_id]");
+    SendClientMessage(playerid, COLOR_CYAN, "Command: /enterganghq, /exitganghq, /gangstash, /gangintpoints [gang_id], /setganginterior [gang_id]");
+    return 1;
+}
+
+stock ShowGangInteriorPointMenu(playerid, gangid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka Gang HQ Interior Point Editor.");
+        return 0;
+    }
+
+    new gangIndex = GetPresetGangIndexByID(gangid);
+    if (gangIndex == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang ID tidak valid. Gunakan /gangs.");
+        return 0;
+    }
+
+    PlayerEditingGangPresetID[playerid] = gangid;
+
+    new title[96];
+    new body[512];
+    format(title, sizeof(title), "Gang HQ Points: %s", PresetGangShortName[gangIndex]);
+    strcat(body, "Info Points\n", sizeof(body));
+    strcat(body, "Set Interior Spawn = My Position\n", sizeof(body));
+    strcat(body, "Set Exterior Exit = My Position\n", sizeof(body));
+    strcat(body, "Set Interior Facing Only\n", sizeof(body));
+    strcat(body, "Set Exit Facing Only\n", sizeof(body));
+    strcat(body, "Raise Exit Z +0.50\n", sizeof(body));
+    strcat(body, "Lower Exit Z -0.50\n", sizeof(body));
+    strcat(body, "Goto Interior Spawn\n", sizeof(body));
+    strcat(body, "Goto Exterior Exit\n", sizeof(body));
+    strcat(body, "Back", sizeof(body));
+    ShowPlayerDialog(playerid, DIALOG_GANG_INTERIOR_POINT_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Back");
+    return 1;
+}
+
+stock SetGangInteriorSpawnPointFromPlayer(playerid, gangid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa edit titik interior Gang HQ.");
+        return 0;
+    }
+
+    new gangIndex = GetPresetGangIndexByID(gangid);
+    if (gangIndex == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang ID tidak valid.");
+        return 0;
+    }
+
+    if (GetPlayerInterior(playerid) == 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Untuk set Interior Spawn, kamu harus berdiri di dalam interior HQ.");
+        return 0;
+    }
+
+    new Float:x, Float:y, Float:z, Float:a;
+    GetPlayerPos(playerid, x, y, z);
+    GetPlayerFacingAngle(playerid, a);
+
+    GangHQInteriorEnabled[gangIndex] = 1;
+    GangHQInteriorID[gangIndex] = GetPlayerInterior(playerid);
+    GangHQInteriorVirtualWorld[gangIndex] = GetGangHQVirtualWorld(gangid);
+    GangHQInteriorX[gangIndex] = x;
+    GangHQInteriorY[gangIndex] = y;
+    GangHQInteriorZ[gangIndex] = z;
+    GangHQInteriorA[gangIndex] = a;
+
+    SaveGangHQInterior(gangid);
+    CreateGangHQInteriorRuntime(gangIndex);
+
+    SendClientMessage(playerid, COLOR_GREEN, "Interior Spawn Gang HQ disimpan dari posisi + facing kamu.");
+    SendClientMessage(playerid, COLOR_WHITE, "VW tetap shared per gang agar semua member/visitor bertemu di interior yang sama.");
+    return 1;
+}
+
+stock SetGangInteriorExitPointFromPlayer(playerid, gangid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa edit titik exit Gang HQ.");
+        return 0;
+    }
+
+    new gangIndex = GetPresetGangIndexByID(gangid);
+    if (gangIndex == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang ID tidak valid.");
+        return 0;
+    }
+
+    if (GetPlayerInterior(playerid) != 0 || GetPlayerVirtualWorld(playerid) != 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Untuk set Exterior Exit, kamu harus berdiri di exterior world/interior 0 dan VW 0.");
+        return 0;
+    }
+
+    new Float:x, Float:y, Float:z, Float:a;
+    GetPlayerPos(playerid, x, y, z);
+    GetPlayerFacingAngle(playerid, a);
+
+    GangHQInteriorExitX[gangIndex] = x;
+    GangHQInteriorExitY[gangIndex] = y;
+    GangHQInteriorExitZ[gangIndex] = z;
+    GangHQInteriorExitA[gangIndex] = a;
+
+    SaveGangHQInterior(gangid);
+
+    SendClientMessage(playerid, COLOR_GREEN, "Exterior Exit Gang HQ disimpan dari posisi + facing kamu.");
+    SendClientMessage(playerid, COLOR_WHITE, "Tips freefall: berdiri sedikit di atas tanah/anak tangga, atau pakai Raise Exit Z +0.50.");
+    return 1;
+}
+
+stock SetGangInteriorFacingFromPlayer(playerid, gangid, pointType)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa edit facing Gang HQ.");
+        return 0;
+    }
+
+    new gangIndex = GetPresetGangIndexByID(gangid);
+    if (gangIndex == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang ID tidak valid.");
+        return 0;
+    }
+
+    new Float:a;
+    GetPlayerFacingAngle(playerid, a);
+
+    if (pointType == 0)
+    {
+        GangHQInteriorA[gangIndex] = a;
+        SendClientMessage(playerid, COLOR_GREEN, "Facing Interior Spawn Gang HQ disimpan.");
+    }
+    else
+    {
+        GangHQInteriorExitA[gangIndex] = a;
+        SendClientMessage(playerid, COLOR_GREEN, "Facing Exterior Exit Gang HQ disimpan.");
+    }
+
+    SaveGangHQInterior(gangid);
+    return 1;
+}
+
+stock AdjustGangInteriorExitZ(playerid, gangid, Float:delta)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa adjust Z exit Gang HQ.");
+        return 0;
+    }
+
+    new gangIndex = GetPresetGangIndexByID(gangid);
+    if (gangIndex == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang ID tidak valid.");
+        return 0;
+    }
+
+    GangHQInteriorExitZ[gangIndex] += delta;
+    SaveGangHQInterior(gangid);
+
+    new msg[160];
+    format(msg, sizeof(msg), "Exit Z %s diubah menjadi %.3f.", PresetGangShortName[gangIndex], GangHQInteriorExitZ[gangIndex]);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    return 1;
+}
+
+stock GotoGangInteriorPoint(playerid, gangid, pointType)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa goto Gang HQ point.");
+        return 0;
+    }
+
+    new gangIndex = GetPresetGangIndexByID(gangid);
+    if (gangIndex == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang ID tidak valid.");
+        return 0;
+    }
+
+    if (pointType == 0)
+    {
+        SetPlayerInterior(playerid, GangHQInteriorID[gangIndex]);
+        SetPlayerVirtualWorld(playerid, GangHQInteriorVirtualWorld[gangIndex]);
+        SetPlayerPos(playerid, GangHQInteriorX[gangIndex], GangHQInteriorY[gangIndex], GangHQInteriorZ[gangIndex]);
+        SetPlayerFacingAngle(playerid, GangHQInteriorA[gangIndex]);
+        SetCameraBehindPlayer(playerid);
+        SendClientMessage(playerid, COLOR_GREEN, "Teleport ke Interior Spawn Gang HQ.");
+    }
+    else
+    {
+        SetPlayerInterior(playerid, 0);
+        SetPlayerVirtualWorld(playerid, 0);
+        SetPlayerPos(playerid, GangHQInteriorExitX[gangIndex], GangHQInteriorExitY[gangIndex], GangHQInteriorExitZ[gangIndex] + 1.0);
+        SetPlayerFacingAngle(playerid, GangHQInteriorExitA[gangIndex]);
+        SetCameraBehindPlayer(playerid);
+        SendClientMessage(playerid, COLOR_GREEN, "Teleport ke Exterior Exit Gang HQ.");
+    }
     return 1;
 }
 
@@ -8456,6 +8675,7 @@ stock ShowGangPresetActionMenu(playerid, gangid)
     strcat(body, "Goto HQ Exterior\n", sizeof(body));
     strcat(body, "Reload DB\n", sizeof(body));
     strcat(body, "Enable / Disable Gang Preset\n", sizeof(body));
+    strcat(body, "Gang HQ Interior Point Editor\n", sizeof(body));
     strcat(body, "Back", sizeof(body));
     ShowPlayerDialog(playerid, DIALOG_GANG_PRESET_ACTION_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Back");
     return 1;
@@ -10788,7 +11008,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.7 Clean Hospital Spawn");
+    SetGameModeText("SAIF Dev v0.24K.8 Gang HQ Point Editor");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -10906,7 +11126,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.7 Clean Hospital Spawn berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.8 Gang HQ Point Editor berhasil dijalankan.");
     return 1;
 }
 
@@ -11122,6 +11342,21 @@ stock ApplyDeathHospitalRespawnPosition(playerid, saveNow = 0)
     return 1;
 }
 
+public HideClassSelectionForHospitalRespawn(playerid)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
+    {
+        return 0;
+    }
+
+    if (PlayerDeathRespawnState[playerid] == DEATH_RESPAWN_WAITING)
+    {
+        // Delay spectator agar animasi mati tetap terlihat, tapi class selection CJ tidak sempat tampil.
+        TogglePlayerSpectating(playerid, true);
+    }
+    return 1;
+}
+
 public RespawnPlayerAtNearestHospital(playerid)
 {
     if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
@@ -11149,7 +11384,6 @@ public RespawnPlayerAtNearestHospital(playerid)
         WEAPON:WEAPON_FIST, 0
     );
 
-    // Keluar dari spectator tepat sebelum SpawnPlayer agar class selection tidak tampil ke player.
     TogglePlayerSpectating(playerid, false);
     SpawnPlayer(playerid);
     return 1;
@@ -11204,10 +11438,9 @@ public OnPlayerDeath(playerid, killerid, WEAPON:reason)
 
     PrepareDeathHospitalRespawn(playerid);
 
-    // Sembunyikan layar class selection (<< >> Spawn) selama menunggu hospital respawn.
-    // Tanpa ini, engine sempat menampilkan view default CJ selama beberapa detik.
-    TogglePlayerSpectating(playerid, true);
-
+    // Jangan TogglePlayerSpectating langsung di sini. Biarkan animasi mati GTA SA terlihat dulu.
+    // Setelah delay pendek, class selection disembunyikan sebelum layar CJ/Spawn muncul.
+    SetTimerEx("HideClassSelectionForHospitalRespawn", HOSPITAL_RESPAWN_HIDE_CLASS_MS, false, "i", playerid);
     SetTimerEx("RespawnPlayerAtNearestHospital", HOSPITAL_RESPAWN_DELAY_MS, false, "i", playerid);
     return 1;
 }
@@ -11330,10 +11563,9 @@ public OnPlayerRequestClass(playerid, classid)
     }
 
     // Jika engine mencoba masuk class selection setelah player mati,
-    // jangan set posisi/camera ke CJ. Biarkan timer hospital respawn yang menang.
+    // jangan set posisi/camera ke CJ. Sembunyikan class UI, timer hospital respawn yang menang.
     if (PlayerDeathRespawnState[playerid] != DEATH_RESPAWN_NONE)
     {
-        // Jika engine tetap meminta class saat death respawn, tetap sembunyikan class UI.
         TogglePlayerSpectating(playerid, true);
         return 0;
     }
@@ -11770,8 +12002,8 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/turfmenu | /turfedit\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n\n", sizeof(body));
-    strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id]\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /gangintpoints [gang_id]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n\n", sizeof(body));
+    strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /gangintpoints [gang_id]\n/gangintsetpoint [gang_id] [interior/exit], /gangintz [gang_id] [delta]\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "SAIF Admin Menu Reference", body, "Back", "Close");
@@ -12568,7 +12800,70 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
                 SendClientMessage(playerid, COLOR_GREEN, "Gang preset config reload dari database diminta.");
             }
             case 8: ShowPlayerDialog(playerid, DIALOG_GANG_PRESET_ENABLE_INPUT, DIALOG_STYLE_INPUT, "Enable / Disable Gang Preset", "Masukkan 1 untuk ACTIVE atau 0 untuk DISABLED.\n\nDisabled gang disembunyikan dari pickup/label/map icon dan player tidak bisa join/enter HQ.", "Save", "Back");
-            case 9: ShowGangPresetMenu(playerid);
+            case 9: ShowGangInteriorPointMenu(playerid, gangid);
+            case 10: ShowGangPresetMenu(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_GANG_INTERIOR_POINT_MENU)
+    {
+        new gangid = PlayerEditingGangPresetID[playerid];
+        if (!response)
+        {
+            ShowGangPresetActionMenu(playerid, gangid);
+            return 1;
+        }
+
+        switch (listitem)
+        {
+            case 0:
+            {
+                ShowGangInteriorInfo(playerid, gangid);
+                ShowGangInteriorPointMenu(playerid, gangid);
+            }
+            case 1:
+            {
+                SetGangInteriorSpawnPointFromPlayer(playerid, gangid);
+                ShowGangInteriorPointMenu(playerid, gangid);
+            }
+            case 2:
+            {
+                SetGangInteriorExitPointFromPlayer(playerid, gangid);
+                ShowGangInteriorPointMenu(playerid, gangid);
+            }
+            case 3:
+            {
+                SetGangInteriorFacingFromPlayer(playerid, gangid, 0);
+                ShowGangInteriorPointMenu(playerid, gangid);
+            }
+            case 4:
+            {
+                SetGangInteriorFacingFromPlayer(playerid, gangid, 1);
+                ShowGangInteriorPointMenu(playerid, gangid);
+            }
+            case 5:
+            {
+                AdjustGangInteriorExitZ(playerid, gangid, 0.50);
+                ShowGangInteriorPointMenu(playerid, gangid);
+            }
+            case 6:
+            {
+                AdjustGangInteriorExitZ(playerid, gangid, -0.50);
+                ShowGangInteriorPointMenu(playerid, gangid);
+            }
+            case 7:
+            {
+                GotoGangInteriorPoint(playerid, gangid, 0);
+            }
+            case 8:
+            {
+                GotoGangInteriorPoint(playerid, gangid, 1);
+            }
+            case 9:
+            {
+                ShowGangPresetActionMenu(playerid, gangid);
+            }
         }
         return 1;
     }
@@ -29488,6 +29783,87 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/gangintpoints", true) || !strcmp(cmdtext, "/gangintedit", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangintpoints [gang_id]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/gangintpoints ", true) == 0)
+    {
+        new gangStr[16];
+        if (!GetOneParam(cmdtext[15], gangStr, sizeof(gangStr)) || !IsNumericString(gangStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangintpoints [gang_id]");
+            return 1;
+        }
+        ShowGangInteriorPointMenu(playerid, strval(gangStr));
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/gangintedit ", true) == 0)
+    {
+        new gangStr[16];
+        if (!GetOneParam(cmdtext[13], gangStr, sizeof(gangStr)) || !IsNumericString(gangStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangintedit [gang_id]");
+            return 1;
+        }
+        ShowGangInteriorPointMenu(playerid, strval(gangStr));
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/gangintsetpoint ", true) == 0)
+    {
+        new gangStr[16];
+        new pointStr[24];
+        if (!GetTwoParams(cmdtext[17], gangStr, sizeof(gangStr), pointStr, sizeof(pointStr)) || !IsNumericString(gangStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangintsetpoint [gang_id] [interior/exit]");
+            return 1;
+        }
+
+        if (!strcmp(pointStr, "interior", true) || !strcmp(pointStr, "spawn", true))
+        {
+            SetGangInteriorSpawnPointFromPlayer(playerid, strval(gangStr));
+        }
+        else if (!strcmp(pointStr, "exit", true) || !strcmp(pointStr, "exterior", true))
+        {
+            SetGangInteriorExitPointFromPlayer(playerid, strval(gangStr));
+        }
+        else
+        {
+            SendClientMessage(playerid, COLOR_RED, "Point harus interior/spawn atau exit/exterior.");
+        }
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/gangintsetpoint", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangintsetpoint [gang_id] [interior/exit]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/gangintz ", true) == 0)
+    {
+        new gangStr[16];
+        new zStr[16];
+        if (!GetTwoParams(cmdtext[10], gangStr, sizeof(gangStr), zStr, sizeof(zStr)) || !IsNumericString(gangStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangintz [gang_id] [delta_z]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /gangintz 1 0.5 atau /gangintz 1 -0.5");
+            return 1;
+        }
+        AdjustGangInteriorExitZ(playerid, strval(gangStr), floatstr(zStr));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/gangintz", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangintz [gang_id] [delta_z]");
+        return 1;
+    }
+
     if (strfind(cmdtext, "/gangpresetenable ", true) == 0)
     {
         if (!IsAdminLevel(playerid, ADMIN_OWNER))
@@ -29952,7 +30328,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.7 Clean Hospital Spawn");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.8 Gang HQ Point Editor");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -29962,7 +30338,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.7: Hide class selection during death respawn; Grove HQ exit uses original exterior point with raised Z.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.8: Death animation kept with delayed class hide; Gang HQ interior/exit point editor added.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K: Gang preset active status, enable/disable, runtime hide, and /amenus command reference cleanup.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24J.4: Business array compile fix after MAX_BUSINESSES 64 expansion.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24F.2: Ammu config dialog fix, edit price/ammo/select action now responds correctly.");
@@ -31518,6 +31894,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/setfuel [amount] - Set fuel kendaraan aktif, Owner only");
         SendClientMessage(playerid, COLOR_WHITE, "/givelicense [id] - Beri basic weapon license, Owner only");
         SendClientMessage(playerid, COLOR_WHITE, "/ammuconfig - Atur harga/ammo/status Ammu-Nation");
+        SendClientMessage(playerid, COLOR_WHITE, "/gangintpoints [gang_id] - Editor titik interior/exit Gang HQ, Owner only");
         SendClientMessage(playerid, COLOR_WHITE, "/serverinfo - Info server dan uptime");
         SendClientMessage(playerid, COLOR_WHITE, "/dbping - Test koneksi database");
         SendClientMessage(playerid, COLOR_WHITE, "/saveall - Simpan semua player, Owner only");

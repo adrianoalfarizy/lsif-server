@@ -11213,7 +11213,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.18.1 Turf Delete Persist DB Filter Fix");
+    SetGameModeText("SAIF Dev v0.24K.19 Business Map Icon Disable Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11326,7 +11326,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.18.1 Turf Delete Persist DB Filter Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.19 Business Map Icon Disable Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -11633,6 +11633,7 @@ public OnBusinessPresetConfigLoaded()
     }
 
     RefreshBusinessRuntime();
+    RefreshBusinessMapIconsForAllPlayers();
     printf("[SAIF] Business preset DB config loaded: %d rows.", rows);
     return 1;
 }
@@ -11690,9 +11691,40 @@ stock CreateBusinessPresetFromPlayer(playerid)
 
     SaveBusinessPresetConfig(businessIndex);
     RefreshBusinessRuntime();
+    RefreshBusinessMapIconsForAllPlayers();
     PlayerEditingBusinessPresetIndex[playerid] = businessIndex;
     SendClientMessage(playerid, COLOR_GREEN, "Business preset baru dibuat di posisi admin. Silakan edit nama/harga/income.");
     ShowBusinessPresetActionMenu(playerid, businessIndex);
+    return 1;
+}
+
+stock RefreshBusinessMapIconsForAllPlayers()
+{
+    for (new playerid = 0; playerid < MAX_PLAYERS; playerid++)
+    {
+        if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
+        {
+            continue;
+        }
+
+        for (new i = 0; i < MAX_BUSINESSES; i++)
+        {
+            RemovePlayerMapIcon(playerid, MAPICON_BASE_BUSINESS + i);
+
+            if (!BusinessEnabled[i] || strlen(BusinessName[i]) < 1)
+            {
+                continue;
+            }
+
+            if (BusinessX[i] == 0.0 && BusinessY[i] == 0.0 && BusinessZ[i] == 0.0)
+            {
+                continue;
+            }
+
+            SetPlayerMapIcon(playerid, MAPICON_BASE_BUSINESS + i, BusinessX[i], BusinessY[i], BusinessZ[i], MAPICON_TYPE_BUSINESS, COLOR_YELLOW, MAPICON_LOCAL);
+        }
+    }
+
     return 1;
 }
 
@@ -11713,6 +11745,7 @@ stock SetBusinessPresetEnabled(playerid, businessIndex, enabled)
     BusinessEnabled[businessIndex] = enabled ? 1 : 0;
     SaveBusinessPresetConfig(businessIndex);
     RefreshBusinessRuntime();
+    RefreshBusinessMapIconsForAllPlayers();
     SendClientMessage(playerid, COLOR_GREEN, enabled ? "Business preset diaktifkan." : "Business preset dinonaktifkan.");
     return 1;
 }
@@ -24725,6 +24758,11 @@ stock CreateWorldInteractionMarkers()
 
     for (new i = 0; i < MAX_BUSINESSES; i++)
     {
+        if (!BusinessEnabled[i] || strlen(BusinessName[i]) < 1)
+        {
+            continue;
+        }
+
         BusinessPickup[i] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, BusinessX[i], BusinessY[i], BusinessZ[i], 0);
 
         format(labelText, sizeof(labelText), "[ALT] Business\n%s\nBuy / Manage / Collect", BusinessName[i]);
@@ -24956,6 +24994,20 @@ stock ApplyLSIFMapIcons(playerid)
 
     for (new i = 0; i < MAX_BUSINESSES; i++)
     {
+        // v0.24K.19: business icon harus mengikuti BusinessEnabled.
+        // Remove dulu supaya icon lama hilang saat business disabled/reload.
+        RemovePlayerMapIcon(playerid, MAPICON_BASE_BUSINESS + i);
+
+        if (!BusinessEnabled[i] || strlen(BusinessName[i]) < 1)
+        {
+            continue;
+        }
+
+        if (BusinessX[i] == 0.0 && BusinessY[i] == 0.0 && BusinessZ[i] == 0.0)
+        {
+            continue;
+        }
+
         SetPlayerMapIcon(playerid, MAPICON_BASE_BUSINESS + i, BusinessX[i], BusinessY[i], BusinessZ[i], MAPICON_TYPE_BUSINESS, COLOR_YELLOW, MAPICON_LOCAL);
     }
 
@@ -31895,7 +31947,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.18.1 Turf Delete Persist DB Filter Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.19 Business Map Icon Disable Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -31905,7 +31957,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.18.1: Turf load now filters enabled=1 only and delete turf removes row from DB, preventing old turf from returning after restart.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19: Business map icons now respect enabled state; disabling a business removes its icon for online players and after restart.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24N: Source cleanup assistant, safe disable by source_tag, relabel fallback tags, and runtime refresh.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24M: Source audit detail menu, deprecated/fallback record review, and source cleanup policy.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24L: Offline/source audit tools, source_tag validation summary, and /amenus audit entry.");

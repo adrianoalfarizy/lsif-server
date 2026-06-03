@@ -229,7 +229,11 @@
 #define DIALOG_BUSINESS_PRESET_INCOME_INPUT 1209
 #define DIALOG_GANG_PRESET_ENABLE_INPUT 1210
 #define DIALOG_GANG_PRESET_STATUS 1211
-#define DIALOG_GANG_INTERIOR_POINT_MENU 1212
+#define DIALOG_SOURCE_AUDIT 1212
+#define DIALOG_SOURCE_AUDIT_MENU 1213
+#define DIALOG_SOURCE_AUDIT_DATASET 1214
+#define DIALOG_SOURCE_AUDIT_DETAIL 1215
+#define DIALOG_SOURCE_AUDIT_DEPRECATED 1216
 
 
 
@@ -260,20 +264,12 @@
 #define BETA_MOTD_TEXT "Selamat datang di LSIF Closed Beta. Fitur masih dalam tahap testing. Laporkan bug dengan /report."
 
 
-#define SPAWN_X         1172.3447
-#define SPAWN_Y         -1323.3228
-#define SPAWN_Z         15.4020
-#define SPAWN_A         270.0
+#define SPAWN_X         1958.3783
+#define SPAWN_Y         1343.1572
+#define SPAWN_Z         15.3746
+#define SPAWN_A         269.1425
 
-#define MAX_HOSPITAL_RESPAWNS 6
-#define HOSPITAL_RESPAWN_DELAY_MS 700
-#define HOSPITAL_RESPAWN_HIDE_CLASS_MS 900
-#define DEATH_RESPAWN_NONE 0
-#define DEATH_RESPAWN_WAITING 1
-#define DEATH_RESPAWN_SPAWNING 2
-#define DEATH_RESPAWN_PROTECT 3
-
-#define DEFAULT_SKIN 299
+#define DEFAULT_SKIN 0
 
 #define MAX_PAY_AMOUNT  50000
 
@@ -627,53 +623,6 @@ new Float:PlayerLastZ[MAX_PLAYERS];
 new Float:PlayerLastA[MAX_PLAYERS];
 new PlayerLastInterior[MAX_PLAYERS];
 new PlayerLastVirtualWorld[MAX_PLAYERS];
-
-new PlayerDeathRespawnState[MAX_PLAYERS];
-new PlayerDeathRespawnLockSeq[MAX_PLAYERS];
-new Float:PlayerHospitalRespawnX[MAX_PLAYERS];
-new Float:PlayerHospitalRespawnY[MAX_PLAYERS];
-new Float:PlayerHospitalRespawnZ[MAX_PLAYERS];
-new Float:PlayerHospitalRespawnA[MAX_PLAYERS];
-
-new Float:HospitalRespawnX[MAX_HOSPITAL_RESPAWNS] =
-{
-    1172.3447, // All Saints General Hospital - Los Santos
-    2034.1694, // County General Hospital - Jefferson
-    -2655.0806, // San Fierro Medical Center
-    -2203.7727, // Angel Pine Medical Center
-    1607.4060, // Las Venturas Hospital
-    -1514.7000  // Fort Carson / Bone County fallback
-};
-
-new Float:HospitalRespawnY[MAX_HOSPITAL_RESPAWNS] =
-{
-    -1323.3228,
-    -1403.3000,
-    635.9655,
-    -2309.8306,
-    1825.4200,
-    2527.3000
-};
-
-new Float:HospitalRespawnZ[MAX_HOSPITAL_RESPAWNS] =
-{
-    15.4020,
-    17.2500,
-    14.4531,
-    30.6250,
-    10.8203,
-    55.7000
-};
-
-new Float:HospitalRespawnA[MAX_HOSPITAL_RESPAWNS] =
-{
-    270.0,
-    180.0,
-    180.0,
-    320.0,
-    180.0,
-    90.0
-};
 
 new PlayerMoney[MAX_PLAYERS];
 new PlayerBankMoney[MAX_PLAYERS];
@@ -1199,6 +1148,7 @@ new PlayerNearbyInteractionCount[MAX_PLAYERS];
 new PlayerNearbyInteractionType[MAX_PLAYERS][MAX_NEARBY_INTERACTIONS];
 new PlayerNearbyInteractionParam[MAX_PLAYERS][MAX_NEARBY_INTERACTIONS];
 new PlayerNearbyInteractionLabel[MAX_PLAYERS][MAX_NEARBY_INTERACTIONS][64];
+new PlayerSourceAuditDataset[MAX_PLAYERS];
 
 new GangHQPickup[MAX_PRESET_GANGS];
 new Text3D:GangHQLabel[MAX_PRESET_GANGS];
@@ -2210,13 +2160,11 @@ forward OnGangRestockBankLoaded(playerid, gangid, weaponIndex, ammo, cost);
 forward OnGangHQInteriorsLoaded();
 forward OnGangPresetConfigLoaded();
 forward OnBusinessPresetConfigLoaded();
-forward RespawnPlayerAtNearestHospital(playerid);
-forward HideClassSelectionForHospitalRespawn(playerid);
-forward ClearDeathRespawnState(playerid);
-forward ReapplyDeathHospitalRespawnLock(playerid, seq);
-forward ForceSpawnLoggedPlayerFromClass(playerid);
-forward ApplyGangHQExitPositionDelayed(playerid, Float:x, Float:y, Float:z, Float:a);
-forward UnfreezePlayerAfterGangHQExit(playerid);
+forward OnSourceAuditSummaryLoaded(playerid);
+forward OnSourceAuditDetailLoaded(playerid, datasetIndex);
+forward OnSourceAuditDeprecatedLoaded(playerid);
+forward OnSourceCleanupUpdated(playerid, datasetIndex, actionType);
+
 forward OnDynamicLocationsLoaded();
 forward OnDynamicLocationCreated(playerid);
 forward OnDynamicLocationUpdated(playerid);
@@ -2537,12 +2485,6 @@ stock ResetPlayerAccountData(playerid)
     PlayerLastA[playerid] = SPAWN_A;
     PlayerLastInterior[playerid] = 0;
     PlayerLastVirtualWorld[playerid] = 0;
-    PlayerDeathRespawnState[playerid] = DEATH_RESPAWN_NONE;
-    PlayerDeathRespawnLockSeq[playerid] = 0;
-    PlayerHospitalRespawnX[playerid] = SPAWN_X;
-    PlayerHospitalRespawnY[playerid] = SPAWN_Y;
-    PlayerHospitalRespawnZ[playerid] = SPAWN_Z;
-    PlayerHospitalRespawnA[playerid] = SPAWN_A;
 
     PlayerMoneyMismatchCount[playerid] = 0;
     PlayerLastACWarningTick[playerid] = 0;
@@ -8056,82 +7998,6 @@ stock EnterPlayerGangHQInterior(playerid, gangid)
     return 1;
 }
 
-
-stock GetSafeGangHQExteriorExit(gangIndex, &Float:x, &Float:y, &Float:z, &Float:a)
-{
-    if (gangIndex >= 0 && gangIndex < MAX_PRESET_GANGS)
-    {
-        // Kembalikan ke flow awal: pakai titik exit exterior yang tersimpan.
-        // Kalau titiknya kurang pas, Owner bisa ubah sendiri lewat /gangintpoints.
-        x = GangHQInteriorExitX[gangIndex];
-        y = GangHQInteriorExitY[gangIndex];
-        z = GangHQInteriorExitZ[gangIndex];
-        a = GangHQInteriorExitA[gangIndex];
-
-        if (!IsSafeExteriorRespawnPosition(x, y, z))
-        {
-            x = GangHQX[gangIndex];
-            y = GangHQY[gangIndex];
-            z = GangHQZ[gangIndex];
-            a = GangHQA[gangIndex];
-        }
-
-        if (!IsSafeExteriorRespawnPosition(x, y, z))
-        {
-            x = SPAWN_X;
-            y = SPAWN_Y;
-            z = SPAWN_Z;
-            a = SPAWN_A;
-            return 0;
-        }
-
-        return 1;
-    }
-
-    x = SPAWN_X;
-    y = SPAWN_Y;
-    z = SPAWN_Z;
-    a = SPAWN_A;
-    return 0;
-}
-
-stock ApplyGangHQExitPosition(playerid, Float:x, Float:y, Float:z, Float:a, savePosition = 0)
-{
-    SetPlayerInterior(playerid, 0);
-    SetPlayerVirtualWorld(playerid, 0);
-    SetPlayerVelocity(playerid, 0.0, 0.0, 0.0);
-    SetPlayerPos(playerid, x, y, z);
-    SetPlayerFacingAngle(playerid, a);
-    SetCameraBehindPlayer(playerid);
-
-    if (savePosition)
-    {
-        PlayerLastX[playerid] = x;
-        PlayerLastY[playerid] = y;
-        PlayerLastZ[playerid] = z;
-        PlayerLastA[playerid] = a;
-        PlayerLastInterior[playerid] = 0;
-        PlayerLastVirtualWorld[playerid] = 0;
-        SavePlayerData(playerid);
-    }
-    return 1;
-}
-
-public ApplyGangHQExitPositionDelayed(playerid, Float:x, Float:y, Float:z, Float:a)
-{
-    if (!IsPlayerConnected(playerid)) return 0;
-    ApplyGangHQExitPosition(playerid, x, y, z, a, 1);
-    return 1;
-}
-
-public UnfreezePlayerAfterGangHQExit(playerid)
-{
-    if (!IsPlayerConnected(playerid)) return 0;
-    TogglePlayerControllable(playerid, true);
-    SetCameraBehindPlayer(playerid);
-    return 1;
-}
-
 stock ExitPlayerGangHQInterior(playerid)
 {
     if (!PlayerInsideGangHQ[playerid])
@@ -8151,18 +8017,12 @@ stock ExitPlayerGangHQInterior(playerid)
     new gangid = PlayerInsideGangHQID[playerid];
     new gangIndex = GetPresetGangIndexByID(gangid);
 
-    if (gangIndex == -1)
-    {
-        gangIndex = GetPlayerCurrentGangHQInteriorIndex(playerid);
-    }
-
     SetPlayerGangHQPickupCooldown(playerid);
     PlayerInsideGangHQ[playerid] = 0;
     PlayerInsideGangHQID[playerid] = 0;
 
     SetPlayerInterior(playerid, 0);
     SetPlayerVirtualWorld(playerid, 0);
-    SetPlayerVelocity(playerid, 0.0, 0.0, 0.0);
 
     if (gangIndex == -1)
     {
@@ -8171,21 +8031,10 @@ stock ExitPlayerGangHQInterior(playerid)
     }
     else
     {
-        // Flow dikembalikan seperti awal: pakai titik exit yang tersimpan.
-        // Kalau titik kurang tinggi/kurang pas, Owner bisa edit lewat /gangintpoints.
         SetPlayerPos(playerid, GangHQInteriorExitX[gangIndex], GangHQInteriorExitY[gangIndex], GangHQInteriorExitZ[gangIndex]);
         SetPlayerFacingAngle(playerid, GangHQInteriorExitA[gangIndex]);
-
-        PlayerLastX[playerid] = GangHQInteriorExitX[gangIndex];
-        PlayerLastY[playerid] = GangHQInteriorExitY[gangIndex];
-        PlayerLastZ[playerid] = GangHQInteriorExitZ[gangIndex];
-        PlayerLastA[playerid] = GangHQInteriorExitA[gangIndex];
-        PlayerLastInterior[playerid] = 0;
-        PlayerLastVirtualWorld[playerid] = 0;
-        SavePlayerData(playerid);
     }
 
-    SetCameraBehindPlayer(playerid);
     SendClientMessage(playerid, COLOR_GREEN, "Kamu keluar dari interior Gang HQ.");
     return 1;
 }
@@ -8254,212 +8103,7 @@ stock ShowGangInteriorInfo(playerid, gangid)
     SendClientMessage(playerid, COLOR_WHITE, msg);
     format(msg, sizeof(msg), "Exit pos: %.2f %.2f %.2f | A %.2f", GangHQInteriorExitX[gangIndex], GangHQInteriorExitY[gangIndex], GangHQInteriorExitZ[gangIndex], GangHQInteriorExitA[gangIndex]);
     SendClientMessage(playerid, COLOR_WHITE, msg);
-    SendClientMessage(playerid, COLOR_CYAN, "Command: /enterganghq, /exitganghq, /gangstash, /gangintpoints [gang_id], /setganginterior [gang_id]");
-    return 1;
-}
-
-stock ShowGangInteriorPointMenu(playerid, gangid)
-{
-    if (!IsAdminLevel(playerid, ADMIN_OWNER))
-    {
-        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka Gang HQ Interior Point Editor.");
-        return 0;
-    }
-
-    new gangIndex = GetPresetGangIndexByID(gangid);
-    if (gangIndex == -1)
-    {
-        SendClientMessage(playerid, COLOR_RED, "Gang ID tidak valid. Gunakan /gangs.");
-        return 0;
-    }
-
-    PlayerEditingGangPresetID[playerid] = gangid;
-
-    new title[96];
-    new body[512];
-    format(title, sizeof(title), "Gang HQ Points: %s", PresetGangShortName[gangIndex]);
-    strcat(body, "Info Points\n", sizeof(body));
-    strcat(body, "Set Interior Spawn = My Position\n", sizeof(body));
-    strcat(body, "Set Exterior Exit = My Position\n", sizeof(body));
-    strcat(body, "Set Interior Facing Only\n", sizeof(body));
-    strcat(body, "Set Exit Facing Only\n", sizeof(body));
-    strcat(body, "Raise Exit Z +0.50\n", sizeof(body));
-    strcat(body, "Lower Exit Z -0.50\n", sizeof(body));
-    strcat(body, "Goto Interior Spawn\n", sizeof(body));
-    strcat(body, "Goto Exterior Exit\n", sizeof(body));
-    strcat(body, "Back", sizeof(body));
-    ShowPlayerDialog(playerid, DIALOG_GANG_INTERIOR_POINT_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Back");
-    return 1;
-}
-
-stock SetGangInteriorSpawnPointFromPlayer(playerid, gangid)
-{
-    if (!IsAdminLevel(playerid, ADMIN_OWNER))
-    {
-        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa edit titik interior Gang HQ.");
-        return 0;
-    }
-
-    new gangIndex = GetPresetGangIndexByID(gangid);
-    if (gangIndex == -1)
-    {
-        SendClientMessage(playerid, COLOR_RED, "Gang ID tidak valid.");
-        return 0;
-    }
-
-    if (GetPlayerInterior(playerid) == 0)
-    {
-        SendClientMessage(playerid, COLOR_RED, "Untuk set Interior Spawn, kamu harus berdiri di dalam interior HQ.");
-        return 0;
-    }
-
-    new Float:x, Float:y, Float:z, Float:a;
-    GetPlayerPos(playerid, x, y, z);
-    GetPlayerFacingAngle(playerid, a);
-
-    GangHQInteriorEnabled[gangIndex] = 1;
-    GangHQInteriorID[gangIndex] = GetPlayerInterior(playerid);
-    GangHQInteriorVirtualWorld[gangIndex] = GetGangHQVirtualWorld(gangid);
-    GangHQInteriorX[gangIndex] = x;
-    GangHQInteriorY[gangIndex] = y;
-    GangHQInteriorZ[gangIndex] = z;
-    GangHQInteriorA[gangIndex] = a;
-
-    SaveGangHQInterior(gangid);
-    CreateGangHQInteriorRuntime(gangIndex);
-
-    SendClientMessage(playerid, COLOR_GREEN, "Interior Spawn Gang HQ disimpan dari posisi + facing kamu.");
-    SendClientMessage(playerid, COLOR_WHITE, "VW tetap shared per gang agar semua member/visitor bertemu di interior yang sama.");
-    return 1;
-}
-
-stock SetGangInteriorExitPointFromPlayer(playerid, gangid)
-{
-    if (!IsAdminLevel(playerid, ADMIN_OWNER))
-    {
-        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa edit titik exit Gang HQ.");
-        return 0;
-    }
-
-    new gangIndex = GetPresetGangIndexByID(gangid);
-    if (gangIndex == -1)
-    {
-        SendClientMessage(playerid, COLOR_RED, "Gang ID tidak valid.");
-        return 0;
-    }
-
-    if (GetPlayerInterior(playerid) != 0 || GetPlayerVirtualWorld(playerid) != 0)
-    {
-        SendClientMessage(playerid, COLOR_RED, "Untuk set Exterior Exit, kamu harus berdiri di exterior world/interior 0 dan VW 0.");
-        return 0;
-    }
-
-    new Float:x, Float:y, Float:z, Float:a;
-    GetPlayerPos(playerid, x, y, z);
-    GetPlayerFacingAngle(playerid, a);
-
-    GangHQInteriorExitX[gangIndex] = x;
-    GangHQInteriorExitY[gangIndex] = y;
-    GangHQInteriorExitZ[gangIndex] = z;
-    GangHQInteriorExitA[gangIndex] = a;
-
-    SaveGangHQInterior(gangid);
-
-    SendClientMessage(playerid, COLOR_GREEN, "Exterior Exit Gang HQ disimpan dari posisi + facing kamu.");
-    SendClientMessage(playerid, COLOR_WHITE, "Tips freefall: berdiri sedikit di atas tanah/anak tangga, atau pakai Raise Exit Z +0.50.");
-    return 1;
-}
-
-stock SetGangInteriorFacingFromPlayer(playerid, gangid, pointType)
-{
-    if (!IsAdminLevel(playerid, ADMIN_OWNER))
-    {
-        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa edit facing Gang HQ.");
-        return 0;
-    }
-
-    new gangIndex = GetPresetGangIndexByID(gangid);
-    if (gangIndex == -1)
-    {
-        SendClientMessage(playerid, COLOR_RED, "Gang ID tidak valid.");
-        return 0;
-    }
-
-    new Float:a;
-    GetPlayerFacingAngle(playerid, a);
-
-    if (pointType == 0)
-    {
-        GangHQInteriorA[gangIndex] = a;
-        SendClientMessage(playerid, COLOR_GREEN, "Facing Interior Spawn Gang HQ disimpan.");
-    }
-    else
-    {
-        GangHQInteriorExitA[gangIndex] = a;
-        SendClientMessage(playerid, COLOR_GREEN, "Facing Exterior Exit Gang HQ disimpan.");
-    }
-
-    SaveGangHQInterior(gangid);
-    return 1;
-}
-
-stock AdjustGangInteriorExitZ(playerid, gangid, Float:delta)
-{
-    if (!IsAdminLevel(playerid, ADMIN_OWNER))
-    {
-        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa adjust Z exit Gang HQ.");
-        return 0;
-    }
-
-    new gangIndex = GetPresetGangIndexByID(gangid);
-    if (gangIndex == -1)
-    {
-        SendClientMessage(playerid, COLOR_RED, "Gang ID tidak valid.");
-        return 0;
-    }
-
-    GangHQInteriorExitZ[gangIndex] += delta;
-    SaveGangHQInterior(gangid);
-
-    new msg[160];
-    format(msg, sizeof(msg), "Exit Z %s diubah menjadi %.3f.", PresetGangShortName[gangIndex], GangHQInteriorExitZ[gangIndex]);
-    SendClientMessage(playerid, COLOR_GREEN, msg);
-    return 1;
-}
-
-stock GotoGangInteriorPoint(playerid, gangid, pointType)
-{
-    if (!IsAdminLevel(playerid, ADMIN_OWNER))
-    {
-        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa goto Gang HQ point.");
-        return 0;
-    }
-
-    new gangIndex = GetPresetGangIndexByID(gangid);
-    if (gangIndex == -1)
-    {
-        SendClientMessage(playerid, COLOR_RED, "Gang ID tidak valid.");
-        return 0;
-    }
-
-    if (pointType == 0)
-    {
-        SetPlayerInterior(playerid, GangHQInteriorID[gangIndex]);
-        SetPlayerVirtualWorld(playerid, GangHQInteriorVirtualWorld[gangIndex]);
-        SetPlayerPos(playerid, GangHQInteriorX[gangIndex], GangHQInteriorY[gangIndex], GangHQInteriorZ[gangIndex]);
-        SetPlayerFacingAngle(playerid, GangHQInteriorA[gangIndex]);
-        SetCameraBehindPlayer(playerid);
-        SendClientMessage(playerid, COLOR_GREEN, "Teleport ke Interior Spawn Gang HQ.");
-    }
-    else
-    {
-        SetPlayerInterior(playerid, 0);
-        SetPlayerVirtualWorld(playerid, 0);
-        SetPlayerPos(playerid, GangHQInteriorExitX[gangIndex], GangHQInteriorExitY[gangIndex], GangHQInteriorExitZ[gangIndex] + 1.0);
-        SetPlayerFacingAngle(playerid, GangHQInteriorExitA[gangIndex]);
-        SetCameraBehindPlayer(playerid);
-        SendClientMessage(playerid, COLOR_GREEN, "Teleport ke Exterior Exit Gang HQ.");
-    }
+    SendClientMessage(playerid, COLOR_CYAN, "Command: /enterganghq, /exitganghq, /gangstash, /setganginterior [gang_id]");
     return 1;
 }
 
@@ -8680,7 +8324,6 @@ stock ShowGangPresetActionMenu(playerid, gangid)
     strcat(body, "Goto HQ Exterior\n", sizeof(body));
     strcat(body, "Reload DB\n", sizeof(body));
     strcat(body, "Enable / Disable Gang Preset\n", sizeof(body));
-    strcat(body, "Gang HQ Interior Point Editor\n", sizeof(body));
     strcat(body, "Back", sizeof(body));
     ShowPlayerDialog(playerid, DIALOG_GANG_PRESET_ACTION_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Back");
     return 1;
@@ -11013,7 +10656,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.15 Death Respawn Lock No CJ");
+    SetGameModeText("SAIF Dev v0.24N Source Cleanup Assistant");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11038,7 +10681,7 @@ public OnGameModeInit()
     LoadBusinessPresetConfigFromDB();
 
     AddPlayerClass(
-        DEFAULT_SKIN,
+        0,
         SPAWN_X,
         SPAWN_Y,
         SPAWN_Z,
@@ -11100,12 +10743,6 @@ public OnGameModeInit()
         PlayerLastA[i] = SPAWN_A;
         PlayerLastInterior[i] = 0;
         PlayerLastVirtualWorld[i] = 0;
-        PlayerDeathRespawnState[i] = DEATH_RESPAWN_NONE;
-        PlayerDeathRespawnLockSeq[i] = 0;
-        PlayerHospitalRespawnX[i] = SPAWN_X;
-        PlayerHospitalRespawnY[i] = SPAWN_Y;
-        PlayerHospitalRespawnZ[i] = SPAWN_Z;
-        PlayerHospitalRespawnA[i] = SPAWN_A;
 
         PlayerMoneyMismatchCount[i] = 0;
         PlayerLastACWarningTick[i] = 0;
@@ -11132,7 +10769,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.15 Death Respawn Lock No CJ berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24N Source Cleanup Assistant berhasil dijalankan.");
     return 1;
 }
 
@@ -11215,281 +10852,6 @@ public OnPlayerConnect(playerid)
     return 1;
 }
 
-
-stock IsSafeExteriorRespawnPosition(Float:x, Float:y, Float:z)
-{
-    if (z < -5.0 || z > 150.0)
-    {
-        return 0;
-    }
-
-    if (floatabs(x) < 1.0 && floatabs(y) < 1.0 && z < 5.0)
-    {
-        return 0;
-    }
-
-    return 1;
-}
-
-stock Float:GetDistanceSquared3D(Float:x1, Float:y1, Float:z1, Float:x2, Float:y2, Float:z2)
-{
-    new Float:dx = x1 - x2;
-    new Float:dy = y1 - y2;
-    new Float:dz = z1 - z2;
-    return (dx * dx) + (dy * dy) + (dz * dz);
-}
-
-stock FindNearestHospitalRespawn(Float:fromX, Float:fromY, Float:fromZ, &Float:x, &Float:y, &Float:z, &Float:a)
-{
-    new found = 0;
-    new Float:bestDist = 999999999.0;
-    new Float:dist;
-
-    for (new i = 0; i < PublicInteriorCount; i++)
-    {
-        if (!PublicInteriorEnabled[i]) continue;
-        if (strcmp(PublicInteriorType[i], "hospital", true)) continue;
-        if (!IsSafeExteriorRespawnPosition(PublicInteriorExtX[i], PublicInteriorExtY[i], PublicInteriorExtZ[i])) continue;
-
-        dist = GetDistanceSquared3D(fromX, fromY, fromZ, PublicInteriorExtX[i], PublicInteriorExtY[i], PublicInteriorExtZ[i]);
-        if (!found || dist < bestDist)
-        {
-            found = 1;
-            bestDist = dist;
-            x = PublicInteriorExtX[i];
-            y = PublicInteriorExtY[i];
-            z = PublicInteriorExtZ[i] + 0.6;
-            a = PublicInteriorExtA[i];
-        }
-    }
-
-    for (new i = 0; i < MAX_HOSPITAL_RESPAWNS; i++)
-    {
-        if (!IsSafeExteriorRespawnPosition(HospitalRespawnX[i], HospitalRespawnY[i], HospitalRespawnZ[i])) continue;
-
-        dist = GetDistanceSquared3D(fromX, fromY, fromZ, HospitalRespawnX[i], HospitalRespawnY[i], HospitalRespawnZ[i]);
-        if (!found || dist < bestDist)
-        {
-            found = 1;
-            bestDist = dist;
-            x = HospitalRespawnX[i];
-            y = HospitalRespawnY[i];
-            z = HospitalRespawnZ[i];
-            a = HospitalRespawnA[i];
-        }
-    }
-
-    if (!found)
-    {
-        x = SPAWN_X;
-        y = SPAWN_Y;
-        z = SPAWN_Z;
-        a = SPAWN_A;
-    }
-
-    return 1;
-}
-
-stock PrepareDeathHospitalRespawn(playerid)
-{
-    new Float:x, Float:y, Float:z;
-    GetPlayerPos(playerid, x, y, z);
-
-    FindNearestHospitalRespawn(x, y, z, PlayerHospitalRespawnX[playerid], PlayerHospitalRespawnY[playerid], PlayerHospitalRespawnZ[playerid], PlayerHospitalRespawnA[playerid]);
-
-    PlayerDeathRespawnLockSeq[playerid]++;
-    PlayerDeathRespawnState[playerid] = DEATH_RESPAWN_WAITING;
-    PlayerLastX[playerid] = PlayerHospitalRespawnX[playerid];
-    PlayerLastY[playerid] = PlayerHospitalRespawnY[playerid];
-    PlayerLastZ[playerid] = PlayerHospitalRespawnZ[playerid];
-    PlayerLastA[playerid] = PlayerHospitalRespawnA[playerid];
-    PlayerLastInterior[playerid] = 0;
-    PlayerLastVirtualWorld[playerid] = 0;
-
-    SetSpawnInfo(
-        playerid,
-        NO_TEAM,
-        DEFAULT_SKIN,
-        PlayerHospitalRespawnX[playerid],
-        PlayerHospitalRespawnY[playerid],
-        PlayerHospitalRespawnZ[playerid],
-        PlayerHospitalRespawnA[playerid],
-        WEAPON:WEAPON_FIST, 0,
-        WEAPON:WEAPON_FIST, 0,
-        WEAPON:WEAPON_FIST, 0
-    );
-
-    return 1;
-}
-
-stock ApplyDeathHospitalRespawnPosition(playerid, saveNow = 0)
-{
-    SetPlayerInterior(playerid, 0);
-    SetPlayerVirtualWorld(playerid, 0);
-    SetPlayerPos(playerid, PlayerHospitalRespawnX[playerid], PlayerHospitalRespawnY[playerid], PlayerHospitalRespawnZ[playerid]);
-    SetPlayerFacingAngle(playerid, PlayerHospitalRespawnA[playerid]);
-    SetPlayerVelocity(playerid, 0.0, 0.0, 0.0);
-    SetPlayerHealth(playerid, 100.0);
-    SetPlayerArmour(playerid, 0.0);
-    ResetPlayerWeapons(playerid);
-    SetPlayerSkin(playerid, DEFAULT_SKIN);
-    SetCameraBehindPlayer(playerid);
-
-    PlayerLastX[playerid] = PlayerHospitalRespawnX[playerid];
-    PlayerLastY[playerid] = PlayerHospitalRespawnY[playerid];
-    PlayerLastZ[playerid] = PlayerHospitalRespawnZ[playerid];
-    PlayerLastA[playerid] = PlayerHospitalRespawnA[playerid];
-    PlayerLastInterior[playerid] = 0;
-    PlayerLastVirtualWorld[playerid] = 0;
-
-    if (saveNow)
-    {
-        SavePlayerData(playerid);
-    }
-
-    return 1;
-}
-
-public HideClassSelectionForHospitalRespawn(playerid)
-{
-    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
-    {
-        return 0;
-    }
-
-    // v0.24K.13: jangan masuk spectator/class screen.
-    // Kalau callback lama masih memanggil fungsi ini, langsung paksa respawn hospital saja.
-    if (PlayerDeathRespawnState[playerid] == DEATH_RESPAWN_WAITING)
-    {
-        RespawnPlayerAtNearestHospital(playerid);
-    }
-    return 1;
-}
-
-public RespawnPlayerAtNearestHospital(playerid)
-{
-    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
-    {
-        return 0;
-    }
-
-    if (PlayerDeathRespawnState[playerid] != DEATH_RESPAWN_WAITING)
-    {
-        return 0;
-    }
-
-    new seq = PlayerDeathRespawnLockSeq[playerid];
-    PlayerDeathRespawnState[playerid] = DEATH_RESPAWN_SPAWNING;
-
-    SetSpawnInfo(
-        playerid,
-        NO_TEAM,
-        DEFAULT_SKIN,
-        PlayerHospitalRespawnX[playerid],
-        PlayerHospitalRespawnY[playerid],
-        PlayerHospitalRespawnZ[playerid],
-        PlayerHospitalRespawnA[playerid],
-        WEAPON:WEAPON_FIST, 0,
-        WEAPON:WEAPON_FIST, 0,
-        WEAPON:WEAPON_FIST, 0
-    );
-
-    TogglePlayerSpectating(playerid, false);
-    SpawnPlayer(playerid);
-
-    // Native/open.mp kadang masih menjalankan delayed death/class fallback sekitar 2 detik.
-    // Lock ini menjaga posisi/skin/weapon tetap hospital selama window itu.
-    SetTimerEx("ReapplyDeathHospitalRespawnLock", 100, false, "ii", playerid, seq);
-    SetTimerEx("ReapplyDeathHospitalRespawnLock", 350, false, "ii", playerid, seq);
-    SetTimerEx("ReapplyDeathHospitalRespawnLock", 750, false, "ii", playerid, seq);
-    SetTimerEx("ReapplyDeathHospitalRespawnLock", 1200, false, "ii", playerid, seq);
-    SetTimerEx("ReapplyDeathHospitalRespawnLock", 1700, false, "ii", playerid, seq);
-    SetTimerEx("ReapplyDeathHospitalRespawnLock", 2100, false, "ii", playerid, seq);
-    SetTimerEx("ReapplyDeathHospitalRespawnLock", 2600, false, "ii", playerid, seq);
-    SetTimerEx("ReapplyDeathHospitalRespawnLock", 3500, false, "ii", playerid, seq);
-    SetTimerEx("ReapplyDeathHospitalRespawnLock", 5000, false, "ii", playerid, seq);
-    SetTimerEx("ReapplyDeathHospitalRespawnLock", 8000, false, "ii", playerid, seq);
-    SetTimerEx("ReapplyDeathHospitalRespawnLock", 12000, false, "ii", playerid, seq);
-    return 1;
-}
-
-public ReapplyDeathHospitalRespawnLock(playerid, seq)
-{
-    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
-    {
-        return 0;
-    }
-
-    if (seq != PlayerDeathRespawnLockSeq[playerid])
-    {
-        return 0;
-    }
-
-    if (PlayerDeathRespawnState[playerid] == DEATH_RESPAWN_NONE)
-    {
-        return 0;
-    }
-
-    ApplyDeathHospitalRespawnPosition(playerid, 0);
-    return 1;
-}
-
-public ClearDeathRespawnState(playerid)
-{
-    if (!IsPlayerConnected(playerid))
-    {
-        return 0;
-    }
-
-    if (PlayerDeathRespawnState[playerid] != DEATH_RESPAWN_NONE)
-    {
-        PlayerDeathRespawnState[playerid] = DEATH_RESPAWN_NONE;
-        PlayerDeathRespawnLockSeq[playerid]++;
-    }
-    return 1;
-}
-
-public OnPlayerDeath(playerid, killerid, WEAPON:reason)
-{
-    #pragma unused killerid
-    #pragma unused reason
-
-    if (!PlayerLoggedIn[playerid])
-    {
-        return 1;
-    }
-
-    CancelPlayerTurfHold(playerid, "Kamu mati. Turf challenge dibatalkan.");
-    HidePlayerTurfHud(playerid);
-    DisablePlayerCheckpoint(playerid);
-
-    if (PlayerRace[playerid] != RACE_NONE)
-    {
-        ResetPlayerRaceData(playerid);
-    }
-
-    if (PlayerWorking[playerid])
-    {
-        PlayerWorking[playerid] = 0;
-        PlayerWorkType[playerid] = WORK_NONE;
-        PlayerWorkPoint[playerid] = -1;
-    }
-
-    PlayerInsidePublicInteriorID[playerid] = 0;
-    PlayerPublicInteriorServiceCheckpoint[playerid] = 0;
-    PlayerInsideGangHQ[playerid] = 0;
-    PlayerInsideGangHQID[playerid] = 0;
-    PlayerInsideHouse[playerid] = 0;
-    PlayerInsideHouseOwner[playerid] = INVALID_PLAYER_ID;
-
-    PrepareDeathHospitalRespawn(playerid);
-
-    // v0.24K.15: langsung respawn ke hospital, tanpa layar class/spawn/reconnect-style.
-    // Delay pendek hanya memberi waktu callback death selesai; tidak memakai TogglePlayerSpectating(true).
-    SetTimerEx("RespawnPlayerAtNearestHospital", HOSPITAL_RESPAWN_DELAY_MS, false, "i", playerid);
-    return 1;
-}
-
 public OnPlayerDisconnect(playerid, reason)
 {
     CancelPlayerTurfHold(playerid);
@@ -11519,9 +10881,6 @@ public OnPlayerDisconnect(playerid, reason)
     PlayerDBID[playerid] = 0;
     PlayerAuthDialogShown[playerid] = 0;
     PlayerFindingBank[playerid] = 0;
-    PlayerDeathRespawnState[playerid] = DEATH_RESPAWN_NONE;
-    PlayerDeathRespawnLockSeq[playerid]++;
-
     PlayerInsidePublicInteriorID[playerid] = 0;
     PlayerPublicInteriorServiceCheckpoint[playerid] = 0;
     PlayerEditingGangPresetID[playerid] = 0;
@@ -11580,46 +10939,32 @@ public OnPlayerDisconnect(playerid, reason)
     return 1;
 }
 
-public ForceSpawnLoggedPlayerFromClass(playerid)
-{
-    #pragma unused playerid
-    // v0.24K.13: deprecated. Jangan spawn dari class callback.
-    // Login/register memakai SpawnLoggedPlayer(); death memakai RespawnPlayerAtNearestHospital().
-    return 0;
-}
-
 public OnPlayerRequestSpawn(playerid)
 {
-    #pragma unused playerid
+    if (!PlayerLoggedIn[playerid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus login/register terlebih dahulu.");
+        return 0;
+    }
 
-    // Tombol Spawn bawaan SA-MP/open.mp dimatikan total.
-    // Jangan spawn dari sini supaya tidak ada fallback CJ/default class.
-    return 0;
+    return 1;
 }
 
 public OnPlayerRequestClass(playerid, classid)
 {
-    #pragma unused classid
-
-    // v0.24K.14:
-    // SAIF tidak memakai class selection/open.mp spawn screen sama sekali.
-    // Callback ini murni BLOCKER. Jangan spawn dari sini.
-    // Spawn hanya boleh dari:
-    // - login/register: SpawnLoggedPlayer()
-    // - death: RespawnPlayerAtNearestHospitalEx()
     if (!PlayerLoggedIn[playerid])
     {
+        TogglePlayerSpectating(playerid, true);
         return 0;
     }
 
-    // Kalau engine mencoba masuk class selection setelah death,
-    // jangan lakukan apa pun selain blok layar bawaan.
-    if (PlayerDeathRespawnState[playerid] != DEATH_RESPAWN_NONE)
-    {
-        return 0;
-    }
+    SetPlayerPos(playerid, SPAWN_X, SPAWN_Y, SPAWN_Z);
+    SetPlayerFacingAngle(playerid, SPAWN_A);
 
-    return 0;
+    SetPlayerCameraPos(playerid, 1962.0000, 1343.0000, 17.0000);
+    SetPlayerCameraLookAt(playerid, SPAWN_X, SPAWN_Y, SPAWN_Z);
+
+    return 1;
 }
 
 public OnPlayerSpawn(playerid)
@@ -11629,27 +10974,6 @@ public OnPlayerSpawn(playerid)
         SendClientMessage(playerid, COLOR_RED, "Kamu belum login.");
         return 1;
     }
-
-    new deathHospitalSpawn = 0;
-
-    if (PlayerDeathRespawnState[playerid] == DEATH_RESPAWN_SPAWNING || PlayerDeathRespawnState[playerid] == DEATH_RESPAWN_WAITING || PlayerDeathRespawnState[playerid] == DEATH_RESPAWN_PROTECT)
-    {
-        deathHospitalSpawn = 1;
-        new seq = PlayerDeathRespawnLockSeq[playerid];
-        TogglePlayerSpectating(playerid, false);
-        ApplyDeathHospitalRespawnPosition(playerid, 1);
-        PlayerDeathRespawnState[playerid] = DEATH_RESPAWN_PROTECT;
-        SetTimerEx("ReapplyDeathHospitalRespawnLock", 250, false, "ii", playerid, seq);
-        SetTimerEx("ReapplyDeathHospitalRespawnLock", 900, false, "ii", playerid, seq);
-        SetTimerEx("ReapplyDeathHospitalRespawnLock", 1900, false, "ii", playerid, seq);
-        SetTimerEx("ReapplyDeathHospitalRespawnLock", 2900, false, "ii", playerid, seq);
-        SetTimerEx("ReapplyDeathHospitalRespawnLock", 6000, false, "ii", playerid, seq);
-        SetTimerEx("ClearDeathRespawnState", 30000, false, "i", playerid);
-        ApplyLSIFMapIcons(playerid);
-        SendClientMessage(playerid, COLOR_GREEN, "Kamu respawn di rumah sakit terdekat.");
-        return 1;
-    }
-
     if (PlayerSpawnHouse[playerid] && PlayerHouseIndex[playerid] != -1)
     {
         new houseIndex = PlayerHouseIndex[playerid];
@@ -11668,11 +10992,8 @@ public OnPlayerSpawn(playerid)
         RestorePlayerInteriorRuntimeState(playerid);
     }
 
-    if (!deathHospitalSpawn)
-    {
-        ResetPlayerWeapons(playerid);
-        SetTimerEx("ApplySavedWeaponLoadout", 1000, false, "i", playerid);
-    }
+    ResetPlayerWeapons(playerid);
+    SetTimerEx("ApplySavedWeaponLoadout", 1000, false, "i", playerid);
     ApplyLSIFMapIcons(playerid);
 
     SendClientMessage(playerid, COLOR_CYAN, "Kamu berhasil spawn di Los Santos.");
@@ -11681,6 +11002,7 @@ public OnPlayerSpawn(playerid)
 
     return 1;
 }
+
 
 
 stock RefreshBusinessRuntime()
@@ -12036,6 +11358,7 @@ stock ShowAdminToolsMenu(playerid)
     strcat(body, "Business Preset DB Config\t/bizpresetmenu\tOwner\n", sizeof(body));
     strcat(body, "Ammu-Nation Config\t/ammuconfig\tOwner\n", sizeof(body));
     strcat(body, "Public Service Config\t/serviceconfig\tOwner\n", sizeof(body));
+    strcat(body, "Offline Source Audit\t/sourceauditmenu\tOwner\n", sizeof(body));
     strcat(body, "Command Reference\t/amenus\tHelper+\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_ADMIN_TOOLS_MENU, DIALOG_STYLE_TABLIST_HEADERS, "SAIF Admin Menus Hub", body, "Open", "Close");
@@ -12050,12 +11373,684 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "SAIF Admin Menus Hub (/amenus)\n\n", sizeof(body));
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/turfmenu | /turfedit\n\n", sizeof(body));
-    strcat(body, "Offline/Exact Source Tools:\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /gangintpoints [gang_id]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n\n", sizeof(body));
-    strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /gangintpoints [gang_id]\n/gangintsetpoint [gang_id] [interior/exit], /gangintz [gang_id] [delta]\n\n", sizeof(body));
-    strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
+    strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n\n", sizeof(body));
+    strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id]\n\n", sizeof(body));
+    strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "SAIF Admin Menu Reference", body, "Back", "Close");
+    return 1;
+}
+
+
+stock GetSourceAuditDatasetName(datasetIndex, datasetName[], len)
+{
+    switch (datasetIndex)
+    {
+        case 0: format(datasetName, len, "world_locations");
+        case 1: format(datasetName, len, "world_objects");
+        case 2: format(datasetName, len, "parked_vehicles");
+        case 3: format(datasetName, len, "world_pickups");
+        case 4: format(datasetName, len, "public_interiors");
+        case 5: format(datasetName, len, "gang_preset_config");
+        case 6: format(datasetName, len, "business_preset_config");
+        default: format(datasetName, len, "unknown");
+    }
+    return 1;
+}
+
+stock ShowSourceAuditActionMenu(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka offline/source audit.");
+        return 0;
+    }
+
+    new body[1024];
+    body[0] = EOS;
+    strcat(body, "Action\tPurpose\n", sizeof(body));
+    strcat(body, "Summary by Source Tag\tHitung exact/manual/deprecated/unknown\n", sizeof(body));
+    strcat(body, "Detail per Dataset\tLihat record ID/nama/source sebelum cleanup\n", sizeof(body));
+    strcat(body, "Deprecated/Fallback Records\tTampilkan data template/curated/legacy/unknown\n", sizeof(body));
+    strcat(body, "Cleanup Assistant\tDisable/relabel source_tag secara aman\n", sizeof(body));
+    strcat(body, "Source Policy & Cleanup Rule\tPanduan aman offline-first\n", sizeof(body));
+    strcat(body, "Admin Command Reference\tDaftar command admin/editor\n", sizeof(body));
+
+    ShowPlayerDialog(playerid, DIALOG_SOURCE_AUDIT_MENU, DIALOG_STYLE_TABLIST_HEADERS, "SAIF Source Audit Menu", body, "Open", "Back");
+    return 1;
+}
+
+stock ShowSourceAuditDatasetMenu(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka source detail audit.");
+        return 0;
+    }
+
+    new body[1024];
+    body[0] = EOS;
+    strcat(body, "Dataset\tAudit Focus\n", sizeof(body));
+    strcat(body, "world_locations\tATM/dealer/job/race/dynamic ALT points\n", sizeof(body));
+    strcat(body, "world_objects\tObject editor / linked visual objects\n", sizeof(body));
+    strcat(body, "parked_vehicles\tManual/exact/legacy parked vehicles\n", sizeof(body));
+    strcat(body, "world_pickups\tHealth/armor/bribe/weapon/hidden pickups\n", sizeof(body));
+    strcat(body, "public_interiors\tIPL/ENEX public shops/services\n", sizeof(body));
+    strcat(body, "gang_preset_config\tGang HQ/name/color/status override\n", sizeof(body));
+    strcat(body, "business_preset_config\tBusiness preset create/edit source\n", sizeof(body));
+
+    ShowPlayerDialog(playerid, DIALOG_SOURCE_AUDIT_DATASET, DIALOG_STYLE_TABLIST_HEADERS, "SAIF Source Audit Detail", body, "View", "Back");
+    return 1;
+}
+
+stock ShowSourceAuditPolicy(playerid)
+{
+    new body[2048];
+    body[0] = EOS;
+    strcat(body, "OFFLINE-FIRST / EXACT-SOURCE-FIRST POLICY\n\n", sizeof(body));
+    strcat(body, "1. EXACT = data hasil import/konversi dari source GTA SA offline. Ini prioritas utama.\n", sizeof(body));
+    strcat(body, "2. MANUAL = data hasil editor/admin. Boleh dipakai untuk online adaptation, fix titik, dan custom kecil.\n", sizeof(body));
+    strcat(body, "3. DEPRECATED = curated/template/legacy_static. Jangan langsung hapus; audit dulu karena mungkin masih dipakai saat exact belum ada.\n", sizeof(body));
+    strcat(body, "4. UNKNOWN = source_tag kosong/tidak dikenali. Perlu diberi label atau dipindahkan ke exact/manual/deprecated.\n\n", sizeof(body));
+    strcat(body, "Cleanup rule aman:\n", sizeof(body));
+    strcat(body, "- Jangan delete massal dari DB production tanpa backup.\n", sizeof(body));
+    strcat(body, "- Mulai dari disable enabled=0 untuk deprecated yang sudah diganti exact.\n", sizeof(body));
+    strcat(body, "- Pastikan public/system core seperti house, gang HQ, business ownership tidak rusak.\n", sizeof(body));
+    strcat(body, "- Setelah audit, baru buat patch cleanup spesifik per dataset/source_tag.\n\n", sizeof(body));
+    strcat(body, "Tools:\n/sourceaudit = summary\n/sourcedetail = detail per dataset\n/sourcedeprecated = list record fallback\n/sourcecleanup = cleanup assistant\n/sourcedisabletag [dataset] [tag] = disable fallback aktif\n/sourcerelabeltag [dataset] [old] [new] = label ulang tag non-exact\n/sourcepolicy = policy ini", sizeof(body));
+
+    ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "SAIF Source Policy", body, "Back", "Close");
+    return 1;
+}
+
+
+stock IsSafeSourceTagName(const sourceTag[])
+{
+    if (sourceTag[0] == EOS) return 0;
+
+    for (new i = 0; sourceTag[i] != EOS; i++)
+    {
+        if ((sourceTag[i] >= 'a' && sourceTag[i] <= 'z') ||
+            (sourceTag[i] >= 'A' && sourceTag[i] <= 'Z') ||
+            (sourceTag[i] >= '0' && sourceTag[i] <= '9') ||
+            sourceTag[i] == '_' || sourceTag[i] == '-')
+        {
+            continue;
+        }
+        return 0;
+    }
+    return 1;
+}
+
+stock IsCleanupProtectedSourceTag(const sourceTag[])
+{
+    if (strfind(sourceTag, "offline_exact", true) != -1 || strfind(sourceTag, "exact", true) != -1)
+    {
+        return 1;
+    }
+
+    if (strfind(sourceTag, "manual", true) != -1 || strfind(sourceTag, "db_editor", true) != -1)
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
+stock IsCleanupAllowedSourceTag(const sourceTag[])
+{
+    if (!strcmp(sourceTag, "unknown", true)) return 1;
+    if (strfind(sourceTag, "template", true) != -1) return 1;
+    if (strfind(sourceTag, "curated", true) != -1) return 1;
+    if (strfind(sourceTag, "legacy", true) != -1) return 1;
+    if (strfind(sourceTag, "fallback", true) != -1) return 1;
+    return 0;
+}
+
+stock GetSourceAuditDatasetLabel(datasetIndex, datasetLabel[], len)
+{
+    switch (datasetIndex)
+    {
+        case 0: format(datasetLabel, len, "0 world_locations");
+        case 1: format(datasetLabel, len, "1 world_objects");
+        case 2: format(datasetLabel, len, "2 parked_vehicles");
+        case 3: format(datasetLabel, len, "3 world_pickups");
+        case 4: format(datasetLabel, len, "4 public_interiors");
+        case 5: format(datasetLabel, len, "5 gang_preset_config");
+        case 6: format(datasetLabel, len, "6 business_preset_config");
+        default: format(datasetLabel, len, "unknown");
+    }
+    return 1;
+}
+
+stock ShowSourceCleanupAssistant(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka source cleanup assistant.");
+        return 0;
+    }
+
+    new body[4096];
+    body[0] = EOS;
+    strcat(body, "SAIF SOURCE CLEANUP ASSISTANT\n\n", sizeof(body));
+    strcat(body, "Tujuan: bersih-bersih data source_tag tanpa delete permanen.\n", sizeof(body));
+    strcat(body, "Cleanup ini hanya untuk fallback/deprecated/unknown yang sudah direview via /sourcedeprecated.\n\n", sizeof(body));
+    strcat(body, "Dataset ID:\n", sizeof(body));
+    strcat(body, "0 = world_locations\n1 = world_objects\n2 = parked_vehicles\n3 = world_pickups\n", sizeof(body));
+    strcat(body, "4 = public_interiors\n5 = gang_preset_config\n6 = business_preset_config\n\n", sizeof(body));
+    strcat(body, "Command aman:\n", sizeof(body));
+    strcat(body, "/sourcedisabletag [dataset_id] [source_tag]\n", sizeof(body));
+    strcat(body, "Contoh: /sourcedisabletag 2 offline_template_ls\n", sizeof(body));
+    strcat(body, "Efek: enabled=0 untuk row aktif dengan source_tag tersebut, lalu runtime direfresh.\n\n", sizeof(body));
+    strcat(body, "/sourcerelabeltag [dataset_id] [old_tag] [new_tag]\n", sizeof(body));
+    strcat(body, "Contoh: /sourcerelabeltag 0 unknown manual_review\n", sizeof(body));
+    strcat(body, "Efek: ubah label source_tag agar audit lebih jelas.\n\n", sizeof(body));
+    strcat(body, "Proteksi:\n", sizeof(body));
+    strcat(body, "- Tag exact/offline_exact tidak boleh bulk disable/relabel.\n", sizeof(body));
+    strcat(body, "- Tag manual/db_editor tidak boleh bulk disable lewat command ini. Pakai editor spesifik kalau perlu.\n", sizeof(body));
+    strcat(body, "- Disable hanya menerima unknown/template/curated/legacy/fallback.\n", sizeof(body));
+    strcat(body, "- Tidak ada DELETE massal di patch ini.\n", sizeof(body));
+
+    ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "SAIF Source Cleanup Assistant", body, "Back", "Close");
+    return 1;
+}
+
+stock RefreshSourceAuditDatasetRuntime(datasetIndex)
+{
+    switch (datasetIndex)
+    {
+        case 0:
+        {
+            LoadDynamicLocations();
+        }
+        case 1:
+        {
+            LoadDynamicObjects();
+            LoadDynamicLocations();
+        }
+        case 2:
+        {
+            LoadParkedVehicles();
+        }
+        case 3:
+        {
+            LoadWorldPickups();
+        }
+        case 4:
+        {
+            LoadPublicInteriors();
+        }
+        case 5:
+        {
+            LoadGangPresetConfigFromDB();
+        }
+        case 6:
+        {
+            LoadBusinessPresetConfigFromDB();
+        }
+    }
+    return 1;
+}
+
+stock BuildSourceTagWhere(query[], querySize, const sourceTag[])
+{
+    query[0] = EOS;
+
+    if (!strcmp(sourceTag, "unknown", true))
+    {
+        strcat(query, "((source_tag IS NULL OR source_tag='' OR source_tag='unknown'))", querySize);
+    }
+    else
+    {
+        mysql_format(g_SQL, query, querySize, "source_tag='%e'", sourceTag);
+    }
+    return 1;
+}
+
+stock DisableSourceTagForDataset(playerid, datasetIndex, const sourceTag[])
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa menjalankan source cleanup.");
+        return 0;
+    }
+
+    if (datasetIndex < 0 || datasetIndex > 6)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dataset tidak valid. Gunakan /sourcecleanup untuk daftar dataset ID.");
+        return 0;
+    }
+
+    if (!IsSafeSourceTagName(sourceTag))
+    {
+        SendClientMessage(playerid, COLOR_RED, "source_tag tidak valid. Gunakan huruf/angka/underscore/dash tanpa spasi.");
+        return 0;
+    }
+
+    if (IsCleanupProtectedSourceTag(sourceTag) || !IsCleanupAllowedSourceTag(sourceTag))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Cleanup ditolak. Command ini hanya untuk unknown/template/curated/legacy/fallback, bukan exact/manual.");
+        return 0;
+    }
+
+    new whereClause[256];
+    new query[768];
+    new datasetLabel[64];
+    BuildSourceTagWhere(whereClause, sizeof(whereClause), sourceTag);
+
+    switch (datasetIndex)
+    {
+        case 0: format(query, sizeof(query), "UPDATE world_locations SET enabled=0 WHERE %s AND enabled=1", whereClause);
+        case 1: format(query, sizeof(query), "UPDATE world_objects SET enabled=0 WHERE %s AND enabled=1", whereClause);
+        case 2: format(query, sizeof(query), "UPDATE parked_vehicles SET enabled=0 WHERE %s AND enabled=1", whereClause);
+        case 3: format(query, sizeof(query), "UPDATE world_pickups SET enabled=0 WHERE %s AND enabled=1", whereClause);
+        case 4: format(query, sizeof(query), "UPDATE public_interiors SET enabled=0 WHERE %s AND enabled=1", whereClause);
+        case 5: format(query, sizeof(query), "UPDATE gang_preset_config SET enabled=0 WHERE %s AND enabled=1", whereClause);
+        case 6: format(query, sizeof(query), "UPDATE business_preset_config SET enabled=0 WHERE %s AND enabled=1", whereClause);
+    }
+
+    GetSourceAuditDatasetLabel(datasetIndex, datasetLabel, sizeof(datasetLabel));
+    new msg[160];
+    format(msg, sizeof(msg), "Source cleanup: disable tag '%s' pada dataset %s...", sourceTag, datasetLabel);
+    SendClientMessage(playerid, COLOR_YELLOW, msg);
+
+    mysql_tquery(g_SQL, query, "OnSourceCleanupUpdated", "iii", playerid, datasetIndex, 1);
+    return 1;
+}
+
+stock RelabelSourceTagForDataset(playerid, datasetIndex, const oldTag[], const newTag[])
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa menjalankan source relabel.");
+        return 0;
+    }
+
+    if (datasetIndex < 0 || datasetIndex > 6)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dataset tidak valid. Gunakan /sourcecleanup untuk daftar dataset ID.");
+        return 0;
+    }
+
+    if (!IsSafeSourceTagName(oldTag) || !IsSafeSourceTagName(newTag))
+    {
+        SendClientMessage(playerid, COLOR_RED, "source_tag tidak valid. Gunakan huruf/angka/underscore/dash tanpa spasi.");
+        return 0;
+    }
+
+    if (IsCleanupProtectedSourceTag(oldTag) || strfind(newTag, "exact", true) != -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Relabel exact/offline_exact ditolak agar data exact-source tidak tercampur.");
+        return 0;
+    }
+
+    new whereClause[256];
+    new query[768];
+    new datasetLabel[64];
+    BuildSourceTagWhere(whereClause, sizeof(whereClause), oldTag);
+
+    switch (datasetIndex)
+    {
+        case 0: mysql_format(g_SQL, query, sizeof(query), "UPDATE world_locations SET source_tag='%e' WHERE %s", newTag, whereClause);
+        case 1: mysql_format(g_SQL, query, sizeof(query), "UPDATE world_objects SET source_tag='%e' WHERE %s", newTag, whereClause);
+        case 2: mysql_format(g_SQL, query, sizeof(query), "UPDATE parked_vehicles SET source_tag='%e' WHERE %s", newTag, whereClause);
+        case 3: mysql_format(g_SQL, query, sizeof(query), "UPDATE world_pickups SET source_tag='%e' WHERE %s", newTag, whereClause);
+        case 4: mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET source_tag='%e' WHERE %s", newTag, whereClause);
+        case 5: mysql_format(g_SQL, query, sizeof(query), "UPDATE gang_preset_config SET source_tag='%e' WHERE %s", newTag, whereClause);
+        case 6: mysql_format(g_SQL, query, sizeof(query), "UPDATE business_preset_config SET source_tag='%e' WHERE %s", newTag, whereClause);
+    }
+
+    GetSourceAuditDatasetLabel(datasetIndex, datasetLabel, sizeof(datasetLabel));
+    new msg[180];
+    format(msg, sizeof(msg), "Source relabel: '%s' -> '%s' pada dataset %s...", oldTag, newTag, datasetLabel);
+    SendClientMessage(playerid, COLOR_YELLOW, msg);
+
+    mysql_tquery(g_SQL, query, "OnSourceCleanupUpdated", "iii", playerid, datasetIndex, 2);
+    return 1;
+}
+
+public OnSourceCleanupUpdated(playerid, datasetIndex, actionType)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+
+    new affectedRows = cache_affected_rows();
+    new datasetLabel[64];
+    new msg[160];
+    GetSourceAuditDatasetLabel(datasetIndex, datasetLabel, sizeof(datasetLabel));
+
+    RefreshSourceAuditDatasetRuntime(datasetIndex);
+
+    if (actionType == 1)
+    {
+        format(msg, sizeof(msg), "Source cleanup selesai: %d row disabled pada %s. Runtime direfresh.", affectedRows, datasetLabel);
+    }
+    else
+    {
+        format(msg, sizeof(msg), "Source relabel selesai: %d row updated pada %s. Runtime direfresh.", affectedRows, datasetLabel);
+    }
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    return 1;
+}
+
+stock ShowSourceAuditDetail(playerid, datasetIndex)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka source detail audit.");
+        return 0;
+    }
+
+    if (datasetIndex < 0 || datasetIndex > 6)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dataset audit tidak valid.");
+        return 0;
+    }
+
+    PlayerSourceAuditDataset[playerid] = datasetIndex;
+
+    new query[2048];
+    query[0] = EOS;
+
+    switch (datasetIndex)
+    {
+        case 0:
+        {
+            strcat(query, "SELECT id AS record_id, display_name AS record_name, ", sizeof(query));
+            strcat(query, "COALESCE(NULLIF(source_tag,''),'unknown') AS source_tag, enabled, ", sizeof(query));
+            strcat(query, "location_type AS meta FROM world_locations ", sizeof(query));
+            strcat(query, "ORDER BY source_tag ASC, id ASC LIMIT 60", sizeof(query));
+        }
+        case 1:
+        {
+            strcat(query, "SELECT id AS record_id, object_name AS record_name, ", sizeof(query));
+            strcat(query, "COALESCE(NULLIF(source_tag,''),'unknown') AS source_tag, enabled, ", sizeof(query));
+            strcat(query, "CAST(model_id AS CHAR) AS meta FROM world_objects ", sizeof(query));
+            strcat(query, "ORDER BY source_tag ASC, id ASC LIMIT 60", sizeof(query));
+        }
+        case 2:
+        {
+            strcat(query, "SELECT id AS record_id, CONCAT('Vehicle ', modelid) AS record_name, ", sizeof(query));
+            strcat(query, "COALESCE(NULLIF(source_tag,''),'unknown') AS source_tag, enabled, ", sizeof(query));
+            strcat(query, "CONCAT('int ', interior, ' vw ', virtual_world) AS meta FROM parked_vehicles ", sizeof(query));
+            strcat(query, "ORDER BY source_tag ASC, id ASC LIMIT 60", sizeof(query));
+        }
+        case 3:
+        {
+            strcat(query, "SELECT id AS record_id, display_name AS record_name, ", sizeof(query));
+            strcat(query, "COALESCE(NULLIF(source_tag,''),'unknown') AS source_tag, enabled, ", sizeof(query));
+            strcat(query, "pickup_type AS meta FROM world_pickups ", sizeof(query));
+            strcat(query, "ORDER BY source_tag ASC, id ASC LIMIT 60", sizeof(query));
+        }
+        case 4:
+        {
+            strcat(query, "SELECT id AS record_id, display_name AS record_name, ", sizeof(query));
+            strcat(query, "COALESCE(NULLIF(source_tag,''),'unknown') AS source_tag, enabled, ", sizeof(query));
+            strcat(query, "interior_type AS meta FROM public_interiors ", sizeof(query));
+            strcat(query, "ORDER BY source_tag ASC, id ASC LIMIT 60", sizeof(query));
+        }
+        case 5:
+        {
+            strcat(query, "SELECT gang_id AS record_id, name AS record_name, ", sizeof(query));
+            strcat(query, "COALESCE(NULLIF(source_tag,''),'unknown') AS source_tag, enabled, ", sizeof(query));
+            strcat(query, "short_name AS meta FROM gang_preset_config ", sizeof(query));
+            strcat(query, "ORDER BY source_tag ASC, gang_id ASC LIMIT 60", sizeof(query));
+        }
+        case 6:
+        {
+            strcat(query, "SELECT business_index AS record_id, name AS record_name, ", sizeof(query));
+            strcat(query, "COALESCE(NULLIF(source_tag,''),'unknown') AS source_tag, enabled, ", sizeof(query));
+            strcat(query, "CAST(price AS CHAR) AS meta FROM business_preset_config ", sizeof(query));
+            strcat(query, "ORDER BY source_tag ASC, business_index ASC LIMIT 60", sizeof(query));
+        }
+    }
+
+    mysql_tquery(g_SQL, query, "OnSourceAuditDetailLoaded", "ii", playerid, datasetIndex);
+    SendClientMessage(playerid, COLOR_YELLOW, "Memuat detail source audit dataset...");
+    return 1;
+}
+
+stock ShowSourceDeprecatedRecords(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka deprecated/fallback audit.");
+        return 0;
+    }
+
+    new query[4096];
+    query[0] = EOS;
+
+    strcat(query, "SELECT dataset, record_id, record_name, source_tag, enabled FROM (", sizeof(query));
+    strcat(query, "SELECT 'world_locations' dataset, id record_id, display_name record_name, COALESCE(NULLIF(source_tag,''),'unknown') source_tag, enabled FROM world_locations ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'world_objects', id, object_name, COALESCE(NULLIF(source_tag,''),'unknown'), enabled FROM world_objects ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'parked_vehicles', id, CONCAT('Vehicle ', modelid), COALESCE(NULLIF(source_tag,''),'unknown'), enabled FROM parked_vehicles ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'world_pickups', id, display_name, COALESCE(NULLIF(source_tag,''),'unknown'), enabled FROM world_pickups ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'public_interiors', id, display_name, COALESCE(NULLIF(source_tag,''),'unknown'), enabled FROM public_interiors ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'gang_preset_config', gang_id, name, COALESCE(NULLIF(source_tag,''),'unknown'), enabled FROM gang_preset_config ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'business_preset_config', business_index, name, COALESCE(NULLIF(source_tag,''),'unknown'), enabled FROM business_preset_config", sizeof(query));
+    strcat(query, ") audit_all WHERE source_tag='unknown' OR source_tag LIKE '%template%' OR source_tag LIKE '%curated%' OR source_tag LIKE '%legacy%' ", sizeof(query));
+    strcat(query, "ORDER BY dataset ASC, record_id ASC LIMIT 80", sizeof(query));
+
+    mysql_tquery(g_SQL, query, "OnSourceAuditDeprecatedLoaded", "i", playerid);
+    SendClientMessage(playerid, COLOR_YELLOW, "Memuat list source deprecated/fallback...");
+    return 1;
+}
+
+stock GetSourceAuditClass(sourceTag[], className[], len)
+{
+    if (strfind(sourceTag, "offline_exact", true) != -1 || strfind(sourceTag, "exact", true) != -1)
+    {
+        format(className, len, "EXACT");
+        return 1;
+    }
+
+    if (strfind(sourceTag, "template", true) != -1 || strfind(sourceTag, "curated", true) != -1 || strfind(sourceTag, "legacy_static", true) != -1)
+    {
+        format(className, len, "DEPRECATED");
+        return 1;
+    }
+
+    if (strfind(sourceTag, "manual", true) != -1 || strfind(sourceTag, "db_editor", true) != -1)
+    {
+        format(className, len, "MANUAL");
+        return 1;
+    }
+
+    format(className, len, "UNKNOWN");
+    return 1;
+}
+
+stock ShowOfflineSourceAudit(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka offline/source audit.");
+        return 0;
+    }
+
+    new query[4096];
+    query[0] = EOS;
+
+    strcat(query, "SELECT 'world_locations' AS dataset, ", sizeof(query));
+    strcat(query, "COALESCE(NULLIF(source_tag,''),'unknown') AS source_tag, ", sizeof(query));
+    strcat(query, "COUNT(*) AS total, SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END) AS active ", sizeof(query));
+    strcat(query, "FROM world_locations GROUP BY COALESCE(NULLIF(source_tag,''),'unknown') ", sizeof(query));
+
+    strcat(query, "UNION ALL SELECT 'world_objects', ", sizeof(query));
+    strcat(query, "COALESCE(NULLIF(source_tag,''),'unknown'), COUNT(*), ", sizeof(query));
+    strcat(query, "SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END) ", sizeof(query));
+    strcat(query, "FROM world_objects GROUP BY COALESCE(NULLIF(source_tag,''),'unknown') ", sizeof(query));
+
+    strcat(query, "UNION ALL SELECT 'parked_vehicles', ", sizeof(query));
+    strcat(query, "COALESCE(NULLIF(source_tag,''),'unknown'), COUNT(*), ", sizeof(query));
+    strcat(query, "SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END) ", sizeof(query));
+    strcat(query, "FROM parked_vehicles GROUP BY COALESCE(NULLIF(source_tag,''),'unknown') ", sizeof(query));
+
+    strcat(query, "UNION ALL SELECT 'world_pickups', ", sizeof(query));
+    strcat(query, "COALESCE(NULLIF(source_tag,''),'unknown'), COUNT(*), ", sizeof(query));
+    strcat(query, "SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END) ", sizeof(query));
+    strcat(query, "FROM world_pickups GROUP BY COALESCE(NULLIF(source_tag,''),'unknown') ", sizeof(query));
+
+    strcat(query, "UNION ALL SELECT 'public_interiors', ", sizeof(query));
+    strcat(query, "COALESCE(NULLIF(source_tag,''),'unknown'), COUNT(*), ", sizeof(query));
+    strcat(query, "SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END) ", sizeof(query));
+    strcat(query, "FROM public_interiors GROUP BY COALESCE(NULLIF(source_tag,''),'unknown') ", sizeof(query));
+
+    strcat(query, "UNION ALL SELECT 'gang_preset_config', ", sizeof(query));
+    strcat(query, "COALESCE(NULLIF(source_tag,''),'unknown'), COUNT(*), ", sizeof(query));
+    strcat(query, "SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END) ", sizeof(query));
+    strcat(query, "FROM gang_preset_config GROUP BY COALESCE(NULLIF(source_tag,''),'unknown') ", sizeof(query));
+
+    strcat(query, "UNION ALL SELECT 'business_preset_config', ", sizeof(query));
+    strcat(query, "COALESCE(NULLIF(source_tag,''),'unknown'), COUNT(*), ", sizeof(query));
+    strcat(query, "SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END) ", sizeof(query));
+    strcat(query, "FROM business_preset_config GROUP BY COALESCE(NULLIF(source_tag,''),'unknown') ", sizeof(query));
+
+    strcat(query, "ORDER BY dataset ASC, source_tag ASC", sizeof(query));
+
+    mysql_tquery(g_SQL, query, "OnSourceAuditSummaryLoaded", "i", playerid);
+    SendClientMessage(playerid, COLOR_YELLOW, "Memuat SAIF offline/source audit dari database...");
+    return 1;
+}
+
+public OnSourceAuditSummaryLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+
+    new rows = cache_num_rows();
+    new body[4096];
+    new line[256];
+    new dataset[48];
+    new sourceTag[80];
+    new className[24];
+    new total;
+    new active;
+
+    body[0] = EOS;
+    strcat(body, "Dataset\tSource Tag\tClass\tTotal/Active\n", sizeof(body));
+
+    if (rows <= 0)
+    {
+        strcat(body, "-\tTidak ada data audit atau query gagal. Pastikan SQL v0.24L sudah dijalankan.\t-\t-\n", sizeof(body));
+    }
+    else
+    {
+        for (new i = 0; i < rows; i++)
+        {
+            cache_get_value_name(i, "dataset", dataset, sizeof(dataset));
+            cache_get_value_name(i, "source_tag", sourceTag, sizeof(sourceTag));
+            cache_get_value_name_int(i, "total", total);
+            cache_get_value_name_int(i, "active", active);
+
+            GetSourceAuditClass(sourceTag, className, sizeof(className));
+            format(line, sizeof(line), "%s\t%s\t%s\t%d/%d\n", dataset, sourceTag, className, total, active);
+
+            if ((strlen(body) + strlen(line)) < 3900)
+            {
+                strcat(body, line, sizeof(body));
+            }
+        }
+    }
+
+    strcat(body, "\nPolicy:\tEXACT = prioritas. MANUAL = editor/admin. DEPRECATED = template/legacy yang harus diaudit.\t-\t-", sizeof(body));
+    ShowPlayerDialog(playerid, DIALOG_SOURCE_AUDIT, DIALOG_STYLE_TABLIST_HEADERS, "SAIF Offline Source Audit", body, "Back", "Close");
+    return 1;
+}
+
+
+public OnSourceAuditDetailLoaded(playerid, datasetIndex)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+
+    new rows = cache_num_rows();
+    new body[4096];
+    new line[256];
+    new datasetName[48];
+    new recordName[80];
+    new sourceTag[80];
+    new className[24];
+    new meta[64];
+    new recordId;
+    new enabled;
+
+    GetSourceAuditDatasetName(datasetIndex, datasetName, sizeof(datasetName));
+
+    body[0] = EOS;
+    strcat(body, "ID\tName\tClass/Tag\tEnabled/Meta\n", sizeof(body));
+
+    if (rows <= 0)
+    {
+        strcat(body, "-\tTidak ada record pada dataset ini.\t-\t-\n", sizeof(body));
+    }
+    else
+    {
+        for (new i = 0; i < rows; i++)
+        {
+            cache_get_value_name_int(i, "record_id", recordId);
+            cache_get_value_name(i, "record_name", recordName, sizeof(recordName));
+            cache_get_value_name(i, "source_tag", sourceTag, sizeof(sourceTag));
+            cache_get_value_name_int(i, "enabled", enabled);
+            cache_get_value_name(i, "meta", meta, sizeof(meta));
+
+            GetSourceAuditClass(sourceTag, className, sizeof(className));
+            format(line, sizeof(line), "%d\t%s\t%s / %s\t%d / %s\n", recordId, recordName, className, sourceTag, enabled, meta);
+
+            if ((strlen(body) + strlen(line)) < 3900)
+            {
+                strcat(body, line, sizeof(body));
+            }
+        }
+    }
+
+    format(line, sizeof(line), "SAIF Source Detail - %s", datasetName);
+    ShowPlayerDialog(playerid, DIALOG_SOURCE_AUDIT_DETAIL, DIALOG_STYLE_TABLIST_HEADERS, line, body, "Back", "Close");
+    return 1;
+}
+
+public OnSourceAuditDeprecatedLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+
+    new rows = cache_num_rows();
+    new body[4096];
+    new line[256];
+    new dataset[48];
+    new recordName[80];
+    new sourceTag[80];
+    new className[24];
+    new recordId;
+    new enabled;
+
+    body[0] = EOS;
+    strcat(body, "Dataset\tID\tName\tClass/Tag\n", sizeof(body));
+
+    if (rows <= 0)
+    {
+        strcat(body, "-\t-\tTidak ada deprecated/unknown source record.\t-\n", sizeof(body));
+    }
+    else
+    {
+        for (new i = 0; i < rows; i++)
+        {
+            cache_get_value_name(i, "dataset", dataset, sizeof(dataset));
+            cache_get_value_name_int(i, "record_id", recordId);
+            cache_get_value_name(i, "record_name", recordName, sizeof(recordName));
+            cache_get_value_name(i, "source_tag", sourceTag, sizeof(sourceTag));
+            cache_get_value_name_int(i, "enabled", enabled);
+
+            GetSourceAuditClass(sourceTag, className, sizeof(className));
+            format(line, sizeof(line), "%s\t%d\t%s\t%s / %s / en:%d\n", dataset, recordId, recordName, className, sourceTag, enabled);
+
+            if ((strlen(body) + strlen(line)) < 3900)
+            {
+                strcat(body, line, sizeof(body));
+            }
+        }
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_SOURCE_AUDIT_DEPRECATED, DIALOG_STYLE_TABLIST_HEADERS, "SAIF Deprecated/Fallback Source Records", body, "Back", "Close");
     return 1;
 }
 
@@ -12537,11 +12532,63 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 9: ShowBusinessPresetMenu(playerid);
             case 10: ShowAmmuConfigMenu(playerid);
             case 11: ShowPublicServiceConfigMenu(playerid);
-            case 12: ShowAdminToolsReference(playerid);
+            case 12: ShowSourceAuditActionMenu(playerid);
+            case 13: ShowAdminToolsReference(playerid);
         }
         return 1;
     }
 
+
+
+    if (dialogid == DIALOG_SOURCE_AUDIT_MENU)
+    {
+        if (!response)
+        {
+            ShowAdminToolsMenu(playerid);
+            return 1;
+        }
+
+        switch (listitem)
+        {
+            case 0: ShowOfflineSourceAudit(playerid);
+            case 1: ShowSourceAuditDatasetMenu(playerid);
+            case 2: ShowSourceDeprecatedRecords(playerid);
+            case 3: ShowSourceCleanupAssistant(playerid);
+            case 4: ShowSourceAuditPolicy(playerid);
+            case 5: ShowAdminToolsReference(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_SOURCE_AUDIT_DATASET)
+    {
+        if (!response)
+        {
+            ShowSourceAuditActionMenu(playerid);
+            return 1;
+        }
+
+        ShowSourceAuditDetail(playerid, listitem);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_SOURCE_AUDIT || dialogid == DIALOG_SOURCE_AUDIT_DEPRECATED)
+    {
+        if (response)
+        {
+            ShowSourceAuditActionMenu(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_SOURCE_AUDIT_DETAIL)
+    {
+        if (response)
+        {
+            ShowSourceAuditDatasetMenu(playerid);
+        }
+        return 1;
+    }
 
 
     if (dialogid == DIALOG_BUSINESS_PRESET_MENU)
@@ -12849,70 +12896,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
                 SendClientMessage(playerid, COLOR_GREEN, "Gang preset config reload dari database diminta.");
             }
             case 8: ShowPlayerDialog(playerid, DIALOG_GANG_PRESET_ENABLE_INPUT, DIALOG_STYLE_INPUT, "Enable / Disable Gang Preset", "Masukkan 1 untuk ACTIVE atau 0 untuk DISABLED.\n\nDisabled gang disembunyikan dari pickup/label/map icon dan player tidak bisa join/enter HQ.", "Save", "Back");
-            case 9: ShowGangInteriorPointMenu(playerid, gangid);
-            case 10: ShowGangPresetMenu(playerid);
-        }
-        return 1;
-    }
-
-    if (dialogid == DIALOG_GANG_INTERIOR_POINT_MENU)
-    {
-        new gangid = PlayerEditingGangPresetID[playerid];
-        if (!response)
-        {
-            ShowGangPresetActionMenu(playerid, gangid);
-            return 1;
-        }
-
-        switch (listitem)
-        {
-            case 0:
-            {
-                ShowGangInteriorInfo(playerid, gangid);
-                ShowGangInteriorPointMenu(playerid, gangid);
-            }
-            case 1:
-            {
-                SetGangInteriorSpawnPointFromPlayer(playerid, gangid);
-                ShowGangInteriorPointMenu(playerid, gangid);
-            }
-            case 2:
-            {
-                SetGangInteriorExitPointFromPlayer(playerid, gangid);
-                ShowGangInteriorPointMenu(playerid, gangid);
-            }
-            case 3:
-            {
-                SetGangInteriorFacingFromPlayer(playerid, gangid, 0);
-                ShowGangInteriorPointMenu(playerid, gangid);
-            }
-            case 4:
-            {
-                SetGangInteriorFacingFromPlayer(playerid, gangid, 1);
-                ShowGangInteriorPointMenu(playerid, gangid);
-            }
-            case 5:
-            {
-                AdjustGangInteriorExitZ(playerid, gangid, 0.50);
-                ShowGangInteriorPointMenu(playerid, gangid);
-            }
-            case 6:
-            {
-                AdjustGangInteriorExitZ(playerid, gangid, -0.50);
-                ShowGangInteriorPointMenu(playerid, gangid);
-            }
-            case 7:
-            {
-                GotoGangInteriorPoint(playerid, gangid, 0);
-            }
-            case 8:
-            {
-                GotoGangInteriorPoint(playerid, gangid, 1);
-            }
-            case 9:
-            {
-                ShowGangPresetActionMenu(playerid, gangid);
-            }
+            case 9: ShowGangPresetMenu(playerid);
         }
         return 1;
     }
@@ -13254,7 +13238,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
     {
         if (!response)
         {
-            OpenPublicInteriorMainService(playerid);
+            ShowPublicInteriorInteractionMenu(playerid);
             return 1;
         }
         ProcessPublicInteriorStorePurchase(playerid, listitem);
@@ -19500,9 +19484,29 @@ stock ShowPublicInteriorInteractionMenu(playerid)
         return 0;
     }
 
-    // v0.24K.6: checkpoint merah langsung membuka interactive/service spesifik.
-    // Exit interior tetap lewat panah exit atau /pubintexit, bukan opsi di menu service.
-    return OpenPublicInteriorMainService(playerid);
+    new title[96];
+    new body[256];
+    format(title, sizeof(title), "%s", PublicInteriorName[idx]);
+
+    if (!strcmp(PublicInteriorType[idx], "ammunation", true))
+    {
+        format(body, sizeof(body), "Weapon Shop\nExit Interior\nInterior Info");
+    }
+    else if (!strcmp(PublicInteriorType[idx], "247", true))
+    {
+        format(body, sizeof(body), "Buy Items\nExit Interior\nInterior Info");
+    }
+    else if (IsPublicInteriorRestaurantType(PublicInteriorType[idx]))
+    {
+        format(body, sizeof(body), "Buy Food\nExit Interior\nInterior Info");
+    }
+    else
+    {
+        format(body, sizeof(body), "Use Service\nExit Interior\nInterior Info");
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_PUBINT_INTERACT_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Close");
+    return 1;
 }
 
 stock OpenPublicInteriorMainService(playerid)
@@ -22583,7 +22587,7 @@ stock CreateDynamicObjectAtPlayer(playerid, modelid)
         g_SQL,
         query,
         sizeof(query),
-        "INSERT INTO world_objects (object_name, model_id, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z, interior, virtual_world, enabled) VALUES ('%e', %d, %f, %f, %f, 0.0, 0.0, %f, %d, %d, 1)",
+        "INSERT INTO world_objects (object_name, model_id, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z, interior, virtual_world, enabled, source_tag) VALUES ('%e', %d, %f, %f, %f, 0.0, 0.0, %f, %d, %d, 1, 'manual')",
         objectName,
         modelid,
         x,
@@ -22617,7 +22621,7 @@ stock CreateDynamicLocationAtCoordsLinked(playerid, const locType[], const locNa
         g_SQL,
         query,
         sizeof(query),
-        "INSERT INTO world_locations (location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled) VALUES ('%e', '%e', '%e', %f, %f, %f, %f, %d, %d, %d, 0, 0, %d, '%e', 3.0, 1)",
+        "INSERT INTO world_locations (location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, linked_object_id, label_text, interaction_radius, enabled, source_tag) VALUES ('%e', '%e', '%e', %f, %f, %f, %f, %d, %d, %d, 0, 0, %d, '%e', 3.0, 1, 'manual')",
         locName,
         locType,
         locName,
@@ -22671,7 +22675,7 @@ stock CreateDynamicLocationAtCoords(playerid, const locType[], const locName[], 
         g_SQL,
         query,
         sizeof(query),
-        "INSERT INTO world_locations (location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, label_text, interaction_radius, enabled) VALUES ('%e', '%e', '%e', %f, %f, %f, %f, %d, %d, %d, %d, 0, '%e', 3.0, 1)",
+        "INSERT INTO world_locations (location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, label_text, interaction_radius, enabled, source_tag) VALUES ('%e', '%e', '%e', %f, %f, %f, %f, %d, %d, %d, %d, 0, '%e', 3.0, 1, 'manual')",
         locName,
         locType,
         locName,
@@ -22710,7 +22714,7 @@ stock CreateDynamicObjectAtCoords(playerid, modelid, const objectName[], Float:x
         g_SQL,
         query,
         sizeof(query),
-        "INSERT INTO world_objects (object_name, model_id, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z, interior, virtual_world, enabled) VALUES ('%e', %d, %f, %f, %f, 0.0, 0.0, %f, %d, %d, 1)",
+        "INSERT INTO world_objects (object_name, model_id, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z, interior, virtual_world, enabled, source_tag) VALUES ('%e', %d, %f, %f, %f, 0.0, 0.0, %f, %d, %d, 1, 'manual')",
         objectName,
         modelid,
         x,
@@ -22901,7 +22905,7 @@ stock CreateDynamicLocationAtPlayer(playerid, const locType[], const locName[])
         g_SQL,
         query,
         sizeof(query),
-        "INSERT INTO world_locations (location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, label_text, interaction_radius, enabled) VALUES ('%e', '%e', '%e', %f, %f, %f, %f, %d, %d, %d, %d, 0, '%e', 3.0, 1)",
+        "INSERT INTO world_locations (location_key, location_type, display_name, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, map_icon, pickup_model, object_model, label_text, interaction_radius, enabled, source_tag) VALUES ('%e', '%e', '%e', %f, %f, %f, %f, %d, %d, %d, %d, 0, '%e', 3.0, 1, 'manual')",
         locName,
         locType,
         locName,
@@ -25312,11 +25316,6 @@ public OnPlayerWeaponsLoaded(playerid)
 
 public ApplySavedWeaponLoadout(playerid)
 {
-    if (PlayerDeathRespawnState[playerid] != DEATH_RESPAWN_NONE)
-    {
-        return 0;
-    }
-
     if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
     {
         return 1;
@@ -28538,6 +28537,75 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/sourceauditmenu", true) || !strcmp(cmdtext, "/sourcemenu", true))
+    {
+        ShowSourceAuditActionMenu(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/sourceaudit", true) || !strcmp(cmdtext, "/saifaudit", true) || !strcmp(cmdtext, "/exactaudit", true) || !strcmp(cmdtext, "/sourcecheck", true))
+    {
+        ShowOfflineSourceAudit(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/sourcedetail", true) || !strcmp(cmdtext, "/sourceauditdetail", true))
+    {
+        ShowSourceAuditDatasetMenu(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/sourcedeprecated", true) || !strcmp(cmdtext, "/sourcefallback", true))
+    {
+        ShowSourceDeprecatedRecords(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/sourcepolicy", true))
+    {
+        ShowSourceAuditPolicy(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/sourcecleanup", true) || !strcmp(cmdtext, "/sourcecleanuphelp", true))
+    {
+        ShowSourceCleanupAssistant(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/sourcedisabletag", true, 17))
+    {
+        new datasetStr[16];
+        new sourceTag[80];
+
+        if (!GetTwoParams(cmdtext[17], datasetStr, sizeof(datasetStr), sourceTag, sizeof(sourceTag)) || !IsNumericString(datasetStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Usage: /sourcedisabletag [dataset_id 0-6] [source_tag]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /sourcedisabletag 2 offline_template_ls");
+            return 1;
+        }
+
+        DisableSourceTagForDataset(playerid, strval(datasetStr), sourceTag);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/sourcerelabeltag", true, 17))
+    {
+        new datasetStr[16];
+        new oldTag[80];
+        new newTag[80];
+
+        if (!GetThreeParams(cmdtext[17], datasetStr, sizeof(datasetStr), oldTag, sizeof(oldTag), newTag, sizeof(newTag)) || !IsNumericString(datasetStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Usage: /sourcerelabeltag [dataset_id 0-6] [old_tag] [new_tag]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /sourcerelabeltag 0 unknown manual_review");
+            return 1;
+        }
+
+        RelabelSourceTagForDataset(playerid, strval(datasetStr), oldTag, newTag);
+        return 1;
+    }
+
 
     if (!strcmp(cmdtext, "/bizpresetmenu", true) || !strcmp(cmdtext, "/businessdbmenu", true) || !strcmp(cmdtext, "/bizdbmenu", true))
     {
@@ -29832,87 +29900,6 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
-    if (!strcmp(cmdtext, "/gangintpoints", true) || !strcmp(cmdtext, "/gangintedit", true))
-    {
-        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangintpoints [gang_id]");
-        return 1;
-    }
-
-    if (strfind(cmdtext, "/gangintpoints ", true) == 0)
-    {
-        new gangStr[16];
-        if (!GetOneParam(cmdtext[15], gangStr, sizeof(gangStr)) || !IsNumericString(gangStr))
-        {
-            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangintpoints [gang_id]");
-            return 1;
-        }
-        ShowGangInteriorPointMenu(playerid, strval(gangStr));
-        return 1;
-    }
-
-    if (strfind(cmdtext, "/gangintedit ", true) == 0)
-    {
-        new gangStr[16];
-        if (!GetOneParam(cmdtext[13], gangStr, sizeof(gangStr)) || !IsNumericString(gangStr))
-        {
-            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangintedit [gang_id]");
-            return 1;
-        }
-        ShowGangInteriorPointMenu(playerid, strval(gangStr));
-        return 1;
-    }
-
-    if (strfind(cmdtext, "/gangintsetpoint ", true) == 0)
-    {
-        new gangStr[16];
-        new pointStr[24];
-        if (!GetTwoParams(cmdtext[17], gangStr, sizeof(gangStr), pointStr, sizeof(pointStr)) || !IsNumericString(gangStr))
-        {
-            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangintsetpoint [gang_id] [interior/exit]");
-            return 1;
-        }
-
-        if (!strcmp(pointStr, "interior", true) || !strcmp(pointStr, "spawn", true))
-        {
-            SetGangInteriorSpawnPointFromPlayer(playerid, strval(gangStr));
-        }
-        else if (!strcmp(pointStr, "exit", true) || !strcmp(pointStr, "exterior", true))
-        {
-            SetGangInteriorExitPointFromPlayer(playerid, strval(gangStr));
-        }
-        else
-        {
-            SendClientMessage(playerid, COLOR_RED, "Point harus interior/spawn atau exit/exterior.");
-        }
-        return 1;
-    }
-
-    if (!strcmp(cmdtext, "/gangintsetpoint", true))
-    {
-        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangintsetpoint [gang_id] [interior/exit]");
-        return 1;
-    }
-
-    if (strfind(cmdtext, "/gangintz ", true) == 0)
-    {
-        new gangStr[16];
-        new zStr[16];
-        if (!GetTwoParams(cmdtext[10], gangStr, sizeof(gangStr), zStr, sizeof(zStr)) || !IsNumericString(gangStr))
-        {
-            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangintz [gang_id] [delta_z]");
-            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /gangintz 1 0.5 atau /gangintz 1 -0.5");
-            return 1;
-        }
-        AdjustGangInteriorExitZ(playerid, strval(gangStr), floatstr(zStr));
-        return 1;
-    }
-
-    if (!strcmp(cmdtext, "/gangintz", true))
-    {
-        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangintz [gang_id] [delta_z]");
-        return 1;
-    }
-
     if (strfind(cmdtext, "/gangpresetenable ", true) == 0)
     {
         if (!IsAdminLevel(playerid, ADMIN_OWNER))
@@ -30377,7 +30364,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.15 Death Respawn Lock No CJ");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24N Source Cleanup Assistant");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -30387,7 +30374,9 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.13: Root fix no CJ spawn; class selection callback is now block-only, default force-spawn is disabled, and death hospital respawn stays protected from delayed class callbacks.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24N: Source cleanup assistant, safe disable by source_tag, relabel fallback tags, and runtime refresh.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24M: Source audit detail menu, deprecated/fallback record review, and source cleanup policy.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24L: Offline/source audit tools, source_tag validation summary, and /amenus audit entry.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K: Gang preset active status, enable/disable, runtime hide, and /amenus command reference cleanup.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24J.4: Business array compile fix after MAX_BUSINESSES 64 expansion.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24F.2: Ammu config dialog fix, edit price/ammo/select action now responds correctly.");
@@ -31943,7 +31932,6 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/setfuel [amount] - Set fuel kendaraan aktif, Owner only");
         SendClientMessage(playerid, COLOR_WHITE, "/givelicense [id] - Beri basic weapon license, Owner only");
         SendClientMessage(playerid, COLOR_WHITE, "/ammuconfig - Atur harga/ammo/status Ammu-Nation");
-        SendClientMessage(playerid, COLOR_WHITE, "/gangintpoints [gang_id] - Editor titik interior/exit Gang HQ, Owner only");
         SendClientMessage(playerid, COLOR_WHITE, "/serverinfo - Info server dan uptime");
         SendClientMessage(playerid, COLOR_WHITE, "/dbping - Test koneksi database");
         SendClientMessage(playerid, COLOR_WHITE, "/saveall - Simpan semua player, Owner only");
@@ -31965,6 +31953,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/recentlogs - Admin log terbaru");
         SendClientMessage(playerid, COLOR_WHITE, "/adminmenu - Dashboard admin berbasis dialog");
         SendClientMessage(playerid, COLOR_WHITE, "/betamenu - Dashboard beta/whitelist berbasis dialog");
+        SendClientMessage(playerid, COLOR_WHITE, "/amenus - Admin menus hub");
+        SendClientMessage(playerid, COLOR_WHITE, "/sourceauditmenu, /sourceaudit, /sourcedetail, /sourcedeprecated, /sourcecleanup, /sourcepolicy - Source audit tools, Owner only");
         SendClientMessage(playerid, COLOR_WHITE, "/version, /changelog, /credits, /staff - Release info commands");
 
         return 1;

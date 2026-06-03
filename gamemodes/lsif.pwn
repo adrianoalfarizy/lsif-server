@@ -243,6 +243,13 @@
 #define DIALOG_GANG_HQ_INTERIOR_SPAWN_MENU 1223
 #define DIALOG_GANG_HQ_EXTERIOR_MENU 1224
 #define DIALOG_GANG_HQ_INTERIOR_MENU 1225
+#define DIALOG_PUBINT_EXTERIOR_MENU 1226
+#define DIALOG_PUBINT_INTERIOR_MENU 1227
+#define DIALOG_PUBINT_SERVICE_POINT_MENU 1228
+#define DIALOG_PUBINT_INTERIOR_ID_INPUT 1229
+#define DIALOG_PUBINT_VW_INPUT 1230
+#define DIALOG_PUBINT_EXT_PICKUP_MODEL_INPUT 1231
+#define DIALOG_PUBINT_INT_PICKUP_MODEL_INPUT 1232
 
 
 
@@ -1553,6 +1560,12 @@ new Float:PublicInteriorExtX[MAX_PUBLIC_INTERIORS];
 new Float:PublicInteriorExtY[MAX_PUBLIC_INTERIORS];
 new Float:PublicInteriorExtZ[MAX_PUBLIC_INTERIORS];
 new Float:PublicInteriorExtA[MAX_PUBLIC_INTERIORS];
+new Float:PublicInteriorExtSpawnX[MAX_PUBLIC_INTERIORS];
+new Float:PublicInteriorExtSpawnY[MAX_PUBLIC_INTERIORS];
+new Float:PublicInteriorExtSpawnZ[MAX_PUBLIC_INTERIORS];
+new Float:PublicInteriorExtSpawnA[MAX_PUBLIC_INTERIORS];
+new PublicInteriorExteriorPickupModel[MAX_PUBLIC_INTERIORS];
+new PublicInteriorInteriorPickupModel[MAX_PUBLIC_INTERIORS];
 new Float:PublicInteriorIntX[MAX_PUBLIC_INTERIORS];
 new Float:PublicInteriorIntY[MAX_PUBLIC_INTERIORS];
 new Float:PublicInteriorIntZ[MAX_PUBLIC_INTERIORS];
@@ -11206,7 +11219,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.16.2 Gang HQ Exterior Interior Editor");
+    SetGameModeText("SAIF Dev v0.24K.17 Public Interior Exterior Interior Editor");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11319,7 +11332,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.16.2 Gang HQ Exterior Interior Editor berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.17 Public Interior Exterior Interior Editor berhasil dijalankan.");
     return 1;
 }
 
@@ -11922,7 +11935,7 @@ stock ShowAdminToolsReference(playerid)
 
     strcat(body, "SAIF Admin Menus Hub (/amenus)\n\n", sizeof(body));
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
-    strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/turfmenu | /turfedit\n\n", sizeof(body));
+    strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/turfmenu | /turfedit\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
     strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
@@ -14104,28 +14117,182 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         switch (listitem)
         {
             case 0: ShowPublicInteriorInfo(playerid, pubIntId);
-            case 1: UpdatePublicInteriorPointFromPlayer(playerid, pubIntId, 1);
-            case 2: UpdatePublicInteriorPointFromPlayer(playerid, pubIntId, 2);
-            case 3: UpdatePublicInteriorPointFromPlayer(playerid, pubIntId, 3);
-            case 4: UpdatePublicInteriorPointFromPlayer(playerid, pubIntId, 4);
-            case 5: ShowPlayerDialog(playerid, DIALOG_PUBINT_SERVICE_RADIUS_INPUT, DIALOG_STYLE_INPUT, "Service Checkpoint Radius", "Masukkan radius service checkpoint.\nDefault rekomendasi: 2.2\nRange aman: 0.8 - 8.0", "Save", "Back");
+            case 1: ShowPublicInteriorExteriorMenu(playerid, pubIntId);
+            case 2: ShowPublicInteriorInteriorMenu(playerid, pubIntId);
+            case 3: ShowPublicInteriorServicePointMenu(playerid, pubIntId);
+            case 4:
+            {
+                LoadPublicInteriors();
+                SendClientMessage(playerid, COLOR_GREEN, "Public interiors direload dari database.");
+                ShowPublicInteriorPointMenu(playerid, pubIntId);
+            }
+            case 5: ShowPublicInteriorActionMenu(playerid, pubIntId);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PUBINT_EXTERIOR_MENU)
+    {
+        new pubIntId = PlayerEditingPublicInteriorID[playerid];
+        if (!response)
+        {
+            ShowPublicInteriorServicePointMenu(playerid, pubIntId);
+            return 1;
+        }
+
+        switch (listitem)
+        {
+            case 0: UpdatePublicInteriorPointFromPlayer(playerid, pubIntId, 1);
+            case 1: UpdatePublicInteriorPointFromPlayer(playerid, pubIntId, 5);
+            case 2: SetPublicInteriorPointFacingOnly(playerid, pubIntId, 5);
+            case 3: ShowPlayerDialog(playerid, DIALOG_PUBINT_EXT_PICKUP_MODEL_INPUT, DIALOG_STYLE_INPUT, "Pickup Panah Exterior Model", "Masukkan model pickup panah exterior.\nDefault rekomendasi: 1318", "Save", "Back");
+            case 4:
+            {
+                GotoPublicInteriorPoint(playerid, pubIntId, 1);
+                ShowPublicInteriorExteriorMenu(playerid, pubIntId);
+            }
+            case 5:
+            {
+                GotoPublicInteriorPoint(playerid, pubIntId, 5);
+                ShowPublicInteriorExteriorMenu(playerid, pubIntId);
+            }
+            case 6: ShowPublicInteriorPointMenu(playerid, pubIntId);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PUBINT_INTERIOR_MENU)
+    {
+        new pubIntId = PlayerEditingPublicInteriorID[playerid];
+        if (!response)
+        {
+            ShowPublicInteriorPointMenu(playerid, pubIntId);
+            return 1;
+        }
+
+        switch (listitem)
+        {
+            case 0: UpdatePublicInteriorPointFromPlayer(playerid, pubIntId, 3);
+            case 1: UpdatePublicInteriorPointFromPlayer(playerid, pubIntId, 2);
+            case 2: SetPublicInteriorPointFacingOnly(playerid, pubIntId, 2);
+            case 3: ShowPlayerDialog(playerid, DIALOG_PUBINT_INTERIOR_ID_INPUT, DIALOG_STYLE_INPUT, "Interior ID", "Masukkan interior ID runtime public interior.\nContoh: 0, 1, 3, 5, 6, 7, 10, 14, 17.", "Save", "Back");
+            case 4: ShowPlayerDialog(playerid, DIALOG_PUBINT_VW_INPUT, DIALOG_STYLE_INPUT, "Shared Virtual World", "Masukkan shared virtual world public interior.\n0 = auto fallback berdasarkan DB ID.\nRekomendasi: isi manual agar full DB-driven.", "Save", "Back");
+            case 5: ShowPlayerDialog(playerid, DIALOG_PUBINT_INT_PICKUP_MODEL_INPUT, DIALOG_STYLE_INPUT, "Pickup Panah Interior Model", "Masukkan model pickup panah interior.\nDefault rekomendasi: 1318", "Save", "Back");
             case 6:
             {
-                GotoPublicInteriorPoint(playerid, pubIntId, 2);
-                ShowPublicInteriorPointMenu(playerid, pubIntId);
+                GotoPublicInteriorPoint(playerid, pubIntId, 3);
+                ShowPublicInteriorInteriorMenu(playerid, pubIntId);
             }
             case 7:
             {
-                GotoPublicInteriorPoint(playerid, pubIntId, 3);
-                ShowPublicInteriorPointMenu(playerid, pubIntId);
+                GotoPublicInteriorPoint(playerid, pubIntId, 2);
+                ShowPublicInteriorInteriorMenu(playerid, pubIntId);
             }
-            case 8:
+            case 8: ShowPublicInteriorPointMenu(playerid, pubIntId);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PUBINT_SERVICE_POINT_MENU)
+    {
+        new pubIntId = PlayerEditingPublicInteriorID[playerid];
+        if (!response)
+        {
+            ShowPublicInteriorPointMenu(playerid, pubIntId);
+            return 1;
+        }
+
+        switch (listitem)
+        {
+            case 0: UpdatePublicInteriorPointFromPlayer(playerid, pubIntId, 4);
+            case 1: ShowPlayerDialog(playerid, DIALOG_PUBINT_SERVICE_RADIUS_INPUT, DIALOG_STYLE_INPUT, "Service Checkpoint Radius", "Masukkan radius service checkpoint.\nDefault rekomendasi: 2.2\nRange aman: 0.8 - 8.0", "Save", "Back");
+            case 2:
             {
                 GotoPublicInteriorPoint(playerid, pubIntId, 4);
-                ShowPublicInteriorPointMenu(playerid, pubIntId);
+                ShowPublicInteriorServicePointMenu(playerid, pubIntId);
             }
-            case 9: ShowPublicInteriorActionMenu(playerid, pubIntId);
+            case 3: ShowPublicInteriorPointMenu(playerid, pubIntId);
         }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PUBINT_INTERIOR_ID_INPUT)
+    {
+        new pubIntId = PlayerEditingPublicInteriorID[playerid];
+        if (!response)
+        {
+            ShowPublicInteriorInteriorMenu(playerid, pubIntId);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Interior ID harus angka.");
+            ShowPublicInteriorInteriorMenu(playerid, pubIntId);
+            return 1;
+        }
+
+        SetPublicInteriorInteriorID(playerid, pubIntId, strval(inputtext));
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PUBINT_VW_INPUT)
+    {
+        new pubIntId = PlayerEditingPublicInteriorID[playerid];
+        if (!response)
+        {
+            ShowPublicInteriorInteriorMenu(playerid, pubIntId);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Virtual World harus angka.");
+            ShowPublicInteriorInteriorMenu(playerid, pubIntId);
+            return 1;
+        }
+
+        SetPublicInteriorVirtualWorld(playerid, pubIntId, strval(inputtext));
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PUBINT_EXT_PICKUP_MODEL_INPUT)
+    {
+        new pubIntId = PlayerEditingPublicInteriorID[playerid];
+        if (!response)
+        {
+            ShowPublicInteriorExteriorMenu(playerid, pubIntId);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Model pickup harus angka.");
+            ShowPublicInteriorExteriorMenu(playerid, pubIntId);
+            return 1;
+        }
+
+        SetPublicInteriorPickupModel(playerid, pubIntId, 1, strval(inputtext));
+        return 1;
+    }
+
+    if (dialogid == DIALOG_PUBINT_INT_PICKUP_MODEL_INPUT)
+    {
+        new pubIntId = PlayerEditingPublicInteriorID[playerid];
+        if (!response)
+        {
+            ShowPublicInteriorInteriorMenu(playerid, pubIntId);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Model pickup harus angka.");
+            ShowPublicInteriorInteriorMenu(playerid, pubIntId);
+            return 1;
+        }
+
+        SetPublicInteriorPickupModel(playerid, pubIntId, 2, strval(inputtext));
         return 1;
     }
 
@@ -14134,7 +14301,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         new pubIntId = PlayerEditingPublicInteriorID[playerid];
         if (!response)
         {
-            ShowPublicInteriorPointMenu(playerid, pubIntId);
+            ShowPublicInteriorServicePointMenu(playerid, pubIntId);
             return 1;
         }
 
@@ -18978,6 +19145,12 @@ stock ResetPublicInteriorArrays()
         PublicInteriorExtY[i] = 0.0;
         PublicInteriorExtZ[i] = 0.0;
         PublicInteriorExtA[i] = 0.0;
+        PublicInteriorExtSpawnX[i] = 0.0;
+        PublicInteriorExtSpawnY[i] = 0.0;
+        PublicInteriorExtSpawnZ[i] = 0.0;
+        PublicInteriorExtSpawnA[i] = 0.0;
+        PublicInteriorExteriorPickupModel[i] = PUBLIC_INTERIOR_PICKUP_MODEL;
+        PublicInteriorInteriorPickupModel[i] = PUBLIC_INTERIOR_PICKUP_MODEL;
         PublicInteriorIntX[i] = 0.0;
         PublicInteriorIntY[i] = 0.0;
         PublicInteriorIntZ[i] = 0.0;
@@ -19450,7 +19623,7 @@ stock CreatePublicInteriorRuntime(index)
     new runtimeVW = GetPublicInteriorRuntimeVW(index);
 
     PublicInteriorPickup[index] = CreatePickup(
-                                      PUBLIC_INTERIOR_PICKUP_MODEL,
+                                      PublicInteriorExteriorPickupModel[index],
                                       PUBLIC_INTERIOR_PICKUP_TYPE,
                                       PublicInteriorExtX[index],
                                       PublicInteriorExtY[index],
@@ -19471,7 +19644,7 @@ stock CreatePublicInteriorRuntime(index)
                                  );
 
     PublicInteriorExitPickup[index] = CreatePickup(
-                                          PUBLIC_INTERIOR_PICKUP_MODEL,
+                                          PublicInteriorInteriorPickupModel[index],
                                           PUBLIC_INTERIOR_PICKUP_TYPE,
                                           PublicInteriorExitX[index],
                                           PublicInteriorExitY[index],
@@ -19565,6 +19738,21 @@ public OnPublicInteriorsLoaded()
         cache_get_value_name_float(i, "exterior_y", PublicInteriorExtY[i]);
         cache_get_value_name_float(i, "exterior_z", PublicInteriorExtZ[i]);
         cache_get_value_name_float(i, "exterior_a", PublicInteriorExtA[i]);
+        cache_get_value_name_float(i, "exterior_spawn_x", PublicInteriorExtSpawnX[i]);
+        cache_get_value_name_float(i, "exterior_spawn_y", PublicInteriorExtSpawnY[i]);
+        cache_get_value_name_float(i, "exterior_spawn_z", PublicInteriorExtSpawnZ[i]);
+        cache_get_value_name_float(i, "exterior_spawn_a", PublicInteriorExtSpawnA[i]);
+        cache_get_value_name_int(i, "exterior_pickup_model", PublicInteriorExteriorPickupModel[i]);
+        cache_get_value_name_int(i, "interior_pickup_model", PublicInteriorInteriorPickupModel[i]);
+        if (PublicInteriorExtSpawnX[i] == 0.0 && PublicInteriorExtSpawnY[i] == 0.0 && PublicInteriorExtSpawnZ[i] == 0.0)
+        {
+            PublicInteriorExtSpawnX[i] = PublicInteriorExtX[i];
+            PublicInteriorExtSpawnY[i] = PublicInteriorExtY[i];
+            PublicInteriorExtSpawnZ[i] = PublicInteriorExtZ[i];
+            PublicInteriorExtSpawnA[i] = PublicInteriorExtA[i];
+        }
+        if (PublicInteriorExteriorPickupModel[i] <= 0) PublicInteriorExteriorPickupModel[i] = PUBLIC_INTERIOR_PICKUP_MODEL;
+        if (PublicInteriorInteriorPickupModel[i] <= 0) PublicInteriorInteriorPickupModel[i] = PUBLIC_INTERIOR_PICKUP_MODEL;
         cache_get_value_name_int(i, "exterior_interior", PublicInteriorExteriorInterior[i]);
         cache_get_value_name_int(i, "exterior_virtual_world", PublicInteriorExteriorVirtualWorld[i]);
         cache_get_value_name_int(i, "interior_id", PublicInteriorInteriorID[i]);
@@ -19595,9 +19783,16 @@ public OnPublicInteriorsLoaded()
 
 public OnPublicInteriorCreated(playerid)
 {
+    new insertId = cache_insert_id();
+    if (insertId > 0)
+    {
+        new query[192];
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET interior_virtual_world=%d WHERE id=%d AND interior_virtual_world=0 LIMIT 1", PUBLIC_INTERIOR_VW_BASE + insertId, insertId);
+        mysql_tquery(g_SQL, query);
+    }
+
     if (IsPlayerConnected(playerid))
     {
-        new insertId = cache_insert_id();
         new msg[144];
         format(msg, sizeof(msg), "Public interior berhasil dibuat. ID: %d. Reloading interiors...", insertId);
         SendClientMessage(playerid, COLOR_GREEN, msg);
@@ -19716,13 +19911,19 @@ stock CreatePublicInteriorAtPlayer(playerid, const rawType[], const rawName[])
 
     new query[1200];
     mysql_format(g_SQL, query, sizeof(query),
-                 "INSERT INTO public_interiors (interior_type, display_name, exterior_x, exterior_y, exterior_z, exterior_a, exterior_interior, exterior_virtual_world, interior_id, interior_virtual_world, interior_x, interior_y, interior_z, interior_a, exit_x, exit_y, exit_z, exit_a, service_a, source_tag, enabled) VALUES ('%e', '%e', %f, %f, %f, %f, %d, %d, %d, 0, %f, %f, %f, %f, %f, %f, %f, %f, %f, '%e', 1)",
+                 "INSERT INTO public_interiors (interior_type, display_name, exterior_x, exterior_y, exterior_z, exterior_a, exterior_spawn_x, exterior_spawn_y, exterior_spawn_z, exterior_spawn_a, exterior_pickup_model, interior_pickup_model, exterior_interior, exterior_virtual_world, interior_id, interior_virtual_world, interior_x, interior_y, interior_z, interior_a, exit_x, exit_y, exit_z, exit_a, service_a, source_tag, enabled) VALUES ('%e', '%e', %f, %f, %f, %f, %f, %f, %f, %f, %d, %d, %d, %d, %d, 0, %f, %f, %f, %f, %f, %f, %f, %f, %f, '%e', 1)",
                  type,
                  name,
                  x,
                  y,
                  z,
                  a,
+                 x,
+                 y,
+                 z,
+                 a,
+                 PUBLIC_INTERIOR_PICKUP_MODEL,
+                 PUBLIC_INTERIOR_PICKUP_MODEL,
                  GetPlayerInterior(playerid),
                  GetPlayerVirtualWorld(playerid),
                  interiorId,
@@ -19800,8 +20001,8 @@ stock ExitPublicInterior(playerid)
     PlayerInsidePublicInteriorID[playerid] = 0;
     SetPlayerInterior(playerid, PublicInteriorExteriorInterior[idx]);
     SetPlayerVirtualWorld(playerid, PublicInteriorExteriorVirtualWorld[idx]);
-    SetPlayerPos(playerid, PublicInteriorExtX[idx], PublicInteriorExtY[idx], PublicInteriorExtZ[idx]);
-    ForceApplyPublicInteriorFacing(playerid, PublicInteriorExtA[idx]);
+    SetPlayerPos(playerid, PublicInteriorExtSpawnX[idx], PublicInteriorExtSpawnY[idx], PublicInteriorExtSpawnZ[idx]);
+    ForceApplyPublicInteriorFacing(playerid, PublicInteriorExtSpawnA[idx]);
 
     SendClientMessage(playerid, COLOR_GREEN, "Kamu keluar dari public interior.");
     return 1;
@@ -19862,7 +20063,7 @@ stock ShowPublicInteriorInfo(playerid, dbid)
     else format(customText, sizeof(customText), "No");
 
     format(body, sizeof(body),
-           "ID: %d\nType: %s\nName: %s\nEnabled: %d\n\nExterior Arrow: %.2f %.2f %.2f | A %.2f\nExterior Interior/VW: %d/%d\n\nInterior ID: %d\nShared Virtual World: %d\nInterior Spawn: %.2f %.2f %.2f | A %.2f\nExit Arrow: %.2f %.2f %.2f | A %.2f\nService Checkpoint: %.2f %.2f %.2f | A %.2f | Radius %.2f\nCustom Service Point: %s",
+           "ID: %d\nType: %s\nName: %s\nEnabled: %d\n\n[EKSTERIOR]\nPickup Panah: %.2f %.2f %.2f | Model %d\nSpawn Lokasi: %.2f %.2f %.2f | Facing %.2f\nExterior Interior/VW: %d/%d\n\n[INTERIOR]\nInterior ID: %d\nShared Virtual World: %d\nPickup Panah: %.2f %.2f %.2f | Model %d\nSpawn Lokasi: %.2f %.2f %.2f | Facing %.2f\n\nService Checkpoint: %.2f %.2f %.2f | A %.2f | Radius %.2f\nCustom Service Point: %s",
            PublicInteriorDBID[idx],
            PublicInteriorType[idx],
            PublicInteriorName[idx],
@@ -19870,19 +20071,23 @@ stock ShowPublicInteriorInfo(playerid, dbid)
            PublicInteriorExtX[idx],
            PublicInteriorExtY[idx],
            PublicInteriorExtZ[idx],
-           PublicInteriorExtA[idx],
+           PublicInteriorExteriorPickupModel[idx],
+           PublicInteriorExtSpawnX[idx],
+           PublicInteriorExtSpawnY[idx],
+           PublicInteriorExtSpawnZ[idx],
+           PublicInteriorExtSpawnA[idx],
            PublicInteriorExteriorInterior[idx],
            PublicInteriorExteriorVirtualWorld[idx],
            PublicInteriorInteriorID[idx],
            GetPublicInteriorRuntimeVW(idx),
+           PublicInteriorExitX[idx],
+           PublicInteriorExitY[idx],
+           PublicInteriorExitZ[idx],
+           PublicInteriorInteriorPickupModel[idx],
            PublicInteriorIntX[idx],
            PublicInteriorIntY[idx],
            PublicInteriorIntZ[idx],
            PublicInteriorIntA[idx],
-           PublicInteriorExitX[idx],
-           PublicInteriorExitY[idx],
-           PublicInteriorExitZ[idx],
-           GetPublicInteriorExitFacing(idx),
            GetPublicInteriorServicePointX(idx),
            GetPublicInteriorServicePointY(idx),
            GetPublicInteriorServicePointZ(idx),
@@ -19926,21 +20131,92 @@ stock ShowPublicInteriorPointMenu(playerid, dbid)
     }
 
     PlayerEditingPublicInteriorID[playerid] = dbid;
+
     new title[96];
     new body[512];
-    format(title, sizeof(title), "Point Editor ID %d", dbid);
+    format(title, sizeof(title), "Public Interior Points ID %d", dbid);
     body[0] = EOS;
-    strcat(body, "Info Points\n");
-    strcat(body, "Set Exterior Arrow + Facing = My Position\n");
-    strcat(body, "Set Interior Spawn + Facing = My Position\n");
-    strcat(body, "Set Exit Arrow + Facing = My Position\n");
-    strcat(body, "Set Service Checkpoint + Facing = My Position\n");
-    strcat(body, "Set Service Radius\n");
-    strcat(body, "Goto Interior Spawn\n");
-    strcat(body, "Goto Exit Arrow\n");
-    strcat(body, "Goto Service Checkpoint\n");
+    strcat(body, "Info All Points\n");
+    strcat(body, "Eksterior Editor\n");
+    strcat(body, "Interior Editor\n");
+    strcat(body, "Service Point Editor\n");
+    strcat(body, "Reload Public Interior DB\n");
     strcat(body, "Back");
     ShowPlayerDialog(playerid, DIALOG_PUBINT_POINT_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Back");
+    return 1;
+}
+
+stock ShowPublicInteriorExteriorMenu(playerid, dbid)
+{
+    if (FindPublicInteriorIndexByDBID(dbid) == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Public interior tidak ditemukan.");
+        return 0;
+    }
+
+    PlayerEditingPublicInteriorID[playerid] = dbid;
+
+    new title[96];
+    new body[768];
+    format(title, sizeof(title), "Public Interior Eksterior ID %d", dbid);
+    body[0] = EOS;
+    strcat(body, "Set Pickup Panah Exterior = My Position\n");
+    strcat(body, "Set Spawn Lokasi Exterior = My Position\n");
+    strcat(body, "Set Facing Exterior = My Facing\n");
+    strcat(body, "Edit Pickup Panah Exterior Model\n");
+    strcat(body, "Goto Pickup Panah Exterior\n");
+    strcat(body, "Goto Spawn Exterior\n");
+    strcat(body, "Back");
+    ShowPlayerDialog(playerid, DIALOG_PUBINT_EXTERIOR_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Back");
+    return 1;
+}
+
+stock ShowPublicInteriorInteriorMenu(playerid, dbid)
+{
+    if (FindPublicInteriorIndexByDBID(dbid) == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Public interior tidak ditemukan.");
+        return 0;
+    }
+
+    PlayerEditingPublicInteriorID[playerid] = dbid;
+
+    new title[96];
+    new body[768];
+    format(title, sizeof(title), "Public Interior Interior ID %d", dbid);
+    body[0] = EOS;
+    strcat(body, "Set Pickup Panah Interior = My Position\n");
+    strcat(body, "Set Spawn Lokasi Interior = My Position\n");
+    strcat(body, "Set Facing Interior = My Facing\n");
+    strcat(body, "Edit Interior ID\n");
+    strcat(body, "Edit Shared Virtual World\n");
+    strcat(body, "Edit Pickup Panah Interior Model\n");
+    strcat(body, "Goto Pickup Panah Interior\n");
+    strcat(body, "Goto Spawn Interior\n");
+    strcat(body, "Back");
+    ShowPlayerDialog(playerid, DIALOG_PUBINT_INTERIOR_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Back");
+    return 1;
+}
+
+stock ShowPublicInteriorServicePointMenu(playerid, dbid)
+{
+    if (FindPublicInteriorIndexByDBID(dbid) == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Public interior tidak ditemukan.");
+        return 0;
+    }
+
+    PlayerEditingPublicInteriorID[playerid] = dbid;
+
+    new title[96];
+    new body[512];
+    format(title, sizeof(title), "Service Point Editor ID %d", dbid);
+    body[0] = EOS;
+    strcat(body, "Set Service Checkpoint + Facing = My Position\n");
+    strcat(body, "Set Service Radius\n");
+    strcat(body, "Goto Service Checkpoint\n");
+    strcat(body, "Back");
+    ShowPlayerDialog(playerid, DIALOG_PUBINT_SERVICE_POINT_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Back");
     return 1;
 }
 
@@ -19962,26 +20238,31 @@ stock UpdatePublicInteriorPointFromPlayer(playerid, dbid, pointType)
     GetPlayerPos(playerid, x, y, z);
     GetPlayerFacingAngle(playerid, a);
 
-    new query[512];
+    new query[768];
     if (pointType == 1)
     {
         mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET exterior_x=%f, exterior_y=%f, exterior_z=%f, exterior_a=%f, exterior_interior=%d, exterior_virtual_world=%d WHERE id=%d LIMIT 1", x, y, z, a, GetPlayerInterior(playerid), GetPlayerVirtualWorld(playerid), dbid);
-        SendClientMessage(playerid, COLOR_GREEN, "Exterior arrow public interior diset ke posisi dan arah hadap kamu.");
+        SendClientMessage(playerid, COLOR_GREEN, "Pickup panah exterior public interior diset ke posisi kamu.");
     }
     else if (pointType == 2)
     {
         mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET interior_id=%d, interior_x=%f, interior_y=%f, interior_z=%f, interior_a=%f WHERE id=%d LIMIT 1", GetPlayerInterior(playerid), x, y, z, a, dbid);
-        SendClientMessage(playerid, COLOR_GREEN, "Interior spawn public interior diset ke posisi dan arah hadap kamu.");
+        SendClientMessage(playerid, COLOR_GREEN, "Spawn lokasi interior public interior diset ke posisi dan facing kamu.");
     }
     else if (pointType == 3)
     {
         mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET exit_x=%f, exit_y=%f, exit_z=%f, exit_a=%f WHERE id=%d LIMIT 1", x, y, z, a, dbid);
-        SendClientMessage(playerid, COLOR_GREEN, "Exit arrow public interior diset ke posisi dan arah hadap kamu.");
+        SendClientMessage(playerid, COLOR_GREEN, "Pickup panah interior public interior diset ke posisi kamu.");
     }
     else if (pointType == 4)
     {
         mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET service_x=%f, service_y=%f, service_z=%f, service_a=%f WHERE id=%d LIMIT 1", x, y, z, a, dbid);
         SendClientMessage(playerid, COLOR_GREEN, "Service checkpoint public interior diset ke posisi dan arah hadap kamu.");
+    }
+    else if (pointType == 5)
+    {
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET exterior_spawn_x=%f, exterior_spawn_y=%f, exterior_spawn_z=%f, exterior_spawn_a=%f, exterior_interior=%d, exterior_virtual_world=%d WHERE id=%d LIMIT 1", x, y, z, a, GetPlayerInterior(playerid), GetPlayerVirtualWorld(playerid), dbid);
+        SendClientMessage(playerid, COLOR_GREEN, "Spawn lokasi exterior public interior diset ke posisi dan facing kamu.");
     }
     else return 0;
 
@@ -20007,25 +20288,114 @@ stock SetPublicInteriorPointFacingOnly(playerid, dbid, pointType)
     GetPlayerFacingAngle(playerid, a);
 
     new query[256];
-    if (pointType == 1)
+    if (pointType == 1 || pointType == 5)
     {
-        mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET exterior_a=%f WHERE id=%d LIMIT 1", a, dbid);
-        SendClientMessage(playerid, COLOR_GREEN, "Facing saat keluar ke exterior diset dari arah hadap kamu.");
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET exterior_spawn_a=%f WHERE id=%d LIMIT 1", a, dbid);
+        SendClientMessage(playerid, COLOR_GREEN, "Facing exterior public interior diset dari arah hadap kamu.");
     }
     else if (pointType == 2)
     {
         mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET interior_a=%f WHERE id=%d LIMIT 1", a, dbid);
-        SendClientMessage(playerid, COLOR_GREEN, "Facing saat masuk/spawn interior diset dari arah hadap kamu.");
+        SendClientMessage(playerid, COLOR_GREEN, "Facing interior public interior diset dari arah hadap kamu.");
     }
     else if (pointType == 3)
     {
         mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET exit_a=%f WHERE id=%d LIMIT 1", a, dbid);
-        SendClientMessage(playerid, COLOR_GREEN, "Facing point panah exit diset dari arah hadap kamu.");
+        SendClientMessage(playerid, COLOR_GREEN, "Facing pickup panah interior diset dari arah hadap kamu.");
     }
     else if (pointType == 4)
     {
         mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET service_a=%f WHERE id=%d LIMIT 1", a, dbid);
         SendClientMessage(playerid, COLOR_GREEN, "Facing service checkpoint diset dari arah hadap kamu.");
+    }
+    else return 0;
+
+    mysql_tquery(g_SQL, query, "OnPublicInteriorUpdated", "i", playerid);
+    return 1;
+}
+
+stock SetPublicInteriorInteriorID(playerid, dbid, interiorId)
+{
+    if (!IsAdminLevel(playerid, ADMIN_ADMIN))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak punya izin admin.");
+        return 0;
+    }
+
+    if (interiorId < 0 || interiorId > 255)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Interior ID harus 0 - 255.");
+        return 0;
+    }
+
+    if (FindPublicInteriorIndexByDBID(dbid) == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Public interior tidak ditemukan.");
+        return 0;
+    }
+
+    new query[192];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET interior_id=%d WHERE id=%d LIMIT 1", interiorId, dbid);
+    mysql_tquery(g_SQL, query, "OnPublicInteriorUpdated", "i", playerid);
+    return 1;
+}
+
+stock SetPublicInteriorVirtualWorld(playerid, dbid, virtualWorld)
+{
+    if (!IsAdminLevel(playerid, ADMIN_ADMIN))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak punya izin admin.");
+        return 0;
+    }
+
+    if (virtualWorld < 0 || virtualWorld > 2140000000)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Virtual World harus >= 0.");
+        return 0;
+    }
+
+    if (FindPublicInteriorIndexByDBID(dbid) == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Public interior tidak ditemukan.");
+        return 0;
+    }
+
+    new query[192];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET interior_virtual_world=%d WHERE id=%d LIMIT 1", virtualWorld, dbid);
+    mysql_tquery(g_SQL, query, "OnPublicInteriorUpdated", "i", playerid);
+    return 1;
+}
+
+stock SetPublicInteriorPickupModel(playerid, dbid, modelType, modelid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_ADMIN))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak punya izin admin.");
+        return 0;
+    }
+
+    if (modelid <= 0 || modelid > 20000)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Model pickup tidak valid.");
+        return 0;
+    }
+
+    if (FindPublicInteriorIndexByDBID(dbid) == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Public interior tidak ditemukan.");
+        return 0;
+    }
+
+    new query[256];
+    if (modelType == 1)
+    {
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET exterior_pickup_model=%d WHERE id=%d LIMIT 1", modelid, dbid);
+        SendClientMessage(playerid, COLOR_GREEN, "Model pickup panah exterior public interior diupdate.");
+    }
+    else if (modelType == 2)
+    {
+        mysql_format(g_SQL, query, sizeof(query), "UPDATE public_interiors SET interior_pickup_model=%d WHERE id=%d LIMIT 1", modelid, dbid);
+        SendClientMessage(playerid, COLOR_GREEN, "Model pickup panah interior public interior diupdate.");
     }
     else return 0;
 
@@ -20068,12 +20438,15 @@ stock GotoPublicInteriorPoint(playerid, dbid, pointType)
         return 0;
     }
 
+    HidePublicInteriorServiceCheckpoint(playerid);
+
     if (pointType == 1)
     {
         SetPlayerInterior(playerid, PublicInteriorExteriorInterior[idx]);
         SetPlayerVirtualWorld(playerid, PublicInteriorExteriorVirtualWorld[idx]);
         SetPlayerPos(playerid, PublicInteriorExtX[idx], PublicInteriorExtY[idx], PublicInteriorExtZ[idx] + 1.0);
         ForceApplyPublicInteriorFacing(playerid, PublicInteriorExtA[idx]);
+        PlayerInsidePublicInteriorID[playerid] = 0;
     }
     else if (pointType == 2)
     {
@@ -20102,6 +20475,14 @@ stock GotoPublicInteriorPoint(playerid, dbid, pointType)
         PlayerInsidePublicInteriorID[playerid] = PublicInteriorDBID[idx];
         ShowPublicInteriorServiceCheckpoint(playerid, idx);
     }
+    else if (pointType == 5)
+    {
+        SetPlayerInterior(playerid, PublicInteriorExteriorInterior[idx]);
+        SetPlayerVirtualWorld(playerid, PublicInteriorExteriorVirtualWorld[idx]);
+        SetPlayerPos(playerid, PublicInteriorExtSpawnX[idx], PublicInteriorExtSpawnY[idx], PublicInteriorExtSpawnZ[idx] + 0.5);
+        ForceApplyPublicInteriorFacing(playerid, PublicInteriorExtSpawnA[idx]);
+        PlayerInsidePublicInteriorID[playerid] = 0;
+    }
     else return 0;
 
     SetCameraBehindPlayer(playerid);
@@ -20128,8 +20509,8 @@ public OnExactPublicInteriorImportCleared(playerid)
     new fmt[2048];
 
     fmt[0] = '\0';
-    strcat(fmt, "INSERT INTO public_interiors (interior_type, display_name, exterior_x, exterior_y, exterior_z, exterior_a, exterior_interior, exterior_virtual_world, interior_id, interior_virtual_world, interior_x, interior_y, interior_z, interior_a, exit_x, exit_y, exit_z, source_tag, enabled) ");
-    strcat(fmt, "SELECT interior_type, display_name, exterior_x, exterior_y, exterior_z, exterior_a, exterior_interior, exterior_virtual_world, interior_id, 0, interior_x, interior_y, interior_z, interior_a, exit_x, exit_y, exit_z, '%e', 1 FROM public_interior_import_queue WHERE enabled=1");
+    strcat(fmt, "INSERT INTO public_interiors (interior_type, display_name, exterior_x, exterior_y, exterior_z, exterior_a, exterior_spawn_x, exterior_spawn_y, exterior_spawn_z, exterior_spawn_a, exterior_pickup_model, interior_pickup_model, exterior_interior, exterior_virtual_world, interior_id, interior_virtual_world, interior_x, interior_y, interior_z, interior_a, exit_x, exit_y, exit_z, exit_a, source_tag, enabled) ");
+    strcat(fmt, "SELECT interior_type, display_name, exterior_x, exterior_y, exterior_z, exterior_a, exterior_x, exterior_y, exterior_z, exterior_a, 1318, 1318, exterior_interior, exterior_virtual_world, interior_id, 0, interior_x, interior_y, interior_z, interior_a, exit_x, exit_y, exit_z, interior_a, '%e', 1 FROM public_interior_import_queue WHERE enabled=1");
 
     mysql_format(g_SQL, query, sizeof(query), fmt, PUBINT_SOURCE_EXACT);
     mysql_tquery(g_SQL, query, "OnExactPublicInteriorImportFinished", "i", playerid);
@@ -20139,6 +20520,7 @@ public OnExactPublicInteriorImportCleared(playerid)
 public OnExactPublicInteriorImportFinished(playerid)
 {
     mysql_tquery(g_SQL, "UPDATE public_interior_import_queue SET imported=1 WHERE enabled=1");
+    mysql_tquery(g_SQL, "UPDATE public_interiors SET interior_virtual_world=43000+id WHERE source_tag='offline_exact_public' AND interior_virtual_world=0");
     LoadPublicInteriors();
     SendClientMessage(playerid, COLOR_GREEN, "Exact public interior queue berhasil diimport ke public_interiors.");
     SendClientMessage(playerid, COLOR_WHITE, "Runtime tetap pakai panah custom SAIF, shared virtual world, dan checkpoint merah.");
@@ -20333,7 +20715,7 @@ stock ShowPublicInteriorActionMenu(playerid, dbid)
     new title[96];
     new body[512];
     format(title, sizeof(title), "Public Interior ID %d", dbid);
-    format(body, sizeof(body), "Info\nGoto Exterior\nEnter Interior\nPoint Editor\nDelete / Disable\nReload All\nBack");
+    format(body, sizeof(body), "Info\nGoto Exterior\nEnter Interior\nExterior / Interior Point Editor\nDelete / Disable\nReload All\nBack");
     ShowPlayerDialog(playerid, DIALOG_PUBINT_ACTION_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Close");
     return 1;
 }
@@ -20346,7 +20728,7 @@ stock ShowPublicInteriorHelp(playerid)
     strcat(body, "Offline-first policy:\n- Public interior exact source utama: IPL/ENEX/map data GTA SA.\n");
     strcat(body, "- Runtime SAIF tetap pakai panah custom, shared virtual world, dan checkpoint merah.\n");
     strcat(body, "- Manual public interior hanya untuk koreksi/placeholder.\n\n");
-    strcat(body, "Editor point:\n/pubintpoints [id]\n/pubintsetpoint [id] [exterior/spawn/exit/service]\n/pubintserviceradius [id] [radius]\n\n");
+    strcat(body, "Editor point:\n/pubintpoints [id]\n/pubintsetpoint [id] [exterior/extspawn/spawn/exit/service]\n/pubintsetfacing [id] [exterior/spawn/exit/service]\n/pubintinteriorid [id] [interior]\n/pubintvw [id] [virtual_world]\n/pubintpickupmodel [id] [exterior/interior] [model]\n/pubintserviceradius [id] [radius]\n\n");
     strcat(body, "Command lain:\n/pubintmenu\n/pubintcreate [type] [name]\n/pubintlist\n/pubintinfo [id]\n/pubintgoto [id]\n/pubintenter [id]\n/pubintexit\n/pubintdelete [id]\n/pubintreload\n/pubintuse\n/pubintimportdb\n/pubintexactclear\n/pubintexactinfo\n\n");
     strcat(body, "Masuk/keluar pakai pickup panah custom. Transaksi hanya di checkpoint merah depan kasir/service point.");
     ShowPlayerDialog(playerid, DIALOG_PUBINT_HELP, DIALOG_STYLE_MSGBOX, "Public Interior Help", body, "Back", "Close");
@@ -29739,19 +30121,20 @@ public OnPlayerCommandText(playerid, cmdtext[])
         new rest[64];
         if (!GetFirstWordAndRest(cmdtext[16], idStr, sizeof(idStr), rest, sizeof(rest)) || !IsNumericString(idStr))
         {
-            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /pubintsetpoint [id] [exterior/spawn/exit/service]");
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /pubintsetpoint [id] [exterior/extspawn/spawn/exit/service]");
             return 1;
         }
         if (!GetOneParam(rest, pointStr, sizeof(pointStr)))
         {
-            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /pubintsetpoint [id] [exterior/spawn/exit/service]");
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /pubintsetpoint [id] [exterior/extspawn/spawn/exit/service]");
             return 1;
         }
-        if (!strcmp(pointStr, "exterior", true)) UpdatePublicInteriorPointFromPlayer(playerid, strval(idStr), 1);
-        else if (!strcmp(pointStr, "spawn", true)) UpdatePublicInteriorPointFromPlayer(playerid, strval(idStr), 2);
-        else if (!strcmp(pointStr, "exit", true)) UpdatePublicInteriorPointFromPlayer(playerid, strval(idStr), 3);
+        if (!strcmp(pointStr, "exterior", true) || !strcmp(pointStr, "extpickup", true)) UpdatePublicInteriorPointFromPlayer(playerid, strval(idStr), 1);
+        else if (!strcmp(pointStr, "extspawn", true) || !strcmp(pointStr, "outside", true)) UpdatePublicInteriorPointFromPlayer(playerid, strval(idStr), 5);
+        else if (!strcmp(pointStr, "spawn", true) || !strcmp(pointStr, "intspawn", true)) UpdatePublicInteriorPointFromPlayer(playerid, strval(idStr), 2);
+        else if (!strcmp(pointStr, "exit", true) || !strcmp(pointStr, "intpickup", true)) UpdatePublicInteriorPointFromPlayer(playerid, strval(idStr), 3);
         else if (!strcmp(pointStr, "service", true)) UpdatePublicInteriorPointFromPlayer(playerid, strval(idStr), 4);
-        else SendClientMessage(playerid, COLOR_YELLOW, "Point valid: exterior, spawn, exit, service.");
+        else SendClientMessage(playerid, COLOR_YELLOW, "Point valid: exterior/extspawn/spawn/exit/service.");
         return 1;
     }
 
@@ -29770,11 +30153,11 @@ public OnPlayerCommandText(playerid, cmdtext[])
             SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /pubintsetfacing [id] [exterior/spawn/exit/service]");
             return 1;
         }
-        if (!strcmp(pointStr, "exterior", true)) SetPublicInteriorPointFacingOnly(playerid, strval(idStr), 1);
-        else if (!strcmp(pointStr, "spawn", true)) SetPublicInteriorPointFacingOnly(playerid, strval(idStr), 2);
-        else if (!strcmp(pointStr, "exit", true)) SetPublicInteriorPointFacingOnly(playerid, strval(idStr), 3);
+        if (!strcmp(pointStr, "exterior", true) || !strcmp(pointStr, "extspawn", true)) SetPublicInteriorPointFacingOnly(playerid, strval(idStr), 5);
+        else if (!strcmp(pointStr, "spawn", true) || !strcmp(pointStr, "intspawn", true)) SetPublicInteriorPointFacingOnly(playerid, strval(idStr), 2);
+        else if (!strcmp(pointStr, "exit", true) || !strcmp(pointStr, "intpickup", true)) SetPublicInteriorPointFacingOnly(playerid, strval(idStr), 3);
         else if (!strcmp(pointStr, "service", true)) SetPublicInteriorPointFacingOnly(playerid, strval(idStr), 4);
-        else SendClientMessage(playerid, COLOR_YELLOW, "Point valid: exterior, spawn, exit, service.");
+        else SendClientMessage(playerid, COLOR_YELLOW, "Point valid: exterior/spawn/exit/service.");
         return 1;
     }
 
@@ -29794,6 +30177,74 @@ public OnPlayerCommandText(playerid, cmdtext[])
             return 1;
         }
         SetPublicInteriorServiceRadius(playerid, strval(idStr), floatstr(radiusStr));
+        return 1;
+    }
+
+
+    if (strfind(cmdtext, "/pubintinteriorid ", true) == 0)
+    {
+        new idStr[16];
+        new valueStr[16];
+        new rest[64];
+        if (!GetFirstWordAndRest(cmdtext[18], idStr, sizeof(idStr), rest, sizeof(rest)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /pubintinteriorid [id] [interior_id]");
+            return 1;
+        }
+        if (!GetOneParam(rest, valueStr, sizeof(valueStr)) || !IsNumericString(valueStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /pubintinteriorid [id] [interior_id]");
+            return 1;
+        }
+        SetPublicInteriorInteriorID(playerid, strval(idStr), strval(valueStr));
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/pubintvw ", true) == 0)
+    {
+        new idStr[16];
+        new valueStr[16];
+        new rest[64];
+        if (!GetFirstWordAndRest(cmdtext[10], idStr, sizeof(idStr), rest, sizeof(rest)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /pubintvw [id] [virtual_world]");
+            return 1;
+        }
+        if (!GetOneParam(rest, valueStr, sizeof(valueStr)) || !IsNumericString(valueStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /pubintvw [id] [virtual_world]");
+            return 1;
+        }
+        SetPublicInteriorVirtualWorld(playerid, strval(idStr), strval(valueStr));
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/pubintpickupmodel ", true) == 0)
+    {
+        new idStr[16];
+        new sideStr[16];
+        new valueStr[16];
+        new rest[64];
+        new rest2[64];
+        if (!GetFirstWordAndRest(cmdtext[19], idStr, sizeof(idStr), rest, sizeof(rest)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /pubintpickupmodel [id] [exterior/interior] [modelid]");
+            return 1;
+        }
+        if (!GetFirstWordAndRest(rest, sideStr, sizeof(sideStr), rest2, sizeof(rest2)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /pubintpickupmodel [id] [exterior/interior] [modelid]");
+            return 1;
+        }
+        if (!GetOneParam(rest2, valueStr, sizeof(valueStr)) || !IsNumericString(valueStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /pubintpickupmodel [id] [exterior/interior] [modelid]");
+            return 1;
+        }
+
+        if (!strcmp(sideStr, "exterior", true)) SetPublicInteriorPickupModel(playerid, strval(idStr), 1, strval(valueStr));
+        else if (!strcmp(sideStr, "interior", true)) SetPublicInteriorPickupModel(playerid, strval(idStr), 2, strval(valueStr));
+        else SendClientMessage(playerid, COLOR_YELLOW, "Side valid: exterior/interior.");
         return 1;
     }
 
@@ -31440,7 +31891,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.16.2 Gang HQ Exterior Interior Editor");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.17 Public Interior Exterior Interior Editor");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");

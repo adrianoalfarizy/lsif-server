@@ -266,8 +266,8 @@
 #define SPAWN_A         269.1425
 
 #define MAX_HOSPITAL_RESPAWNS 6
-#define HOSPITAL_RESPAWN_DELAY_MS 2600
-#define HOSPITAL_RESPAWN_HIDE_CLASS_MS 1900
+#define HOSPITAL_RESPAWN_DELAY_MS 1400
+#define HOSPITAL_RESPAWN_HIDE_CLASS_MS 0
 #define DEATH_RESPAWN_NONE 0
 #define DEATH_RESPAWN_WAITING 1
 #define DEATH_RESPAWN_SPAWNING 2
@@ -11008,7 +11008,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.8 Gang HQ Point Editor");
+    SetGameModeText("SAIF Dev v0.24K.9 Death Anim No CJ");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11126,7 +11126,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.8 Gang HQ Point Editor berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.9 Death Anim No CJ berhasil dijalankan.");
     return 1;
 }
 
@@ -11351,7 +11351,7 @@ public HideClassSelectionForHospitalRespawn(playerid)
 
     if (PlayerDeathRespawnState[playerid] == DEATH_RESPAWN_WAITING)
     {
-        // Delay spectator agar animasi mati tetap terlihat, tapi class selection CJ tidak sempat tampil.
+        // Safety fallback only: normal K9 flow respawns before class selection appears.
         TogglePlayerSpectating(playerid, true);
     }
     return 1;
@@ -11438,9 +11438,9 @@ public OnPlayerDeath(playerid, killerid, WEAPON:reason)
 
     PrepareDeathHospitalRespawn(playerid);
 
-    // Jangan TogglePlayerSpectating langsung di sini. Biarkan animasi mati GTA SA terlihat dulu.
-    // Setelah delay pendek, class selection disembunyikan sebelum layar CJ/Spawn muncul.
-    SetTimerEx("HideClassSelectionForHospitalRespawn", HOSPITAL_RESPAWN_HIDE_CLASS_MS, false, "i", playerid);
+    // Jangan TogglePlayerSpectating di OnPlayerDeath.
+    // Ini membiarkan animasi mati GTA SA tetap terlihat.
+    // Respawn dipercepat sebelum class selection default sempat tampil di CJ.
     SetTimerEx("RespawnPlayerAtNearestHospital", HOSPITAL_RESPAWN_DELAY_MS, false, "i", playerid);
     return 1;
 }
@@ -11563,7 +11563,7 @@ public OnPlayerRequestClass(playerid, classid)
     }
 
     // Jika engine mencoba masuk class selection setelah player mati,
-    // jangan set posisi/camera ke CJ. Sembunyikan class UI, timer hospital respawn yang menang.
+    // jangan set posisi/camera ke CJ. Ini hanya safety fallback; timer hospital harus lebih cepat.
     if (PlayerDeathRespawnState[playerid] != DEATH_RESPAWN_NONE)
     {
         TogglePlayerSpectating(playerid, true);
@@ -30328,7 +30328,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.8 Gang HQ Point Editor");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.9 Death Anim No CJ");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -30338,7 +30338,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.8: Death animation kept with delayed class hide; Gang HQ interior/exit point editor added.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.9: Death animation kept; hospital respawn now happens before default CJ class screen; Gang HQ point editor retained.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K: Gang preset active status, enable/disable, runtime hide, and /amenus command reference cleanup.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24J.4: Business array compile fix after MAX_BUSINESSES 64 expansion.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24F.2: Ammu config dialog fix, edit price/ammo/select action now responds correctly.");

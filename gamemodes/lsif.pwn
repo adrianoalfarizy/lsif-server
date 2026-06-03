@@ -593,7 +593,8 @@ new PublicServiceCount;
 
 #define DYN_OBJECT_NAME_SIZE 64
 #define MAPICON_BASE_DYNAMIC 80
-#define MAPICON_BASE_PUBLIC_INTERIOR 160
+#define MAPICON_BASE_PUBLIC_INTERIOR 80
+#define PUBLIC_INTERIOR_MAPICON_SLOTS 20
 #define LOC_TYPE_SIZE 24
 #define LOC_NAME_SIZE 64
 #define LOC_LABEL_SIZE 96
@@ -7867,25 +7868,35 @@ stock InitGangHQInteriorDefaults()
 {
     for (new i = 0; i < MAX_PRESET_GANGS; i++)
     {
-        GangHQInteriorEnabled[i] = 1;
-        GangHQInteriorID[i] = 3;
-        GangHQInteriorVirtualWorld[i] = GetGangHQVirtualWorld(PresetGangID[i]);
-        GangHQInteriorX[i] = 2496.0498;
-        GangHQInteriorY[i] = -1695.2382;
-        GangHQInteriorZ[i] = 1014.7422;
-        GangHQInteriorA[i] = 180.0000;
-        GangHQInteriorExitX[i] = GangHQX[i];
-        GangHQInteriorExitY[i] = GangHQY[i];
-        GangHQInteriorExitZ[i] = GangHQZ[i];
-        GangHQInteriorExitA[i] = GangHQA[i];
-        GangHQDoorX[i] = GangHQX[i];
-        GangHQDoorY[i] = GangHQY[i];
-        GangHQDoorZ[i] = GangHQZ[i];
-        GangHQDoorA[i] = GangHQA[i];
-        GangHQInteriorPickupX[i] = GangHQInteriorX[i];
-        GangHQInteriorPickupY[i] = GangHQInteriorY[i] + GANG_HQ_INTERIOR_EXIT_Y_OFFSET;
-        GangHQInteriorPickupZ[i] = GangHQInteriorZ[i];
-        GangHQInteriorPickupA[i] = GangHQInteriorA[i];
+        // v0.24K.21.1:
+        // Gang HQ interior/door point tidak boleh fallback ke hardcoded GangHQX/Y/Z saat restart.
+        // Semua point harus berasal dari DB gang_hq_interiors.
+        // Kalau row DB tidak ada, interior/door tidak dibuat daripada balik ke titik awal hardcoded.
+        GangHQInteriorEnabled[i] = 0;
+        GangHQInteriorID[i] = 0;
+        GangHQInteriorVirtualWorld[i] = 0;
+
+        GangHQInteriorX[i] = 0.0;
+        GangHQInteriorY[i] = 0.0;
+        GangHQInteriorZ[i] = 0.0;
+        GangHQInteriorA[i] = 0.0;
+
+        GangHQInteriorExitX[i] = 0.0;
+        GangHQInteriorExitY[i] = 0.0;
+        GangHQInteriorExitZ[i] = 0.0;
+        GangHQInteriorExitA[i] = 0.0;
+
+        GangHQDoorX[i] = 0.0;
+        GangHQDoorY[i] = 0.0;
+        GangHQDoorZ[i] = 0.0;
+        GangHQDoorA[i] = 0.0;
+
+        GangHQInteriorPickupX[i] = 0.0;
+        GangHQInteriorPickupY[i] = 0.0;
+        GangHQInteriorPickupZ[i] = 0.0;
+        GangHQInteriorPickupA[i] = 0.0;
+
+        // ALT pickup / map icon tetap default aman sampai gang_preset_config DB dimuat.
         GangHQPickupModel[i] = GANG_HQ_ALT_PICKUP_DEFAULT_MODEL;
         GangHQDoorPickupModel[i] = GANG_HQ_DOOR_PICKUP_DEFAULT_MODEL;
         GangHQMapIconType[i] = MAPICON_TYPE_GANG_HQ;
@@ -8031,8 +8042,18 @@ public OnGangHQInteriorsLoaded()
         }
     }
 
+    // Interior exit pickup ada di runtime interior.
     CreateAllGangHQInteriorRuntime();
-    printf("[SAIF] Gang HQ interiors loaded: %d rows.", rows);
+
+    // Penting:
+    // Door/panah exterior dibuat di CreateGangHQExteriorRuntime().
+    // Karena LoadGangPresetConfigFromDB() dan LoadGangHQInteriors() sama-sama async,
+    // exterior runtime bisa sempat dibuat memakai default lama sebelum data door DB masuk.
+    // Maka setelah gang_hq_interiors selesai load, recreate exterior runtime juga.
+    CreateAllGangHQExteriorRuntime();
+    RefreshGangHQMapIconsForAll();
+
+    printf("[SAIF] Gang HQ interiors loaded from DB: %d rows.", rows);
     return 1;
 }
 
@@ -8046,7 +8067,7 @@ stock SaveGangHQInterior(gangid)
     }
 
     new query[1536];
-    mysql_format(g_SQL, query, sizeof(query), "REPLACE INTO gang_hq_interiors (gang_id, gang_name, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, door_x, door_y, door_z, door_a, int_exit_x, int_exit_y, int_exit_z, int_exit_a, door_pickup_model, enabled) VALUES (%d, '%e', %d, %d, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %d, %d)", gangid, PresetGangName[gangIndex], GangHQInteriorID[gangIndex], GangHQInteriorVirtualWorld[gangIndex], GangHQInteriorX[gangIndex], GangHQInteriorY[gangIndex], GangHQInteriorZ[gangIndex], GangHQInteriorA[gangIndex], GangHQInteriorExitX[gangIndex], GangHQInteriorExitY[gangIndex], GangHQInteriorExitZ[gangIndex], GangHQInteriorExitA[gangIndex], GangHQDoorX[gangIndex], GangHQDoorY[gangIndex], GangHQDoorZ[gangIndex], GangHQDoorA[gangIndex], GangHQInteriorPickupX[gangIndex], GangHQInteriorPickupY[gangIndex], GangHQInteriorPickupZ[gangIndex], GangHQInteriorPickupA[gangIndex], GangHQDoorPickupModel[gangIndex], GangHQInteriorEnabled[gangIndex]);
+    mysql_format(g_SQL, query, sizeof(query), "REPLACE INTO gang_hq_interiors (gang_id, gang_name, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, door_x, door_y, door_z, door_a, int_exit_x, int_exit_y, int_exit_z, int_exit_a, door_pickup_model, enabled, updated_at) VALUES (%d, '%e', %d, %d, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %d, %d, NOW())", gangid, PresetGangName[gangIndex], GangHQInteriorID[gangIndex], GangHQInteriorVirtualWorld[gangIndex], GangHQInteriorX[gangIndex], GangHQInteriorY[gangIndex], GangHQInteriorZ[gangIndex], GangHQInteriorA[gangIndex], GangHQInteriorExitX[gangIndex], GangHQInteriorExitY[gangIndex], GangHQInteriorExitZ[gangIndex], GangHQInteriorExitA[gangIndex], GangHQDoorX[gangIndex], GangHQDoorY[gangIndex], GangHQDoorZ[gangIndex], GangHQDoorA[gangIndex], GangHQInteriorPickupX[gangIndex], GangHQInteriorPickupY[gangIndex], GangHQInteriorPickupZ[gangIndex], GangHQInteriorPickupA[gangIndex], GangHQDoorPickupModel[gangIndex], GangHQInteriorEnabled[gangIndex]);
     mysql_tquery(g_SQL, query);
     return 1;
 }
@@ -8707,7 +8728,9 @@ stock CreateGangHQExteriorRuntime(gangIndex)
     GangHQLabel[gangIndex] = Create3DTextLabel(labelText, PresetGangColor[gangIndex], GangHQX[gangIndex], GangHQY[gangIndex], GangHQZ[gangIndex] + 1.4, 16.0, 0, true);
 
     // Door pickup: pintu exterior untuk masuk ke interior Gang HQ.
-    if (GangHQInteriorEnabled[gangIndex])
+    // Dibuat hanya kalau data door DB valid, supaya tidak fallback ke hardcoded lama.
+    if (GangHQInteriorEnabled[gangIndex] &&
+        !(GangHQDoorX[gangIndex] == 0.0 && GangHQDoorY[gangIndex] == 0.0 && GangHQDoorZ[gangIndex] == 0.0))
     {
         GangHQDoorPickup[gangIndex] = CreatePickup(GangHQDoorPickupModel[gangIndex], GANG_HQ_INTERIOR_PICKUP_TYPE, GangHQDoorX[gangIndex], GangHQDoorY[gangIndex], GangHQDoorZ[gangIndex], 0);
         format(labelText, sizeof(labelText), "[HQ DOOR] %s\nPanah/pickup: Enter HQ\nModel: %d", PresetGangShortName[gangIndex], GangHQDoorPickupModel[gangIndex]);
@@ -11216,7 +11239,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.20 Public Interior Icon Direct Service Fix");
+    SetGameModeText("SAIF Dev v0.24K.21.1 Gang HQ DB Only Runtime Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11329,7 +11352,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.20 Public Interior Icon Direct Service Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.21.1 Gang HQ DB Only Runtime Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -14124,13 +14147,14 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
                 EnterPublicInterior(playerid, pubIntId);
             }
             case 3: ShowPublicInteriorPointMenu(playerid, pubIntId);
-            case 4: ShowPlayerDialog(playerid, DIALOG_PUBINT_DELETE_CONFIRM, DIALOG_STYLE_MSGBOX, "Delete Public Interior", "Yakin ingin menonaktifkan public interior ini?\nData tidak dihapus permanen, hanya enabled=0.", "Delete", "Back");
-            case 5:
+            case 4: ShowPlayerDialog(playerid, DIALOG_PUBINT_MAP_ICON_INPUT, DIALOG_STYLE_INPUT, "Public Interior Map Icon", "Masukkan radar/map icon ID.\nContoh: Ammu=6, Store=52.\nIsi 0 untuk default sesuai type.", "Save", "Back");
+            case 5: ShowPlayerDialog(playerid, DIALOG_PUBINT_DELETE_CONFIRM, DIALOG_STYLE_MSGBOX, "Delete Public Interior", "Yakin ingin menonaktifkan public interior ini?\nData tidak dihapus permanen, hanya enabled=0.", "Delete", "Back");
+            case 6:
             {
                 LoadPublicInteriors();
                 SendClientMessage(playerid, COLOR_GREEN, "Public interiors direload dari database.");
             }
-            case 6: ShowPublicInteriorMenu(playerid);
+            case 7: ShowPublicInteriorMenu(playerid);
         }
         return 1;
     }
@@ -20821,7 +20845,7 @@ stock ShowPublicInteriorActionMenu(playerid, dbid)
     new title[96];
     new body[512];
     format(title, sizeof(title), "Public Interior ID %d", dbid);
-    format(body, sizeof(body), "Info\nGoto Exterior\nEnter Interior\nExterior / Interior Point Editor\nDelete / Disable\nReload All\nBack");
+    format(body, sizeof(body), "Info\nGoto Exterior\nEnter Interior\nExterior / Interior Point Editor\nEdit Map Icon ID\nDelete / Disable\nReload All\nBack");
     ShowPlayerDialog(playerid, DIALOG_PUBINT_ACTION_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Close");
     return 1;
 }
@@ -25037,15 +25061,17 @@ stock DestroyWorldInteractionMarkers()
 
 stock ApplyPublicInteriorMapIcons(playerid)
 {
-    for (new i = 0; i < MAX_PUBLIC_INTERIORS; i++)
+    // open.mp/SA-MP map icon slot valid aman: 0..99.
+    // v0.24K.20 memakai base 160 sehingga icon tidak tampil.
+    // v0.24K.21 memakai slot 80..99 dan compact modulo.
+    // Jika public interior lebih dari 20, entry terbaru/urutan belakang akan overwrite slot lama.
+    for (new slot = 0; slot < PUBLIC_INTERIOR_MAPICON_SLOTS; slot++)
     {
-        RemovePlayerMapIcon(playerid, MAPICON_BASE_PUBLIC_INTERIOR + i);
+        RemovePlayerMapIcon(playerid, MAPICON_BASE_PUBLIC_INTERIOR + slot);
+    }
 
-        if (i >= PublicInteriorCount)
-        {
-            continue;
-        }
-
+    for (new i = 0; i < PublicInteriorCount; i++)
+    {
         if (!PublicInteriorEnabled[i])
         {
             continue;
@@ -25062,14 +25088,20 @@ stock ApplyPublicInteriorMapIcons(playerid)
             iconType = GetPublicInteriorDefaultMapIcon(PublicInteriorType[i]);
         }
 
-        SetPlayerMapIcon(playerid, MAPICON_BASE_PUBLIC_INTERIOR + i, PublicInteriorExtX[i], PublicInteriorExtY[i], PublicInteriorExtZ[i], iconType, COLOR_CYAN, MAPICON_LOCAL);
+        new iconSlot = MAPICON_BASE_PUBLIC_INTERIOR + (i % PUBLIC_INTERIOR_MAPICON_SLOTS);
+        if (iconSlot > MAPICON_MAX_SAFE_ID)
+        {
+            continue;
+        }
+
+        SetPlayerMapIcon(playerid, iconSlot, PublicInteriorExtX[i], PublicInteriorExtY[i], PublicInteriorExtZ[i], iconType, COLOR_CYAN, MAPICON_LOCAL);
     }
     return 1;
 }
 
 stock RemovePublicInteriorMapIcons(playerid)
 {
-    for (new i = 0; i < MAX_PUBLIC_INTERIORS; i++)
+    for (new i = 0; i < PUBLIC_INTERIOR_MAPICON_SLOTS; i++)
     {
         RemovePlayerMapIcon(playerid, MAPICON_BASE_PUBLIC_INTERIOR + i);
     }
@@ -25168,8 +25200,8 @@ stock ApplyLSIFMapIcons(playerid)
         }
     }
 
-    ApplyPublicInteriorMapIcons(playerid);
     ApplyDynamicLocationIcons(playerid);
+    ApplyPublicInteriorMapIcons(playerid);
 
     return 1;
 }
@@ -32080,7 +32112,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.20 Public Interior Icon Direct Service Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.21.1 Gang HQ DB Only Runtime Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -32090,7 +32122,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.20: Public interior map icons are DB-driven and service checkpoints open the specific shop/service directly without Info/Exit menu.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.21: Public interior map icon slots fixed and Gang HQ interior points load latest DB row after restart.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24N: Source cleanup assistant, safe disable by source_tag, relabel fallback tags, and runtime refresh.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24M: Source audit detail menu, deprecated/fallback record review, and source cleanup policy.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24L: Offline/source audit tools, source_tag validation summary, and /amenus audit entry.");

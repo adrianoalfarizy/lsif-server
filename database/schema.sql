@@ -2000,3 +2000,45 @@ WHERE territory_index BETWEEN 1 AND 6
     'Empty Territory'
   );
 
+-- SAIF / LSIF Dev v0.24K.20
+-- Public Interior Icon + Direct Service Checkpoint Fix
+
+ALTER TABLE public_interiors
+    ADD COLUMN IF NOT EXISTS exterior_map_icon INT NOT NULL DEFAULT 52;
+
+-- Isi default icon untuk data lama. Admin tetap bisa override via /pubintmapicon atau editor.
+UPDATE public_interiors
+SET exterior_map_icon = CASE
+    WHEN interior_type = 'ammunation' THEN 6
+    WHEN interior_type IN ('burgershot', 'cluckinbell', 'pizzastack') THEN 10
+    WHEN interior_type = 'barber' THEN 7
+    WHEN interior_type = 'tattoo' THEN 39
+    WHEN interior_type = 'police' THEN 30
+    WHEN interior_type = 'hospital' THEN 22
+    ELSE 52
+END
+WHERE exterior_map_icon IS NULL OR exterior_map_icon <= 0;
+
+-- SAIF / LSIF Dev v0.24K.21.1
+-- Gang HQ DB Only Runtime Fix
+--
+-- Tidak ada history row. Fix ini mengatasi fallback hardcoded dan async runtime:
+-- 1) InitGangHQInteriorDefaults di PWN tidak lagi mengisi door/exit dari GangHQX/Y/Z hardcoded.
+-- 2) Setelah gang_hq_interiors selesai load, exterior runtime dibuat ulang supaya pickup panah exterior memakai data DB.
+-- 3) Kalau row gang_hq_interiors tidak ada/invalid, door tidak dibuat daripada balik ke titik awal hardcoded.
+
+ALTER TABLE gang_hq_interiors
+    ADD COLUMN IF NOT EXISTS door_x FLOAT NULL,
+    ADD COLUMN IF NOT EXISTS door_y FLOAT NULL,
+    ADD COLUMN IF NOT EXISTS door_z FLOAT NULL,
+    ADD COLUMN IF NOT EXISTS door_a FLOAT NULL,
+    ADD COLUMN IF NOT EXISTS int_exit_x FLOAT NULL,
+    ADD COLUMN IF NOT EXISTS int_exit_y FLOAT NULL,
+    ADD COLUMN IF NOT EXISTS int_exit_z FLOAT NULL,
+    ADD COLUMN IF NOT EXISTS int_exit_a FLOAT NULL,
+    ADD COLUMN IF NOT EXISTS door_pickup_model INT NOT NULL DEFAULT 1318;
+
+UPDATE gang_hq_interiors
+SET door_pickup_model = 1318
+WHERE door_pickup_model IS NULL OR door_pickup_model <= 0;
+

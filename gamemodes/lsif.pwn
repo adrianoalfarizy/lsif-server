@@ -264,7 +264,7 @@
 #define SPAWN_A         269.1425
 
 #define MAX_HOSPITAL_RESPAWNS 6
-#define HOSPITAL_RESPAWN_DELAY_MS 3500
+#define HOSPITAL_RESPAWN_DELAY_MS 750
 #define DEATH_RESPAWN_NONE 0
 #define DEATH_RESPAWN_WAITING 1
 #define DEATH_RESPAWN_SPAWNING 2
@@ -8050,18 +8050,10 @@ stock EnterPlayerGangHQInterior(playerid, gangid)
 
 stock GetSafeGangHQExteriorExit(gangIndex, &Float:x, &Float:y, &Float:z, &Float:a)
 {
-    // Untuk Grove, jangan keluarkan tepat di pickup HQ. Beri offset ke area jalan yang aman agar tidak re-trigger pickup enter.
-    if (gangIndex == 0)
-    {
-        x = 2495.4094;
-        y = -1682.7000;
-        z = 13.5153;
-        a = 180.0000;
-        return 1;
-    }
-
     if (gangIndex >= 0 && gangIndex < MAX_PRESET_GANGS)
     {
+        // Utamakan titik exterior/exit yang memang tersimpan.
+        // Untuk Grove, jangan geser X/Y terlalu jauh; cukup naikkan Z agar tidak jatuh/freefall saat keluar interior.
         x = GangHQInteriorExitX[gangIndex];
         y = GangHQInteriorExitY[gangIndex];
         z = GangHQInteriorExitZ[gangIndex];
@@ -8071,7 +8063,7 @@ stock GetSafeGangHQExteriorExit(gangIndex, &Float:x, &Float:y, &Float:z, &Float:
         {
             x = GangHQX[gangIndex];
             y = GangHQY[gangIndex];
-            z = GangHQZ[gangIndex] + 0.8;
+            z = GangHQZ[gangIndex];
             a = GangHQA[gangIndex];
         }
 
@@ -8082,6 +8074,15 @@ stock GetSafeGangHQExteriorExit(gangIndex, &Float:x, &Float:y, &Float:z, &Float:
             z = SPAWN_Z;
             a = SPAWN_A;
             return 0;
+        }
+
+        if (gangIndex == 0)
+        {
+            z += 2.5;
+        }
+        else
+        {
+            z += 0.8;
         }
         return 1;
     }
@@ -8098,7 +8099,7 @@ stock ApplyGangHQExitPosition(playerid, Float:x, Float:y, Float:z, Float:a, save
     SetPlayerInterior(playerid, 0);
     SetPlayerVirtualWorld(playerid, 0);
     SetPlayerVelocity(playerid, 0.0, 0.0, 0.0);
-    SetPlayerPos(playerid, x, y, z + 0.8);
+    SetPlayerPos(playerid, x, y, z);
     SetPlayerFacingAngle(playerid, a);
     SetCameraBehindPlayer(playerid);
 
@@ -8106,7 +8107,7 @@ stock ApplyGangHQExitPosition(playerid, Float:x, Float:y, Float:z, Float:a, save
     {
         PlayerLastX[playerid] = x;
         PlayerLastY[playerid] = y;
-        PlayerLastZ[playerid] = z + 0.8;
+        PlayerLastZ[playerid] = z;
         PlayerLastA[playerid] = a;
         PlayerLastInterior[playerid] = 0;
         PlayerLastVirtualWorld[playerid] = 0;
@@ -8163,8 +8164,8 @@ stock ExitPlayerGangHQInterior(playerid)
 
     TogglePlayerControllable(playerid, false);
     ApplyGangHQExitPosition(playerid, exitX, exitY, exitZ, exitA, 1);
-    SetTimerEx("ApplyGangHQExitPositionDelayed", 700, false, "iffff", playerid, exitX, exitY, exitZ, exitA);
-    SetTimerEx("UnfreezePlayerAfterGangHQExit", 1600, false, "i", playerid);
+    SetTimerEx("ApplyGangHQExitPositionDelayed", 350, false, "iffff", playerid, exitX, exitY, exitZ, exitA);
+    SetTimerEx("UnfreezePlayerAfterGangHQExit", 900, false, "i", playerid);
 
     SendClientMessage(playerid, COLOR_GREEN, "Kamu keluar dari interior Gang HQ.");
     return 1;
@@ -10787,7 +10788,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.6 Spawn Root Fix");
+    SetGameModeText("SAIF Dev v0.24K.7 Clean Hospital Spawn");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -10905,7 +10906,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.6 Spawn Root Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.7 Clean Hospital Spawn berhasil dijalankan.");
     return 1;
 }
 
@@ -11148,8 +11149,8 @@ public RespawnPlayerAtNearestHospital(playerid)
         WEAPON:WEAPON_FIST, 0
     );
 
-    // Jangan TogglePlayerSpectating di sini. Patch sebelumnya ping-pong karena melawan class flow engine.
-    // Cukup panggil SpawnPlayer sekali, lalu OnPlayerSpawn akan apply posisi hospital dan clear state.
+    // Keluar dari spectator tepat sebelum SpawnPlayer agar class selection tidak tampil ke player.
+    TogglePlayerSpectating(playerid, false);
     SpawnPlayer(playerid);
     return 1;
 }
@@ -11202,6 +11203,11 @@ public OnPlayerDeath(playerid, killerid, WEAPON:reason)
     PlayerInsideHouseOwner[playerid] = INVALID_PLAYER_ID;
 
     PrepareDeathHospitalRespawn(playerid);
+
+    // Sembunyikan layar class selection (<< >> Spawn) selama menunggu hospital respawn.
+    // Tanpa ini, engine sempat menampilkan view default CJ selama beberapa detik.
+    TogglePlayerSpectating(playerid, true);
+
     SetTimerEx("RespawnPlayerAtNearestHospital", HOSPITAL_RESPAWN_DELAY_MS, false, "i", playerid);
     return 1;
 }
@@ -11327,6 +11333,8 @@ public OnPlayerRequestClass(playerid, classid)
     // jangan set posisi/camera ke CJ. Biarkan timer hospital respawn yang menang.
     if (PlayerDeathRespawnState[playerid] != DEATH_RESPAWN_NONE)
     {
+        // Jika engine tetap meminta class saat death respawn, tetap sembunyikan class UI.
+        TogglePlayerSpectating(playerid, true);
         return 0;
     }
 
@@ -11352,6 +11360,7 @@ public OnPlayerSpawn(playerid)
     if (PlayerDeathRespawnState[playerid] == DEATH_RESPAWN_SPAWNING || PlayerDeathRespawnState[playerid] == DEATH_RESPAWN_WAITING)
     {
         deathHospitalSpawn = 1;
+        TogglePlayerSpectating(playerid, false);
         ApplyDeathHospitalRespawnPosition(playerid, 1);
         PlayerDeathRespawnState[playerid] = DEATH_RESPAWN_NONE;
         SetTimerEx("ClearDeathRespawnState", 2500, false, "i", playerid);
@@ -29943,7 +29952,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.6 Spawn Root Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.7 Clean Hospital Spawn");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -29953,7 +29962,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.6: Death respawn root fix, direct public interior checkpoint service, and safe Grove HQ exit offset.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.7: Hide class selection during death respawn; Grove HQ exit uses original exterior point with raised Z.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K: Gang preset active status, enable/disable, runtime hide, and /amenus command reference cleanup.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24J.4: Business array compile fix after MAX_BUSINESSES 64 expansion.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24F.2: Ammu config dialog fix, edit price/ammo/select action now responds correctly.");

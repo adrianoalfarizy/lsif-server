@@ -6195,7 +6195,7 @@ stock LoadGangTerritories()
     // Runtime must be destroyed BEFORE reset, otherwise old 3D label / GangZone handles are lost.
     DestroyTerritoryRuntime();
     ResetGangTerritoryData();
-    mysql_tquery(g_SQL, "SELECT territory_index, territory_name, owner_gang_id, owner_gang_name, owner_color, center_x, center_y, center_z, radius, min_x, min_y, max_x, max_y, enabled FROM gang_territories ORDER BY territory_index ASC", "OnGangTerritoriesLoaded");
+    mysql_tquery(g_SQL, "SELECT territory_index, territory_name, owner_gang_id, owner_gang_name, owner_color, center_x, center_y, center_z, radius, min_x, min_y, max_x, max_y, enabled FROM gang_territories WHERE enabled=1 ORDER BY territory_index ASC", "OnGangTerritoriesLoaded");
     return 1;
 }
 
@@ -7502,13 +7502,13 @@ stock DeleteTurfZone(playerid, territoryIndex)
     format(TerritoryName[territoryIndex], 64, "Empty Territory");
 
     new query[256];
-    mysql_format(g_SQL, query, sizeof(query), "UPDATE gang_territories SET enabled=0, territory_name='Empty Territory', owner_gang_id=0, owner_gang_name='Neutral', owner_color=%d, center_x=0, center_y=0, center_z=0, radius=0, min_x=0, min_y=0, max_x=0, max_y=0, updated_at=NOW() WHERE territory_index=%d LIMIT 1", COLOR_GRAY, territoryIndex + 1);
+    mysql_format(g_SQL, query, sizeof(query), "DELETE FROM gang_territories WHERE territory_index=%d LIMIT 1", territoryIndex + 1);
     mysql_tquery(g_SQL, query);
 
     RefreshAllPlayerTerritoryZones();
     RefreshAllPlayerMapIcons();
 
-    SendClientMessage(playerid, COLOR_GREEN, "Turf zone dinonaktifkan/dihapus dari map.");
+    SendClientMessage(playerid, COLOR_GREEN, "Turf zone dihapus permanen dari DB dan runtime.");
     return 1;
 }
 
@@ -11213,7 +11213,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.18 Turf DB Only No Hardcoded Fallback");
+    SetGameModeText("SAIF Dev v0.24K.18.1 Turf Delete Persist DB Filter Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11326,7 +11326,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.18 Turf DB Only No Hardcoded Fallback berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.18.1 Turf Delete Persist DB Filter Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -28487,9 +28487,19 @@ public OnGangTerritoriesLoaded()
         cache_get_value_name_float(i, "max_y", maxY);
         cache_get_value_name_int(i, "enabled", enabled);
 
+        if (enabled != 1)
+        {
+            continue;
+        }
+
         territoryIndex--;
 
         if (!IsValidTerritoryIndex(territoryIndex))
+        {
+            continue;
+        }
+
+        if (radius <= 0.0 || (centerX == 0.0 && centerY == 0.0 && centerZ == 0.0))
         {
             continue;
         }
@@ -31885,7 +31895,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.18 Turf DB Only No Hardcoded Fallback");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.18.1 Turf Delete Persist DB Filter Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -31895,7 +31905,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.18: Turf runtime is DB-only; hardcoded/default turf fallback no longer reappears after restart.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.18.1: Turf load now filters enabled=1 only and delete turf removes row from DB, preventing old turf from returning after restart.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24N: Source cleanup assistant, safe disable by source_tag, relabel fallback tags, and runtime refresh.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24M: Source audit detail menu, deprecated/fallback record review, and source cleanup policy.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24L: Offline/source audit tools, source_tag validation summary, and /amenus audit entry.");

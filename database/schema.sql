@@ -1970,3 +1970,33 @@ WHERE source_tag IS NULL OR source_tag = '';
 
 -- Opsional kalau kamu ingin menonaktifkan semua turf lama dari DB:
 -- UPDATE gang_territories SET enabled=0, updated_at=NOW();
+
+-- SAIF / LSIF Dev v0.24K.18.1
+-- Turf Delete Persist / DB Filter Fix
+--
+-- Patch PWN:
+-- 1) LoadGangTerritories() hanya load WHERE enabled=1.
+-- 2) Delete Turf sekarang DELETE row, bukan cuma enabled=0.
+-- 3) Runtime skip row invalid/zero coordinate.
+
+ALTER TABLE gang_territories
+    ADD COLUMN IF NOT EXISTS source_tag VARCHAR(64) NOT NULL DEFAULT 'manual';
+
+UPDATE gang_territories
+SET source_tag = 'manual'
+WHERE source_tag IS NULL OR source_tag = '';
+
+-- Cleanup legacy hardcoded default turf yang dulu sering balik setelah restart.
+-- Query ini hanya menyasar 6 default awal berdasarkan territory_index + nama legacy.
+DELETE FROM gang_territories
+WHERE territory_index BETWEEN 1 AND 6
+  AND territory_name IN (
+    'Ganton Block',
+    'Idlewood District',
+    'Market Strip',
+    'East Los Santos',
+    'Vinewood Hills',
+    'Pershing Square',
+    'Empty Territory'
+  );
+

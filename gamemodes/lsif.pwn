@@ -265,6 +265,7 @@
 
 #define MAX_HOSPITAL_RESPAWNS 6
 #define HOSPITAL_RESPAWN_DELAY_MS 1500
+#define HOSPITAL_RESPAWN_GUARD_MS 5000
 
 #define DEFAULT_SKIN 0
 
@@ -998,6 +999,11 @@ new BankPointName[MAX_BANK_POINTS][32] =
 };
 
 new PlayerHospitalRespawnPending[MAX_PLAYERS];
+new PlayerHospitalRespawnGuard[MAX_PLAYERS];
+new Float:PlayerHospitalRespawnX[MAX_PLAYERS];
+new Float:PlayerHospitalRespawnY[MAX_PLAYERS];
+new Float:PlayerHospitalRespawnZ[MAX_PLAYERS];
+new Float:PlayerHospitalRespawnA[MAX_PLAYERS];
 
 new Float:HospitalRespawnX[MAX_HOSPITAL_RESPAWNS] =
 {
@@ -2247,6 +2253,8 @@ forward ApplyPublicInteriorFacingDelayed2(playerid, Float:angle);
 forward RespawnWorldPickupByDBID(dbid);
 forward ReloadDynamicLocationsDelayed(playerid);
 forward RespawnPlayerAtNearestHospital(playerid);
+forward ReapplyHospitalRespawnPosition(playerid);
+forward ClearHospitalRespawnGuard(playerid);
 forward ApplyGangHQExitPositionDelayed(playerid, Float:x, Float:y, Float:z, Float:a);
 
 
@@ -2484,6 +2492,12 @@ stock ResetPlayerAccountData(playerid)
     PlayerDBID[playerid] = 0;
     PlayerLoggedIn[playerid] = 0;
     PlayerAuthDialogShown[playerid] = 0;
+    PlayerHospitalRespawnPending[playerid] = 0;
+    PlayerHospitalRespawnGuard[playerid] = 0;
+    PlayerHospitalRespawnX[playerid] = SPAWN_X;
+    PlayerHospitalRespawnY[playerid] = SPAWN_Y;
+    PlayerHospitalRespawnZ[playerid] = SPAWN_Z;
+    PlayerHospitalRespawnA[playerid] = SPAWN_A;
 
     PlayerMoney[playerid] = 500;
     PlayerBankMoney[playerid] = 0;
@@ -8034,6 +8048,22 @@ stock EnterPlayerGangHQInterior(playerid, gangid)
 }
 
 
+stock IsSafeGangHQExteriorExitPosition(Float:x, Float:y, Float:z)
+{
+    if (!IsSafeExteriorRespawnPosition(x, y, z))
+    {
+        return 0;
+    }
+
+    // Koordinat interior GTA SA biasanya Z 900-1100. Jika dipakai sebagai exterior, player akan jatuh/freefall.
+    if (z > 150.0)
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
 stock GetSafeGangHQExteriorExit(gangIndex, &Float:x, &Float:y, &Float:z, &Float:a)
 {
     if (gangIndex < 0 || gangIndex >= MAX_PRESET_GANGS)
@@ -8050,15 +8080,15 @@ stock GetSafeGangHQExteriorExit(gangIndex, &Float:x, &Float:y, &Float:z, &Float:
     z = GangHQInteriorExitZ[gangIndex];
     a = GangHQInteriorExitA[gangIndex];
 
-    if (!IsSafeExteriorRespawnPosition(x, y, z))
+    if (!IsSafeGangHQExteriorExitPosition(x, y, z))
     {
         x = GangHQX[gangIndex];
         y = GangHQY[gangIndex];
-        z = GangHQZ[gangIndex] + 0.5;
+        z = GangHQZ[gangIndex] + 1.0;
         a = GangHQA[gangIndex];
     }
 
-    if (!IsSafeExteriorRespawnPosition(x, y, z))
+    if (!IsSafeGangHQExteriorExitPosition(x, y, z))
     {
         x = SPAWN_X;
         y = SPAWN_Y;
@@ -8116,6 +8146,8 @@ stock ExitPlayerGangHQInterior(playerid)
     SetPlayerFacingAngle(playerid, exitA);
     SetPlayerVelocity(playerid, 0.0, 0.0, 0.0);
     SetTimerEx("ApplyGangHQExitPositionDelayed", 250, false, "iffff", playerid, exitX, exitY, exitZ, exitA);
+    SetTimerEx("ApplyGangHQExitPositionDelayed", 900, false, "iffff", playerid, exitX, exitY, exitZ, exitA);
+    SetTimerEx("ApplyGangHQExitPositionDelayed", 1800, false, "iffff", playerid, exitX, exitY, exitZ, exitA);
 
     SendClientMessage(playerid, COLOR_GREEN, "Kamu keluar dari interior Gang HQ.");
     return 1;
@@ -10738,7 +10770,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.1 Bugfix Checkpoint Hospital HQ");
+    SetGameModeText("SAIF Dev v0.24K.2 Respawn HQ Exit Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -10825,6 +10857,12 @@ public OnGameModeInit()
         PlayerLastA[i] = SPAWN_A;
         PlayerLastInterior[i] = 0;
         PlayerLastVirtualWorld[i] = 0;
+        PlayerHospitalRespawnPending[i] = 0;
+        PlayerHospitalRespawnGuard[i] = 0;
+        PlayerHospitalRespawnX[i] = SPAWN_X;
+        PlayerHospitalRespawnY[i] = SPAWN_Y;
+        PlayerHospitalRespawnZ[i] = SPAWN_Z;
+        PlayerHospitalRespawnA[i] = SPAWN_A;
 
         PlayerMoneyMismatchCount[i] = 0;
         PlayerLastACWarningTick[i] = 0;
@@ -10851,7 +10889,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.1 Bugfix Checkpoint Hospital HQ berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.2 Respawn HQ Exit Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -11018,6 +11056,12 @@ stock PreparePlayerHospitalRespawn(playerid)
     FindNearestHospitalRespawn(x, y, z, hx, hy, hz, ha);
 
     PlayerHospitalRespawnPending[playerid] = 1;
+    PlayerHospitalRespawnGuard[playerid] = 1;
+    PlayerHospitalRespawnX[playerid] = hx;
+    PlayerHospitalRespawnY[playerid] = hy;
+    PlayerHospitalRespawnZ[playerid] = hz;
+    PlayerHospitalRespawnA[playerid] = ha;
+
     PlayerLastX[playerid] = hx;
     PlayerLastY[playerid] = hy;
     PlayerLastZ[playerid] = hz;
@@ -11040,6 +11084,64 @@ stock PreparePlayerHospitalRespawn(playerid)
     return 1;
 }
 
+stock ApplyHospitalRespawnState(playerid, saveNow = 0)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 0;
+    }
+
+    SetPlayerInterior(playerid, 0);
+    SetPlayerVirtualWorld(playerid, 0);
+    SetPlayerPos(playerid, PlayerHospitalRespawnX[playerid], PlayerHospitalRespawnY[playerid], PlayerHospitalRespawnZ[playerid]);
+    SetPlayerFacingAngle(playerid, PlayerHospitalRespawnA[playerid]);
+    SetPlayerVelocity(playerid, 0.0, 0.0, 0.0);
+    SetPlayerHealth(playerid, 100.0);
+    SetPlayerArmour(playerid, 0.0);
+    ResetPlayerWeapons(playerid);
+
+    PlayerLastX[playerid] = PlayerHospitalRespawnX[playerid];
+    PlayerLastY[playerid] = PlayerHospitalRespawnY[playerid];
+    PlayerLastZ[playerid] = PlayerHospitalRespawnZ[playerid];
+    PlayerLastA[playerid] = PlayerHospitalRespawnA[playerid];
+    PlayerLastInterior[playerid] = 0;
+    PlayerLastVirtualWorld[playerid] = 0;
+
+    if (saveNow)
+    {
+        SavePlayerData(playerid);
+    }
+
+    return 1;
+}
+
+public ReapplyHospitalRespawnPosition(playerid)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
+    {
+        return 0;
+    }
+
+    if (!PlayerHospitalRespawnGuard[playerid])
+    {
+        return 0;
+    }
+
+    ApplyHospitalRespawnState(playerid, 0);
+    return 1;
+}
+
+public ClearHospitalRespawnGuard(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 0;
+    }
+
+    PlayerHospitalRespawnGuard[playerid] = 0;
+    return 1;
+}
+
 public RespawnPlayerAtNearestHospital(playerid)
 {
     if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
@@ -11047,12 +11149,32 @@ public RespawnPlayerAtNearestHospital(playerid)
         return 0;
     }
 
-    if (!PlayerHospitalRespawnPending[playerid])
+    if (!PlayerHospitalRespawnPending[playerid] && !PlayerHospitalRespawnGuard[playerid])
     {
         return 0;
     }
 
+    if (!PlayerHospitalRespawnPending[playerid] && PlayerHospitalRespawnGuard[playerid])
+    {
+        ApplyHospitalRespawnState(playerid, 0);
+        return 1;
+    }
+
+    SetSpawnInfo(
+        playerid,
+        NO_TEAM,
+        DEFAULT_SKIN,
+        PlayerHospitalRespawnX[playerid],
+        PlayerHospitalRespawnY[playerid],
+        PlayerHospitalRespawnZ[playerid],
+        PlayerHospitalRespawnA[playerid],
+        WEAPON:WEAPON_FIST, 0,
+        WEAPON:WEAPON_FIST, 0,
+        WEAPON:WEAPON_FIST, 0
+    );
     SpawnPlayer(playerid);
+    SetTimerEx("ReapplyHospitalRespawnPosition", 350, false, "i", playerid);
+    SetTimerEx("ReapplyHospitalRespawnPosition", 1200, false, "i", playerid);
     return 1;
 }
 
@@ -11086,6 +11208,7 @@ public OnPlayerDisconnect(playerid, reason)
     PlayerAuthDialogShown[playerid] = 0;
     PlayerFindingBank[playerid] = 0;
     PlayerHospitalRespawnPending[playerid] = 0;
+    PlayerHospitalRespawnGuard[playerid] = 0;
     PlayerInsidePublicInteriorID[playerid] = 0;
     PlayerPublicInteriorServiceCheckpoint[playerid] = 0;
     PlayerEditingGangPresetID[playerid] = 0;
@@ -11191,6 +11314,12 @@ public OnPlayerRequestSpawn(playerid)
         return 0;
     }
 
+    if (PlayerHospitalRespawnPending[playerid] || PlayerHospitalRespawnGuard[playerid])
+    {
+        SetTimerEx("RespawnPlayerAtNearestHospital", 250, false, "i", playerid);
+        return 0;
+    }
+
     return 1;
 }
 
@@ -11202,9 +11331,10 @@ public OnPlayerRequestClass(playerid, classid)
         return 0;
     }
 
-    if (PlayerHospitalRespawnPending[playerid])
+    if (PlayerHospitalRespawnPending[playerid] || PlayerHospitalRespawnGuard[playerid])
     {
-        SetTimerEx("RespawnPlayerAtNearestHospital", 500, false, "i", playerid);
+        SetTimerEx("RespawnPlayerAtNearestHospital", 250, false, "i", playerid);
+        SetTimerEx("ReapplyHospitalRespawnPosition", 750, false, "i", playerid);
         return 0;
     }
 
@@ -11224,8 +11354,11 @@ public OnPlayerSpawn(playerid)
         SendClientMessage(playerid, COLOR_RED, "Kamu belum login.");
         return 1;
     }
-    if (PlayerHospitalRespawnPending[playerid])
+    new hospitalRespawnHandled = 0;
+
+    if (PlayerHospitalRespawnPending[playerid] || PlayerHospitalRespawnGuard[playerid])
     {
+        hospitalRespawnHandled = 1;
         PlayerHospitalRespawnPending[playerid] = 0;
         PlayerInsidePublicInteriorID[playerid] = 0;
         PlayerPublicInteriorServiceCheckpoint[playerid] = 0;
@@ -11234,14 +11367,12 @@ public OnPlayerSpawn(playerid)
         PlayerInsideHouse[playerid] = 0;
         PlayerInsideHouseOwner[playerid] = INVALID_PLAYER_ID;
 
-        SetPlayerInterior(playerid, 0);
-        SetPlayerVirtualWorld(playerid, 0);
-        SetPlayerPos(playerid, PlayerLastX[playerid], PlayerLastY[playerid], PlayerLastZ[playerid]);
-        SetPlayerFacingAngle(playerid, PlayerLastA[playerid]);
-        SetPlayerHealth(playerid, 100.0);
-        SetPlayerArmour(playerid, 0.0);
+        ApplyHospitalRespawnState(playerid, 1);
+        SetTimerEx("ReapplyHospitalRespawnPosition", 350, false, "i", playerid);
+        SetTimerEx("ReapplyHospitalRespawnPosition", 1200, false, "i", playerid);
+        SetTimerEx("ReapplyHospitalRespawnPosition", 2500, false, "i", playerid);
+        SetTimerEx("ClearHospitalRespawnGuard", HOSPITAL_RESPAWN_GUARD_MS, false, "i", playerid);
         SendClientMessage(playerid, COLOR_GREEN, "Kamu respawn di rumah sakit terdekat.");
-        SavePlayerData(playerid);
     }
     else if (PlayerSpawnHouse[playerid] && PlayerHouseIndex[playerid] != -1)
     {
@@ -11261,8 +11392,11 @@ public OnPlayerSpawn(playerid)
         RestorePlayerInteriorRuntimeState(playerid);
     }
 
-    ResetPlayerWeapons(playerid);
-    SetTimerEx("ApplySavedWeaponLoadout", 1000, false, "i", playerid);
+    if (!hospitalRespawnHandled)
+    {
+        ResetPlayerWeapons(playerid);
+        SetTimerEx("ApplySavedWeaponLoadout", 1000, false, "i", playerid);
+    }
     ApplyLSIFMapIcons(playerid);
 
     SendClientMessage(playerid, COLOR_CYAN, "Kamu berhasil spawn di Los Santos.");
@@ -29805,7 +29939,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.1 Bugfix Checkpoint Hospital HQ");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.2 Respawn HQ Exit Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -29815,7 +29949,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.1: Checkpoint public interior langsung membuka service spesifik, death respawn ke rumah sakit terdekat, dan exit Grove/Gang HQ memakai exterior fallback aman.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.2: Hospital respawn guard mencegah override ke spawn CJ/class selection, loadout tidak auto-apply saat respawn rumah sakit, dan Gang HQ exit menolak koordinat interior-Z agar tidak freefall.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24J.4: Business array compile fix after MAX_BUSINESSES 64 expansion.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24F.2: Ammu config dialog fix, edit price/ammo/select action now responds correctly.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24F.1: Configurable Ammu-Nation price/ammo and repeat purchase.");

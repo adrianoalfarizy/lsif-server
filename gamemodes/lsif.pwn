@@ -234,6 +234,10 @@
 #define DIALOG_SOURCE_AUDIT_DATASET 1214
 #define DIALOG_SOURCE_AUDIT_DETAIL 1215
 #define DIALOG_SOURCE_AUDIT_DEPRECATED 1216
+#define DIALOG_GANG_HQ_POINT_MENU 1217
+#define DIALOG_GANG_PICKUP_MODEL_INPUT 1218
+#define DIALOG_GANG_DOOR_MODEL_INPUT 1219
+#define DIALOG_GANG_MAP_ICON_INPUT 1220
 
 
 
@@ -248,6 +252,7 @@
 #define INTERACT_TYPE_HOUSE 5
 #define INTERACT_TYPE_BUSINESS 6
 #define INTERACT_TYPE_DYNAMIC_LOCATION 7
+#define INTERACT_TYPE_GANG_HQ_UTILITY 8
 
 
 #define STARTER_CASH 15000
@@ -446,6 +451,9 @@
 #define GANG_HQ_INTERIOR_PICKUP_COOLDOWN_MS 3000
 #define GANG_HQ_INTERIOR_EXIT_Y_OFFSET -2.0
 #define GANG_HQ_VW_OFFSET 42000
+#define GANG_HQ_ALT_PICKUP_DEFAULT_MODEL 1314
+#define GANG_HQ_DOOR_PICKUP_DEFAULT_MODEL GANG_HQ_INTERIOR_PICKUP_MODEL
+#define GANG_HQ_DOOR_RADIUS 3.0
 
 #define TURF_WAR_STATE_NONE            0
 #define TURF_WAR_STATE_CAPTURING       1
@@ -1150,8 +1158,13 @@ new PlayerNearbyInteractionParam[MAX_PLAYERS][MAX_NEARBY_INTERACTIONS];
 new PlayerNearbyInteractionLabel[MAX_PLAYERS][MAX_NEARBY_INTERACTIONS][64];
 new PlayerSourceAuditDataset[MAX_PLAYERS];
 
-new GangHQPickup[MAX_PRESET_GANGS];
+new GangHQPickup[MAX_PRESET_GANGS]; // ALT-only gang marker / join point
 new Text3D:GangHQLabel[MAX_PRESET_GANGS];
+new GangHQDoorPickup[MAX_PRESET_GANGS]; // exterior door pickup to enter HQ interior
+new Text3D:GangHQDoorLabel[MAX_PRESET_GANGS];
+new GangHQPickupModel[MAX_PRESET_GANGS];
+new GangHQDoorPickupModel[MAX_PRESET_GANGS];
+new GangHQMapIconType[MAX_PRESET_GANGS];
 new GangHQInteriorExitPickup[MAX_PRESET_GANGS];
 new Text3D:GangHQInteriorExitLabel[MAX_PRESET_GANGS];
 new GangHQInteriorEnabled[MAX_PRESET_GANGS];
@@ -2159,6 +2172,7 @@ forward OnGangWeaponStashLoaded();
 forward OnGangRestockBankLoaded(playerid, gangid, weaponIndex, ammo, cost);
 forward OnGangHQInteriorsLoaded();
 forward OnGangPresetConfigLoaded();
+forward OnGangHQPointModelSaved(playerid, gangid);
 forward OnBusinessPresetConfigLoaded();
 forward OnSourceAuditSummaryLoaded(playerid);
 forward OnSourceAuditDetailLoaded(playerid, datasetIndex);
@@ -5591,6 +5605,51 @@ stock IsPlayerNearGangHQ(playerid, gangIndex)
     return 0;
 }
 
+stock IsPlayerNearGangHQDoor(playerid, gangIndex)
+{
+    if (gangIndex < 0 || gangIndex >= MAX_PRESET_GANGS)
+    {
+        return 0;
+    }
+
+    if (!PresetGangEnabled[gangIndex] || !GangHQInteriorEnabled[gangIndex])
+    {
+        return 0;
+    }
+
+    if (GetPlayerDistanceFromPoint(playerid, GangHQInteriorExitX[gangIndex], GangHQInteriorExitY[gangIndex], GangHQInteriorExitZ[gangIndex]) <= GANG_HQ_DOOR_RADIUS)
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
+stock GetNearestGangHQDoor(playerid)
+{
+    new nearest = -1;
+    new Float:nearestDistance = 999999.0;
+
+    for (new i = 0; i < MAX_PRESET_GANGS; i++)
+    {
+        if (!PresetGangEnabled[i] || !GangHQInteriorEnabled[i])
+        {
+            continue;
+        }
+
+        new Float:distance = GetPlayerDistanceFromPoint(playerid, GangHQInteriorExitX[i], GangHQInteriorExitY[i], GangHQInteriorExitZ[i]);
+
+        if (distance < nearestDistance)
+        {
+            nearestDistance = distance;
+            nearest = i;
+        }
+    }
+
+    return nearest;
+}
+
+
 stock ShowGangHQDialog(playerid, gangid)
 {
     if (!IsPresetGangID(gangid))
@@ -7796,6 +7855,9 @@ stock InitGangHQInteriorDefaults()
         GangHQInteriorExitY[i] = GangHQY[i];
         GangHQInteriorExitZ[i] = GangHQZ[i];
         GangHQInteriorExitA[i] = GangHQA[i];
+        GangHQPickupModel[i] = GANG_HQ_ALT_PICKUP_DEFAULT_MODEL;
+        GangHQDoorPickupModel[i] = GANG_HQ_DOOR_PICKUP_DEFAULT_MODEL;
+        GangHQMapIconType[i] = MAPICON_TYPE_GANG_HQ;
     }
 
     return 1;
@@ -7887,7 +7949,7 @@ stock DestroyAllGangHQInteriorRuntime()
 stock LoadGangHQInteriors()
 {
     InitGangHQInteriorDefaults();
-    mysql_tquery(g_SQL, "SELECT gang_id, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, enabled FROM gang_hq_interiors WHERE gang_id BETWEEN 1 AND 9 ORDER BY gang_id ASC", "OnGangHQInteriorsLoaded");
+    mysql_tquery(g_SQL, "SELECT gang_id, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, COALESCE(door_pickup_model, 1318) AS door_pickup_model, enabled FROM gang_hq_interiors WHERE gang_id BETWEEN 1 AND 9 ORDER BY gang_id ASC", "OnGangHQInteriorsLoaded");
     return 1;
 }
 
@@ -7917,7 +7979,13 @@ public OnGangHQInteriorsLoaded()
         cache_get_value_name_float(i, "exit_y", GangHQInteriorExitY[gangIndex]);
         cache_get_value_name_float(i, "exit_z", GangHQInteriorExitZ[gangIndex]);
         cache_get_value_name_float(i, "exit_a", GangHQInteriorExitA[gangIndex]);
+        cache_get_value_name_int(i, "door_pickup_model", GangHQDoorPickupModel[gangIndex]);
         cache_get_value_name_int(i, "enabled", GangHQInteriorEnabled[gangIndex]);
+
+        if (GangHQDoorPickupModel[gangIndex] <= 0)
+        {
+            GangHQDoorPickupModel[gangIndex] = GANG_HQ_DOOR_PICKUP_DEFAULT_MODEL;
+        }
 
         if (GangHQInteriorVirtualWorld[gangIndex] <= 0)
         {
@@ -7940,7 +8008,7 @@ stock SaveGangHQInterior(gangid)
     }
 
     new query[1024];
-    mysql_format(g_SQL, query, sizeof(query), "REPLACE INTO gang_hq_interiors (gang_id, gang_name, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, enabled) VALUES (%d, '%e', %d, %d, %f, %f, %f, %f, %f, %f, %f, %f, %d)", gangid, PresetGangName[gangIndex], GangHQInteriorID[gangIndex], GangHQInteriorVirtualWorld[gangIndex], GangHQInteriorX[gangIndex], GangHQInteriorY[gangIndex], GangHQInteriorZ[gangIndex], GangHQInteriorA[gangIndex], GangHQInteriorExitX[gangIndex], GangHQInteriorExitY[gangIndex], GangHQInteriorExitZ[gangIndex], GangHQInteriorExitA[gangIndex], GangHQInteriorEnabled[gangIndex]);
+    mysql_format(g_SQL, query, sizeof(query), "REPLACE INTO gang_hq_interiors (gang_id, gang_name, interior_id, virtual_world, int_x, int_y, int_z, int_a, exit_x, exit_y, exit_z, exit_a, door_pickup_model, enabled) VALUES (%d, '%e', %d, %d, %f, %f, %f, %f, %f, %f, %f, %f, %d, %d)", gangid, PresetGangName[gangIndex], GangHQInteriorID[gangIndex], GangHQInteriorVirtualWorld[gangIndex], GangHQInteriorX[gangIndex], GangHQInteriorY[gangIndex], GangHQInteriorZ[gangIndex], GangHQInteriorA[gangIndex], GangHQInteriorExitX[gangIndex], GangHQInteriorExitY[gangIndex], GangHQInteriorExitZ[gangIndex], GangHQInteriorExitA[gangIndex], GangHQDoorPickupModel[gangIndex], GangHQInteriorEnabled[gangIndex]);
     mysql_tquery(g_SQL, query);
     return 1;
 }
@@ -7978,9 +8046,9 @@ stock EnterPlayerGangHQInterior(playerid, gangid)
         return 0;
     }
 
-    if (!IsPlayerNearGangHQ(playerid, gangIndex))
+    if (!IsPlayerNearGangHQDoor(playerid, gangIndex))
     {
-        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada di luar Gang HQ untuk masuk interior.");
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada di pickup pintu Gang HQ untuk masuk interior.");
         return 0;
     }
 
@@ -8070,10 +8138,6 @@ stock SetGangInteriorFromPlayer(playerid, gangid)
     GangHQInteriorY[gangIndex] = y;
     GangHQInteriorZ[gangIndex] = z;
     GangHQInteriorA[gangIndex] = a;
-    GangHQInteriorExitX[gangIndex] = GangHQX[gangIndex];
-    GangHQInteriorExitY[gangIndex] = GangHQY[gangIndex];
-    GangHQInteriorExitZ[gangIndex] = GangHQZ[gangIndex];
-    GangHQInteriorExitA[gangIndex] = GangHQA[gangIndex];
 
     SaveGangHQInterior(gangid);
     CreateGangHQInteriorRuntime(gangIndex);
@@ -8107,6 +8171,174 @@ stock ShowGangInteriorInfo(playerid, gangid)
     return 1;
 }
 
+stock ShowGangHQPointEditorMenu(playerid, gangid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka Gang HQ point editor.");
+        return 0;
+    }
+
+    new gangIndex = GetPresetGangIndexByID(gangid);
+    if (gangIndex == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang ID tidak valid.");
+        return 0;
+    }
+
+    PlayerEditingGangPresetID[playerid] = gangid;
+
+    new title[96];
+    new body[768];
+    format(title, sizeof(title), "Gang HQ Points: %s", PresetGangShortName[gangIndex]);
+    strcat(body, "Info Points\n", sizeof(body));
+    strcat(body, "Set Gang ALT Pickup = My Position\n", sizeof(body));
+    strcat(body, "Set HQ Door Exterior = My Position\n", sizeof(body));
+    strcat(body, "Set Interior Spawn = My Position\n", sizeof(body));
+    strcat(body, "Edit Gang Pickup Model\n", sizeof(body));
+    strcat(body, "Edit Door Pickup Model\n", sizeof(body));
+    strcat(body, "Edit Map Icon ID\n", sizeof(body));
+    strcat(body, "Goto Gang ALT Pickup\n", sizeof(body));
+    strcat(body, "Goto HQ Door Exterior\n", sizeof(body));
+    strcat(body, "Goto Interior Spawn\n", sizeof(body));
+    strcat(body, "Reload Gang HQ DB\n", sizeof(body));
+    strcat(body, "Back", sizeof(body));
+
+    ShowPlayerDialog(playerid, DIALOG_GANG_HQ_POINT_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Back");
+    return 1;
+}
+
+stock ShowGangHQPointInfo(playerid, gangid)
+{
+    new gangIndex = GetPresetGangIndexByID(gangid);
+    if (gangIndex == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang ID tidak valid.");
+        return 0;
+    }
+
+    new body[1024];
+    new line[192];
+
+    format(line, sizeof(line), "Gang: %s (%s)\nStatus: %s\n\n", PresetGangName[gangIndex], PresetGangShortName[gangIndex], (PresetGangEnabled[gangIndex] ? "ACTIVE" : "DISABLED"));
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Gang ALT Pickup: %.3f %.3f %.3f | A %.2f\n", GangHQX[gangIndex], GangHQY[gangIndex], GangHQZ[gangIndex], GangHQA[gangIndex]);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Gang Pickup Model: %d | Map Icon ID: %d | ALT action: direct join\n\n", GangHQPickupModel[gangIndex], GangHQMapIconType[gangIndex]);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "HQ Door Exterior: %.3f %.3f %.3f | A %.2f\n", GangHQInteriorExitX[gangIndex], GangHQInteriorExitY[gangIndex], GangHQInteriorExitZ[gangIndex], GangHQInteriorExitA[gangIndex]);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Door Pickup Model: %d | Door Radius: %.1f\n\n", GangHQDoorPickupModel[gangIndex], GANG_HQ_DOOR_RADIUS);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Interior Spawn: Int %d | VW %d | %.3f %.3f %.3f | A %.2f", GangHQInteriorID[gangIndex], GangHQInteriorVirtualWorld[gangIndex], GangHQInteriorX[gangIndex], GangHQInteriorY[gangIndex], GangHQInteriorZ[gangIndex], GangHQInteriorA[gangIndex]);
+    strcat(body, line, sizeof(body));
+
+    ShowPlayerDialog(playerid, DIALOG_GANG_PRESET_INFO, DIALOG_STYLE_MSGBOX, "Gang HQ Point Info", body, "OK", "Back");
+    return 1;
+}
+
+stock UpdateGangHQDoorFromPlayer(playerid, gangid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa set Gang HQ door.");
+        return 0;
+    }
+
+    new gangIndex = GetPresetGangIndexByID(gangid);
+    if (gangIndex == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang preset tidak valid.");
+        return 0;
+    }
+
+    GetPlayerPos(playerid, GangHQInteriorExitX[gangIndex], GangHQInteriorExitY[gangIndex], GangHQInteriorExitZ[gangIndex]);
+    GetPlayerFacingAngle(playerid, GangHQInteriorExitA[gangIndex]);
+
+    SaveGangHQInterior(gangid);
+    CreateGangHQExteriorRuntime(gangIndex);
+
+    SendClientMessage(playerid, COLOR_GREEN, "Pintu exterior Gang HQ diset ke posisi + facing admin dan disimpan ke DB.");
+    SendClientMessage(playerid, COLOR_WHITE, "Pickup pintu ini terpisah dari pickup gang/ALT join.");
+    return 1;
+}
+
+stock SetGangHQPickupModel(playerid, gangid, modelid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa edit pickup model gang.");
+        return 0;
+    }
+
+    new gangIndex = GetPresetGangIndexByID(gangid);
+    if (gangIndex == -1 || modelid <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang/model tidak valid.");
+        return 0;
+    }
+
+    GangHQPickupModel[gangIndex] = modelid;
+    SaveGangPresetConfig(gangid);
+    CreateGangHQExteriorRuntime(gangIndex);
+
+    new msg[160];
+    format(msg, sizeof(msg), "Gang pickup model %s diset ke ID %d.", PresetGangShortName[gangIndex], modelid);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    return 1;
+}
+
+stock SetGangHQDoorPickupModel(playerid, gangid, modelid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa edit door pickup model gang.");
+        return 0;
+    }
+
+    new gangIndex = GetPresetGangIndexByID(gangid);
+    if (gangIndex == -1 || modelid <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang/model tidak valid.");
+        return 0;
+    }
+
+    GangHQDoorPickupModel[gangIndex] = modelid;
+    SaveGangHQInterior(gangid);
+    CreateGangHQExteriorRuntime(gangIndex);
+
+    new msg[160];
+    format(msg, sizeof(msg), "Gang HQ door pickup model %s diset ke ID %d.", PresetGangShortName[gangIndex], modelid);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    return 1;
+}
+
+stock SetGangHQMapIconType(playerid, gangid, iconid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa edit map icon gang.");
+        return 0;
+    }
+
+    new gangIndex = GetPresetGangIndexByID(gangid);
+    if (gangIndex == -1 || iconid <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Gang/icon tidak valid.");
+        return 0;
+    }
+
+    GangHQMapIconType[gangIndex] = iconid;
+    SaveGangPresetConfig(gangid);
+    RefreshGangHQMapIconsForAll();
+
+    new msg[160];
+    format(msg, sizeof(msg), "Gang HQ map icon %s diset ke ID %d.", PresetGangShortName[gangIndex], iconid);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    return 1;
+}
+
+
 stock ShowGangHQUtilityInfo(playerid)
 {
     if (PlayerGangID[playerid] <= 0)
@@ -8127,9 +8359,9 @@ stock ShowGangHQUtilityInfo(playerid)
     SendClientMessage(playerid, COLOR_YELLOW, "========== GANG HQ UTILITY ==========");
     format(msg, sizeof(msg), "Gang: %s | HQ: %.2f %.2f %.2f | A %.2f", PresetGangName[gangIndex], GangHQX[gangIndex], GangHQY[gangIndex], GangHQZ[gangIndex], GangHQA[gangIndex]);
     SendClientMessage(playerid, COLOR_WHITE, msg);
-    SendClientMessage(playerid, COLOR_WHITE, "/enterganghq = masuk interior HQ jika dekat HQ.");
+    SendClientMessage(playerid, COLOR_WHITE, "/enterganghq = masuk interior HQ jika dekat pickup pintu HQ.");
     SendClientMessage(playerid, COLOR_WHITE, "/exitganghq = keluar interior HQ.");
-    SendClientMessage(playerid, COLOR_WHITE, "/gangstash = weapon stash, bisa dari HQ luar atau interior HQ.");
+    SendClientMessage(playerid, COLOR_WHITE, "/gangstash = weapon stash, bisa dari HQ marker luar atau interior HQ.");
     return 1;
 }
 
@@ -8153,15 +8385,48 @@ stock CreateGangHQExteriorRuntime(gangIndex)
         GangHQLabel[gangIndex] = Text3D:INVALID_3DTEXT_ID;
     }
 
+    if (GangHQDoorPickup[gangIndex] != -1)
+    {
+        DestroyPickup(GangHQDoorPickup[gangIndex]);
+        GangHQDoorPickup[gangIndex] = -1;
+    }
+
+    if (GangHQDoorLabel[gangIndex] != Text3D:INVALID_3DTEXT_ID)
+    {
+        Delete3DTextLabel(GangHQDoorLabel[gangIndex]);
+        GangHQDoorLabel[gangIndex] = Text3D:INVALID_3DTEXT_ID;
+    }
+
     if (!PresetGangEnabled[gangIndex])
     {
         return 1;
     }
 
+    if (GangHQPickupModel[gangIndex] <= 0)
+    {
+        GangHQPickupModel[gangIndex] = GANG_HQ_ALT_PICKUP_DEFAULT_MODEL;
+    }
+
+    if (GangHQDoorPickupModel[gangIndex] <= 0)
+    {
+        GangHQDoorPickupModel[gangIndex] = GANG_HQ_DOOR_PICKUP_DEFAULT_MODEL;
+    }
+
     new labelText[192];
-    GangHQPickup[gangIndex] = CreatePickup(WORLD_MARKER_PICKUP_MODEL, WORLD_MARKER_PICKUP_TYPE, GangHQX[gangIndex], GangHQY[gangIndex], GangHQZ[gangIndex], 0);
-    format(labelText, sizeof(labelText), "[GANG HQ] %s\nALT: Menu / Stash\nPickup: Enter HQ\nSource: DB/offline preset", PresetGangShortName[gangIndex]);
-    GangHQLabel[gangIndex] = Create3DTextLabel(labelText, PresetGangColor[gangIndex], GangHQX[gangIndex], GangHQY[gangIndex], GangHQZ[gangIndex] + 2.2, 16.0, 0, true);
+
+    // Marker gang / join point: ALT only. Pickup ini TIDAK menjadi pintu interior.
+    GangHQPickup[gangIndex] = CreatePickup(GangHQPickupModel[gangIndex], WORLD_MARKER_PICKUP_TYPE, GangHQX[gangIndex], GangHQY[gangIndex], GangHQZ[gangIndex], 0);
+    format(labelText, sizeof(labelText), "[GANG] %s\nALT: Join gang langsung\nModel: %d | Source: DB", PresetGangShortName[gangIndex], GangHQPickupModel[gangIndex]);
+    GangHQLabel[gangIndex] = Create3DTextLabel(labelText, PresetGangColor[gangIndex], GangHQX[gangIndex], GangHQY[gangIndex], GangHQZ[gangIndex] + 1.4, 16.0, 0, true);
+
+    // Door pickup: pintu exterior untuk masuk ke interior Gang HQ.
+    if (GangHQInteriorEnabled[gangIndex])
+    {
+        GangHQDoorPickup[gangIndex] = CreatePickup(GangHQDoorPickupModel[gangIndex], GANG_HQ_INTERIOR_PICKUP_TYPE, GangHQInteriorExitX[gangIndex], GangHQInteriorExitY[gangIndex], GangHQInteriorExitZ[gangIndex], 0);
+        format(labelText, sizeof(labelText), "[HQ DOOR] %s\nPanah/pickup: Enter HQ\nModel: %d", PresetGangShortName[gangIndex], GangHQDoorPickupModel[gangIndex]);
+        GangHQDoorLabel[gangIndex] = Create3DTextLabel(labelText, PresetGangColor[gangIndex], GangHQInteriorExitX[gangIndex], GangHQInteriorExitY[gangIndex], GangHQInteriorExitZ[gangIndex] + 1.2, 16.0, 0, true);
+    }
+
     return 1;
 }
 
@@ -8189,7 +8454,7 @@ stock RefreshGangHQMapIconsForAll()
             RemovePlayerMapIcon(playerid, MAPICON_BASE_GANG_HQ + i);
             if (PresetGangEnabled[i])
             {
-                SetPlayerMapIcon(playerid, MAPICON_BASE_GANG_HQ + i, GangHQX[i], GangHQY[i], GangHQZ[i], MAPICON_TYPE_GANG_HQ, PresetGangColor[i], MAPICON_LOCAL);
+                SetPlayerMapIcon(playerid, MAPICON_BASE_GANG_HQ + i, GangHQX[i], GangHQY[i], GangHQZ[i], GangHQMapIconType[i], PresetGangColor[i], MAPICON_LOCAL);
             }
         }
     }
@@ -8199,7 +8464,7 @@ stock RefreshGangHQMapIconsForAll()
 
 stock LoadGangPresetConfigFromDB()
 {
-    mysql_tquery(g_SQL, "SELECT gang_id, name, short_name, color, color_name, hq_x, hq_y, hq_z, hq_a, hq_radius, enabled FROM gang_preset_config WHERE gang_id BETWEEN 1 AND 9 ORDER BY gang_id ASC", "OnGangPresetConfigLoaded");
+    mysql_tquery(g_SQL, "SELECT gang_id, name, short_name, color, color_name, hq_x, hq_y, hq_z, hq_a, hq_radius, COALESCE(hq_pickup_model, 1314) AS hq_pickup_model, COALESCE(hq_map_icon, 19) AS hq_map_icon, enabled FROM gang_preset_config WHERE gang_id BETWEEN 1 AND 9 ORDER BY gang_id ASC", "OnGangPresetConfigLoaded");
     return 1;
 }
 
@@ -8228,7 +8493,19 @@ public OnGangPresetConfigLoaded()
         cache_get_value_name_float(i, "hq_z", GangHQZ[gangIndex]);
         cache_get_value_name_float(i, "hq_a", GangHQA[gangIndex]);
         cache_get_value_name_float(i, "hq_radius", GangHQRadius[gangIndex]);
+        cache_get_value_name_int(i, "hq_pickup_model", GangHQPickupModel[gangIndex]);
+        cache_get_value_name_int(i, "hq_map_icon", GangHQMapIconType[gangIndex]);
         cache_get_value_name_int(i, "enabled", PresetGangEnabled[gangIndex]);
+
+        if (GangHQPickupModel[gangIndex] <= 0)
+        {
+            GangHQPickupModel[gangIndex] = GANG_HQ_ALT_PICKUP_DEFAULT_MODEL;
+        }
+
+        if (GangHQMapIconType[gangIndex] <= 0)
+        {
+            GangHQMapIconType[gangIndex] = MAPICON_TYPE_GANG_HQ;
+        }
 
         if (PresetGangEnabled[gangIndex] != 0)
         {
@@ -8256,7 +8533,7 @@ stock SaveGangPresetConfig(gangid)
     }
 
     new query[1024];
-    mysql_format(g_SQL, query, sizeof(query), "REPLACE INTO gang_preset_config (gang_id, name, short_name, color, color_name, hq_x, hq_y, hq_z, hq_a, hq_radius, source_tag, enabled, updated_at) VALUES (%d, '%e', '%e', %d, '%e', %f, %f, %f, %f, %f, 'offline_exact_manual', %d, NOW())", gangid, PresetGangName[gangIndex], PresetGangShortName[gangIndex], PresetGangColor[gangIndex], PresetGangColorName[gangIndex], GangHQX[gangIndex], GangHQY[gangIndex], GangHQZ[gangIndex], GangHQA[gangIndex], GangHQRadius[gangIndex], PresetGangEnabled[gangIndex]);
+    mysql_format(g_SQL, query, sizeof(query), "REPLACE INTO gang_preset_config (gang_id, name, short_name, color, color_name, hq_x, hq_y, hq_z, hq_a, hq_radius, hq_pickup_model, hq_map_icon, source_tag, enabled, updated_at) VALUES (%d, '%e', '%e', %d, '%e', %f, %f, %f, %f, %f, %d, %d, 'offline_exact_manual', %d, NOW())", gangid, PresetGangName[gangIndex], PresetGangShortName[gangIndex], PresetGangColor[gangIndex], PresetGangColorName[gangIndex], GangHQX[gangIndex], GangHQY[gangIndex], GangHQZ[gangIndex], GangHQA[gangIndex], GangHQRadius[gangIndex], GangHQPickupModel[gangIndex], GangHQMapIconType[gangIndex], PresetGangEnabled[gangIndex]);
     mysql_tquery(g_SQL, query);
     return 1;
 }
@@ -8321,7 +8598,8 @@ stock ShowGangPresetActionMenu(playerid, gangid)
     strcat(body, "Edit Name\n", sizeof(body));
     strcat(body, "Edit Short Name\n", sizeof(body));
     strcat(body, "Edit Color Decimal\n", sizeof(body));
-    strcat(body, "Goto HQ Exterior\n", sizeof(body));
+    strcat(body, "Goto Gang ALT Pickup\n", sizeof(body));
+    strcat(body, "Gang HQ Pickup/Door Editor\n", sizeof(body));
     strcat(body, "Reload DB\n", sizeof(body));
     strcat(body, "Enable / Disable Gang Preset\n", sizeof(body));
     strcat(body, "Back", sizeof(body));
@@ -8346,9 +8624,11 @@ stock ShowGangPresetInfo(playerid, gangid)
     strcat(body, line, sizeof(body));
     format(line, sizeof(line), "Color: %d (%s)\n", PresetGangColor[gangIndex], PresetGangColorName[gangIndex]);
     strcat(body, line, sizeof(body));
-    format(line, sizeof(line), "HQ: %.3f %.3f %.3f | A %.2f\n", GangHQX[gangIndex], GangHQY[gangIndex], GangHQZ[gangIndex], GangHQA[gangIndex]);
+    format(line, sizeof(line), "Gang ALT Pickup: %.3f %.3f %.3f | A %.2f | Model %d\n", GangHQX[gangIndex], GangHQY[gangIndex], GangHQZ[gangIndex], GangHQA[gangIndex], GangHQPickupModel[gangIndex]);
     strcat(body, line, sizeof(body));
-    format(line, sizeof(line), "Access Radius: %.2f\n", GangHQRadius[gangIndex]);
+    format(line, sizeof(line), "HQ Door: %.3f %.3f %.3f | A %.2f | Model %d\n", GangHQInteriorExitX[gangIndex], GangHQInteriorExitY[gangIndex], GangHQInteriorExitZ[gangIndex], GangHQInteriorExitA[gangIndex], GangHQDoorPickupModel[gangIndex]);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Access Radius: %.2f | Map Icon ID: %d\n", GangHQRadius[gangIndex], GangHQMapIconType[gangIndex]);
     strcat(body, line, sizeof(body));
     strcat(body, "Source: gang_preset_config DB / offline-source-first override\n", sizeof(body));
     strcat(body, "Catatan: Gang tetap preset GTA SA, bukan player-made gang.", sizeof(body));
@@ -8376,18 +8656,12 @@ stock UpdateGangPresetHQFromPlayer(playerid, gangid)
     GetPlayerPos(playerid, GangHQX[gangIndex], GangHQY[gangIndex], GangHQZ[gangIndex]);
     GetPlayerFacingAngle(playerid, GangHQA[gangIndex]);
 
-    GangHQInteriorExitX[gangIndex] = GangHQX[gangIndex];
-    GangHQInteriorExitY[gangIndex] = GangHQY[gangIndex];
-    GangHQInteriorExitZ[gangIndex] = GangHQZ[gangIndex];
-    GangHQInteriorExitA[gangIndex] = GangHQA[gangIndex];
-
     SaveGangPresetConfig(gangid);
-    SaveGangHQInterior(gangid);
     CreateGangHQExteriorRuntime(gangIndex);
-    CreateGangHQInteriorRuntime(gangIndex);
     RefreshGangHQMapIconsForAll();
 
-    SendClientMessage(playerid, COLOR_GREEN, "Gang HQ exterior dipindahkan ke posisi + facing admin dan disimpan ke DB.");
+    SendClientMessage(playerid, COLOR_GREEN, "Gang ALT pickup dipindahkan ke posisi + facing admin dan disimpan ke DB.");
+    SendClientMessage(playerid, COLOR_WHITE, "Catatan: titik ini hanya untuk ALT direct join, bukan pintu masuk interior.");
     return 1;
 }
 
@@ -10769,7 +11043,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24N Source Cleanup Assistant berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.GHQ Split Gang Pickup Door berhasil dijalankan.");
     return 1;
 }
 
@@ -11355,6 +11629,7 @@ stock ShowAdminToolsMenu(playerid)
     strcat(body, "Public Interior Editor\t/pubintmenu\tOwner\n", sizeof(body));
     strcat(body, "Turf Zone Editor\t/turfmenu\tOwner\n", sizeof(body));
     strcat(body, "Gang Preset DB Config\t/gangpresetmenu\tOwner\n", sizeof(body));
+    strcat(body, "Gang HQ Pickup/Door Editor\t/ganghqpoints [id]\tOwner\n", sizeof(body));
     strcat(body, "Business Preset DB Config\t/bizpresetmenu\tOwner\n", sizeof(body));
     strcat(body, "Ammu-Nation Config\t/ammuconfig\tOwner\n", sizeof(body));
     strcat(body, "Public Service Config\t/serviceconfig\tOwner\n", sizeof(body));
@@ -11374,8 +11649,8 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/turfmenu | /turfedit\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n\n", sizeof(body));
-    strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id]\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id], /gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n\n", sizeof(body));
+    strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; HQ door pickup = enter interior.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "SAIF Admin Menu Reference", body, "Back", "Close");
@@ -12860,44 +13135,229 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
     if (dialogid == DIALOG_GANG_PRESET_ACTION_MENU)
     {
         new gangid = PlayerEditingGangPresetID[playerid];
+
         if (!response)
         {
-            ShowGangPresetMenu(playerid);
+            ShowGangPresetListDialog(playerid);
             return 1;
         }
 
-        switch (listitem)
+        if (listitem == 0)
         {
-            case 0: ShowGangPresetInfo(playerid, gangid);
-            case 1:
-            {
-                UpdateGangPresetHQFromPlayer(playerid, gangid);
-                ShowGangPresetActionMenu(playerid, gangid);
-            }
-            case 2: ShowPlayerDialog(playerid, DIALOG_GANG_PRESET_RADIUS_INPUT, DIALOG_STYLE_INPUT, "Gang HQ Radius", "Masukkan radius akses HQ.\nRange aman: 2.0 - 50.0\nContoh: 8.0", "Save", "Back");
-            case 3: ShowPlayerDialog(playerid, DIALOG_GANG_PRESET_NAME_INPUT, DIALOG_STYLE_INPUT, "Edit Gang Name", "Masukkan nama gang preset baru.", "Save", "Back");
-            case 4: ShowPlayerDialog(playerid, DIALOG_GANG_PRESET_SHORT_INPUT, DIALOG_STYLE_INPUT, "Edit Gang Short Name", "Masukkan short name gang.\nContoh: Grove", "Save", "Back");
-            case 5: ShowPlayerDialog(playerid, DIALOG_GANG_PRESET_COLOR_INPUT, DIALOG_STYLE_INPUT, "Edit Gang Color", "Masukkan warna decimal ARGB/RGBA SA-MP.\nContoh hijau existing: 16711935\nCatatan: edit warna hanya Owner.", "Save", "Back");
-            case 6:
-            {
-                new idx = GetPresetGangIndexByID(gangid);
-                if (idx != -1)
-                {
-                    SetPlayerInterior(playerid, 0);
-                    SetPlayerVirtualWorld(playerid, 0);
-                    SetPlayerPos(playerid, GangHQX[idx], GangHQY[idx], GangHQZ[idx] + 1.0);
-                    SetPlayerFacingAngle(playerid, GangHQA[idx]);
-                }
-                ShowGangPresetActionMenu(playerid, gangid);
-            }
-            case 7:
-            {
-                LoadGangPresetConfigFromDB();
-                SendClientMessage(playerid, COLOR_GREEN, "Gang preset config reload dari database diminta.");
-            }
-            case 8: ShowPlayerDialog(playerid, DIALOG_GANG_PRESET_ENABLE_INPUT, DIALOG_STYLE_INPUT, "Enable / Disable Gang Preset", "Masukkan 1 untuk ACTIVE atau 0 untuk DISABLED.\n\nDisabled gang disembunyikan dari pickup/label/map icon dan player tidak bisa join/enter HQ.", "Save", "Back");
-            case 9: ShowGangPresetMenu(playerid);
+            ShowGangPresetInfo(playerid, gangid);
+            return 1;
         }
+
+        if (listitem == 1)
+        {
+            UpdateGangPresetHQFromPlayer(playerid, gangid);
+            ShowGangPresetActionMenu(playerid, gangid);
+            return 1;
+        }
+
+        if (listitem == 2)
+        {
+            ShowPlayerDialog(playerid, DIALOG_GANG_PRESET_RADIUS_INPUT, DIALOG_STYLE_INPUT, "Set Gang HQ Radius", "Masukkan radius akses HQ. Contoh: 8.0", "Save", "Back");
+            return 1;
+        }
+
+        if (listitem == 3)
+        {
+            ShowPlayerDialog(playerid, DIALOG_GANG_PRESET_NAME_INPUT, DIALOG_STYLE_INPUT, "Edit Gang Name", "Masukkan nama gang.", "Save", "Back");
+            return 1;
+        }
+
+        if (listitem == 4)
+        {
+            ShowPlayerDialog(playerid, DIALOG_GANG_PRESET_SHORT_INPUT, DIALOG_STYLE_INPUT, "Edit Gang Short Name", "Masukkan short name gang.", "Save", "Back");
+            return 1;
+        }
+
+        if (listitem == 5)
+        {
+            ShowPlayerDialog(playerid, DIALOG_GANG_PRESET_COLOR_INPUT, DIALOG_STYLE_INPUT, "Edit Gang Color Decimal", "Masukkan warna decimal ARGB/RGBA sesuai sistem Pawn existing.", "Save", "Back");
+            return 1;
+        }
+
+        if (listitem == 6)
+        {
+            new gangIndex = GetPresetGangIndexByID(gangid);
+            if (gangIndex != -1)
+            {
+                SetPlayerInterior(playerid, 0);
+                SetPlayerVirtualWorld(playerid, 0);
+                SetPlayerPos(playerid, GangHQX[gangIndex], GangHQY[gangIndex], GangHQZ[gangIndex] + 1.0);
+                SetPlayerFacingAngle(playerid, GangHQA[gangIndex]);
+            }
+            return 1;
+        }
+
+        if (listitem == 7)
+        {
+            ShowGangHQPointEditorMenu(playerid, gangid);
+            return 1;
+        }
+
+        if (listitem == 8)
+        {
+            LoadGangPresetConfigFromDB();
+            LoadGangHQInteriors();
+            SendClientMessage(playerid, COLOR_GREEN, "Gang preset + HQ interior DB reload diminta.");
+            return 1;
+        }
+
+        if (listitem == 9)
+        {
+            new gangIndex = GetPresetGangIndexByID(gangid);
+            if (gangIndex == -1)
+            {
+                SendClientMessage(playerid, COLOR_RED, "Gang preset tidak valid.");
+                return 1;
+            }
+
+            SetGangPresetEnabled(playerid, gangid, PresetGangEnabled[gangIndex] ? 0 : 1);
+            ShowGangPresetActionMenu(playerid, gangid);
+            return 1;
+        }
+
+        ShowGangPresetListDialog(playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_GANG_HQ_POINT_MENU)
+    {
+        new gangid = PlayerEditingGangPresetID[playerid];
+
+        if (!response)
+        {
+            ShowGangPresetActionMenu(playerid, gangid);
+            return 1;
+        }
+
+        new gangIndex = GetPresetGangIndexByID(gangid);
+        if (gangIndex == -1)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Gang preset tidak valid.");
+            return 1;
+        }
+
+        if (listitem == 0)
+        {
+            ShowGangHQPointInfo(playerid, gangid);
+            return 1;
+        }
+
+        if (listitem == 1)
+        {
+            UpdateGangPresetHQFromPlayer(playerid, gangid);
+            ShowGangHQPointEditorMenu(playerid, gangid);
+            return 1;
+        }
+
+        if (listitem == 2)
+        {
+            UpdateGangHQDoorFromPlayer(playerid, gangid);
+            ShowGangHQPointEditorMenu(playerid, gangid);
+            return 1;
+        }
+
+        if (listitem == 3)
+        {
+            SetGangInteriorFromPlayer(playerid, gangid);
+            ShowGangHQPointEditorMenu(playerid, gangid);
+            return 1;
+        }
+
+        if (listitem == 4)
+        {
+            ShowPlayerDialog(playerid, DIALOG_GANG_PICKUP_MODEL_INPUT, DIALOG_STYLE_INPUT, "Gang Pickup Model", "Masukkan model ID untuk marker gang/ALT join.\nDefault: 1314", "Save", "Back");
+            return 1;
+        }
+
+        if (listitem == 5)
+        {
+            ShowPlayerDialog(playerid, DIALOG_GANG_DOOR_MODEL_INPUT, DIALOG_STYLE_INPUT, "Gang Door Pickup Model", "Masukkan model ID untuk pintu HQ.\nDefault panah: 1318", "Save", "Back");
+            return 1;
+        }
+
+        if (listitem == 6)
+        {
+            ShowPlayerDialog(playerid, DIALOG_GANG_MAP_ICON_INPUT, DIALOG_STYLE_INPUT, "Gang Map Icon ID", "Masukkan ID map icon/radar icon untuk Gang HQ.", "Save", "Back");
+            return 1;
+        }
+
+        if (listitem == 7)
+        {
+            SetPlayerInterior(playerid, 0);
+            SetPlayerVirtualWorld(playerid, 0);
+            SetPlayerPos(playerid, GangHQX[gangIndex], GangHQY[gangIndex], GangHQZ[gangIndex] + 1.0);
+            SetPlayerFacingAngle(playerid, GangHQA[gangIndex]);
+            return 1;
+        }
+
+        if (listitem == 8)
+        {
+            SetPlayerInterior(playerid, 0);
+            SetPlayerVirtualWorld(playerid, 0);
+            SetPlayerPos(playerid, GangHQInteriorExitX[gangIndex], GangHQInteriorExitY[gangIndex], GangHQInteriorExitZ[gangIndex] + 1.0);
+            SetPlayerFacingAngle(playerid, GangHQInteriorExitA[gangIndex]);
+            return 1;
+        }
+
+        if (listitem == 9)
+        {
+            SetPlayerInterior(playerid, GangHQInteriorID[gangIndex]);
+            SetPlayerVirtualWorld(playerid, GangHQInteriorVirtualWorld[gangIndex]);
+            SetPlayerPos(playerid, GangHQInteriorX[gangIndex], GangHQInteriorY[gangIndex], GangHQInteriorZ[gangIndex]);
+            SetPlayerFacingAngle(playerid, GangHQInteriorA[gangIndex]);
+            return 1;
+        }
+
+        if (listitem == 10)
+        {
+            LoadGangPresetConfigFromDB();
+            LoadGangHQInteriors();
+            SendClientMessage(playerid, COLOR_GREEN, "Gang HQ config reload dari DB diminta.");
+            return 1;
+        }
+
+        ShowGangPresetActionMenu(playerid, gangid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_GANG_PICKUP_MODEL_INPUT || dialogid == DIALOG_GANG_DOOR_MODEL_INPUT || dialogid == DIALOG_GANG_MAP_ICON_INPUT)
+    {
+        new gangid = PlayerEditingGangPresetID[playerid];
+
+        if (!response)
+        {
+            ShowGangHQPointEditorMenu(playerid, gangid);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext) || strval(inputtext) <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Input harus angka valid.");
+            ShowGangHQPointEditorMenu(playerid, gangid);
+            return 1;
+        }
+
+        new value = strval(inputtext);
+
+        if (dialogid == DIALOG_GANG_PICKUP_MODEL_INPUT)
+        {
+            SetGangHQPickupModel(playerid, gangid, value);
+        }
+        else if (dialogid == DIALOG_GANG_DOOR_MODEL_INPUT)
+        {
+            SetGangHQDoorPickupModel(playerid, gangid, value);
+        }
+        else
+        {
+            SetGangHQMapIconType(playerid, gangid, value);
+        }
+
+        ShowGangHQPointEditorMenu(playerid, gangid);
         return 1;
     }
 
@@ -16098,7 +16558,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             ShowPublicServiceConfigAction(playerid, serviceIndex);
             return 1;
         }
-        if (!IsNumericString(inputtext) || strval(inputtext) < 0)
+        if (!IsNumericString(inputtext) || strval(inputtext) <= 0)
         {
             SendClientMessage(playerid, COLOR_RED, "Value harus angka minimal 0.");
             ShowPublicServiceConfigAction(playerid, serviceIndex);
@@ -23341,6 +23801,11 @@ stock InitWorldMarkerArrays()
     {
         GangHQPickup[i] = -1;
         GangHQLabel[i] = Text3D:INVALID_3DTEXT_ID;
+        GangHQDoorPickup[i] = -1;
+        GangHQDoorLabel[i] = Text3D:INVALID_3DTEXT_ID;
+        GangHQPickupModel[i] = GANG_HQ_ALT_PICKUP_DEFAULT_MODEL;
+        GangHQDoorPickupModel[i] = GANG_HQ_DOOR_PICKUP_DEFAULT_MODEL;
+        GangHQMapIconType[i] = MAPICON_TYPE_GANG_HQ;
         GangHQInteriorExitPickup[i] = -1;
         GangHQInteriorExitLabel[i] = Text3D:INVALID_3DTEXT_ID;
     }
@@ -23573,6 +24038,18 @@ stock DestroyWorldInteractionMarkers()
             Delete3DTextLabel(GangHQLabel[i]);
             GangHQLabel[i] = Text3D:INVALID_3DTEXT_ID;
         }
+
+        if (GangHQDoorPickup[i] != -1)
+        {
+            DestroyPickup(GangHQDoorPickup[i]);
+            GangHQDoorPickup[i] = -1;
+        }
+
+        if (GangHQDoorLabel[i] != Text3D:INVALID_3DTEXT_ID)
+        {
+            Delete3DTextLabel(GangHQDoorLabel[i]);
+            GangHQDoorLabel[i] = Text3D:INVALID_3DTEXT_ID;
+        }
     }
 
     DestroyAllGangHQInteriorRuntime();
@@ -23654,7 +24131,7 @@ stock ApplyLSIFMapIcons(playerid)
     {
         if (PresetGangEnabled[i])
         {
-            SetPlayerMapIcon(playerid, MAPICON_BASE_GANG_HQ + i, GangHQX[i], GangHQY[i], GangHQZ[i], MAPICON_TYPE_GANG_HQ, PresetGangColor[i], MAPICON_LOCAL);
+            SetPlayerMapIcon(playerid, MAPICON_BASE_GANG_HQ + i, GangHQX[i], GangHQY[i], GangHQZ[i], GangHQMapIconType[i], PresetGangColor[i], MAPICON_LOCAL);
         }
     }
 
@@ -25794,6 +26271,11 @@ stock ExecuteNearbyInteraction(playerid, index)
 
     if (interactionType == INTERACT_TYPE_GANG_HQ)
     {
+        return ProcessJoinPresetGang(playerid, interactionParam);
+    }
+
+    if (interactionType == INTERACT_TYPE_GANG_HQ_UTILITY)
+    {
         ShowGangHQDialog(playerid, interactionParam);
         return 1;
     }
@@ -25918,7 +26400,7 @@ stock HandleWorldInteractKey(playerid)
     if (PlayerInsideGangHQ[playerid])
     {
         ResetNearbyInteractions(playerid);
-        AddNearbyInteraction(playerid, INTERACT_TYPE_GANG_HQ, PlayerInsideGangHQID[playerid], "Gang HQ Interior Utility");
+        AddNearbyInteraction(playerid, INTERACT_TYPE_GANG_HQ_UTILITY, PlayerInsideGangHQID[playerid], "Gang HQ Interior Utility");
         return ShowNearbyInteractionDialog(playerid);
     }
 
@@ -25955,7 +26437,7 @@ stock HandleWorldInteractKey(playerid)
     if (nearestGangHQ != -1 && IsPlayerNearGangHQ(playerid, nearestGangHQ))
     {
         new gangLabel[64];
-        format(gangLabel, sizeof(gangLabel), "Gang HQ: %s", PresetGangShortName[nearestGangHQ]);
+        format(gangLabel, sizeof(gangLabel), "Join Gang: %s", PresetGangShortName[nearestGangHQ]);
         AddNearbyInteraction(playerid, INTERACT_TYPE_GANG_HQ, PresetGangID[nearestGangHQ], gangLabel);
     }
 
@@ -26056,7 +26538,7 @@ public OnPlayerPickUpPickup(playerid, pickupid)
 
     for (new g = 0; g < MAX_PRESET_GANGS; g++)
     {
-        if (GangHQPickup[g] != -1 && pickupid == GangHQPickup[g])
+        if (GangHQDoorPickup[g] != -1 && pickupid == GangHQDoorPickup[g])
         {
             if (IsPlayerInGangHQPickupCooldown(playerid))
             {
@@ -26064,6 +26546,15 @@ public OnPlayerPickUpPickup(playerid, pickupid)
             }
 
             EnterPlayerGangHQInterior(playerid, PresetGangID[g]);
+            return 1;
+        }
+    }
+
+    for (new g = 0; g < MAX_PRESET_GANGS; g++)
+    {
+        if (GangHQPickup[g] != -1 && pickupid == GangHQPickup[g])
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Tekan ALT di marker gang untuk join langsung. Pickup ini bukan pintu interior.");
             return 1;
         }
     }
@@ -29979,6 +30470,101 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/setganghqpoint", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setganghqpoint [gang_id]");
+        SendClientMessage(playerid, COLOR_WHITE, "Sekarang command ini hanya mengatur pickup gang/ALT join, bukan pintu interior.");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/ganghqpoints ", true) == 0 || strfind(cmdtext, "/gangintpoints ", true) == 0)
+    {
+        new offset = (!strcmp(cmdtext, "/ganghqpoints", true, 13)) ? 14 : 15;
+        new gangStr[16];
+        if (!GetOneParam(cmdtext[offset], gangStr, sizeof(gangStr)) || !IsNumericString(gangStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /ganghqpoints [gang_id]");
+            return 1;
+        }
+        ShowGangHQPointEditorMenu(playerid, strval(gangStr));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/ganghqpoints", true) || !strcmp(cmdtext, "/gangintpoints", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /ganghqpoints [gang_id]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/setgangdoorpoint ", true) == 0)
+    {
+        new gangStr[16];
+        if (!GetOneParam(cmdtext[18], gangStr, sizeof(gangStr)) || !IsNumericString(gangStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setgangdoorpoint [gang_id]");
+            SendClientMessage(playerid, COLOR_WHITE, "Berdiri di pintu exterior bangunan HQ.");
+            return 1;
+        }
+        UpdateGangHQDoorFromPlayer(playerid, strval(gangStr));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/setgangdoorpoint", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setgangdoorpoint [gang_id]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/gangpickupmodel ", true) == 0)
+    {
+        new gangStr[16], modelStr[16];
+        if (!GetTwoParams(cmdtext[17], gangStr, sizeof(gangStr), modelStr, sizeof(modelStr)) || !IsNumericString(gangStr) || !IsNumericString(modelStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangpickupmodel [gang_id] [modelid]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /gangpickupmodel 1 1314");
+            return 1;
+        }
+        SetGangHQPickupModel(playerid, strval(gangStr), strval(modelStr));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/gangpickupmodel", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangpickupmodel [gang_id] [modelid]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/gangdoormodel ", true) == 0)
+    {
+        new gangStr[16], modelStr[16];
+        if (!GetTwoParams(cmdtext[15], gangStr, sizeof(gangStr), modelStr, sizeof(modelStr)) || !IsNumericString(gangStr) || !IsNumericString(modelStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangdoormodel [gang_id] [modelid]");
+            SendClientMessage(playerid, COLOR_WHITE, "Contoh: /gangdoormodel 1 1318");
+            return 1;
+        }
+        SetGangHQDoorPickupModel(playerid, strval(gangStr), strval(modelStr));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/gangdoormodel", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangdoormodel [gang_id] [modelid]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/gangmapicon ", true) == 0)
+    {
+        new gangStr[16], iconStr[16];
+        if (!GetTwoParams(cmdtext[13], gangStr, sizeof(gangStr), iconStr, sizeof(iconStr)) || !IsNumericString(gangStr) || !IsNumericString(iconStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangmapicon [gang_id] [iconid]");
+            return 1;
+        }
+        SetGangHQMapIconType(playerid, strval(gangStr), strval(iconStr));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/gangmapicon", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /gangmapicon [gang_id] [iconid]");
         return 1;
     }
 
@@ -29990,10 +30576,10 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
     if (!strcmp(cmdtext, "/enterganghq", true))
     {
-        new gangIndex = GetNearestGangHQ(playerid);
-        if (gangIndex == -1)
+        new gangIndex = GetNearestGangHQDoor(playerid);
+        if (gangIndex == -1 || !IsPlayerNearGangHQDoor(playerid, gangIndex))
         {
-            SendClientMessage(playerid, COLOR_RED, "Kamu harus berada di dekat Gang HQ untuk masuk interior.");
+            SendClientMessage(playerid, COLOR_RED, "Kamu harus berada di pickup pintu Gang HQ untuk masuk interior.");
             return 1;
         }
         EnterPlayerGangHQInterior(playerid, PresetGangID[gangIndex]);
@@ -30364,7 +30950,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24N Source Cleanup Assistant");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.GHQ Split Gang Pickup Door");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");

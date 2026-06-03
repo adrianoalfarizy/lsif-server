@@ -11219,7 +11219,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.17 Public Interior Exterior Interior Editor");
+    SetGameModeText("SAIF Dev v0.24K.17.1 Public Interior Exterior Spawn Load Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11332,7 +11332,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.17 Public Interior Exterior Interior Editor berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.17.1 Public Interior Exterior Spawn Load Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -19712,7 +19712,7 @@ stock LoadPublicInteriors()
     ResetPublicInteriorArrays();
 
     mysql_tquery(g_SQL,
-                 "SELECT id, interior_type, display_name, exterior_x, exterior_y, exterior_z, exterior_a, exterior_interior, exterior_virtual_world, interior_id, interior_virtual_world, interior_x, interior_y, interior_z, interior_a, exit_x, exit_y, exit_z, exit_a, service_x, service_y, service_z, service_a, service_radius, enabled FROM public_interiors WHERE enabled=1 ORDER BY id ASC LIMIT 80",
+                 "SELECT id, interior_type, display_name, exterior_x, exterior_y, exterior_z, exterior_a, exterior_spawn_x, exterior_spawn_y, exterior_spawn_z, exterior_spawn_a, exterior_pickup_model, interior_pickup_model, exterior_interior, exterior_virtual_world, interior_id, interior_virtual_world, interior_x, interior_y, interior_z, interior_a, exit_x, exit_y, exit_z, exit_a, service_x, service_y, service_z, service_a, service_radius, enabled FROM public_interiors WHERE enabled=1 ORDER BY id ASC LIMIT 80",
                  "OnPublicInteriorsLoaded"
                 );
     return 1;
@@ -31891,7 +31891,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.17 Public Interior Exterior Interior Editor");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.17.1 Public Interior Exterior Spawn Load Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");

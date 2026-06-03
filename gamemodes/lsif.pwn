@@ -593,8 +593,9 @@ new PublicServiceCount;
 
 #define DYN_OBJECT_NAME_SIZE 64
 #define MAPICON_BASE_DYNAMIC 80
-#define MAPICON_BASE_PUBLIC_INTERIOR 80
-#define PUBLIC_INTERIOR_MAPICON_SLOTS 20
+#define DYNAMIC_LOCATION_MAPICON_SLOTS 10
+#define MAPICON_BASE_PUBLIC_INTERIOR 90
+#define PUBLIC_INTERIOR_MAPICON_SLOTS 10
 #define LOC_TYPE_SIZE 24
 #define LOC_NAME_SIZE 64
 #define LOC_LABEL_SIZE 96
@@ -11239,7 +11240,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.21.1 Gang HQ DB Only Runtime Fix");
+    SetGameModeText("SAIF Dev v0.24K.21.2 Public Interior Map Icon Slot Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11352,7 +11353,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.21.1 Gang HQ DB Only Runtime Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.21.2 Public Interior Map Icon Slot Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -18577,8 +18578,17 @@ stock CreateDynamicLocationMarkers()
 
 stock ApplyDynamicLocationIcons(playerid)
 {
+    // v0.24K.21.2:
+    // Dynamic location icon hanya memakai slot 80-89.
+    // Slot 90-99 disediakan untuk public interior agar tidak saling remove/overwrite.
+    new usedSlots = 0;
     for (new i = 0; i < DynamicLocationCount; i++)
     {
+        if (usedSlots >= DYNAMIC_LOCATION_MAPICON_SLOTS)
+        {
+            break;
+        }
+
         if (!DynamicLocationEnabled[i])
         {
             continue;
@@ -18589,10 +18599,9 @@ stock ApplyDynamicLocationIcons(playerid)
             continue;
         }
 
-        new iconSlot = MAPICON_BASE_DYNAMIC + i;
+        new iconSlot = MAPICON_BASE_DYNAMIC + usedSlots;
         if (iconSlot > MAPICON_MAX_SAFE_ID)
         {
-            // Location still has pickup/3D label; only radar icon is skipped.
             continue;
         }
 
@@ -18606,6 +18615,7 @@ stock ApplyDynamicLocationIcons(playerid)
             GetDynamicLocationColor(DynamicLocationType[i]),
             MAPICON_LOCAL
         );
+        usedSlots++;
     }
 
     return 1;
@@ -18613,14 +18623,9 @@ stock ApplyDynamicLocationIcons(playerid)
 
 stock RemoveDynamicLocationIcons(playerid)
 {
-    for (new i = 0; i < MAX_DYNAMIC_LOCATIONS; i++)
+    for (new i = 0; i < DYNAMIC_LOCATION_MAPICON_SLOTS; i++)
     {
-        new iconSlot = MAPICON_BASE_DYNAMIC + i;
-        if (iconSlot > MAPICON_MAX_SAFE_ID)
-        {
-            continue;
-        }
-        RemovePlayerMapIcon(playerid, iconSlot);
+        RemovePlayerMapIcon(playerid, MAPICON_BASE_DYNAMIC + i);
     }
 
     return 1;
@@ -20845,7 +20850,7 @@ stock ShowPublicInteriorActionMenu(playerid, dbid)
     new title[96];
     new body[512];
     format(title, sizeof(title), "Public Interior ID %d", dbid);
-    format(body, sizeof(body), "Info\nGoto Exterior\nEnter Interior\nExterior / Interior Point Editor\nEdit Map Icon ID\nDelete / Disable\nReload All\nBack");
+    format(body, sizeof(body), "Info\nGoto Exterior\nEnter Interior\nExterior / Interior Point Editor\nEdit Map Icon ID / Radar Icon\nDelete / Disable\nReload All\nBack");
     ShowPlayerDialog(playerid, DIALOG_PUBINT_ACTION_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Close");
     return 1;
 }
@@ -20860,6 +20865,7 @@ stock ShowPublicInteriorHelp(playerid)
     strcat(body, "- Manual public interior hanya untuk koreksi/placeholder.\n\n");
     strcat(body, "Editor point:\n/pubintpoints [id]\n/pubintsetpoint [id] [exterior/extspawn/spawn/exit/service]\n/pubintsetfacing [id] [exterior/spawn/exit/service]\n/pubintinteriorid [id] [interior]\n/pubintvw [id] [virtual_world]\n/pubintpickupmodel [id] [exterior/interior] [model]\n/pubintmapicon [id] [icon_id]\n/pubintserviceradius [id] [radius]\n\n");
     strcat(body, "Command lain:\n/pubintmenu\n/pubintcreate [type] [name]\n/pubintlist\n/pubintinfo [id]\n/pubintgoto [id]\n/pubintenter [id]\n/pubintexit\n/pubintdelete [id]\n/pubintreload\n/pubintuse\n/pubintimportdb\n/pubintexactclear\n/pubintexactinfo\n\n");
+    strcat(body, "Map icon: pilih interior > Edit Map Icon ID atau /pubintmapicon [id] [icon_id]. Slot public interior terbatas 10 icon aktif terbaru (90-99).\n\n");
     strcat(body, "Masuk/keluar pakai pickup panah custom. Transaksi hanya di checkpoint merah depan kasir/service point.");
     ShowPlayerDialog(playerid, DIALOG_PUBINT_HELP, DIALOG_STYLE_MSGBOX, "Public Interior Help", body, "Back", "Close");
     return 1;
@@ -25062,16 +25068,22 @@ stock DestroyWorldInteractionMarkers()
 stock ApplyPublicInteriorMapIcons(playerid)
 {
     // open.mp/SA-MP map icon slot valid aman: 0..99.
-    // v0.24K.20 memakai base 160 sehingga icon tidak tampil.
-    // v0.24K.21 memakai slot 80..99 dan compact modulo.
-    // Jika public interior lebih dari 20, entry terbaru/urutan belakang akan overwrite slot lama.
+    // v0.24K.21.2:
+    // Public interior memakai slot 90-99 khusus.
+    // Loop latest-first supaya interior yang baru dibuat/diimport terakhir lebih mudah terlihat di map.
     for (new slot = 0; slot < PUBLIC_INTERIOR_MAPICON_SLOTS; slot++)
     {
         RemovePlayerMapIcon(playerid, MAPICON_BASE_PUBLIC_INTERIOR + slot);
     }
 
-    for (new i = 0; i < PublicInteriorCount; i++)
+    new usedSlots = 0;
+    for (new i = PublicInteriorCount - 1; i >= 0; i--)
     {
+        if (usedSlots >= PUBLIC_INTERIOR_MAPICON_SLOTS)
+        {
+            break;
+        }
+
         if (!PublicInteriorEnabled[i])
         {
             continue;
@@ -25088,13 +25100,14 @@ stock ApplyPublicInteriorMapIcons(playerid)
             iconType = GetPublicInteriorDefaultMapIcon(PublicInteriorType[i]);
         }
 
-        new iconSlot = MAPICON_BASE_PUBLIC_INTERIOR + (i % PUBLIC_INTERIOR_MAPICON_SLOTS);
+        new iconSlot = MAPICON_BASE_PUBLIC_INTERIOR + usedSlots;
         if (iconSlot > MAPICON_MAX_SAFE_ID)
         {
             continue;
         }
 
         SetPlayerMapIcon(playerid, iconSlot, PublicInteriorExtX[i], PublicInteriorExtY[i], PublicInteriorExtZ[i], iconType, COLOR_CYAN, MAPICON_LOCAL);
+        usedSlots++;
     }
     return 1;
 }
@@ -32112,7 +32125,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.21.1 Gang HQ DB Only Runtime Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.21.2 Public Interior Map Icon Slot Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");

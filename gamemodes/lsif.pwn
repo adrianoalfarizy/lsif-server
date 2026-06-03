@@ -1211,6 +1211,7 @@ new Float:TerritoryMinY[MAX_TERRITORIES];
 new Float:TerritoryMaxX[MAX_TERRITORIES];
 new Float:TerritoryMaxY[MAX_TERRITORIES];
 
+// Legacy fallback coordinates kept only for reference; runtime turf is DB-only since v0.24K.18.
 new Float:TerritoryX[MAX_TERRITORIES] =
 {
     2229.3215,
@@ -5899,27 +5900,20 @@ stock ResetGangTerritoryData()
         TerritoryOwnerColor[i] = COLOR_GRAY;
         format(TerritoryOwnerName[i], 64, "Neutral");
 
-        if (i < MAX_DEFAULT_TERRITORIES)
-        {
-            TerritoryEnabled[i] = 1;
-            TerritoryMinX[i] = TerritoryX[i] - TerritoryRadius[i];
-            TerritoryMinY[i] = TerritoryY[i] - TerritoryRadius[i];
-            TerritoryMaxX[i] = TerritoryX[i] + TerritoryRadius[i];
-            TerritoryMaxY[i] = TerritoryY[i] + TerritoryRadius[i];
-        }
-        else
-        {
-            TerritoryEnabled[i] = 0;
-            TerritoryX[i] = 0.0;
-            TerritoryY[i] = 0.0;
-            TerritoryZ[i] = 0.0;
-            TerritoryRadius[i] = 0.0;
-            TerritoryMinX[i] = 0.0;
-            TerritoryMinY[i] = 0.0;
-            TerritoryMaxX[i] = 0.0;
-            TerritoryMaxY[i] = 0.0;
-            format(TerritoryName[i], 64, "Empty Territory");
-        }
+        // v0.24K.18:
+        // Turf runtime sekarang DB-only.
+        // Jangan hidupkan kembali 6 turf hardcoded dari array TerritoryX/Y/Z/Name.
+        // Kalau row gang_territories dihapus atau enabled=0, turf harus tetap hilang setelah restart.
+        TerritoryEnabled[i] = 0;
+        TerritoryX[i] = 0.0;
+        TerritoryY[i] = 0.0;
+        TerritoryZ[i] = 0.0;
+        TerritoryRadius[i] = 0.0;
+        TerritoryMinX[i] = 0.0;
+        TerritoryMinY[i] = 0.0;
+        TerritoryMaxX[i] = 0.0;
+        TerritoryMaxY[i] = 0.0;
+        format(TerritoryName[i], 64, "Empty Territory");
     }
 
     return 1;
@@ -11219,7 +11213,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.17.1 Public Interior Exterior Spawn Load Fix");
+    SetGameModeText("SAIF Dev v0.24K.18 Turf DB Only No Hardcoded Fallback");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11332,7 +11326,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.17.1 Public Interior Exterior Spawn Load Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.18 Turf DB Only No Hardcoded Fallback berhasil dijalankan.");
     return 1;
 }
 
@@ -31891,7 +31885,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.17.1 Public Interior Exterior Spawn Load Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.18 Turf DB Only No Hardcoded Fallback");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -31901,6 +31895,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.18: Turf runtime is DB-only; hardcoded/default turf fallback no longer reappears after restart.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24N: Source cleanup assistant, safe disable by source_tag, relabel fallback tags, and runtime refresh.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24M: Source audit detail menu, deprecated/fallback record review, and source cleanup policy.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24L: Offline/source audit tools, source_tag validation summary, and /amenus audit entry.");

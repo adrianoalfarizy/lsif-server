@@ -1895,3 +1895,78 @@ UPDATE world_objects
 SET source_tag = 'manual'
 WHERE source_tag IS NULL OR source_tag = '';
 
+-- SAIF / LSIF Dev v0.24K.16
+-- Gang HQ Split Pickup/Door Editor
+-- Wajib dijalankan sebelum server start, karena query runtime membaca kolom baru ini.
+
+ALTER TABLE gang_preset_config
+    ADD COLUMN IF NOT EXISTS hq_pickup_model INT NOT NULL DEFAULT 1314,
+    ADD COLUMN IF NOT EXISTS hq_map_icon INT NOT NULL DEFAULT 19;
+
+ALTER TABLE gang_hq_interiors
+    ADD COLUMN IF NOT EXISTS door_pickup_model INT NOT NULL DEFAULT 1318;
+
+UPDATE gang_preset_config
+SET hq_pickup_model = 1314
+WHERE hq_pickup_model IS NULL OR hq_pickup_model <= 0;
+
+UPDATE gang_preset_config
+SET hq_map_icon = 19
+WHERE hq_map_icon IS NULL OR hq_map_icon <= 0;
+
+UPDATE gang_hq_interiors
+SET door_pickup_model = 1318
+WHERE door_pickup_model IS NULL OR door_pickup_model <= 0;
+
+-- SAIF / LSIF Dev v0.24K.17
+-- Public Interior Exterior / Interior Editor DB Parameters
+-- Jalankan sebelum start server karena runtime membaca kolom baru ini.
+
+ALTER TABLE public_interiors
+    ADD COLUMN IF NOT EXISTS exterior_spawn_x FLOAT NULL AFTER exterior_a,
+    ADD COLUMN IF NOT EXISTS exterior_spawn_y FLOAT NULL AFTER exterior_spawn_x,
+    ADD COLUMN IF NOT EXISTS exterior_spawn_z FLOAT NULL AFTER exterior_spawn_y,
+    ADD COLUMN IF NOT EXISTS exterior_spawn_a FLOAT NULL AFTER exterior_spawn_z,
+    ADD COLUMN IF NOT EXISTS exterior_pickup_model INT NOT NULL DEFAULT 1318 AFTER exterior_spawn_a,
+    ADD COLUMN IF NOT EXISTS interior_pickup_model INT NOT NULL DEFAULT 1318 AFTER exterior_pickup_model;
+
+UPDATE public_interiors
+SET
+    exterior_spawn_x = exterior_x,
+    exterior_spawn_y = exterior_y,
+    exterior_spawn_z = exterior_z,
+    exterior_spawn_a = exterior_a
+WHERE exterior_spawn_x IS NULL
+   OR exterior_spawn_y IS NULL
+   OR exterior_spawn_z IS NULL
+   OR exterior_spawn_a IS NULL;
+
+UPDATE public_interiors
+SET exterior_pickup_model = 1318
+WHERE exterior_pickup_model IS NULL OR exterior_pickup_model <= 0;
+
+UPDATE public_interiors
+SET interior_pickup_model = 1318
+WHERE interior_pickup_model IS NULL OR interior_pickup_model <= 0;
+
+-- Jadikan shared virtual world tersimpan eksplisit di DB, bukan hanya fallback runtime.
+UPDATE public_interiors
+SET interior_virtual_world = 43000 + id
+WHERE interior_virtual_world IS NULL OR interior_virtual_world = 0;
+
+-- SAIF / LSIF Dev v0.24K.18
+-- Turf DB Only / No Hardcoded Fallback
+--
+-- Tidak wajib menghapus data.
+-- Patch PWN v0.24K.18 membuat runtime turf hanya membaca gang_territories dari DB.
+-- Jika row dihapus atau enabled=0, turf tidak akan muncul lagi setelah restart.
+
+ALTER TABLE gang_territories
+    ADD COLUMN IF NOT EXISTS source_tag VARCHAR(64) NOT NULL DEFAULT 'manual';
+
+UPDATE gang_territories
+SET source_tag = 'manual'
+WHERE source_tag IS NULL OR source_tag = '';
+
+-- Opsional kalau kamu ingin menonaktifkan semua turf lama dari DB:
+-- UPDATE gang_territories SET enabled=0, updated_at=NOW();

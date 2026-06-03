@@ -1000,6 +1000,8 @@ new BankPointName[MAX_BANK_POINTS][32] =
 
 new PlayerHospitalRespawnPending[MAX_PLAYERS];
 new PlayerHospitalRespawnGuard[MAX_PLAYERS];
+new PlayerManagedSpawnQueued[MAX_PLAYERS];
+new PlayerManagedSpawnBusy[MAX_PLAYERS];
 new Float:PlayerHospitalRespawnX[MAX_PLAYERS];
 new Float:PlayerHospitalRespawnY[MAX_PLAYERS];
 new Float:PlayerHospitalRespawnZ[MAX_PLAYERS];
@@ -2255,6 +2257,7 @@ forward ReloadDynamicLocationsDelayed(playerid);
 forward RespawnPlayerAtNearestHospital(playerid);
 forward ReapplyHospitalRespawnPosition(playerid);
 forward ClearHospitalRespawnGuard(playerid);
+forward ForceManagedPlayerSpawn(playerid);
 forward ApplyGangHQExitPositionDelayed(playerid, Float:x, Float:y, Float:z, Float:a);
 forward UnfreezePlayerAfterGangHQExit(playerid);
 
@@ -2495,6 +2498,8 @@ stock ResetPlayerAccountData(playerid)
     PlayerAuthDialogShown[playerid] = 0;
     PlayerHospitalRespawnPending[playerid] = 0;
     PlayerHospitalRespawnGuard[playerid] = 0;
+    PlayerManagedSpawnQueued[playerid] = 0;
+    PlayerManagedSpawnBusy[playerid] = 0;
     PlayerHospitalRespawnX[playerid] = SPAWN_X;
     PlayerHospitalRespawnY[playerid] = SPAWN_Y;
     PlayerHospitalRespawnZ[playerid] = SPAWN_Z;
@@ -2773,6 +2778,9 @@ stock SpawnLoggedPlayer(playerid)
         return 0;
     }
 
+    PlayerManagedSpawnQueued[playerid] = 0;
+    PlayerManagedSpawnBusy[playerid] = 1;
+
     SetSpawnInfo(
         playerid,
         NO_TEAM,
@@ -2788,7 +2796,35 @@ stock SpawnLoggedPlayer(playerid)
 
     TogglePlayerSpectating(playerid, false);
     SpawnPlayer(playerid);
+    PlayerManagedSpawnBusy[playerid] = 0;
 
+    return 1;
+}
+
+stock QueueManagedPlayerSpawn(playerid, delayMs, spectateNow)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
+    {
+        return 0;
+    }
+
+    if (PlayerManagedSpawnQueued[playerid])
+    {
+        if (spectateNow)
+        {
+            TogglePlayerSpectating(playerid, true);
+        }
+        return 1;
+    }
+
+    PlayerManagedSpawnQueued[playerid] = 1;
+
+    if (spectateNow)
+    {
+        TogglePlayerSpectating(playerid, true);
+    }
+
+    SetTimerEx("ForceManagedPlayerSpawn", delayMs, false, "i", playerid);
     return 1;
 }
 
@@ -8142,8 +8178,9 @@ stock ApplyGangHQExitExteriorPosition(playerid, Float:x, Float:y, Float:z, Float
     SetPlayerVirtualWorld(playerid, 0);
     SetPlayerVelocity(playerid, 0.0, 0.0, 0.0);
 
-    // Gunakan FindZ untuk exterior transition. SetPlayerPos biasa bisa jatuh jika collision belum siap.
-    SetPlayerPosFindZ(playerid, x, y, z + 4.0);
+    // v0.24K.5: jangan pakai FindZ untuk Grove/HQ exit karena pada beberapa client hasilnya bisa turun ke Z rendah.
+    // Pakai koordinat exterior fixed yang sudah divalidasi, lalu freeze sebentar sampai collision siap.
+    SetPlayerPos(playerid, x, y, z + 1.2);
     SetPlayerFacingAngle(playerid, a);
     SetCameraBehindPlayer(playerid);
 
@@ -8151,7 +8188,7 @@ stock ApplyGangHQExitExteriorPosition(playerid, Float:x, Float:y, Float:z, Float
     {
         PlayerLastX[playerid] = x;
         PlayerLastY[playerid] = y;
-        PlayerLastZ[playerid] = z + 1.0;
+        PlayerLastZ[playerid] = z + 1.2;
         PlayerLastA[playerid] = a;
         PlayerLastInterior[playerid] = 0;
         PlayerLastVirtualWorld[playerid] = 0;
@@ -8206,6 +8243,12 @@ stock ExitPlayerGangHQInterior(playerid)
     if (gangIndex == -1)
     {
         gangIndex = GetPlayerCurrentGangHQInteriorIndex(playerid);
+    }
+
+    // Safety: jika interior/VW cocok dengan Grove HQ tapi runtime flag gangid gagal, tetap paksa gangIndex Grove.
+    if (gangIndex == -1 && GetPlayerInterior(playerid) == GangHQInteriorID[0] && GetPlayerVirtualWorld(playerid) == GangHQInteriorVirtualWorld[0])
+    {
+        gangIndex = 0;
     }
 
     SetPlayerGangHQPickupCooldown(playerid);
@@ -10843,7 +10886,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.4 Death Respawn Root Fix");
+    SetGameModeText("SAIF Dev v0.24K.5 Managed Spawn Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -10932,6 +10975,8 @@ public OnGameModeInit()
         PlayerLastVirtualWorld[i] = 0;
         PlayerHospitalRespawnPending[i] = 0;
         PlayerHospitalRespawnGuard[i] = 0;
+        PlayerManagedSpawnQueued[i] = 0;
+        PlayerManagedSpawnBusy[i] = 0;
         PlayerHospitalRespawnX[i] = SPAWN_X;
         PlayerHospitalRespawnY[i] = SPAWN_Y;
         PlayerHospitalRespawnZ[i] = SPAWN_Z;
@@ -10962,7 +11007,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.4 Death Respawn Root Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.5 Managed Spawn Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -11188,6 +11233,56 @@ stock ApplyHospitalRespawnState(playerid, saveNow = 0)
     return 1;
 }
 
+public ForceManagedPlayerSpawn(playerid)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
+    {
+        return 0;
+    }
+
+    PlayerManagedSpawnQueued[playerid] = 0;
+
+    new Float:sx;
+    new Float:sy;
+    new Float:sz;
+    new Float:sa;
+
+    if (PlayerHospitalRespawnPending[playerid])
+    {
+        sx = PlayerHospitalRespawnX[playerid];
+        sy = PlayerHospitalRespawnY[playerid];
+        sz = PlayerHospitalRespawnZ[playerid];
+        sa = PlayerHospitalRespawnA[playerid];
+    }
+    else
+    {
+        sx = PlayerLastX[playerid];
+        sy = PlayerLastY[playerid];
+        sz = PlayerLastZ[playerid];
+        sa = PlayerLastA[playerid];
+    }
+
+    PlayerManagedSpawnBusy[playerid] = 1;
+
+    SetSpawnInfo(
+        playerid,
+        NO_TEAM,
+        DEFAULT_SKIN,
+        sx,
+        sy,
+        sz,
+        sa,
+        WEAPON:WEAPON_FIST, 0,
+        WEAPON:WEAPON_FIST, 0,
+        WEAPON:WEAPON_FIST, 0
+    );
+
+    TogglePlayerSpectating(playerid, false);
+    SpawnPlayer(playerid);
+    PlayerManagedSpawnBusy[playerid] = 0;
+    return 1;
+}
+
 public ReapplyHospitalRespawnPosition(playerid)
 {
     if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
@@ -11222,15 +11317,13 @@ public RespawnPlayerAtNearestHospital(playerid)
         return 0;
     }
 
-    // v0.24K.4: single spawn only. Jangan re-apply posisi berkali-kali karena itu terlihat seperti teleport ping-pong.
     if (!PlayerHospitalRespawnPending[playerid])
     {
         return 0;
     }
 
-    // v0.24K.4 safety: fungsi ini tidak lagi dipakai sebagai timer spawn manual.
-    // Jika masih terpanggil dari build lama/timer tersisa, jangan SpawnPlayer lagi.
-    ApplyHospitalRespawnState(playerid, 1);
+    // Compatibility fallback untuk timer lama: tetap gunakan managed spawn, bukan teleport ulang.
+    ForceManagedPlayerSpawn(playerid);
     return 1;
 }
 
@@ -11265,6 +11358,8 @@ public OnPlayerDisconnect(playerid, reason)
     PlayerFindingBank[playerid] = 0;
     PlayerHospitalRespawnPending[playerid] = 0;
     PlayerHospitalRespawnGuard[playerid] = 0;
+    PlayerManagedSpawnQueued[playerid] = 0;
+    PlayerManagedSpawnBusy[playerid] = 0;
     PlayerInsidePublicInteriorID[playerid] = 0;
     PlayerPublicInteriorServiceCheckpoint[playerid] = 0;
     PlayerEditingGangPresetID[playerid] = 0;
@@ -11357,9 +11452,10 @@ public OnPlayerDeath(playerid, killerid, WEAPON:reason)
     PlayerInsideHouse[playerid] = 0;
     PlayerInsideHouseOwner[playerid] = INVALID_PLAYER_ID;
 
-    // v0.24K.4: cukup set SpawnInfo hospital. Jangan panggil SpawnPlayer/timer manual,
-    // karena auto death respawn + timer manual menyebabkan ping-pong hospital -> class spawn/CJ -> hospital.
+    // v0.24K.5: death respawn dikelola sendiri agar tidak masuk class selection.
+    // Satu timer spawn saja: tidak ada re-apply teleport berkali-kali.
     PreparePlayerHospitalRespawn(playerid);
+    QueueManagedPlayerSpawn(playerid, HOSPITAL_RESPAWN_DELAY_MS, 0);
     return 1;
 }
 
@@ -11371,13 +11467,13 @@ public OnPlayerRequestSpawn(playerid)
         return 0;
     }
 
-    if (PlayerHospitalRespawnPending[playerid])
+    // Tidak ada spawn manual dari class selection. Jika tombol Spawn muncul karena engine SA-MP,
+    // paksa keluar dari class selection lalu spawn via managed flow.
+    if (!PlayerManagedSpawnBusy[playerid])
     {
-        // Death respawn sedang menunggu auto-spawn engine. Jangan izinkan class/default spawn.
-        return 0;
+        QueueManagedPlayerSpawn(playerid, 150, 1);
     }
-
-    return 1;
+    return 0;
 }
 
 public OnPlayerRequestClass(playerid, classid)
@@ -11390,9 +11486,14 @@ public OnPlayerRequestClass(playerid, classid)
         return 0;
     }
 
-    // v0.24K.4: setelah login, player tidak boleh masuk class selection lagi.
-    // Jangan pernah SetPlayerPos ke SPAWN_X/CJ di callback ini, karena itulah sumber teleport
-    // setelah death/hospital respawn.
+    if (PlayerManagedSpawnBusy[playerid])
+    {
+        return 0;
+    }
+
+    // v0.24K.5: class selection adalah state yang tidak dipakai SAIF setelah login.
+    // Jangan set posisi CJ. Sembunyikan UI class dan respawn lewat managed spawn.
+    QueueManagedPlayerSpawn(playerid, 150, 1);
     return 0;
 }
 
@@ -11403,6 +11504,7 @@ public OnPlayerSpawn(playerid)
         SendClientMessage(playerid, COLOR_RED, "Kamu belum login.");
         return 1;
     }
+    PlayerManagedSpawnQueued[playerid] = 0;
     new hospitalRespawnHandled = 0;
 
     if (PlayerHospitalRespawnPending[playerid] || PlayerHospitalRespawnGuard[playerid])
@@ -29995,7 +30097,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.4 Death Respawn Root Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.5 Managed Spawn Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -30005,7 +30107,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.4: Hospital respawn dibuat single-spawn tanpa guard teleport berulang, class selection CJ diblok tanpa memindah posisi, saved loadout ditahan saat death respawn, dan Grove HQ exit dipaksa ke exterior preset aman.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.5: Hospital respawn dibuat single-spawn tanpa guard teleport berulang, class selection CJ diblok tanpa memindah posisi, saved loadout ditahan saat death respawn, dan Grove HQ exit dipaksa ke exterior preset aman.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24J.4: Business array compile fix after MAX_BUSINESSES 64 expansion.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24F.2: Ammu config dialog fix, edit price/ammo/select action now responds correctly.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24F.1: Configurable Ammu-Nation price/ammo and repeat purchase.");

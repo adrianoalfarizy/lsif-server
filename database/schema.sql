@@ -2051,3 +2051,29 @@ SET exterior_map_icon = CASE
 END
 WHERE exterior_map_icon IS NULL OR exterior_map_icon <= 0;
 
+
+-- SAIF / LSIF Dev v0.24K.19.4
+-- Nearby Map Icon Manager
+--
+-- Tidak ada struktur DB baru.
+-- Patch PWN mengubah slot 80-99 menjadi dynamic nearby icon slots:
+-- - Public Interior dari public_interiors.exterior_map_icon
+-- - Dynamic Location dari world_locations.map_icon
+--
+-- Icon yang ditampilkan dipilih berdasarkan jarak player, radius 1500m, update otomatis tiap 8 detik.
+
+ALTER TABLE public_interiors
+    ADD COLUMN IF NOT EXISTS exterior_map_icon INT NOT NULL DEFAULT 52;
+
+UPDATE public_interiors
+SET exterior_map_icon = CASE
+    WHEN interior_type = 'ammunation' THEN 6
+    WHEN interior_type IN ('burgershot', 'cluckinbell', 'pizzastack') THEN 10
+    WHEN interior_type = 'barber' THEN 7
+    WHEN interior_type = 'tattoo' THEN 39
+    WHEN interior_type = 'police' THEN 30
+    WHEN interior_type = 'hospital' THEN 22
+    ELSE 52
+END
+WHERE exterior_map_icon IS NULL OR exterior_map_icon <= 0;
+

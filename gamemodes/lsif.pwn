@@ -595,6 +595,10 @@ new PublicServiceCount;
 #define MAPICON_BASE_DYNAMIC 80
 #define MAPICON_BASE_PUBLIC_INTERIOR 80
 #define PUBLIC_INTERIOR_MAPICON_SLOTS 20
+#define NEARBY_MAPICON_BASE 80
+#define NEARBY_MAPICON_SLOTS 20
+#define NEARBY_MAPICON_RADIUS 1500.0
+#define NEARBY_MAPICON_UPDATE_MS 8000
 #define LOC_TYPE_SIZE 24
 #define LOC_NAME_SIZE 64
 #define LOC_LABEL_SIZE 96
@@ -2261,6 +2265,7 @@ forward ApplyPublicInteriorFacingDelayed(playerid, Float:angle);
 forward ApplyPublicInteriorFacingDelayed2(playerid, Float:angle);
 forward RespawnWorldPickupByDBID(dbid);
 forward ReloadDynamicLocationsDelayed(playerid);
+forward UpdateNearbyMapIconsForAllPlayers();
 
 
 stock LoadTurfConfigFromDB()
@@ -11220,7 +11225,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.19.3 Public Interior Icon Priority Fix");
+    SetGameModeText("SAIF Dev v0.24K.19.4 Nearby Map Icon Manager");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11317,6 +11322,7 @@ public OnGameModeInit()
     g_FuelTimer = SetTimer("FuelSystemTick", FUEL_TIMER_INTERVAL, true);
     ResetTurfWarData();
     g_TurfWarTimer = SetTimer("TurfWarTick", TURF_WAR_TICK_INTERVAL, true);
+    SetTimer("UpdateNearbyMapIconsForAllPlayers", NEARBY_MAPICON_UPDATE_MS, true);
 
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
     print("[LSIF] Anti-cheat timer aktif setiap 10 detik.");
@@ -11327,13 +11333,14 @@ public OnGameModeInit()
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
     print("[LSIF] Custom house arrow pickups aktif.");
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
+    print("[SAIF] Nearby Map Icon Manager aktif: slot 80-99 diisi otomatis dari icon terdekat per player.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Legacy static ATM/Dealer/Ammu/Job/Race Pawn markers deprecated; gunakan world_locations DB + /locmenu.");
     print("[SAIF] Full San Andreas gang preset HQ/color/name dapat dioverride via gang_preset_config DB + /gangpresetmenu.");
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.19.3 Public Interior Icon Priority Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.19.4 Nearby Map Icon Manager berhasil dijalankan.");
     return 1;
 }
 
@@ -12902,7 +12909,7 @@ stock ShowHelpCategory(playerid, category)
             strcat(body, "Tombol 2: start vehicle mission/job saat driver kendaraan sesuai.\n", sizeof(body));
             strcat(body, "/interact: fallback ALT.\n", sizeof(body));
             strcat(body, "/maplegend: arti icon radar/map dan turf color.\n", sizeof(body));
-            strcat(body, "/refreshicons: refresh radar/map icon.\n", sizeof(body));
+            strcat(body, "/refreshicons /nearbyicons: refresh radar/map icon.\n", sizeof(body));
             strcat(body, "/refreshzones: refresh blok warna turf.\n", sizeof(body));
             strcat(body, "/version, /changelog, /credits, /staff.\n\n", sizeof(body));
             strcat(body, "Catatan: public interior pakai shared virtual world; rumah pribadi memakai virtual world khusus.", sizeof(body));
@@ -18555,69 +18562,190 @@ stock CreateDynamicLocationMarkers()
     return 1;
 }
 
-stock ApplyDynamicLocationIcons(playerid)
+stock RemoveNearbyMapIcons(playerid)
 {
-    for (new i = 0; i < DynamicLocationCount; i++)
+    for (new slot = 0; slot < NEARBY_MAPICON_SLOTS; slot++)
     {
-        if (!DynamicLocationEnabled[i])
-        {
-            continue;
-        }
+        RemovePlayerMapIcon(playerid, NEARBY_MAPICON_BASE + slot);
+    }
+    return 1;
+}
 
-        if (DynamicLocationMapIcon[i] <= 0)
-        {
-            continue;
-        }
+stock IsDynamicLocationNearbyIconCandidate(index)
+{
+    if (index < 0 || index >= DynamicLocationCount)
+    {
+        return 0;
+    }
 
-        new iconSlot = MAPICON_BASE_DYNAMIC + i;
-        if (iconSlot > MAPICON_MAX_SAFE_ID)
-        {
-            // Location still has pickup/3D label; only radar icon is skipped.
-            continue;
-        }
+    if (!DynamicLocationEnabled[index])
+    {
+        return 0;
+    }
 
-        SetPlayerMapIcon(
-            playerid,
-            iconSlot,
-            DynamicLocationX[i],
-            DynamicLocationY[i],
-            DynamicLocationZ[i],
-            DynamicLocationMapIcon[i],
-            GetDynamicLocationColor(DynamicLocationType[i]),
-            MAPICON_LOCAL
-        );
+    if (DynamicLocationMapIcon[index] <= 0)
+    {
+        return 0;
+    }
+
+    if (DynamicLocationX[index] == 0.0 && DynamicLocationY[index] == 0.0 && DynamicLocationZ[index] == 0.0)
+    {
+        return 0;
     }
 
     return 1;
+}
+
+stock Float:GetMapIconDistanceSq(Float:px, Float:py, Float:pz, Float:x, Float:y, Float:z)
+{
+    new Float:dx = x - px;
+    new Float:dy = y - py;
+    new Float:dz = z - pz;
+    return (dx * dx) + (dy * dy) + (dz * dz);
+}
+
+stock ApplyNearbyMapIcons(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 0;
+    }
+
+    RemoveNearbyMapIcons(playerid);
+
+    new Float:px, Float:py, Float:pz;
+    GetPlayerPos(playerid, px, py, pz);
+
+    new selectedPub[MAX_PUBLIC_INTERIORS];
+    new selectedDyn[MAX_DYNAMIC_LOCATIONS];
+
+    new Float:radiusSq = NEARBY_MAPICON_RADIUS * NEARBY_MAPICON_RADIUS;
+    new usedSlots = 0;
+
+    for (new slot = 0; slot < NEARBY_MAPICON_SLOTS; slot++)
+    {
+        new bestKind = 0; // 1 = public interior, 2 = dynamic location
+        new bestIndex = -1;
+        new Float:bestDistance = radiusSq + 1.0;
+
+        for (new i = 0; i < PublicInteriorCount; i++)
+        {
+            if (selectedPub[i])
+            {
+                continue;
+            }
+
+            if (!IsPublicInteriorIconCandidateValid(i))
+            {
+                continue;
+            }
+
+            new Float:dist = GetMapIconDistanceSq(px, py, pz, PublicInteriorExtX[i], PublicInteriorExtY[i], PublicInteriorExtZ[i]);
+            if (dist <= radiusSq && dist < bestDistance)
+            {
+                bestDistance = dist;
+                bestKind = 1;
+                bestIndex = i;
+            }
+        }
+
+        for (new i = 0; i < DynamicLocationCount; i++)
+        {
+            if (selectedDyn[i])
+            {
+                continue;
+            }
+
+            if (!IsDynamicLocationNearbyIconCandidate(i))
+            {
+                continue;
+            }
+
+            new Float:dist = GetMapIconDistanceSq(px, py, pz, DynamicLocationX[i], DynamicLocationY[i], DynamicLocationZ[i]);
+            if (dist <= radiusSq && dist < bestDistance)
+            {
+                bestDistance = dist;
+                bestKind = 2;
+                bestIndex = i;
+            }
+        }
+
+        if (bestKind == 0 || bestIndex < 0)
+        {
+            break;
+        }
+
+        if (bestKind == 1)
+        {
+            new iconType = PublicInteriorMapIcon[bestIndex];
+            if (iconType <= 0)
+            {
+                iconType = GetPublicInteriorDefaultMapIcon(PublicInteriorType[bestIndex]);
+            }
+
+            SetPlayerMapIcon(
+                playerid,
+                NEARBY_MAPICON_BASE + usedSlots,
+                PublicInteriorExtX[bestIndex],
+                PublicInteriorExtY[bestIndex],
+                PublicInteriorExtZ[bestIndex],
+                iconType,
+                COLOR_CYAN,
+                MAPICON_GLOBAL
+            );
+            selectedPub[bestIndex] = 1;
+        }
+        else if (bestKind == 2)
+        {
+            SetPlayerMapIcon(
+                playerid,
+                NEARBY_MAPICON_BASE + usedSlots,
+                DynamicLocationX[bestIndex],
+                DynamicLocationY[bestIndex],
+                DynamicLocationZ[bestIndex],
+                DynamicLocationMapIcon[bestIndex],
+                GetDynamicLocationColor(DynamicLocationType[bestIndex]),
+                MAPICON_GLOBAL
+            );
+            selectedDyn[bestIndex] = 1;
+        }
+
+        usedSlots++;
+    }
+
+    return 1;
+}
+
+public UpdateNearbyMapIconsForAllPlayers()
+{
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!IsPlayerConnected(i) || !PlayerLoggedIn[i])
+        {
+            continue;
+        }
+
+        ApplyNearbyMapIcons(i);
+    }
+
+    return 1;
+}
+
+// Compatibility wrappers.
+// Semua icon DB/dynamic nearby sekarang dikelola satu pintu oleh ApplyNearbyMapIcons().
+stock ApplyDynamicLocationIcons(playerid)
+{
+    return ApplyNearbyMapIcons(playerid);
 }
 
 stock RemoveDynamicLocationIcons(playerid)
 {
-    for (new i = 0; i < MAX_DYNAMIC_LOCATIONS; i++)
-    {
-        new iconSlot = MAPICON_BASE_DYNAMIC + i;
-        if (iconSlot > MAPICON_MAX_SAFE_ID)
-        {
-            continue;
-        }
-        RemovePlayerMapIcon(playerid, iconSlot);
-    }
-
-    return 1;
+    return RemoveNearbyMapIcons(playerid);
 }
 
 stock RefreshAllDynamicLocationIcons()
 {
-    for (new i = 0; i < MAX_PLAYERS; i++)
-    {
-        if (IsPlayerConnected(i))
-        {
-            RemoveDynamicLocationIcons(i);
-            ApplyDynamicLocationIcons(i);
-            ApplyPublicInteriorMapIcons(i);
-        }
-    }
-
+    UpdateNearbyMapIconsForAllPlayers();
     return 1;
 }
 
@@ -20837,7 +20965,7 @@ stock ShowPublicInteriorHelp(playerid)
     strcat(body, "- Manual public interior hanya untuk koreksi/placeholder.\n\n");
     strcat(body, "Editor point:\n/pubintpoints [id]\n/pubintsetpoint [id] [exterior/extspawn/spawn/exit/service]\n/pubintsetfacing [id] [exterior/spawn/exit/service]\n/pubintinteriorid [id] [interior]\n/pubintvw [id] [virtual_world]\n/pubintpickupmodel [id] [exterior/interior] [model]\n/pubintmapicon [id] [icon_id]\n/pubintserviceradius [id] [radius]\n\n");
     strcat(body, "Command lain:\n/pubintmenu\n/pubintcreate [type] [name]\n/pubintlist\n/pubintinfo [id]\n/pubintgoto [id]\n/pubintenter [id]\n/pubintexit\n/pubintdelete [id]\n/pubintreload\n/pubintuse\n/pubintimportdb\n/pubintexactclear\n/pubintexactinfo\n\n");
-    strcat(body, "Masuk/keluar pakai pickup panah custom. Transaksi langsung terbuka dari checkpoint merah depan kasir/service point tanpa menu Info/Exit. Map icon bisa diedit via menu action public interior atau /pubintmapicon [id] [icon_id]. Karena slot terbatas, Ammu-Nation diprioritaskan tampil dulu.");
+    strcat(body, "Masuk/keluar pakai pickup panah custom. Transaksi langsung terbuka dari checkpoint merah depan kasir/service point tanpa menu Info/Exit. Map icon bisa diedit via menu action public interior atau /pubintmapicon [id] [icon_id]. Slot 80-99 sekarang otomatis diisi icon terdekat dari posisi player lewat Nearby Map Icon Manager.");
     ShowPlayerDialog(playerid, DIALOG_PUBINT_HELP, DIALOG_STYLE_MSGBOX, "Public Interior Help", body, "Back", "Close");
     return 1;
 }
@@ -25089,65 +25217,15 @@ stock SetPublicInteriorMapIconSlot(playerid, slotIndex, pubIdx)
 
 stock ApplyPublicInteriorMapIcons(playerid)
 {
-    // Public interior map icon native.
-    // Slot 80-99 = 20 slot. Karena public interior bisa >20, v0.24K.19.3 memakai priority:
-    // 1) Ammu-Nation dulu, supaya tidak terdorong keluar oleh ID baru.
-    // 2) Sisanya terbaru/urutan belakang.
-    for (new slot = 0; slot < PUBLIC_INTERIOR_MAPICON_SLOTS; slot++)
-    {
-        RemovePlayerMapIcon(playerid, MAPICON_BASE_PUBLIC_INTERIOR + slot);
-    }
-
-    new usedSlots = 0;
-
-    // Priority 1: Ammu-Nation selalu tampil dulu.
-    for (new i = 0; i < PublicInteriorCount; i++)
-    {
-        if (usedSlots >= PUBLIC_INTERIOR_MAPICON_SLOTS)
-        {
-            return 1;
-        }
-
-        if (strcmp(PublicInteriorType[i], "ammunation", true))
-        {
-            continue;
-        }
-
-        if (SetPublicInteriorMapIconSlot(playerid, usedSlots, i))
-        {
-            usedSlots++;
-        }
-    }
-
-    // Priority 2: public interior lain, latest-first.
-    for (new i = PublicInteriorCount - 1; i >= 0; i--)
-    {
-        if (usedSlots >= PUBLIC_INTERIOR_MAPICON_SLOTS)
-        {
-            break;
-        }
-
-        if (!strcmp(PublicInteriorType[i], "ammunation", true))
-        {
-            continue;
-        }
-
-        if (SetPublicInteriorMapIconSlot(playerid, usedSlots, i))
-        {
-            usedSlots++;
-        }
-    }
-
+    // Compatibility wrapper.
+    // Public interior icon sekarang ikut Nearby Map Icon Manager bersama dynamic location.
+    #pragma unused playerid
     return 1;
 }
 
 stock RemovePublicInteriorMapIcons(playerid)
 {
-    for (new slot = 0; slot < PUBLIC_INTERIOR_MAPICON_SLOTS; slot++)
-    {
-        RemovePlayerMapIcon(playerid, MAPICON_BASE_PUBLIC_INTERIOR + slot);
-    }
-    return 1;
+    return RemoveNearbyMapIcons(playerid);
 }
 
 stock ApplyLSIFMapIcons(playerid)
@@ -25228,8 +25306,7 @@ stock ApplyLSIFMapIcons(playerid)
         }
     }
 
-    ApplyDynamicLocationIcons(playerid);
-    ApplyPublicInteriorMapIcons(playerid);
+    ApplyNearbyMapIcons(playerid);
 
     return 1;
 }
@@ -25285,8 +25362,7 @@ stock RemoveLSIFMapIcons(playerid)
         RemovePlayerMapIcon(playerid, MAPICON_BASE_GANG_HQ + i);
     }
 
-    RemoveDynamicLocationIcons(playerid);
-    RemovePublicInteriorMapIcons(playerid);
+    RemoveNearbyMapIcons(playerid);
 
     return 1;
 }
@@ -31053,8 +31129,17 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
     if (!strcmp(cmdtext, "/refreshicons", true))
     {
+        RemoveLSIFMapIcons(playerid);
         ApplyLSIFMapIcons(playerid);
         SendClientMessage(playerid, COLOR_GREEN, "Map icon dan territory zone LSIF sudah direfresh.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/nearbyicons", true))
+    {
+        ApplyNearbyMapIcons(playerid);
+        SendClientMessage(playerid, COLOR_GREEN, "Nearby map icons direfresh sesuai posisi kamu saat ini.");
+        SendClientMessage(playerid, COLOR_WHITE, "Slot 80-99 diisi dari public interior + dynamic location terdekat dalam radius 1500m.");
         return 1;
     }
 
@@ -32158,7 +32243,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.19.3 Public Interior Icon Priority Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.19.4 Nearby Map Icon Manager");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -32168,7 +32253,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19.3: Public interior map icons now prioritize Ammu-Nation first, then newest interiors, so Ammu icons are not pushed out by the 20-slot limit.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19.4: Nearby Map Icon Manager now fills slots 80-99 with nearest public interiors and dynamic locations around each player.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24N: Source cleanup assistant, safe disable by source_tag, relabel fallback tags, and runtime refresh.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24M: Source audit detail menu, deprecated/fallback record review, and source cleanup policy.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24L: Offline/source audit tools, source_tag validation summary, and /amenus audit entry.");

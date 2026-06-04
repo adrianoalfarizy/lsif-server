@@ -405,6 +405,7 @@
 
 #define ANTICHEAT_INTERVAL 10000 // 10 detik
 #define MONEY_MISMATCH_TOLERANCE 0
+#define DEATH_MONEY_SYNC_GRACE_MS 15000
 
 #define MAX_BANK_TRANSACTION 10000000
 
@@ -686,6 +687,7 @@ new Float:HospitalRespawnA[MAX_HOSPITAL_RESPAWNS] =
 };
 
 new PlayerMoneyMismatchCount[MAX_PLAYERS];
+new PlayerMoneyHUDGraceUntilTick[MAX_PLAYERS];
 new PlayerLastACWarningTick[MAX_PLAYERS];
 new PlayerLastWhitelistQuery[MAX_PLAYERS][24];
 new PlayerStarterPackClaimed[MAX_PLAYERS];
@@ -2652,6 +2654,36 @@ stock SyncPlayerMoneyHUD(playerid)
     return 1;
 }
 
+stock StartMoneyHUDSyncGrace(playerid, durationMs)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 0;
+    }
+
+    PlayerMoneyHUDGraceUntilTick[playerid] = GetTickCount() + durationMs;
+    PlayerMoneyMismatchCount[playerid] = 0;
+    return 1;
+}
+
+stock IsMoneyHUDSyncGraceActive(playerid)
+{
+    if (PlayerMoneyHUDGraceUntilTick[playerid] == 0)
+    {
+        return 0;
+    }
+
+    new nowTick = GetTickCount();
+
+    if (nowTick <= PlayerMoneyHUDGraceUntilTick[playerid])
+    {
+        return 1;
+    }
+
+    PlayerMoneyHUDGraceUntilTick[playerid] = 0;
+    return 0;
+}
+
 stock ReportSuspiciousActivity(playerid, const reason[])
 {
     if (!IsPlayerConnected(playerid))
@@ -2735,6 +2767,7 @@ stock ResetPlayerAccountData(playerid)
     PlayerDeathRespawnPending[playerid] = 0;
     PlayerClassSpawnRecoveryQueued[playerid] = 0;
     PlayerLoadoutBlockedAfterDeath[playerid] = 0;
+    PlayerMoneyHUDGraceUntilTick[playerid] = 0;
     PlayerDeathX[playerid] = 0.0;
     PlayerDeathY[playerid] = 0.0;
     PlayerDeathZ[playerid] = 0.0;
@@ -2743,6 +2776,7 @@ stock ResetPlayerAccountData(playerid)
     PlayerDeathVirtualWorld[playerid] = 0;
 
     PlayerMoneyMismatchCount[playerid] = 0;
+    PlayerMoneyHUDGraceUntilTick[playerid] = 0;
     PlayerLastACWarningTick[playerid] = 0;
     format(PlayerLastWhitelistQuery[playerid], 24, "-");
     PlayerStarterPackClaimed[playerid] = 0;
@@ -11439,7 +11473,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.20.5 True Class Selection Bypass Attempt");
+    SetGameModeText("SAIF Dev v0.24K.20.6 Death Money Sync Grace");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11539,6 +11573,7 @@ public OnGameModeInit()
         PlayerDeathVirtualWorld[i] = 0;
 
         PlayerMoneyMismatchCount[i] = 0;
+        PlayerMoneyHUDGraceUntilTick[i] = 0;
         PlayerLastACWarningTick[i] = 0;
         format(PlayerLastWhitelistQuery[i], 24, "-");
     }
@@ -11565,7 +11600,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.20.5 True Class Selection Bypass Attempt berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.20.6 Death Money Sync Grace berhasil dijalankan.");
     return 1;
 }
 
@@ -11681,6 +11716,7 @@ public OnPlayerDisconnect(playerid, reason)
     PlayerDeathRespawnPending[playerid] = 0;
     PlayerClassSpawnRecoveryQueued[playerid] = 0;
     PlayerLoadoutBlockedAfterDeath[playerid] = 0;
+    PlayerMoneyHUDGraceUntilTick[playerid] = 0;
     PlayerFindingBank[playerid] = 0;
     PlayerInsidePublicInteriorID[playerid] = 0;
     PlayerPublicInteriorServiceCheckpoint[playerid] = 0;
@@ -11832,6 +11868,7 @@ public OnPlayerDeath(playerid, killerid, WEAPON:reason)
     CancelPlayerActivitiesOnDeath(playerid);
 
     PlayerDeathRespawnPending[playerid] = 1;
+    StartMoneyHUDSyncGrace(playerid, DEATH_MONEY_SYNC_GRACE_MS);
 
     new Float:hospitalX;
     new Float:hospitalY;
@@ -11868,6 +11905,8 @@ public OnPlayerSpawn(playerid)
     {
         ApplyHospitalDeathRespawn(playerid);
         ResetPlayerWeapons(playerid);
+        StartMoneyHUDSyncGrace(playerid, 5000);
+        SyncPlayerMoneyHUD(playerid);
         ApplyLSIFMapIcons(playerid);
         SavePlayerData(playerid);
 
@@ -29244,26 +29283,36 @@ public AntiCheatCheck()
 
         if (hudMoney != PlayerMoney[i])
         {
-            PlayerMoneyMismatchCount[i]++;
-
-            new reason[144];
-            format(
-                reason,
-                sizeof(reason),
-                "Money mismatch detected. HUD=$%d Server=$%d Count=%d",
-                hudMoney,
-                PlayerMoney[i],
-                PlayerMoneyMismatchCount[i]
-            );
-
-            ReportSuspiciousActivity(i, reason);
-
-            SyncPlayerMoneyHUD(i);
-
-            if (PlayerMoneyMismatchCount[i] >= 3)
+            if (PlayerDeathRespawnPending[i] || IsMoneyHUDSyncGraceActive(i))
             {
-                SendClientMessage(i, COLOR_RED, "Anti-cheat: money mismatch terdeteksi. Uang kamu disinkronkan ulang.");
+                // Death/native respawn can briefly alter the HUD money client-side.
+                // Server/DB money remains authoritative; resync silently without AC report.
                 PlayerMoneyMismatchCount[i] = 0;
+                SyncPlayerMoneyHUD(i);
+            }
+            else
+            {
+                PlayerMoneyMismatchCount[i]++;
+
+                new reason[144];
+                format(
+                    reason,
+                    sizeof(reason),
+                    "Money mismatch detected. HUD=$%d Server=$%d Count=%d",
+                    hudMoney,
+                    PlayerMoney[i],
+                    PlayerMoneyMismatchCount[i]
+                );
+
+                ReportSuspiciousActivity(i, reason);
+
+                SyncPlayerMoneyHUD(i);
+
+                if (PlayerMoneyMismatchCount[i] >= 3)
+                {
+                    SendClientMessage(i, COLOR_RED, "Anti-cheat: money mismatch terdeteksi. Uang kamu disinkronkan ulang.");
+                    PlayerMoneyMismatchCount[i] = 0;
+                }
             }
         }
 
@@ -32868,7 +32917,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.20.5 True Class Selection Bypass Attempt");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.20.6 Death Money Sync Grace");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -32878,7 +32927,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.20.5: Attempt true native class-selection bypass using immediate spectate-spawn recovery; natural death animation, hospital respawn, and weapon drop remain unchanged.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.20.6: Death money HUD sync grace prevents native death money changes from triggering anti-cheat; v0.24K.20.5 class-selection bypass remains clear.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19.5: Public interior single transform removes delayed facing/camera snap on enter/exit.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19.4: Nearby Map Icon Manager now fills slots 80-99 with nearest public interiors and dynamic locations around each player.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24N: Source cleanup assistant, safe disable by source_tag, relabel fallback tags, and runtime refresh.");

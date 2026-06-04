@@ -579,6 +579,13 @@ new PublicServiceCount;
 #define WORLD_PICKUP_OFFLINE_SEED_TAG "offline_template_ls"
 #define WORLD_PICKUP_EXACT_SCM_TAG "offline_exact_scm"
 
+#define MAX_HOSPITAL_RESPAWNS 7
+#define MAX_DEATH_WEAPON_DROPS 256
+#define DEATH_WEAPON_SLOT_COUNT 13
+#define DEATH_WEAPON_DROP_PICKUP_TYPE 1
+#define DEATH_WEAPON_DROP_LIFETIME_SECONDS 600
+#define DEATH_WEAPON_DROP_LABEL_DRAW_DISTANCE 18.0
+
 #define MAX_PUBLIC_INTERIORS 80
 #define PUBLIC_INTERIOR_PICKUP_MODEL 1318
 #define PUBLIC_INTERIOR_PICKUP_TYPE 1
@@ -634,6 +641,50 @@ new g_TurfCooldownSeconds = TURF_COOLDOWN_SECONDS;
 
 new g_ServerStartTick;
 
+new Float:HospitalRespawnX[MAX_HOSPITAL_RESPAWNS] =
+{
+    2034.2000,  // Jefferson / County General Hospital, Los Santos
+    1177.7156,  // All Saints General Hospital, Los Santos
+    -2655.1841, // San Fierro Medical Center
+    1607.0000,  // Las Venturas Hospital
+    -2199.5330, // Angel Pine Medical Center
+    -320.0440,  // Fort Carson Medical Center
+    -1514.8230  // El Quebrados Medical Center
+};
+
+new Float:HospitalRespawnY[MAX_HOSPITAL_RESPAWNS] =
+{
+    -1403.4000,
+    -1323.7457,
+    635.0706,
+    1816.0000,
+    -2308.5610,
+    1050.6950,
+    2527.1190
+};
+
+new Float:HospitalRespawnZ[MAX_HOSPITAL_RESPAWNS] =
+{
+    17.2500,
+    14.0810,
+    14.4531,
+    10.8203,
+    30.6250,
+    20.3403,
+    55.6875
+};
+
+new Float:HospitalRespawnA[MAX_HOSPITAL_RESPAWNS] =
+{
+    180.0000,
+    270.0000,
+    180.0000,
+    0.0000,
+    320.0000,
+    0.0000,
+    0.0000
+};
+
 new PlayerMoneyMismatchCount[MAX_PLAYERS];
 new PlayerLastACWarningTick[MAX_PLAYERS];
 new PlayerLastWhitelistQuery[MAX_PLAYERS][24];
@@ -653,6 +704,16 @@ new Float:PlayerLastZ[MAX_PLAYERS];
 new Float:PlayerLastA[MAX_PLAYERS];
 new PlayerLastInterior[MAX_PLAYERS];
 new PlayerLastVirtualWorld[MAX_PLAYERS];
+
+new PlayerDeathRespawnPending[MAX_PLAYERS];
+new PlayerClassSpawnRecoveryQueued[MAX_PLAYERS];
+new PlayerLoadoutBlockedAfterDeath[MAX_PLAYERS];
+new Float:PlayerDeathX[MAX_PLAYERS];
+new Float:PlayerDeathY[MAX_PLAYERS];
+new Float:PlayerDeathZ[MAX_PLAYERS];
+new Float:PlayerDeathA[MAX_PLAYERS];
+new PlayerDeathInterior[MAX_PLAYERS];
+new PlayerDeathVirtualWorld[MAX_PLAYERS];
 
 new PlayerMoney[MAX_PLAYERS];
 new PlayerBankMoney[MAX_PLAYERS];
@@ -1558,6 +1619,18 @@ new Float:WorldPickupZ[MAX_WORLD_PICKUPS];
 new WorldPickupName[MAX_WORLD_PICKUPS][64];
 new Text3D:WorldPickupLabel[MAX_WORLD_PICKUPS];
 
+new DeathWeaponDropPickup[MAX_DEATH_WEAPON_DROPS];
+new DeathWeaponDropWeapon[MAX_DEATH_WEAPON_DROPS];
+new DeathWeaponDropAmmo[MAX_DEATH_WEAPON_DROPS];
+new DeathWeaponDropOwner[MAX_DEATH_WEAPON_DROPS];
+new DeathWeaponDropInterior[MAX_DEATH_WEAPON_DROPS];
+new DeathWeaponDropVirtualWorld[MAX_DEATH_WEAPON_DROPS];
+new DeathWeaponDropCreatedTick[MAX_DEATH_WEAPON_DROPS];
+new Float:DeathWeaponDropX[MAX_DEATH_WEAPON_DROPS];
+new Float:DeathWeaponDropY[MAX_DEATH_WEAPON_DROPS];
+new Float:DeathWeaponDropZ[MAX_DEATH_WEAPON_DROPS];
+new Text3D:DeathWeaponDropLabel[MAX_DEATH_WEAPON_DROPS];
+
 new PublicInteriorCount;
 new PublicInteriorDBID[MAX_PUBLIC_INTERIORS];
 new PublicInteriorEnabled[MAX_PUBLIC_INTERIORS];
@@ -1973,6 +2046,110 @@ stock Float:GetDistanceBetweenPoints3D(Float:x1, Float:y1, Float:z1, Float:x2, F
     return floatsqroot((dx * dx) + (dy * dy) + (dz * dz));
 }
 
+stock IsUsableRespawnPosition(Float:x, Float:y, Float:z)
+{
+    if (x == 0.0 && y == 0.0 && z == 0.0)
+    {
+        return 0;
+    }
+
+    if (z < -20.0)
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+stock GetNearestHospitalRespawnPoint(Float:sourceX, Float:sourceY, Float:sourceZ, &Float:x, &Float:y, &Float:z, &Float:a, &interior, &virtualWorld)
+{
+    new found = 0;
+    new Float:nearestDistance = 9999999.0;
+    new Float:checkX;
+    new Float:checkY;
+    new Float:checkZ;
+    new Float:checkA;
+    new Float:distance;
+
+    for (new i = 0; i < PublicInteriorCount; i++)
+    {
+        if (!PublicInteriorEnabled[i] || strcmp(PublicInteriorType[i], "hospital", true))
+        {
+            continue;
+        }
+
+        checkX = PublicInteriorExtSpawnX[i];
+        checkY = PublicInteriorExtSpawnY[i];
+        checkZ = PublicInteriorExtSpawnZ[i];
+        checkA = PublicInteriorExtSpawnA[i];
+
+        if (!IsUsableRespawnPosition(checkX, checkY, checkZ))
+        {
+            checkX = PublicInteriorExtX[i];
+            checkY = PublicInteriorExtY[i];
+            checkZ = PublicInteriorExtZ[i];
+            checkA = PublicInteriorExtA[i];
+        }
+
+        if (!IsUsableRespawnPosition(checkX, checkY, checkZ))
+        {
+            continue;
+        }
+
+        distance = GetDistanceBetweenPoints3D(sourceX, sourceY, sourceZ, checkX, checkY, checkZ);
+        if (!found || distance < nearestDistance)
+        {
+            found = 1;
+            nearestDistance = distance;
+            x = checkX;
+            y = checkY;
+            z = checkZ;
+            a = checkA;
+            interior = PublicInteriorExteriorInterior[i];
+            virtualWorld = PublicInteriorExteriorVirtualWorld[i];
+        }
+    }
+
+    if (found)
+    {
+        return 1;
+    }
+
+    for (new h = 0; h < MAX_HOSPITAL_RESPAWNS; h++)
+    {
+        distance = GetDistanceBetweenPoints3D(sourceX, sourceY, sourceZ, HospitalRespawnX[h], HospitalRespawnY[h], HospitalRespawnZ[h]);
+        if (!found || distance < nearestDistance)
+        {
+            found = 1;
+            nearestDistance = distance;
+            x = HospitalRespawnX[h];
+            y = HospitalRespawnY[h];
+            z = HospitalRespawnZ[h];
+            a = HospitalRespawnA[h];
+            interior = 0;
+            virtualWorld = 0;
+        }
+    }
+
+    if (!found)
+    {
+        x = SPAWN_X;
+        y = SPAWN_Y;
+        z = SPAWN_Z;
+        a = SPAWN_A;
+        interior = 0;
+        virtualWorld = 0;
+    }
+
+    return 1;
+}
+
+stock SetPlayerNoWeaponSpawnInfoAt(playerid, Float:x, Float:y, Float:z, Float:a)
+{
+    SetSpawnInfo(playerid, NO_TEAM, DEFAULT_SKIN, x, y, z, a, WEAPON:WEAPON_FIST, 0, WEAPON:WEAPON_FIST, 0, WEAPON:WEAPON_FIST, 0);
+    return 1;
+}
+
 stock ClampInt(value, minValue, maxValue)
 {
     if (value < minValue)
@@ -2264,6 +2441,8 @@ forward ReloadPublicInteriorsDelayed(playerid);
 forward ApplyPublicInteriorFacingDelayed(playerid, Float:angle);
 forward ApplyPublicInteriorFacingDelayed2(playerid, Float:angle);
 forward RespawnWorldPickupByDBID(dbid);
+forward DestroyDeathWeaponDropDelayed(index, pickupid);
+forward ForceSpawnLoggedPlayerFromClass(playerid);
 forward ReloadDynamicLocationsDelayed(playerid);
 forward UpdateNearbyMapIconsForAllPlayers();
 
@@ -2539,6 +2718,16 @@ stock ResetPlayerAccountData(playerid)
     PlayerLastInterior[playerid] = 0;
     PlayerLastVirtualWorld[playerid] = 0;
 
+    PlayerDeathRespawnPending[playerid] = 0;
+    PlayerClassSpawnRecoveryQueued[playerid] = 0;
+    PlayerLoadoutBlockedAfterDeath[playerid] = 0;
+    PlayerDeathX[playerid] = 0.0;
+    PlayerDeathY[playerid] = 0.0;
+    PlayerDeathZ[playerid] = 0.0;
+    PlayerDeathA[playerid] = 0.0;
+    PlayerDeathInterior[playerid] = 0;
+    PlayerDeathVirtualWorld[playerid] = 0;
+
     PlayerMoneyMismatchCount[playerid] = 0;
     PlayerLastACWarningTick[playerid] = 0;
     format(PlayerLastWhitelistQuery[playerid], 24, "-");
@@ -2776,19 +2965,25 @@ stock SpawnLoggedPlayer(playerid)
         return 0;
     }
 
-    SetSpawnInfo(
-        playerid,
-        NO_TEAM,
-        DEFAULT_SKIN,
-        PlayerLastX[playerid],
-        PlayerLastY[playerid],
-        PlayerLastZ[playerid],
-        PlayerLastA[playerid],
-        WEAPON:WEAPON_FIST, 0,
-        WEAPON:WEAPON_FIST, 0,
-        WEAPON:WEAPON_FIST, 0
-    );
+    new Float:spawnX = PlayerLastX[playerid];
+    new Float:spawnY = PlayerLastY[playerid];
+    new Float:spawnZ = PlayerLastZ[playerid];
+    new Float:spawnA = PlayerLastA[playerid];
+    new spawnInterior = PlayerLastInterior[playerid];
+    new spawnVirtualWorld = PlayerLastVirtualWorld[playerid];
 
+    if (PlayerDeathRespawnPending[playerid])
+    {
+        GetNearestHospitalRespawnPoint(PlayerDeathX[playerid], PlayerDeathY[playerid], PlayerDeathZ[playerid], spawnX, spawnY, spawnZ, spawnA, spawnInterior, spawnVirtualWorld);
+        PlayerLastX[playerid] = spawnX;
+        PlayerLastY[playerid] = spawnY;
+        PlayerLastZ[playerid] = spawnZ;
+        PlayerLastA[playerid] = spawnA;
+        PlayerLastInterior[playerid] = spawnInterior;
+        PlayerLastVirtualWorld[playerid] = spawnVirtualWorld;
+    }
+
+    SetPlayerNoWeaponSpawnInfoAt(playerid, spawnX, spawnY, spawnZ, spawnA);
     TogglePlayerSpectating(playerid, false);
     SpawnPlayer(playerid);
 
@@ -11225,7 +11420,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.19.5 Public Interior Single Transform");
+    SetGameModeText("SAIF Dev v0.24K.20 Hospital Death Respawn");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11271,6 +11466,7 @@ public OnGameModeInit()
     LoadParkedVehicles();
     LoadWorldPickups();
     LoadPublicInteriors();
+    ResetDeathWeaponDropsRuntime();
 
     for (new i = 0; i < MAX_PLAYERS; i++)
     {
@@ -11313,6 +11509,16 @@ public OnGameModeInit()
         PlayerLastInterior[i] = 0;
         PlayerLastVirtualWorld[i] = 0;
 
+        PlayerDeathRespawnPending[i] = 0;
+        PlayerClassSpawnRecoveryQueued[i] = 0;
+        PlayerLoadoutBlockedAfterDeath[i] = 0;
+        PlayerDeathX[i] = 0.0;
+        PlayerDeathY[i] = 0.0;
+        PlayerDeathZ[i] = 0.0;
+        PlayerDeathA[i] = 0.0;
+        PlayerDeathInterior[i] = 0;
+        PlayerDeathVirtualWorld[i] = 0;
+
         PlayerMoneyMismatchCount[i] = 0;
         PlayerLastACWarningTick[i] = 0;
         format(PlayerLastWhitelistQuery[i], 24, "-");
@@ -11340,7 +11546,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.19.5 Public Interior Single Transform berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.20 Hospital Death Respawn & Weapon Drop berhasil dijalankan.");
     return 1;
 }
 
@@ -11375,6 +11581,7 @@ public OnGameModeExit()
 
     DestroyAllParkedVehicleRuntime();
     DestroyAllWorldPickupsRuntime();
+    DestroyAllDeathWeaponDrops();
     DestroyAllPublicInteriorsRuntime();
     DestroyDynamicWorldObjects();
     DestroyWorldInteractionMarkers();
@@ -11451,6 +11658,9 @@ public OnPlayerDisconnect(playerid, reason)
     PlayerLoggedIn[playerid] = 0;
     PlayerDBID[playerid] = 0;
     PlayerAuthDialogShown[playerid] = 0;
+    PlayerDeathRespawnPending[playerid] = 0;
+    PlayerClassSpawnRecoveryQueued[playerid] = 0;
+    PlayerLoadoutBlockedAfterDeath[playerid] = 0;
     PlayerFindingBank[playerid] = 0;
     PlayerInsidePublicInteriorID[playerid] = 0;
     PlayerPublicInteriorServiceCheckpoint[playerid] = 0;
@@ -11510,6 +11720,42 @@ public OnPlayerDisconnect(playerid, reason)
     return 1;
 }
 
+stock QueueForceSpawnLoggedPlayer(playerid)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
+    {
+        return 0;
+    }
+
+    if (PlayerClassSpawnRecoveryQueued[playerid])
+    {
+        return 1;
+    }
+
+    PlayerClassSpawnRecoveryQueued[playerid] = 1;
+    SetTimerEx("ForceSpawnLoggedPlayerFromClass", 250, false, "i", playerid);
+    return 1;
+}
+
+public ForceSpawnLoggedPlayerFromClass(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    PlayerClassSpawnRecoveryQueued[playerid] = 0;
+
+    if (!PlayerLoggedIn[playerid])
+    {
+        TogglePlayerSpectating(playerid, true);
+        return 1;
+    }
+
+    SpawnLoggedPlayer(playerid);
+    return 1;
+}
+
 public OnPlayerRequestSpawn(playerid)
 {
     if (!PlayerLoggedIn[playerid])
@@ -11518,7 +11764,8 @@ public OnPlayerRequestSpawn(playerid)
         return 0;
     }
 
-    return 1;
+    QueueForceSpawnLoggedPlayer(playerid);
+    return 0;
 }
 
 public OnPlayerRequestClass(playerid, classid)
@@ -11529,12 +11776,48 @@ public OnPlayerRequestClass(playerid, classid)
         return 0;
     }
 
-    SetPlayerPos(playerid, SPAWN_X, SPAWN_Y, SPAWN_Z);
-    SetPlayerFacingAngle(playerid, SPAWN_A);
+    QueueForceSpawnLoggedPlayer(playerid);
+    return 0;
+}
 
-    SetPlayerCameraPos(playerid, 1962.0000, 1343.0000, 17.0000);
-    SetPlayerCameraLookAt(playerid, SPAWN_X, SPAWN_Y, SPAWN_Z);
+public OnPlayerDeath(playerid, killerid, WEAPON:reason)
+{
+    if (!PlayerLoggedIn[playerid])
+    {
+        return 1;
+    }
 
+    GetPlayerPos(playerid, PlayerDeathX[playerid], PlayerDeathY[playerid], PlayerDeathZ[playerid]);
+    GetPlayerFacingAngle(playerid, PlayerDeathA[playerid]);
+    PlayerDeathInterior[playerid] = GetPlayerInterior(playerid);
+    PlayerDeathVirtualWorld[playerid] = GetPlayerVirtualWorld(playerid);
+
+    DropPlayerWeaponsAtDeath(playerid, PlayerDeathX[playerid], PlayerDeathY[playerid], PlayerDeathZ[playerid], PlayerDeathInterior[playerid], PlayerDeathVirtualWorld[playerid]);
+    ClearPlayerWeaponLoadoutAfterDeath(playerid);
+    CancelPlayerActivitiesOnDeath(playerid);
+
+    PlayerDeathRespawnPending[playerid] = 1;
+
+    new Float:hospitalX;
+    new Float:hospitalY;
+    new Float:hospitalZ;
+    new Float:hospitalA;
+    new hospitalInterior;
+    new hospitalVirtualWorld;
+
+    GetNearestHospitalRespawnPoint(PlayerDeathX[playerid], PlayerDeathY[playerid], PlayerDeathZ[playerid], hospitalX, hospitalY, hospitalZ, hospitalA, hospitalInterior, hospitalVirtualWorld);
+
+    PlayerLastX[playerid] = hospitalX;
+    PlayerLastY[playerid] = hospitalY;
+    PlayerLastZ[playerid] = hospitalZ;
+    PlayerLastA[playerid] = hospitalA;
+    PlayerLastInterior[playerid] = hospitalInterior;
+    PlayerLastVirtualWorld[playerid] = hospitalVirtualWorld;
+
+    SetPlayerNoWeaponSpawnInfoAt(playerid, hospitalX, hospitalY, hospitalZ, hospitalA);
+
+    SendClientMessage(playerid, COLOR_ORANGE, "Wasted. Senjata kamu jatuh sebagai pickup di lokasi mati.");
+    SendClientMessage(playerid, COLOR_WHITE, "Kamu akan respawn di rumah sakit terdekat tanpa membuka selector skin/class.");
     return 1;
 }
 
@@ -11545,10 +11828,22 @@ public OnPlayerSpawn(playerid)
         SendClientMessage(playerid, COLOR_RED, "Kamu belum login.");
         return 1;
     }
+
+    if (PlayerDeathRespawnPending[playerid])
+    {
+        ApplyHospitalDeathRespawn(playerid);
+        ResetPlayerWeapons(playerid);
+        ApplyLSIFMapIcons(playerid);
+        SavePlayerData(playerid);
+
+        SendClientMessage(playerid, COLOR_CYAN, "Kamu respawn di rumah sakit terdekat.");
+        SendClientMessage(playerid, COLOR_WHITE, "Death penalty aktif: loadout lama dihapus, ambil kembali weapon pickup di lokasi mati jika masih ada.");
+        return 1;
+    }
+
     if (PlayerSpawnHouse[playerid] && PlayerHouseIndex[playerid] != -1)
     {
         new houseIndex = PlayerHouseIndex[playerid];
-
         SetPlayerInterior(playerid, 0);
         SetPlayerVirtualWorld(playerid, 0);
         SetPlayerPos(playerid, HouseX[houseIndex], HouseY[houseIndex], HouseZ[houseIndex]);
@@ -11570,7 +11865,6 @@ public OnPlayerSpawn(playerid)
     SendClientMessage(playerid, COLOR_CYAN, "Kamu berhasil spawn di Los Santos.");
     SendClientMessage(playerid, COLOR_WHITE, "Closed Beta: gunakan /betaguide untuk alur awal dan /bugreport jika menemukan bug.");
     SendClientMessage(playerid, COLOR_WHITE, "Command cepat: /help, /starterpack, /jobs, /jobguide, /maplegend. Cari marker [ALT] untuk interaksi dunia.");
-
     return 1;
 }
 
@@ -19191,6 +19485,182 @@ stock GetDefaultAmmoForWeaponPickup(weaponid)
         case 44..46: return 1;
     }
     return 30;
+}
+
+stock GetPickupModelFromWeaponID(weaponid)
+{
+    switch (weaponid)
+    {
+        case 1: return 331; case 2: return 333; case 3: return 334; case 4: return 335; case 5: return 336;
+        case 6: return 337; case 7: return 338; case 8: return 339; case 9: return 341; case 10: return 321;
+        case 11: return 322; case 12: return 323; case 13: return 324; case 14: return 325; case 15: return 326;
+        case 16: return 342; case 17: return 343; case 18: return 344; case 22: return 346; case 23: return 347;
+        case 24: return 348; case 25: return 349; case 26: return 350; case 27: return 351; case 28: return 352;
+        case 29: return 353; case 30: return 355; case 31: return 356; case 32: return 372; case 33: return 357;
+        case 34: return 358; case 35: return 359; case 36: return 360; case 37: return 361; case 38: return 362;
+        case 39: return 363; case 40: return 364; case 41: return 365; case 42: return 366; case 43: return 367;
+        case 44: return 368; case 45: return 369; case 46: return 371;
+    }
+    return 0;
+}
+
+stock DestroyDeathWeaponDrop(index)
+{
+    if (index < 0 || index >= MAX_DEATH_WEAPON_DROPS) return 0;
+    if (DeathWeaponDropLabel[index] != Text3D:INVALID_3DTEXT_ID)
+    {
+        Delete3DTextLabel(DeathWeaponDropLabel[index]);
+        DeathWeaponDropLabel[index] = Text3D:INVALID_3DTEXT_ID;
+    }
+    if (DeathWeaponDropPickup[index] != -1)
+    {
+        DestroyPickup(DeathWeaponDropPickup[index]);
+        DeathWeaponDropPickup[index] = -1;
+    }
+    DeathWeaponDropWeapon[index] = 0;
+    DeathWeaponDropAmmo[index] = 0;
+    DeathWeaponDropOwner[index] = INVALID_PLAYER_ID;
+    DeathWeaponDropInterior[index] = 0;
+    DeathWeaponDropVirtualWorld[index] = 0;
+    DeathWeaponDropCreatedTick[index] = 0;
+    DeathWeaponDropX[index] = 0.0;
+    DeathWeaponDropY[index] = 0.0;
+    DeathWeaponDropZ[index] = 0.0;
+    return 1;
+}
+
+stock ResetDeathWeaponDropsRuntime()
+{
+    for (new i = 0; i < MAX_DEATH_WEAPON_DROPS; i++)
+    {
+        DeathWeaponDropPickup[i] = -1;
+        DeathWeaponDropWeapon[i] = 0;
+        DeathWeaponDropAmmo[i] = 0;
+        DeathWeaponDropOwner[i] = INVALID_PLAYER_ID;
+        DeathWeaponDropInterior[i] = 0;
+        DeathWeaponDropVirtualWorld[i] = 0;
+        DeathWeaponDropCreatedTick[i] = 0;
+        DeathWeaponDropX[i] = 0.0;
+        DeathWeaponDropY[i] = 0.0;
+        DeathWeaponDropZ[i] = 0.0;
+        DeathWeaponDropLabel[i] = Text3D:INVALID_3DTEXT_ID;
+    }
+    return 1;
+}
+
+stock DestroyAllDeathWeaponDrops()
+{
+    for (new i = 0; i < MAX_DEATH_WEAPON_DROPS; i++) DestroyDeathWeaponDrop(i);
+    return 1;
+}
+
+stock GetDeathWeaponDropIndexByPickupID(pickupid)
+{
+    for (new i = 0; i < MAX_DEATH_WEAPON_DROPS; i++)
+    {
+        if (DeathWeaponDropPickup[i] == pickupid) return i;
+    }
+    return -1;
+}
+
+stock GetFreeDeathWeaponDropSlot()
+{
+    new oldestIndex = 0;
+    new oldestTick = 2147483647;
+    for (new i = 0; i < MAX_DEATH_WEAPON_DROPS; i++)
+    {
+        if (DeathWeaponDropPickup[i] == -1) return i;
+        if (DeathWeaponDropCreatedTick[i] < oldestTick)
+        {
+            oldestTick = DeathWeaponDropCreatedTick[i];
+            oldestIndex = i;
+        }
+    }
+    DestroyDeathWeaponDrop(oldestIndex);
+    return oldestIndex;
+}
+
+stock GetDeathWeaponDropOffset(offsetIndex, &Float:offsetX, &Float:offsetY)
+{
+    switch (offsetIndex % 8)
+    {
+        case 0: { offsetX = 0.0; offsetY = 0.0; }
+        case 1: { offsetX = 0.6; offsetY = 0.0; }
+        case 2: { offsetX = -0.6; offsetY = 0.0; }
+        case 3: { offsetX = 0.0; offsetY = 0.6; }
+        case 4: { offsetX = 0.0; offsetY = -0.6; }
+        case 5: { offsetX = 0.6; offsetY = 0.6; }
+        case 6: { offsetX = -0.6; offsetY = -0.6; }
+        default: { offsetX = -0.6; offsetY = 0.6; }
+    }
+    return 1;
+}
+
+stock CreateDeathWeaponDrop(playerid, weaponid, ammo, modelid, Float:x, Float:y, Float:z, interior, virtualWorld)
+{
+    if (weaponid <= 0 || ammo <= 0 || modelid <= 0) return 0;
+    new index = GetFreeDeathWeaponDropSlot();
+    new labelText[144];
+    DeathWeaponDropPickup[index] = CreatePickup(modelid, DEATH_WEAPON_DROP_PICKUP_TYPE, x, y, z, virtualWorld);
+    DeathWeaponDropWeapon[index] = weaponid;
+    DeathWeaponDropAmmo[index] = ammo;
+    DeathWeaponDropOwner[index] = playerid;
+    DeathWeaponDropInterior[index] = interior;
+    DeathWeaponDropVirtualWorld[index] = virtualWorld;
+    DeathWeaponDropCreatedTick[index] = GetTickCount();
+    DeathWeaponDropX[index] = x;
+    DeathWeaponDropY[index] = y;
+    DeathWeaponDropZ[index] = z;
+    format(labelText, sizeof(labelText), "[DROPPED WEAPON]\nWeapon ID: %d | Ammo: %d", weaponid, ammo);
+    DeathWeaponDropLabel[index] = Create3DTextLabel(labelText, COLOR_PURPLE, x, y, z + 0.6, DEATH_WEAPON_DROP_LABEL_DRAW_DISTANCE, virtualWorld, true);
+    SetTimerEx("DestroyDeathWeaponDropDelayed", DEATH_WEAPON_DROP_LIFETIME_SECONDS * 1000, false, "ii", index, DeathWeaponDropPickup[index]);
+    return 1;
+}
+
+public DestroyDeathWeaponDropDelayed(index, pickupid)
+{
+    if (index < 0 || index >= MAX_DEATH_WEAPON_DROPS) return 1;
+    if (DeathWeaponDropPickup[index] == pickupid) DestroyDeathWeaponDrop(index);
+    return 1;
+}
+
+stock DropPlayerWeaponsAtDeath(playerid, Float:x, Float:y, Float:z, interior, virtualWorld)
+{
+    new weaponid;
+    new ammo;
+    new modelid;
+    new dropped = 0;
+    new Float:offsetX;
+    new Float:offsetY;
+    for (new slot = 0; slot < DEATH_WEAPON_SLOT_COUNT; slot++)
+    {
+        GetPlayerWeaponData(playerid, slot, weaponid, ammo);
+        if (weaponid <= 0 || ammo <= 0) continue;
+        modelid = GetPickupModelFromWeaponID(weaponid);
+        if (modelid <= 0) continue;
+        GetDeathWeaponDropOffset(dropped, offsetX, offsetY);
+        CreateDeathWeaponDrop(playerid, weaponid, ammo, modelid, x + offsetX, y + offsetY, z + 0.2, interior, virtualWorld);
+        dropped++;
+    }
+    return dropped;
+}
+
+stock HandleDeathWeaponDropPickup(playerid, pickupid)
+{
+    new index = GetDeathWeaponDropIndexByPickupID(pickupid);
+    if (index == -1) return 0;
+    if (GetPlayerInterior(playerid) != DeathWeaponDropInterior[index] || GetPlayerVirtualWorld(playerid) != DeathWeaponDropVirtualWorld[index]) return 1;
+    if (DeathWeaponDropWeapon[index] <= 0 || DeathWeaponDropAmmo[index] <= 0)
+    {
+        DestroyDeathWeaponDrop(index);
+        return 1;
+    }
+    GivePlayerWeapon(playerid, t_WEAPON:DeathWeaponDropWeapon[index], DeathWeaponDropAmmo[index]);
+    new msg[144];
+    format(msg, sizeof(msg), "Dropped weapon diambil. Weapon ID %d | Ammo %d.", DeathWeaponDropWeapon[index], DeathWeaponDropAmmo[index]);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    DestroyDeathWeaponDrop(index);
+    return 1;
 }
 
 stock DestroyWorldPickupRuntime(index)
@@ -26849,6 +27319,75 @@ stock ResetPlayerWeaponLoadoutData(playerid)
     return 1;
 }
 
+stock ClearPlayerWeaponLoadoutAfterDeath(playerid)
+{
+    PlayerLoadoutBlockedAfterDeath[playerid] = 1;
+    ResetPlayerWeaponLoadoutData(playerid);
+    if (!PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0) return 1;
+    new query[192];
+    mysql_format(g_SQL, query, sizeof(query), "DELETE FROM player_weapons WHERE player_id=%d", PlayerDBID[playerid]);
+    mysql_tquery(g_SQL, query);
+    return 1;
+}
+
+stock CancelPlayerActivitiesOnDeath(playerid)
+{
+    DisablePlayerCheckpoint(playerid);
+    PlayerFindingBank[playerid] = 0;
+    PlayerFindingHouse[playerid] = 0;
+    PlayerFindingBusiness[playerid] = 0;
+    PlayerFindingDealer[playerid] = 0;
+    if (PlayerRace[playerid] != RACE_NONE) ResetPlayerRaceData(playerid);
+    if (PlayerWorking[playerid])
+    {
+        PlayerWorking[playerid] = 0;
+        PlayerWorkType[playerid] = WORK_NONE;
+        PlayerWorkPoint[playerid] = -1;
+        ResetTaxiWorkData(playerid);
+        ResetTruckerWorkData(playerid);
+        ResetBusWorkData(playerid);
+        ResetPoliceWorkData(playerid);
+    }
+    if (PlayerInsideHouse[playerid])
+    {
+        PlayerInsideHouse[playerid] = 0;
+        PlayerInsideHouseOwner[playerid] = INVALID_PLAYER_ID;
+        DestroyPlayerHouseExitPickup(playerid);
+    }
+    PlayerInsidePublicInteriorID[playerid] = 0;
+    PlayerPublicInteriorServiceCheckpoint[playerid] = 0;
+    PlayerInsideGangHQ[playerid] = 0;
+    PlayerInsideGangHQID[playerid] = 0;
+    return 1;
+}
+
+stock ApplyHospitalDeathRespawn(playerid)
+{
+    new Float:x;
+    new Float:y;
+    new Float:z;
+    new Float:a;
+    new interior;
+    new virtualWorld;
+    GetNearestHospitalRespawnPoint(PlayerDeathX[playerid], PlayerDeathY[playerid], PlayerDeathZ[playerid], x, y, z, a, interior, virtualWorld);
+    SetPlayerInterior(playerid, interior);
+    SetPlayerVirtualWorld(playerid, virtualWorld);
+    SetPlayerPos(playerid, x, y, z);
+    SetPlayerFacingAngle(playerid, a);
+    SetCameraBehindPlayer(playerid);
+    SetPlayerHealth(playerid, 100.0);
+    SetPlayerArmour(playerid, 0.0);
+    PlayerLastX[playerid] = x;
+    PlayerLastY[playerid] = y;
+    PlayerLastZ[playerid] = z;
+    PlayerLastA[playerid] = a;
+    PlayerLastInterior[playerid] = interior;
+    PlayerLastVirtualWorld[playerid] = virtualWorld;
+    PlayerDeathRespawnPending[playerid] = 0;
+    PlayerClassSpawnRecoveryQueued[playerid] = 0;
+    return 1;
+}
+
 stock GetWeaponShopIndexFromWeaponID(weaponid)
 {
     for (new i = 0; i < MAX_WEAPON_SHOP_ITEMS; i++)
@@ -26959,6 +27498,12 @@ public OnPlayerWeaponsLoaded(playerid)
         return 1;
     }
 
+    if (PlayerLoadoutBlockedAfterDeath[playerid])
+    {
+        ResetPlayerWeaponLoadoutData(playerid);
+        return 1;
+    }
+
     ResetPlayerWeaponLoadoutData(playerid);
 
     new rows = cache_num_rows();
@@ -26994,6 +27539,11 @@ public OnPlayerWeaponsLoaded(playerid)
 public ApplySavedWeaponLoadout(playerid)
 {
     if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
+    {
+        return 1;
+    }
+
+    if (PlayerLoadoutBlockedAfterDeath[playerid])
     {
         return 1;
     }
@@ -27314,6 +27864,7 @@ stock ProcessWeaponPurchaseAmount(playerid, weaponIndex, packs)
     TakePlayerCash(playerid, price);
     GivePlayerWeapon(playerid, t_WEAPON:WeaponShopWeaponID[weaponIndex], purchasedAmmo);
 
+    PlayerLoadoutBlockedAfterDeath[playerid] = 0;
     PlayerSavedWeaponOwned[playerid][weaponIndex] = 1;
     PlayerSavedWeaponAmmo[playerid][weaponIndex] += purchasedAmmo;
 
@@ -27766,6 +28317,11 @@ public OnPlayerPickUpPickup(playerid, pickupid)
             SendClientMessage(playerid, COLOR_YELLOW, "Tekan ALT di marker gang untuk join langsung. Pickup ini bukan pintu interior.");
             return 1;
         }
+    }
+
+    if (HandleDeathWeaponDropPickup(playerid, pickupid))
+    {
+        return 1;
     }
 
     if (HandleWorldPickupPickup(playerid, pickupid))
@@ -31354,6 +31910,11 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
     if (!strcmp(cmdtext, "/reloadout", true))
     {
+        if (PlayerLoadoutBlockedAfterDeath[playerid])
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Loadout lama sudah hilang karena death penalty. Ambil weapon pickup di lokasi mati atau beli ulang di Ammu-Nation.");
+            return 1;
+        }
         ResetPlayerWeapons(playerid);
         ApplySavedWeaponLoadout(playerid);
         SendClientMessage(playerid, COLOR_GREEN, "Saved weapon loadout sudah di-apply ulang.");
@@ -32272,7 +32833,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.19.5 Public Interior Single Transform");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.20 Hospital Death Respawn & Offline Weapon Drop");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -32282,6 +32843,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.20: Death respawn skips class selector, sends player to nearest hospital, and drops current weapons as runtime pickups.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19.5: Public interior single transform removes delayed facing/camera snap on enter/exit.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19.4: Nearby Map Icon Manager now fills slots 80-99 with nearest public interiors and dynamic locations around each player.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24N: Source cleanup assistant, safe disable by source_tag, relabel fallback tags, and runtime refresh.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24M: Source audit detail menu, deprecated/fallback record review, and source cleanup policy.");

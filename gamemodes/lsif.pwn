@@ -581,8 +581,6 @@ new PublicServiceCount;
 
 #define MAX_PUBLIC_INTERIORS 80
 #define PUBLIC_INTERIOR_PICKUP_MODEL 1318
-#define PUBLIC_INTERIOR_TRANSITION_PICKUP_RADIUS 2.5
-#define PUBLIC_INTERIOR_PICKUP_COOLDOWN_MS 3000
 #define PUBLIC_INTERIOR_PICKUP_TYPE 1
 #define PUBLIC_INTERIOR_LABEL_DRAW_DISTANCE 18.0
 #define PUBLIC_INTERIOR_SERVICE_CP_SIZE 1.8
@@ -1621,7 +1619,6 @@ new PlayerPendingPublicInteriorType[MAX_PLAYERS][PUBINT_TYPE_SIZE];
 new PlayerInsidePublicInteriorID[MAX_PLAYERS];
 new PlayerPublicInteriorServiceCheckpoint[MAX_PLAYERS];
 new PlayerLastPublicInteriorPickupTick[MAX_PLAYERS];
-new PlayerPublicInteriorPickupBlocked[MAX_PLAYERS];
 new PlayerPendingObjectLinkType[MAX_PLAYERS][LOC_TYPE_SIZE];
 new PlayerPendingObjectLinkName[MAX_PLAYERS][LOC_NAME_SIZE];
 
@@ -11228,7 +11225,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.19.5 Public Interior Transition Guard");
+    SetGameModeText("SAIF Dev v0.24K.19.4 Nearby Map Icon Manager");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11343,7 +11340,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.19.5 Public Interior Transition Guard berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.19.4 Nearby Map Icon Manager berhasil dijalankan.");
     return 1;
 }
 
@@ -11407,7 +11404,6 @@ public OnPlayerConnect(playerid)
     PlayerInsidePublicInteriorID[playerid] = 0;
     PlayerPublicInteriorServiceCheckpoint[playerid] = 0;
     PlayerLastPublicInteriorPickupTick[playerid] = 0;
-    PlayerPublicInteriorPickupBlocked[playerid] = 0;
     CreatePlayerTurfHud(playerid);
 
     // Sembunyikan class selection/pilih skin sebelum login.
@@ -11458,7 +11454,6 @@ public OnPlayerDisconnect(playerid, reason)
     PlayerFindingBank[playerid] = 0;
     PlayerInsidePublicInteriorID[playerid] = 0;
     PlayerPublicInteriorServiceCheckpoint[playerid] = 0;
-    PlayerPublicInteriorPickupBlocked[playerid] = 0;
     PlayerEditingGangPresetID[playerid] = 0;
     if (PlayerInsideGangHQ[playerid])
     {
@@ -19783,7 +19778,7 @@ stock IsPlayerNearPublicInteriorServicePoint(playerid, idx)
 
 stock IsPlayerInPublicInteriorPickupCooldown(playerid)
 {
-    if (GetTickCount() - PlayerLastPublicInteriorPickupTick[playerid] < PUBLIC_INTERIOR_PICKUP_COOLDOWN_MS)
+    if (GetTickCount() - PlayerLastPublicInteriorPickupTick[playerid] < 1500)
     {
         return 1;
     }
@@ -19793,63 +19788,6 @@ stock IsPlayerInPublicInteriorPickupCooldown(playerid)
 stock SetPlayerPublicInteriorPickupCooldown(playerid)
 {
     PlayerLastPublicInteriorPickupTick[playerid] = GetTickCount();
-    return 1;
-}
-
-stock IsPlayerNearAnyPublicInteriorDoorPickup(playerid)
-{
-    new pInterior = GetPlayerInterior(playerid);
-    new pVW = GetPlayerVirtualWorld(playerid);
-
-    for (new i = 0; i < PublicInteriorCount; i++)
-    {
-        if (!PublicInteriorEnabled[i])
-        {
-            continue;
-        }
-
-        // Exterior enter pickup/panah.
-        if (pInterior == PublicInteriorExteriorInterior[i] &&
-            pVW == PublicInteriorExteriorVirtualWorld[i] &&
-            IsPlayerInRangeOfPoint(playerid, PUBLIC_INTERIOR_TRANSITION_PICKUP_RADIUS, PublicInteriorExtX[i], PublicInteriorExtY[i], PublicInteriorExtZ[i]))
-        {
-            return 1;
-        }
-
-        // Interior exit pickup/panah.
-        if (pInterior == PublicInteriorInteriorID[i] &&
-            pVW == GetPublicInteriorRuntimeVW(i) &&
-            IsPlayerInRangeOfPoint(playerid, PUBLIC_INTERIOR_TRANSITION_PICKUP_RADIUS, PublicInteriorExitX[i], PublicInteriorExitY[i], PublicInteriorExitZ[i]))
-        {
-            return 1;
-        }
-    }
-
-    return 0;
-}
-
-stock IsPublicInteriorPickupTransitionBlocked(playerid)
-{
-    if (!PlayerPublicInteriorPickupBlocked[playerid])
-    {
-        return 0;
-    }
-
-    // Block tetap aktif selama player masih berdiri di pickup panah enter/exit.
-    // Begitu player keluar dari area pickup, block otomatis dibuka.
-    if (IsPlayerNearAnyPublicInteriorDoorPickup(playerid))
-    {
-        return 1;
-    }
-
-    PlayerPublicInteriorPickupBlocked[playerid] = 0;
-    return 0;
-}
-
-stock StartPublicInteriorTransitionGuard(playerid)
-{
-    PlayerPublicInteriorPickupBlocked[playerid] = 1;
-    SetPlayerPublicInteriorPickupCooldown(playerid);
     return 1;
 }
 
@@ -19935,9 +19873,8 @@ stock ForceApplyPublicInteriorFacing(playerid, Float:angle)
 
     SetPlayerFacingAngle(playerid, angle);
     SetCameraBehindPlayer(playerid);
-    // Satu delayed apply cukup untuk memastikan facing setelah teleport/interior switch.
-    // Timer berlapis sebelumnya membuat transisi terasa seperti spawn/load berulang.
-    SetTimerEx("ApplyPublicInteriorFacingDelayed", 250, false, "if", playerid, angle);
+    SetTimerEx("ApplyPublicInteriorFacingDelayed", 150, false, "if", playerid, angle);
+    SetTimerEx("ApplyPublicInteriorFacingDelayed2", 450, false, "if", playerid, angle);
     return 1;
 }
 
@@ -20222,7 +20159,7 @@ stock EnterPublicInterior(playerid, dbid)
         return 0;
     }
 
-    StartPublicInteriorTransitionGuard(playerid);
+    SetPlayerPublicInteriorPickupCooldown(playerid);
     PlayerInsidePublicInteriorID[playerid] = PublicInteriorDBID[idx];
     SetPlayerInterior(playerid, PublicInteriorInteriorID[idx]);
     SetPlayerVirtualWorld(playerid, GetPublicInteriorRuntimeVW(idx));
@@ -20262,7 +20199,7 @@ stock ExitPublicInterior(playerid)
     }
 
     HidePublicInteriorServiceCheckpoint(playerid);
-    StartPublicInteriorTransitionGuard(playerid);
+    SetPlayerPublicInteriorPickupCooldown(playerid);
     PlayerInsidePublicInteriorID[playerid] = 0;
     SetPlayerInterior(playerid, PublicInteriorExteriorInterior[idx]);
     SetPlayerVirtualWorld(playerid, PublicInteriorExteriorVirtualWorld[idx]);
@@ -20275,11 +20212,6 @@ stock ExitPublicInterior(playerid)
 
 stock HandlePublicInteriorPickup(playerid, pickupid)
 {
-    if (IsPublicInteriorPickupTransitionBlocked(playerid))
-    {
-        return 1;
-    }
-
     for (new i = 0; i < PublicInteriorCount; i++)
     {
         if (!PublicInteriorEnabled[i]) continue;
@@ -32311,7 +32243,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.19.5 Public Interior Transition Guard");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.19.4 Nearby Map Icon Manager");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");

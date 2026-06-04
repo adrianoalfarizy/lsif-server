@@ -11225,7 +11225,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.19.4 Nearby Map Icon Manager");
+    SetGameModeText("SAIF Dev v0.24K.19.5 Public Interior Single Transform");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11340,7 +11340,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.19.4 Nearby Map Icon Manager berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.19.5 Public Interior Single Transform berhasil dijalankan.");
     return 1;
 }
 
@@ -19867,18 +19867,35 @@ stock CreatePublicInteriorRuntime(index)
 }
 
 
-stock ForceApplyPublicInteriorFacing(playerid, Float:angle)
+stock SetPlayerPublicInteriorTransform(playerid, interiorid, virtualworld, Float:x, Float:y, Float:z, Float:angle)
 {
+    if (!IsPlayerConnected(playerid))
+    {
+        return 0;
+    }
+
+    // v0.24K.19.5:
+    // Public interior transition dibuat satu paket.
+    // Tidak ada delayed facing/camera correction agar tidak terasa seperti spawn point di-load beberapa kali.
+    SetPlayerInterior(playerid, interiorid);
+    SetPlayerVirtualWorld(playerid, virtualworld);
+    SetPlayerPos(playerid, x, y, z);
     SetPlayerFacingAngle(playerid, angle);
     SetCameraBehindPlayer(playerid);
-
-    // cukup satu koreksi ringan, jangan dua kali
-    SetTimerEx("ApplyPublicInteriorFacingDelayed", 250, false, "if", playerid, angle);
     return 1;
 }
 
+stock ForceApplyPublicInteriorFacing(playerid, Float:angle)
+{
+    if (!IsPlayerConnected(playerid)) return 0;
 
+    // One-shot only. Timer berlapis dinonaktifkan karena membuat transisi terasa seperti spawn/camera reload berulang.
+    SetPlayerFacingAngle(playerid, angle);
+    SetCameraBehindPlayer(playerid);
+    return 1;
+}
 
+// Legacy public kept for compatibility; no longer called by ForceApplyPublicInteriorFacing since v0.24K.19.5.
 public ApplyPublicInteriorFacingDelayed(playerid, Float:angle)
 {
     if (!IsPlayerConnected(playerid)) return 0;
@@ -19888,6 +19905,7 @@ public ApplyPublicInteriorFacingDelayed(playerid, Float:angle)
     return 1;
 }
 
+// Legacy public kept for compatibility; no longer called by ForceApplyPublicInteriorFacing since v0.24K.19.5.
 public ApplyPublicInteriorFacingDelayed2(playerid, Float:angle)
 {
     if (!IsPlayerConnected(playerid)) return 0;
@@ -20162,10 +20180,15 @@ stock EnterPublicInterior(playerid, dbid)
 
     SetPlayerPublicInteriorPickupCooldown(playerid);
     PlayerInsidePublicInteriorID[playerid] = PublicInteriorDBID[idx];
-    SetPlayerInterior(playerid, PublicInteriorInteriorID[idx]);
-    SetPlayerVirtualWorld(playerid, GetPublicInteriorRuntimeVW(idx));
-    SetPlayerPos(playerid, PublicInteriorIntX[idx], PublicInteriorIntY[idx], PublicInteriorIntZ[idx]);
-    ForceApplyPublicInteriorFacing(playerid, PublicInteriorIntA[idx]);
+    SetPlayerPublicInteriorTransform(
+        playerid,
+        PublicInteriorInteriorID[idx],
+        GetPublicInteriorRuntimeVW(idx),
+        PublicInteriorIntX[idx],
+        PublicInteriorIntY[idx],
+        PublicInteriorIntZ[idx],
+        PublicInteriorIntA[idx]
+    );
     ShowPublicInteriorServiceCheckpoint(playerid, idx);
 
     new msg[144];
@@ -20202,10 +20225,15 @@ stock ExitPublicInterior(playerid)
     HidePublicInteriorServiceCheckpoint(playerid);
     SetPlayerPublicInteriorPickupCooldown(playerid);
     PlayerInsidePublicInteriorID[playerid] = 0;
-    SetPlayerInterior(playerid, PublicInteriorExteriorInterior[idx]);
-    SetPlayerVirtualWorld(playerid, PublicInteriorExteriorVirtualWorld[idx]);
-    SetPlayerPos(playerid, PublicInteriorExtSpawnX[idx], PublicInteriorExtSpawnY[idx], PublicInteriorExtSpawnZ[idx]);
-    ForceApplyPublicInteriorFacing(playerid, PublicInteriorExtSpawnA[idx]);
+    SetPlayerPublicInteriorTransform(
+        playerid,
+        PublicInteriorExteriorInterior[idx],
+        PublicInteriorExteriorVirtualWorld[idx],
+        PublicInteriorExtSpawnX[idx],
+        PublicInteriorExtSpawnY[idx],
+        PublicInteriorExtSpawnZ[idx],
+        PublicInteriorExtSpawnA[idx]
+    );
 
     SendClientMessage(playerid, COLOR_GREEN, "Kamu keluar dari public interior.");
     return 1;
@@ -32244,7 +32272,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.19.4 Nearby Map Icon Manager");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.19.5 Public Interior Single Transform");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");

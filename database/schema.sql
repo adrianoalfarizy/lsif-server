@@ -2022,3 +2022,32 @@ SET exterior_map_icon = CASE
     ELSE 52
 END
 WHERE exterior_map_icon IS NULL OR exterior_map_icon <= 0;
+
+-- SAIF / LSIF Dev v0.24K.19.3
+-- Public Interior Icon Priority Fix
+--
+-- Penyebab Ammu-Nation tidak tampil:
+-- public interior lebih banyak dari 20 slot map icon yang disediakan (80-99).
+-- Patch PWN memprioritaskan Ammu-Nation dulu, lalu interior lain terbaru.
+--
+-- SQL ini juga memastikan Ammu-Nation yang masih icon default 52 menjadi icon 6.
+
+ALTER TABLE public_interiors
+    ADD COLUMN IF NOT EXISTS exterior_map_icon INT NOT NULL DEFAULT 52;
+
+UPDATE public_interiors
+SET exterior_map_icon = 6
+WHERE interior_type = 'ammunation'
+  AND (exterior_map_icon IS NULL OR exterior_map_icon <= 0 OR exterior_map_icon = 52);
+
+UPDATE public_interiors
+SET exterior_map_icon = CASE
+    WHEN interior_type IN ('burgershot', 'cluckinbell', 'pizzastack') THEN 10
+    WHEN interior_type = 'barber' THEN 7
+    WHEN interior_type = 'tattoo' THEN 39
+    WHEN interior_type = 'police' THEN 30
+    WHEN interior_type = 'hospital' THEN 22
+    ELSE exterior_map_icon
+END
+WHERE exterior_map_icon IS NULL OR exterior_map_icon <= 0;
+

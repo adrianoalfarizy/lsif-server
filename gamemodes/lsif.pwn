@@ -11220,7 +11220,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.19.2 Public Interior Map Icon Native");
+    SetGameModeText("SAIF Dev v0.24K.19.3 Public Interior Icon Priority Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11333,7 +11333,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.19.2 Public Interior Map Icon Native berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.19.3 Public Interior Icon Priority Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -20837,7 +20837,7 @@ stock ShowPublicInteriorHelp(playerid)
     strcat(body, "- Manual public interior hanya untuk koreksi/placeholder.\n\n");
     strcat(body, "Editor point:\n/pubintpoints [id]\n/pubintsetpoint [id] [exterior/extspawn/spawn/exit/service]\n/pubintsetfacing [id] [exterior/spawn/exit/service]\n/pubintinteriorid [id] [interior]\n/pubintvw [id] [virtual_world]\n/pubintpickupmodel [id] [exterior/interior] [model]\n/pubintmapicon [id] [icon_id]\n/pubintserviceradius [id] [radius]\n\n");
     strcat(body, "Command lain:\n/pubintmenu\n/pubintcreate [type] [name]\n/pubintlist\n/pubintinfo [id]\n/pubintgoto [id]\n/pubintenter [id]\n/pubintexit\n/pubintdelete [id]\n/pubintreload\n/pubintuse\n/pubintimportdb\n/pubintexactclear\n/pubintexactinfo\n\n");
-    strcat(body, "Masuk/keluar pakai pickup panah custom. Transaksi langsung terbuka dari checkpoint merah depan kasir/service point tanpa menu Info/Exit. Map icon bisa diedit via menu action public interior atau /pubintmapicon [id] [icon_id].");
+    strcat(body, "Masuk/keluar pakai pickup panah custom. Transaksi langsung terbuka dari checkpoint merah depan kasir/service point tanpa menu Info/Exit. Map icon bisa diedit via menu action public interior atau /pubintmapicon [id] [icon_id]. Karena slot terbatas, Ammu-Nation diprioritaskan tampil dulu.");
     ShowPlayerDialog(playerid, DIALOG_PUBINT_HELP, DIALOG_STYLE_MSGBOX, "Public Interior Help", body, "Back", "Close");
     return 1;
 }
@@ -25036,16 +25036,90 @@ stock DestroyWorldInteractionMarkers()
     return 1;
 }
 
+stock IsPublicInteriorIconCandidateValid(index)
+{
+    if (index < 0 || index >= PublicInteriorCount)
+    {
+        return 0;
+    }
+
+    if (!PublicInteriorEnabled[index])
+    {
+        return 0;
+    }
+
+    if (PublicInteriorExtX[index] == 0.0 && PublicInteriorExtY[index] == 0.0 && PublicInteriorExtZ[index] == 0.0)
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+stock SetPublicInteriorMapIconSlot(playerid, slotIndex, pubIdx)
+{
+    if (slotIndex < 0 || slotIndex >= PUBLIC_INTERIOR_MAPICON_SLOTS)
+    {
+        return 0;
+    }
+
+    if (!IsPublicInteriorIconCandidateValid(pubIdx))
+    {
+        return 0;
+    }
+
+    new iconType = PublicInteriorMapIcon[pubIdx];
+    if (iconType <= 0)
+    {
+        iconType = GetPublicInteriorDefaultMapIcon(PublicInteriorType[pubIdx]);
+    }
+
+    SetPlayerMapIcon(
+        playerid,
+        MAPICON_BASE_PUBLIC_INTERIOR + slotIndex,
+        PublicInteriorExtX[pubIdx],
+        PublicInteriorExtY[pubIdx],
+        PublicInteriorExtZ[pubIdx],
+        iconType,
+        COLOR_CYAN,
+        MAPICON_GLOBAL
+    );
+    return 1;
+}
+
 stock ApplyPublicInteriorMapIcons(playerid)
 {
     // Public interior map icon native.
-    // Slot 80-99 sengaja dipasang setelah Dynamic Location agar public interior terlihat.
+    // Slot 80-99 = 20 slot. Karena public interior bisa >20, v0.24K.19.3 memakai priority:
+    // 1) Ammu-Nation dulu, supaya tidak terdorong keluar oleh ID baru.
+    // 2) Sisanya terbaru/urutan belakang.
     for (new slot = 0; slot < PUBLIC_INTERIOR_MAPICON_SLOTS; slot++)
     {
         RemovePlayerMapIcon(playerid, MAPICON_BASE_PUBLIC_INTERIOR + slot);
     }
 
     new usedSlots = 0;
+
+    // Priority 1: Ammu-Nation selalu tampil dulu.
+    for (new i = 0; i < PublicInteriorCount; i++)
+    {
+        if (usedSlots >= PUBLIC_INTERIOR_MAPICON_SLOTS)
+        {
+            return 1;
+        }
+
+        if (strcmp(PublicInteriorType[i], "ammunation", true))
+        {
+            continue;
+        }
+
+        if (SetPublicInteriorMapIconSlot(playerid, usedSlots, i))
+        {
+            usedSlots++;
+        }
+    }
+
+    // Priority 2: public interior lain, latest-first.
     for (new i = PublicInteriorCount - 1; i >= 0; i--)
     {
         if (usedSlots >= PUBLIC_INTERIOR_MAPICON_SLOTS)
@@ -25053,33 +25127,15 @@ stock ApplyPublicInteriorMapIcons(playerid)
             break;
         }
 
-        if (!PublicInteriorEnabled[i])
+        if (!strcmp(PublicInteriorType[i], "ammunation", true))
         {
             continue;
         }
 
-        if (PublicInteriorExtX[i] == 0.0 && PublicInteriorExtY[i] == 0.0 && PublicInteriorExtZ[i] == 0.0)
+        if (SetPublicInteriorMapIconSlot(playerid, usedSlots, i))
         {
-            continue;
+            usedSlots++;
         }
-
-        new iconType = PublicInteriorMapIcon[i];
-        if (iconType <= 0)
-        {
-            iconType = GetPublicInteriorDefaultMapIcon(PublicInteriorType[i]);
-        }
-
-        SetPlayerMapIcon(
-            playerid,
-            MAPICON_BASE_PUBLIC_INTERIOR + usedSlots,
-            PublicInteriorExtX[i],
-            PublicInteriorExtY[i],
-            PublicInteriorExtZ[i],
-            iconType,
-            COLOR_CYAN,
-            MAPICON_GLOBAL
-        );
-        usedSlots++;
     }
 
     return 1;
@@ -32102,7 +32158,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.19.2 Public Interior Map Icon Native");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.19.3 Public Interior Icon Priority Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -32112,7 +32168,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19.2: Public interior now has native DB-driven map icons via /pubintmapicon and Public Interior Editor.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19.3: Public interior map icons now prioritize Ammu-Nation first, then newest interiors, so Ammu icons are not pushed out by the 20-slot limit.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24N: Source cleanup assistant, safe disable by source_tag, relabel fallback tags, and runtime refresh.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24M: Source audit detail menu, deprecated/fallback record review, and source cleanup policy.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24L: Offline/source audit tools, source_tag validation summary, and /amenus audit entry.");

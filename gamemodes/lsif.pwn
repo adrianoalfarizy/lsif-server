@@ -19869,14 +19869,15 @@ stock CreatePublicInteriorRuntime(index)
 
 stock ForceApplyPublicInteriorFacing(playerid, Float:angle)
 {
-    if (!IsPlayerConnected(playerid)) return 0;
-
     SetPlayerFacingAngle(playerid, angle);
     SetCameraBehindPlayer(playerid);
-    SetTimerEx("ApplyPublicInteriorFacingDelayed", 150, false, "if", playerid, angle);
-    SetTimerEx("ApplyPublicInteriorFacingDelayed2", 450, false, "if", playerid, angle);
+
+    // cukup satu koreksi ringan, jangan dua kali
+    SetTimerEx("ApplyPublicInteriorFacingDelayed", 250, false, "if", playerid, angle);
     return 1;
 }
+
+
 
 public ApplyPublicInteriorFacingDelayed(playerid, Float:angle)
 {

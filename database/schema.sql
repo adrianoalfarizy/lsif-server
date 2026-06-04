@@ -2000,3 +2000,25 @@ WHERE territory_index BETWEEN 1 AND 6
     'Empty Territory'
   );
 
+-- SAIF / LSIF Dev v0.24K.19.2
+-- Public Interior Map Icon Native
+--
+-- Menambahkan icon map native untuk public_interiors.
+-- PWN akan membaca public_interiors.exterior_map_icon dan menampilkan lewat SetPlayerMapIcon.
+
+ALTER TABLE public_interiors
+    ADD COLUMN IF NOT EXISTS exterior_map_icon INT NOT NULL DEFAULT 52;
+
+-- Default icon untuk data lama.
+-- Admin tetap bisa override lewat /pubintmapicon [id] [icon_id] atau menu Public Interior Editor.
+UPDATE public_interiors
+SET exterior_map_icon = CASE
+    WHEN interior_type = 'ammunation' THEN 6
+    WHEN interior_type IN ('burgershot', 'cluckinbell', 'pizzastack') THEN 10
+    WHEN interior_type = 'barber' THEN 7
+    WHEN interior_type = 'tattoo' THEN 39
+    WHEN interior_type = 'police' THEN 30
+    WHEN interior_type = 'hospital' THEN 22
+    ELSE 52
+END
+WHERE exterior_map_icon IS NULL OR exterior_map_icon <= 0;

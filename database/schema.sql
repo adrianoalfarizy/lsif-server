@@ -2089,3 +2089,32 @@ SET exterior_map_icon = CASE
     ELSE 52
 END
 WHERE exterior_map_icon IS NULL OR exterior_map_icon <= 0;
+
+-- SAIF / LSIF Dev v0.24K.21.4
+-- Public Interior Icon Debug / Force Fix
+--
+-- PWN:
+-- - Public interior map icon memakai MAPICON_GLOBAL.
+-- - Refresh icon tidak lagi mensyaratkan PlayerLoggedIn.
+-- - Tambah /pubinticondebug [id] dan /pubintshowicon [id] untuk memastikan runtime/slot/client.
+--
+-- SQL:
+-- - Pastikan kolom icon ada.
+-- - Update icon default berdasarkan type jika masih memakai default 52 untuk type yang lebih spesifik.
+
+ALTER TABLE public_interiors
+    ADD COLUMN IF NOT EXISTS exterior_map_icon INT NOT NULL DEFAULT 52;
+
+UPDATE public_interiors
+SET exterior_map_icon = CASE
+    WHEN interior_type = 'ammunation' THEN 6
+    WHEN interior_type IN ('burgershot', 'cluckinbell', 'pizzastack') THEN 10
+    WHEN interior_type = 'barber' THEN 7
+    WHEN interior_type = 'tattoo' THEN 39
+    WHEN interior_type = 'police' THEN 30
+    WHEN interior_type = 'hospital' THEN 22
+    ELSE 52
+END
+WHERE exterior_map_icon IS NULL
+   OR exterior_map_icon <= 0
+   OR (exterior_map_icon = 52 AND interior_type IN ('ammunation','burgershot','cluckinbell','pizzastack','barber','tattoo','police','hospital'));

@@ -602,6 +602,12 @@ new PublicServiceCount;
 #if !defined MAPICON_LOCAL
 #define MAPICON_LOCAL 0
 #endif
+#if !defined MAPICON_GLOBAL
+#define MAPICON_GLOBAL 1
+#endif
+#if !defined MAPICON_GLOBAL_CHECKPOINT
+#define MAPICON_GLOBAL_CHECKPOINT 3
+#endif
 
 #define MAX_GARAGE_SLOTS 3
 
@@ -2255,6 +2261,7 @@ forward OnExactPublicInteriorImportClearedOnly(playerid);
 forward OnExactPublicInteriorImportInfoLoaded(playerid);
 forward OnWeaponShopConfigLoaded();
 forward ReloadPublicInteriorsDelayed(playerid);
+forward RefreshPublicInteriorMapIconsDelayed();
 forward ApplyPublicInteriorFacingDelayed(playerid, Float:angle);
 forward ApplyPublicInteriorFacingDelayed2(playerid, Float:angle);
 forward RespawnWorldPickupByDBID(dbid);
@@ -11240,7 +11247,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.21.2 Public Interior Map Icon Slot Fix");
+    SetGameModeText("SAIF Dev v0.24K.21.4 Public Interior Icon Debug Force Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11353,7 +11360,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.21.2 Public Interior Map Icon Slot Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.21.4 Public Interior Icon Debug Force Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -19807,7 +19814,7 @@ stock LoadPublicInteriors()
     ResetPublicInteriorArrays();
 
     mysql_tquery(g_SQL,
-                 "SELECT id, interior_type, display_name, exterior_x, exterior_y, exterior_z, exterior_a, exterior_spawn_x, exterior_spawn_y, exterior_spawn_z, exterior_spawn_a, exterior_pickup_model, interior_pickup_model, exterior_map_icon, exterior_interior, exterior_virtual_world, interior_id, interior_virtual_world, interior_x, interior_y, interior_z, interior_a, exit_x, exit_y, exit_z, exit_a, service_x, service_y, service_z, service_a, service_radius, enabled FROM public_interiors WHERE enabled=1 ORDER BY id ASC LIMIT 80",
+                 "SELECT id, interior_type, display_name, exterior_x, exterior_y, exterior_z, exterior_a, exterior_spawn_x, exterior_spawn_y, exterior_spawn_z, exterior_spawn_a, exterior_pickup_model, interior_pickup_model, exterior_map_icon, exterior_interior, exterior_virtual_world, interior_id, interior_virtual_world, interior_x, interior_y, interior_z, interior_a, exit_x, exit_y, exit_z, exit_a, service_x, service_y, service_z, service_a, service_radius, enabled FROM public_interiors WHERE enabled=1 ORDER BY id DESC LIMIT 80",
                  "OnPublicInteriorsLoaded"
                 );
     return 1;
@@ -19872,6 +19879,7 @@ public OnPublicInteriorsLoaded()
 
     CreatePublicInteriorRuntimeAll();
     RefreshPublicInteriorMapIconsForAllPlayers();
+    SetTimer("RefreshPublicInteriorMapIconsDelayed", 700, false);
 
     new msg[144];
     format(msg, sizeof(msg), "[LSIF] Public interiors loaded: %d.", PublicInteriorCount);
@@ -20863,9 +20871,9 @@ stock ShowPublicInteriorHelp(playerid)
     strcat(body, "Offline-first policy:\n- Public interior exact source utama: IPL/ENEX/map data GTA SA.\n");
     strcat(body, "- Runtime SAIF tetap pakai panah custom, shared virtual world, dan checkpoint merah.\n");
     strcat(body, "- Manual public interior hanya untuk koreksi/placeholder.\n\n");
-    strcat(body, "Editor point:\n/pubintpoints [id]\n/pubintsetpoint [id] [exterior/extspawn/spawn/exit/service]\n/pubintsetfacing [id] [exterior/spawn/exit/service]\n/pubintinteriorid [id] [interior]\n/pubintvw [id] [virtual_world]\n/pubintpickupmodel [id] [exterior/interior] [model]\n/pubintmapicon [id] [icon_id]\n/pubintserviceradius [id] [radius]\n\n");
+    strcat(body, "Editor point:\n/pubintpoints [id]\n/pubintsetpoint [id] [exterior/extspawn/spawn/exit/service]\n/pubintsetfacing [id] [exterior/spawn/exit/service]\n/pubintinteriorid [id] [interior]\n/pubintvw [id] [virtual_world]\n/pubintpickupmodel [id] [exterior/interior] [model]\n/pubintmapicon [id] [icon_id] | /pubintrefreshicons\n/pubinticondebug [id] | /pubintshowicon [id]\n/pubintserviceradius [id] [radius]\n\n");
     strcat(body, "Command lain:\n/pubintmenu\n/pubintcreate [type] [name]\n/pubintlist\n/pubintinfo [id]\n/pubintgoto [id]\n/pubintenter [id]\n/pubintexit\n/pubintdelete [id]\n/pubintreload\n/pubintuse\n/pubintimportdb\n/pubintexactclear\n/pubintexactinfo\n\n");
-    strcat(body, "Map icon: pilih interior > Edit Map Icon ID atau /pubintmapicon [id] [icon_id]. Slot public interior terbatas 10 icon aktif terbaru (90-99).\n\n");
+    strcat(body, "Map icon: pilih interior > Edit Map Icon ID atau /pubintmapicon [id] [icon_id]. Gunakan /pubintrefreshicons untuk refresh manual, /pubinticondebug [id] untuk cek runtime, dan /pubintshowicon [id] untuk force-test slot 99. Slot public interior terbatas 10 icon aktif terbaru (90-99).\n\n");
     strcat(body, "Masuk/keluar pakai pickup panah custom. Transaksi hanya di checkpoint merah depan kasir/service point.");
     ShowPlayerDialog(playerid, DIALOG_PUBINT_HELP, DIALOG_STYLE_MSGBOX, "Public Interior Help", body, "Back", "Close");
     return 1;
@@ -25077,7 +25085,7 @@ stock ApplyPublicInteriorMapIcons(playerid)
     }
 
     new usedSlots = 0;
-    for (new i = PublicInteriorCount - 1; i >= 0; i--)
+    for (new i = 0; i < PublicInteriorCount; i++)
     {
         if (usedSlots >= PUBLIC_INTERIOR_MAPICON_SLOTS)
         {
@@ -25106,7 +25114,8 @@ stock ApplyPublicInteriorMapIcons(playerid)
             continue;
         }
 
-        SetPlayerMapIcon(playerid, iconSlot, PublicInteriorExtX[i], PublicInteriorExtY[i], PublicInteriorExtZ[i], iconType, COLOR_CYAN, MAPICON_LOCAL);
+        // Public interior icon dibuat GLOBAL_CHECKPOINT supaya terlihat jelas di map/radar, bukan hanya local/nearby.
+        SetPlayerMapIcon(playerid, iconSlot, PublicInteriorExtX[i], PublicInteriorExtY[i], PublicInteriorExtZ[i], iconType, COLOR_CYAN, MAPICON_GLOBAL);
         usedSlots++;
     }
     return 1;
@@ -25125,13 +25134,150 @@ stock RefreshPublicInteriorMapIconsForAllPlayers()
 {
     for (new playerid = 0; playerid < MAX_PLAYERS; playerid++)
     {
-        if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
+        if (!IsPlayerConnected(playerid))
         {
             continue;
         }
 
         ApplyPublicInteriorMapIcons(playerid);
     }
+    return 1;
+}
+
+public RefreshPublicInteriorMapIconsDelayed()
+{
+    RefreshPublicInteriorMapIconsForAllPlayers();
+    return 1;
+}
+
+stock GetPublicInteriorIconRuntimeSlot(idx)
+{
+    if (idx < 0 || idx >= PublicInteriorCount)
+    {
+        return -1;
+    }
+
+    new usedSlots = 0;
+    for (new i = 0; i < PublicInteriorCount; i++)
+    {
+        if (usedSlots >= PUBLIC_INTERIOR_MAPICON_SLOTS)
+        {
+            break;
+        }
+
+        if (!PublicInteriorEnabled[i])
+        {
+            continue;
+        }
+
+        if (PublicInteriorExtX[i] == 0.0 && PublicInteriorExtY[i] == 0.0 && PublicInteriorExtZ[i] == 0.0)
+        {
+            continue;
+        }
+
+        if (i == idx)
+        {
+            return MAPICON_BASE_PUBLIC_INTERIOR + usedSlots;
+        }
+
+        usedSlots++;
+    }
+
+    return -1;
+}
+
+stock ForcePublicInteriorIconForPlayer(playerid, dbid)
+{
+    new idx = FindPublicInteriorIndexByDBID(dbid);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Public interior tidak ditemukan di runtime. Coba /pubintreload lalu cek /pubinticondebug.");
+        return 0;
+    }
+
+    if (!PublicInteriorEnabled[idx])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Public interior ini disabled, icon tidak dibuat.");
+        return 0;
+    }
+
+    if (PublicInteriorExtX[idx] == 0.0 && PublicInteriorExtY[idx] == 0.0 && PublicInteriorExtZ[idx] == 0.0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Koordinat exterior public interior masih 0,0,0.");
+        return 0;
+    }
+
+    new iconType = PublicInteriorMapIcon[idx];
+    if (iconType <= 0)
+    {
+        iconType = GetPublicInteriorDefaultMapIcon(PublicInteriorType[idx]);
+    }
+
+    // Slot debug paling akhir. Ini sengaja player-specific untuk membuktikan apakah icon bisa tampil di client.
+    RemovePlayerMapIcon(playerid, 99);
+    SetPlayerMapIcon(playerid, 99, PublicInteriorExtX[idx], PublicInteriorExtY[idx], PublicInteriorExtZ[idx], iconType, COLOR_CYAN, MAPICON_GLOBAL);
+
+    new msg[180];
+    format(msg, sizeof(msg), "[PUBICON] Forced slot 99: id=%d idx=%d type=%s icon=%d pos=%.2f %.2f %.2f",
+        dbid,
+        idx,
+        PublicInteriorType[idx],
+        iconType,
+        PublicInteriorExtX[idx],
+        PublicInteriorExtY[idx],
+        PublicInteriorExtZ[idx]
+    );
+    SendClientMessage(playerid, COLOR_CYAN, msg);
+    return 1;
+}
+
+stock ShowPublicInteriorIconDebug(playerid, dbid)
+{
+    new idx = FindPublicInteriorIndexByDBID(dbid);
+    if (idx == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Public interior ID tidak ada di runtime.");
+        SendClientMessage(playerid, COLOR_YELLOW, "Kemungkinan: tidak ikut LIMIT/loader, disabled, atau belum /pubintreload.");
+        return 0;
+    }
+
+    new iconType = PublicInteriorMapIcon[idx];
+    if (iconType <= 0)
+    {
+        iconType = GetPublicInteriorDefaultMapIcon(PublicInteriorType[idx]);
+    }
+
+    new slot = GetPublicInteriorIconRuntimeSlot(idx);
+    new msg[180];
+
+    format(msg, sizeof(msg), "[PUBICON] id=%d idx=%d enabled=%d slot=%d icon=%d type=%s",
+        dbid,
+        idx,
+        PublicInteriorEnabled[idx],
+        slot,
+        iconType,
+        PublicInteriorType[idx]
+    );
+    SendClientMessage(playerid, COLOR_CYAN, msg);
+
+    format(msg, sizeof(msg), "[PUBICON] name=%s pos=%.2f %.2f %.2f count=%d",
+        PublicInteriorName[idx],
+        PublicInteriorExtX[idx],
+        PublicInteriorExtY[idx],
+        PublicInteriorExtZ[idx],
+        PublicInteriorCount
+    );
+    SendClientMessage(playerid, COLOR_CYAN, msg);
+
+    if (slot == -1)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Icon tidak masuk 10 slot runtime. Gunakan /pubintshowicon [id] untuk force test slot 99.");
+    }
+    else
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "Icon masuk runtime slot. Kalau tidak terlihat, gunakan /pubintshowicon untuk test force icon.");
+    }
+
     return 1;
 }
 
@@ -30482,6 +30628,59 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/pubintrefreshicons", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_ADMIN))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu tidak punya izin admin.");
+            return 1;
+        }
+
+        RefreshPublicInteriorMapIconsForAllPlayers();
+        SendClientMessage(playerid, COLOR_GREEN, "Public interior map icons direfresh untuk semua player online.");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/pubinticondebug ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_ADMIN))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu tidak punya izin admin.");
+            return 1;
+        }
+
+        new idStr[16];
+        strmid(idStr, cmdtext, 17, sizeof(idStr) + 17);
+        if (!IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /pubinticondebug [id]");
+            return 1;
+        }
+
+        ShowPublicInteriorIconDebug(playerid, strval(idStr));
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/pubintshowicon ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_ADMIN))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu tidak punya izin admin.");
+            return 1;
+        }
+
+        new idStr[16];
+        strmid(idStr, cmdtext, 16, sizeof(idStr) + 16);
+        if (!IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /pubintshowicon [id]");
+            return 1;
+        }
+
+        ForcePublicInteriorIconForPlayer(playerid, strval(idStr));
+        return 1;
+    }
+
     if (strfind(cmdtext, "/pubintenter ", true) == 0)
     {
         new idStr[16];
@@ -32125,7 +32324,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.21.2 Public Interior Map Icon Slot Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.21.4 Public Interior Icon Debug Force Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");

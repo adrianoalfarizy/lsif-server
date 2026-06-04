@@ -11213,7 +11213,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.19 Business Map Icon Disable Fix");
+    SetGameModeText("SAIF Dev v0.24K.19.1 Direct Public Service Checkpoint");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11326,7 +11326,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.19 Business Map Icon Disable Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.19.1 Direct Public Service Checkpoint berhasil dijalankan.");
     return 1;
 }
 
@@ -14382,7 +14382,6 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
     {
         if (!response)
         {
-            ShowPublicInteriorInteractionMenu(playerid);
             return 1;
         }
         ProcessPublicInteriorStorePurchase(playerid, listitem);
@@ -14393,7 +14392,6 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
     {
         if (!response)
         {
-            ShowPublicInteriorInteractionMenu(playerid);
             return 1;
         }
         ProcessPublicInteriorFoodPurchase(playerid, listitem);
@@ -14404,7 +14402,6 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
     {
         if (!response)
         {
-            ShowPublicInteriorInteractionMenu(playerid);
             return 1;
         }
         ProcessPublicInteriorService(playerid, listitem);
@@ -20757,7 +20754,7 @@ stock ShowPublicInteriorHelp(playerid)
     strcat(body, "- Manual public interior hanya untuk koreksi/placeholder.\n\n");
     strcat(body, "Editor point:\n/pubintpoints [id]\n/pubintsetpoint [id] [exterior/extspawn/spawn/exit/service]\n/pubintsetfacing [id] [exterior/spawn/exit/service]\n/pubintinteriorid [id] [interior]\n/pubintvw [id] [virtual_world]\n/pubintpickupmodel [id] [exterior/interior] [model]\n/pubintserviceradius [id] [radius]\n\n");
     strcat(body, "Command lain:\n/pubintmenu\n/pubintcreate [type] [name]\n/pubintlist\n/pubintinfo [id]\n/pubintgoto [id]\n/pubintenter [id]\n/pubintexit\n/pubintdelete [id]\n/pubintreload\n/pubintuse\n/pubintimportdb\n/pubintexactclear\n/pubintexactinfo\n\n");
-    strcat(body, "Masuk/keluar pakai pickup panah custom. Transaksi hanya di checkpoint merah depan kasir/service point.");
+    strcat(body, "Masuk/keluar pakai pickup panah custom. Transaksi langsung terbuka dari checkpoint merah depan kasir/service point tanpa menu Info/Exit.");
     ShowPlayerDialog(playerid, DIALOG_PUBINT_HELP, DIALOG_STYLE_MSGBOX, "Public Interior Help", body, "Back", "Close");
     return 1;
 }
@@ -20843,29 +20840,10 @@ stock ShowPublicInteriorInteractionMenu(playerid)
         return 0;
     }
 
-    new title[96];
-    new body[256];
-    format(title, sizeof(title), "%s", PublicInteriorName[idx]);
-
-    if (!strcmp(PublicInteriorType[idx], "ammunation", true))
-    {
-        format(body, sizeof(body), "Weapon Shop\nExit Interior\nInterior Info");
-    }
-    else if (!strcmp(PublicInteriorType[idx], "247", true))
-    {
-        format(body, sizeof(body), "Buy Items\nExit Interior\nInterior Info");
-    }
-    else if (IsPublicInteriorRestaurantType(PublicInteriorType[idx]))
-    {
-        format(body, sizeof(body), "Buy Food\nExit Interior\nInterior Info");
-    }
-    else
-    {
-        format(body, sizeof(body), "Use Service\nExit Interior\nInterior Info");
-    }
-
-    ShowPlayerDialog(playerid, DIALOG_PUBINT_INTERACT_MENU, DIALOG_STYLE_LIST, title, body, "Select", "Close");
-    return 1;
+    // v0.24K.19.1:
+    // Public interior tidak lagi memakai menu perantara Info / Exit untuk service.
+    // Kalau sudah di checkpoint merah, langsung buka service sesuai type.
+    return OpenPublicInteriorMainService(playerid);
 }
 
 stock OpenPublicInteriorMainService(playerid)
@@ -27324,7 +27302,16 @@ stock HandleWorldInteractKey(playerid)
 
     if (PlayerInsidePublicInteriorID[playerid] > 0 || GetPlayerPublicInteriorIndex(playerid) != -1)
     {
-        return ShowPublicInteriorInteractionMenu(playerid);
+        new pubIdx = GetPlayerPublicInteriorIndex(playerid);
+        if (pubIdx != -1 && IsPlayerNearPublicInteriorServicePoint(playerid, pubIdx))
+        {
+            return OpenPublicInteriorMainService(playerid);
+        }
+
+        SendClientMessage(playerid, COLOR_YELLOW, "Service public interior dipakai dari checkpoint merah, bukan ALT.");
+        SendClientMessage(playerid, COLOR_WHITE, "Untuk keluar interior, gunakan pickup panah exit.");
+        if (pubIdx != -1) ShowPublicInteriorServiceCheckpoint(playerid, pubIdx);
+        return 1;
     }
 
     if (PlayerWorking[playerid] || PlayerRace[playerid] != RACE_NONE)
@@ -27587,7 +27574,10 @@ public OnPlayerEnterCheckpoint(playerid)
         new pubIdx = GetPlayerPublicInteriorIndex(playerid);
         if (pubIdx != -1 && IsPlayerNearPublicInteriorServicePoint(playerid, pubIdx))
         {
-            ShowPublicInteriorInteractionMenu(playerid);
+            // v0.24K.19.1:
+            // Checkpoint merah langsung membuka service spesifik.
+            // Tidak lewat menu Info / Exit Interior dan tidak butuh ALT.
+            OpenPublicInteriorMainService(playerid);
             return 1;
         }
     }
@@ -30324,7 +30314,15 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
     if (!strcmp(cmdtext, "/pubintuse", true))
     {
-        ShowPublicInteriorInteractionMenu(playerid);
+        new pubIdx = GetPlayerPublicInteriorIndex(playerid);
+        if (pubIdx != -1 && IsPlayerNearPublicInteriorServicePoint(playerid, pubIdx))
+        {
+            OpenPublicInteriorMainService(playerid);
+            return 1;
+        }
+
+        SendClientMessage(playerid, COLOR_YELLOW, "Dekati checkpoint merah public interior untuk memakai service.");
+        if (pubIdx != -1) ShowPublicInteriorServiceCheckpoint(playerid, pubIdx);
         return 1;
     }
 
@@ -31947,7 +31945,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.19 Business Map Icon Disable Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.19.1 Direct Public Service Checkpoint");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -31957,7 +31955,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19: Business map icons now respect enabled state; disabling a business removes its icon for online players and after restart.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19.1: Public interior service checkpoints now open the specific shop/service directly without ALT or Info/Exit menu.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24N: Source cleanup assistant, safe disable by source_tag, relabel fallback tags, and runtime refresh.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24M: Source audit detail menu, deprecated/fallback record review, and source cleanup policy.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24L: Offline/source audit tools, source_tag validation summary, and /amenus audit entry.");

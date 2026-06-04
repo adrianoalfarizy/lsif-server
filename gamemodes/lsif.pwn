@@ -2150,6 +2150,20 @@ stock SetPlayerNoWeaponSpawnInfoAt(playerid, Float:x, Float:y, Float:z, Float:a)
     return 1;
 }
 
+stock HideClassSelectionForAuth(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 0;
+    }
+
+    // Auth/register flow is dialog-driven. Keep the native SA-MP/open.mp
+    // class selector hidden and prepare a harmless default spawn info.
+    SetPlayerNoWeaponSpawnInfoAt(playerid, SPAWN_X, SPAWN_Y, SPAWN_Z, SPAWN_A);
+    TogglePlayerSpectating(playerid, true);
+    return 1;
+}
+
 stock ClampInt(value, minValue, maxValue)
 {
     if (value < minValue)
@@ -2742,6 +2756,7 @@ stock ResetPlayerAccountData(playerid)
 
 stock ShowRegisterDialog(playerid)
 {
+    HideClassSelectionForAuth(playerid);
     PlayerAuthDialogShown[playerid] = 1;
     ShowPlayerDialog(
         playerid,
@@ -2757,6 +2772,7 @@ stock ShowRegisterDialog(playerid)
 
 stock ShowLoginDialog(playerid)
 {
+    HideClassSelectionForAuth(playerid);
     PlayerAuthDialogShown[playerid] = 1;
     ShowPlayerDialog(
         playerid,
@@ -2984,8 +3000,11 @@ stock SpawnLoggedPlayer(playerid)
     }
 
     SetPlayerNoWeaponSpawnInfoAt(playerid, spawnX, spawnY, spawnZ, spawnA);
+
+    // Do not call SpawnPlayer() here. Disabling spectator mode already triggers
+    // OnPlayerSpawn, and avoiding a second spawn request prevents the native
+    // << >> Spawn/class selector from flashing during login/register/death recovery.
     TogglePlayerSpectating(playerid, false);
-    SpawnPlayer(playerid);
 
     return 1;
 }
@@ -11420,7 +11439,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.20 Hospital Death Respawn");
+    SetGameModeText("SAIF Dev v0.24K.20.2 No Class Selection Auth Flow");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11546,7 +11565,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.20 Hospital Death Respawn & Weapon Drop berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.20.2 No Class Selection Auth Flow berhasil dijalankan.");
     return 1;
 }
 
@@ -11613,8 +11632,8 @@ public OnPlayerConnect(playerid)
     PlayerLastPublicInteriorPickupTick[playerid] = 0;
     CreatePlayerTurfHud(playerid);
 
-    // Sembunyikan class selection/pilih skin sebelum login.
-    TogglePlayerSpectating(playerid, true);
+    // Sembunyikan class selection/pilih skin sebelum login/register.
+    HideClassSelectionForAuth(playerid);
 
     SendClientMessage(playerid, COLOR_GREEN, "Selamat datang di LSIF Closed Beta.");
     SendClientMessage(playerid, COLOR_WHITE, "Mengecek whitelist, ban, dan status akun kamu...");
@@ -11727,13 +11746,17 @@ stock QueueForceSpawnLoggedPlayer(playerid)
         return 0;
     }
 
+    // Hide the SA-MP/open.mp class selector immediately before the recovery timer runs.
+    // Without this, death respawn can briefly show the << >> Spawn screen for one client frame.
+    TogglePlayerSpectating(playerid, true);
+
     if (PlayerClassSpawnRecoveryQueued[playerid])
     {
         return 1;
     }
 
     PlayerClassSpawnRecoveryQueued[playerid] = 1;
-    SetTimerEx("ForceSpawnLoggedPlayerFromClass", 250, false, "i", playerid);
+    SetTimerEx("ForceSpawnLoggedPlayerFromClass", 50, false, "i", playerid);
     return 1;
 }
 
@@ -11761,6 +11784,7 @@ public OnPlayerRequestSpawn(playerid)
     if (!PlayerLoggedIn[playerid])
     {
         SendClientMessage(playerid, COLOR_RED, "Kamu harus login/register terlebih dahulu.");
+        HideClassSelectionForAuth(playerid);
         return 0;
     }
 
@@ -11772,7 +11796,7 @@ public OnPlayerRequestClass(playerid, classid)
 {
     if (!PlayerLoggedIn[playerid])
     {
-        TogglePlayerSpectating(playerid, true);
+        HideClassSelectionForAuth(playerid);
         return 0;
     }
 
@@ -32833,7 +32857,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.20 Hospital Death Respawn & Offline Weapon Drop");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.20.2 No Class Selection Auth Flow");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -32843,7 +32867,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.20: Death respawn skips class selector, sends player to nearest hospital, and drops current weapons as runtime pickups.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.20.2: Remove native class selector from login/register/death flow; hospital respawn and weapon drop remain unchanged.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19.5: Public interior single transform removes delayed facing/camera snap on enter/exit.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19.4: Nearby Map Icon Manager now fills slots 80-99 with nearest public interiors and dynamic locations around each player.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24N: Source cleanup assistant, safe disable by source_tag, relabel fallback tags, and runtime refresh.");

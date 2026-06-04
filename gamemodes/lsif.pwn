@@ -3002,8 +3002,8 @@ stock SpawnLoggedPlayer(playerid)
     SetPlayerNoWeaponSpawnInfoAt(playerid, spawnX, spawnY, spawnZ, spawnA);
 
     // Do not call SpawnPlayer() here. Disabling spectator mode already triggers
-    // OnPlayerSpawn, and avoiding a second spawn request prevents the native
-    // << >> Spawn/class selector from flashing during login/register/death recovery.
+    // OnPlayerSpawn. v0.24K.20.5 relies on this to bypass the native
+    // << >> Spawn/class selector without a delayed recovery timer.
     TogglePlayerSpectating(playerid, false);
 
     return 1;
@@ -11439,7 +11439,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.20.3 Preempt Class Selection Flash");
+    SetGameModeText("SAIF Dev v0.24K.20.5 True Class Selection Bypass Attempt");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11565,7 +11565,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.20.3 Preempt Class Selection Flash berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.20.5 True Class Selection Bypass Attempt berhasil dijalankan.");
     return 1;
 }
 
@@ -11623,8 +11623,8 @@ public OnGameModeExit()
 
 public OnPlayerConnect(playerid)
 {
-    // Must be the first gameplay call on connect. If this runs after reset/HUD/messages,
-    // the client can still render one native class-selection frame.
+    // First gameplay call on connect: hide native class selector before reset/HUD/messages.
+    // This keeps auth/register dialog-driven while preserving natural death animation.
     HideClassSelectionForAuth(playerid);
 
     ResetPlayerAccountData(playerid);
@@ -11747,17 +11747,23 @@ stock QueueForceSpawnLoggedPlayer(playerid)
         return 0;
     }
 
-    // Hide the SA-MP/open.mp class selector immediately before the recovery timer runs.
-    // Without this, death respawn can briefly show the << >> Spawn screen for one client frame.
-    TogglePlayerSpectating(playerid, true);
-
     if (PlayerClassSpawnRecoveryQueued[playerid])
     {
+        // Already consuming a native class/spawn callback. Keep the selector hidden.
+        TogglePlayerSpectating(playerid, true);
         return 1;
     }
 
     PlayerClassSpawnRecoveryQueued[playerid] = 1;
-    SetTimerEx("ForceSpawnLoggedPlayerFromClass", 25, false, "i", playerid);
+
+    // Consume the native SA-MP/open.mp class-selection phase immediately.
+    // Community workaround pattern: set spawn info, enter spectate to hide selector,
+    // then leave spectate so OnPlayerSpawn fires from our scripted spawn info.
+    // No delayed timer here: this is the v0.24K.20.5 bypass attempt.
+    TogglePlayerSpectating(playerid, true);
+    SpawnLoggedPlayer(playerid);
+
+    PlayerClassSpawnRecoveryQueued[playerid] = 0;
     return 1;
 }
 
@@ -11772,10 +11778,12 @@ public ForceSpawnLoggedPlayerFromClass(playerid)
 
     if (!PlayerLoggedIn[playerid])
     {
-        TogglePlayerSpectating(playerid, true);
+        HideClassSelectionForAuth(playerid);
         return 1;
     }
 
+    // Legacy fallback only. v0.24K.20.5 normally bypasses without timer.
+    TogglePlayerSpectating(playerid, true);
     SpawnLoggedPlayer(playerid);
     return 1;
 }
@@ -11789,6 +11797,7 @@ public OnPlayerRequestSpawn(playerid)
         return 0;
     }
 
+    // Do not allow native Spawn button flow. Consume it into SAIF spawn flow.
     QueueForceSpawnLoggedPlayer(playerid);
     return 0;
 }
@@ -11801,6 +11810,7 @@ public OnPlayerRequestClass(playerid, classid)
         return 0;
     }
 
+    // Native class selector is only a dummy internal phase for SAIF.
     QueueForceSpawnLoggedPlayer(playerid);
     return 0;
 }
@@ -11840,12 +11850,6 @@ public OnPlayerDeath(playerid, killerid, WEAPON:reason)
     PlayerLastVirtualWorld[playerid] = hospitalVirtualWorld;
 
     SetPlayerNoWeaponSpawnInfoAt(playerid, hospitalX, hospitalY, hospitalZ, hospitalA);
-
-    // Preempt native SA-MP/open.mp death respawn/class flow.
-    // Previously we waited until OnPlayerRequestClass/OnPlayerRequestSpawn, which allowed
-    // the << >> Spawn selector to flash for one client frame. Queue the hospital respawn
-    // directly from death after the death position/weapon drop has been captured.
-    QueueForceSpawnLoggedPlayer(playerid);
 
     SendClientMessage(playerid, COLOR_ORANGE, "Wasted. Senjata kamu jatuh sebagai pickup di lokasi mati.");
     SendClientMessage(playerid, COLOR_WHITE, "Kamu akan respawn di rumah sakit terdekat tanpa membuka selector skin/class.");
@@ -32864,7 +32868,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.20.3 Preempt Class Selection Flash");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.20.5 True Class Selection Bypass Attempt");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -32874,7 +32878,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.20.3: Preempt class selection flash by hiding selector at first connect line and queueing death hospital respawn directly from OnPlayerDeath.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.20.5: Attempt true native class-selection bypass using immediate spectate-spawn recovery; natural death animation, hospital respawn, and weapon drop remain unchanged.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19.5: Public interior single transform removes delayed facing/camera snap on enter/exit.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19.4: Nearby Map Icon Manager now fills slots 80-99 with nearest public interiors and dynamic locations around each player.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24N: Source cleanup assistant, safe disable by source_tag, relabel fallback tags, and runtime refresh.");

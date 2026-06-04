@@ -11439,7 +11439,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.20.2 No Class Selection Auth Flow");
+    SetGameModeText("SAIF Dev v0.24K.20.3 Preempt Class Selection Flash");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11565,7 +11565,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.20.2 No Class Selection Auth Flow berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.20.3 Preempt Class Selection Flash berhasil dijalankan.");
     return 1;
 }
 
@@ -11623,6 +11623,10 @@ public OnGameModeExit()
 
 public OnPlayerConnect(playerid)
 {
+    // Must be the first gameplay call on connect. If this runs after reset/HUD/messages,
+    // the client can still render one native class-selection frame.
+    HideClassSelectionForAuth(playerid);
+
     ResetPlayerAccountData(playerid);
     PlayerEditingWorldPickupID[playerid] = 0;
     PlayerEditingPublicInteriorID[playerid] = 0;
@@ -11631,9 +11635,6 @@ public OnPlayerConnect(playerid)
     PlayerPublicInteriorServiceCheckpoint[playerid] = 0;
     PlayerLastPublicInteriorPickupTick[playerid] = 0;
     CreatePlayerTurfHud(playerid);
-
-    // Sembunyikan class selection/pilih skin sebelum login/register.
-    HideClassSelectionForAuth(playerid);
 
     SendClientMessage(playerid, COLOR_GREEN, "Selamat datang di LSIF Closed Beta.");
     SendClientMessage(playerid, COLOR_WHITE, "Mengecek whitelist, ban, dan status akun kamu...");
@@ -11756,7 +11757,7 @@ stock QueueForceSpawnLoggedPlayer(playerid)
     }
 
     PlayerClassSpawnRecoveryQueued[playerid] = 1;
-    SetTimerEx("ForceSpawnLoggedPlayerFromClass", 50, false, "i", playerid);
+    SetTimerEx("ForceSpawnLoggedPlayerFromClass", 25, false, "i", playerid);
     return 1;
 }
 
@@ -11839,6 +11840,12 @@ public OnPlayerDeath(playerid, killerid, WEAPON:reason)
     PlayerLastVirtualWorld[playerid] = hospitalVirtualWorld;
 
     SetPlayerNoWeaponSpawnInfoAt(playerid, hospitalX, hospitalY, hospitalZ, hospitalA);
+
+    // Preempt native SA-MP/open.mp death respawn/class flow.
+    // Previously we waited until OnPlayerRequestClass/OnPlayerRequestSpawn, which allowed
+    // the << >> Spawn selector to flash for one client frame. Queue the hospital respawn
+    // directly from death after the death position/weapon drop has been captured.
+    QueueForceSpawnLoggedPlayer(playerid);
 
     SendClientMessage(playerid, COLOR_ORANGE, "Wasted. Senjata kamu jatuh sebagai pickup di lokasi mati.");
     SendClientMessage(playerid, COLOR_WHITE, "Kamu akan respawn di rumah sakit terdekat tanpa membuka selector skin/class.");
@@ -32857,7 +32864,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.20.2 No Class Selection Auth Flow");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.20.3 Preempt Class Selection Flash");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -32867,7 +32874,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.20.2: Remove native class selector from login/register/death flow; hospital respawn and weapon drop remain unchanged.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.20.3: Preempt class selection flash by hiding selector at first connect line and queueing death hospital respawn directly from OnPlayerDeath.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19.5: Public interior single transform removes delayed facing/camera snap on enter/exit.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19.4: Nearby Map Icon Manager now fills slots 80-99 with nearest public interiors and dynamic locations around each player.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24N: Source cleanup assistant, safe disable by source_tag, relabel fallback tags, and runtime refresh.");

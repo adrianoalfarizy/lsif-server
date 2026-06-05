@@ -11576,7 +11576,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.22E Wanted Persist On Death");
+    SetGameModeText("SAIF Dev v0.24K.22F Death Log Wanted Level");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11705,7 +11705,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.22E Wanted Persist On Death berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.22F Death Log Wanted Level berhasil dijalankan.");
     return 1;
 }
 
@@ -27986,7 +27986,7 @@ stock LogPlayerDeathEvent(playerid, killerid, WEAPON:reason, droppedWeapons)
         g_SQL,
         query,
         sizeof(query),
-        "INSERT INTO death_logs (death_token, victim_id, victim_name, killer_id, killer_name, reason_id, reason_name, death_x, death_y, death_z, death_a, death_interior, death_virtual_world, dropped_weapon_count, hospital_fee_charged) VALUES ('%e', %d, '%e', %d, '%e', %d, '%e', %f, %f, %f, %f, %d, %d, %d, 0)",
+        "INSERT INTO death_logs (death_token, victim_id, victim_name, killer_id, killer_name, reason_id, reason_name, wanted_level_at_death, death_x, death_y, death_z, death_a, death_interior, death_virtual_world, dropped_weapon_count, hospital_fee_charged) VALUES ('%e', %d, '%e', %d, '%e', %d, '%e', %d, %f, %f, %f, %f, %d, %d, %d, 0)",
         PlayerDeathLogToken[playerid],
         PlayerDBID[playerid],
         victimName,
@@ -27994,6 +27994,7 @@ stock LogPlayerDeathEvent(playerid, killerid, WEAPON:reason, droppedWeapons)
         killerName,
         _:reason,
         reasonName,
+        PlayerDeathWantedLevel[playerid],
         PlayerDeathX[playerid],
         PlayerDeathY[playerid],
         PlayerDeathZ[playerid],
@@ -28039,7 +28040,7 @@ stock ShowRecentDeathLogs(playerid)
         g_SQL,
         query,
         sizeof(query),
-        "SELECT id, victim_name, killer_name, reason_name, dropped_weapon_count, hospital_fee_charged, created_at FROM death_logs ORDER BY id DESC LIMIT 10"
+        "SELECT id, victim_name, killer_name, reason_name, wanted_level_at_death, dropped_weapon_count, hospital_fee_charged, created_at FROM death_logs ORDER BY id DESC LIMIT 10"
     );
     mysql_tquery(g_SQL, query, "OnRecentDeathLogsLoaded", "i", playerid);
     return 1;
@@ -28066,6 +28067,7 @@ public OnRecentDeathLogsLoaded(playerid)
         new victimName[MAX_PLAYER_NAME];
         new killerName[MAX_PLAYER_NAME];
         new reasonName[40];
+        new wanted;
         new dropped;
         new fee;
         new createdAt[32];
@@ -28076,18 +28078,19 @@ public OnRecentDeathLogsLoaded(playerid)
             cache_get_value_name(i, "victim_name", victimName, sizeof(victimName));
             cache_get_value_name(i, "killer_name", killerName, sizeof(killerName));
             cache_get_value_name(i, "reason_name", reasonName, sizeof(reasonName));
+            cache_get_value_name_int(i, "wanted_level_at_death", wanted);
             cache_get_value_name_int(i, "dropped_weapon_count", dropped);
             cache_get_value_name_int(i, "hospital_fee_charged", fee);
             cache_get_value_name(i, "created_at", createdAt, sizeof(createdAt));
 
-            format(line, sizeof(line), "#%d %s died | killer: %s | %s | drops:%d | fee:$%d\n", id, victimName, killerName, reasonName, dropped, fee);
+            format(line, sizeof(line), "#%d %s died | killer: %s | %s | wanted:%d | drops:%d | fee:$%d\n", id, victimName, killerName, reasonName, wanted, dropped, fee);
             strcat(body, line, sizeof(body));
             format(line, sizeof(line), "   %s\n", createdAt);
             strcat(body, line, sizeof(body));
         }
     }
 
-    strcat(body, "\nData ini hanya audit. Death/class selection flow tidak diubah oleh v0.24K.22B/v0.24K.22C.", sizeof(body));
+    strcat(body, "\nData ini hanya audit. Wanted column mencatat wanted level saat mati; hospital death tetap tidak menghapus wanted.", sizeof(body));
     ShowPlayerDialog(playerid, DIALOG_DEATH_LOGS, DIALOG_STYLE_MSGBOX, "Death Logs", body, "Back", "Close");
     return 1;
 }
@@ -28281,7 +28284,7 @@ stock ShowDeathHospitalConfigMenu(playerid)
     strcat(body, "/deathlogs = show recent death/killer/fee logs\n", sizeof(body));
     strcat(body, "/deathconfig, /hospitalconfig, /hospitalfee = open this reference\n\n", sizeof(body));
     strcat(body, "Design note:\n", sizeof(body));
-    strcat(body, "Native GTA/SA-MP money loss remains ignored. DB/server money is authoritative; weapon drop lifetime is SAIF-controlled via server_settings. Wanted level persists after death; arrest/jail reset must be handled by future police flow, not hospital death.", sizeof(body));
+    strcat(body, "Native GTA/SA-MP money loss remains ignored. DB/server money is authoritative; weapon drop lifetime is SAIF-controlled via server_settings. Wanted level persists after death and is recorded in death_logs; arrest/jail reset must be handled by future police flow, not hospital death.", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_DEATH_CONFIG_MENU, DIALOG_STYLE_MSGBOX, "Death / Hospital Config", body, "Back", "Close");
     return 1;
@@ -33909,7 +33912,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22E Wanted Persist On Death");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22F Death Log Wanted Level");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -33919,7 +33922,9 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22D: Death weapon drop lifetime DB config + /deathdrops audit; no class/death animation changes.{FFFFFF}v0.24K.22E: Wanted level now persists after hospital death respawn; no arrest/reset on death.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22F: death_logs now record wanted level at death; /deathlogs shows wanted audit.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22E: Wanted level persists after hospital death respawn; no arrest/reset on death.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22D: Death weapon drop lifetime DB config + /deathdrops audit; no class/death animation changes.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22C.1: Fixed /amenus Recent Death Logs mapping; no gameplay or DB changes.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22C: Schema baseline refresh; death_logs masuk DB contract/runtime table count 36; no gameplay changes.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22B: Death log audit; killer/reason/death position/drop count/hospital fee recorded in DB; no class-flow changes.");

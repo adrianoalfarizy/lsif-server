@@ -8392,7 +8392,18 @@ public OnGangHQInteriorsLoaded()
     }
 
     CreateAllGangHQInteriorRuntime();
-    printf("[SAIF] Gang HQ interiors loaded: %d rows.", rows);
+
+    /*
+     * v0.24K.22F.1
+     * Gang HQ exterior runtime owns the outside door/panah pickup.
+     * gang_hq_interiors is loaded async and may finish after gang_preset_config.
+     * If we only recreate interior runtime here, the exterior door pickup can stay at
+     * the hardcoded/default HQ point until a manual reload/editor action.
+     * Recreate exterior runtime after loading door_x/y/z/a so restart uses DB points.
+     */
+    CreateAllGangHQExteriorRuntime();
+
+    printf("[SAIF] Gang HQ interiors loaded: %d rows. Exterior door pickups refreshed from DB.", rows);
     return 1;
 }
 
@@ -11576,7 +11587,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.22F Death Log Wanted Level");
+    SetGameModeText("SAIF Dev v0.24K.22F.1 Gang HQ Door Reload Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11705,7 +11716,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.22F Death Log Wanted Level berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.22F.1 Gang HQ Door Reload Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -33912,7 +33923,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22F Death Log Wanted Level");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22F.1 Gang HQ Door Reload Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -33922,7 +33933,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22F: death_logs now record wanted level at death; /deathlogs shows wanted audit.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22F.1: Gang HQ exterior door/panah pickup now reloads from DB after restart.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22E: Wanted level persists after hospital death respawn; no arrest/reset on death.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22D: Death weapon drop lifetime DB config + /deathdrops audit; no class/death animation changes.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22C.1: Fixed /amenus Recent Death Logs mapping; no gameplay or DB changes.");

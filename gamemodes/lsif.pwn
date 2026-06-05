@@ -2469,6 +2469,7 @@ forward OnDeathConfigSaved();
 forward OnRecentDeathLogsLoaded(playerid);
 forward OnRecentArrestLogsLoaded(playerid);
 forward OnPersistentArrestJailHoldLoaded(playerid);
+forward OnPersistentArrestJailHoldsListLoaded(playerid);
 forward ReleaseArrestJailedPlayer(playerid);
 forward ReapplyPlayerWantedAfterDeath(playerid, wantedLevel);
 forward OnGangColorUpdated(playerid, colorIndex);
@@ -11768,7 +11769,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24L.2 Schema Baseline Jail Refresh");
+    SetGameModeText("SAIF Dev v0.24L.3 Persistent Jail Admin GUI Polish");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -12666,7 +12667,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /releasejail [id], /jailstatus, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /releasejail [id], /jailstatus, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
@@ -12742,7 +12743,8 @@ stock ShowArrestConfigMenu(playerid)
     format(line, sizeof(line), "Set Jail Release Point Here\t%.1f, %.1f, %.1f | int %d vw %d\n", g_PoliceArrestReleaseX, g_PoliceArrestReleaseY, g_PoliceArrestReleaseZ, g_PoliceArrestReleaseInterior, g_PoliceArrestReleaseVW);
     strcat(body, line, sizeof(body));
     strcat(body, "Goto Jail Release Point\tTeleport Owner to release point\n", sizeof(body));
-    strcat(body, "Active Jail Holds\tList jailed players\n", sizeof(body));
+    strcat(body, "Active Jail Holds\tList online jailed players\n", sizeof(body));
+    strcat(body, "Persistent Jail DB Holds\tList saved jail holds\n", sizeof(body));
     strcat(body, "Wanted / Arrest Reference\tFlow rules\n", sizeof(body));
     strcat(body, "Recent Arrest / Jail Logs\tAudit POLICE_ARREST / ARREST_JAIL_RELEASE\n", sizeof(body));
     strcat(body, "Death / Hospital Config\tOpen related config\n", sizeof(body));
@@ -14524,10 +14526,11 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
                 ShowArrestConfigMenu(playerid);
             }
             case 9: ShowActiveArrestJails(playerid);
-            case 10: ShowWantedPoliceArrestReference(playerid);
-            case 11: ShowRecentArrestLogs(playerid);
-            case 12: ShowDeathHospitalConfigMenu(playerid);
-            case 13: ShowAdminToolsMenu(playerid);
+            case 10: ShowPersistentArrestJailHolds(playerid);
+            case 11: ShowWantedPoliceArrestReference(playerid);
+            case 12: ShowRecentArrestLogs(playerid);
+            case 13: ShowDeathHospitalConfigMenu(playerid);
+            case 14: ShowAdminToolsMenu(playerid);
         }
         return 1;
     }
@@ -29341,8 +29344,7 @@ stock ShowActiveArrestJails(playerid)
     new count = 0;
     body[0] = EOS;
 
-    strcat(body, "Player	Remaining	Status
-", sizeof(body));
+    strcat(body, "Player	Remaining	Status\n", sizeof(body));
 
     for (new i = 0; i < MAX_PLAYERS; i++)
     {
@@ -29352,19 +29354,82 @@ stock ShowActiveArrestJails(playerid)
         }
 
         GetPlayerName(i, name, sizeof(name));
-        format(line, sizeof(line), "%s [%d]	%ds	Jailed
-", name, i, GetArrestJailRemainingSeconds(i));
+        format(line, sizeof(line), "%s [%d]	%ds	Jailed\n", name, i, GetArrestJailRemainingSeconds(i));
         strcat(body, line, sizeof(body));
         count++;
     }
 
     if (count <= 0)
     {
-        strcat(body, "No active jail holds	-	Clear
-", sizeof(body));
+        strcat(body, "No active jail holds	-	Clear\n", sizeof(body));
     }
 
     ShowPlayerDialog(playerid, DIALOG_ARREST_JAIL_LIST, DIALOG_STYLE_TABLIST_HEADERS, "Active Arrest Jail Holds", body, "Back", "Close");
+    return 1;
+}
+
+stock ShowPersistentArrestJailHolds(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa melihat persistent jail holds.");
+        return 0;
+    }
+
+    new query[512];
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "SELECT h.id, h.player_id, COALESCE(p.username, 'UNKNOWN') AS username, GREATEST(0, TIMESTAMPDIFF(SECOND, NOW(), h.expires_at)) AS remaining_seconds, h.reason, h.expires_at, h.updated_at FROM player_jail_holds h LEFT JOIN players p ON p.id = h.player_id ORDER BY h.expires_at ASC LIMIT 20"
+    );
+    mysql_tquery(g_SQL, query, "OnPersistentArrestJailHoldsListLoaded", "i", playerid);
+    return 1;
+}
+
+public OnPersistentArrestJailHoldsListLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+
+    new rows = cache_num_rows();
+    new body[3072];
+    new line[224];
+    body[0] = EOS;
+
+    strcat(body, "Persistent Jail Holds (DB)\n\n", sizeof(body));
+    strcat(body, "Ini menampilkan jail hold yang tersimpan di player_jail_holds, termasuk player offline/reconnect pending.\n\n", sizeof(body));
+
+    if (rows <= 0)
+    {
+        strcat(body, "Tidak ada persistent jail hold tersimpan.\n", sizeof(body));
+    }
+    else
+    {
+        new id, playerDbId, remaining;
+        new username[24];
+        new reason[64];
+        new expiresAt[32];
+        new updatedAt[32];
+
+        for (new i = 0; i < rows; i++)
+        {
+            cache_get_value_name_int(i, "id", id);
+            cache_get_value_name_int(i, "player_id", playerDbId);
+            cache_get_value_name_int(i, "remaining_seconds", remaining);
+            cache_get_value_name(i, "username", username, sizeof(username));
+            cache_get_value_name(i, "reason", reason, sizeof(reason));
+            cache_get_value_name(i, "expires_at", expiresAt, sizeof(expiresAt));
+            cache_get_value_name(i, "updated_at", updatedAt, sizeof(updatedAt));
+
+            format(line, sizeof(line), "#%d DB:%d %s | remaining:%ds | reason:%s\n", id, playerDbId, username, remaining, reason);
+            strcat(body, line, sizeof(body));
+            format(line, sizeof(line), "   expires:%s | updated:%s\n", expiresAt, updatedAt);
+            strcat(body, line, sizeof(body));
+        }
+    }
+
+    strcat(body, "\nOnline jail hold runtime: /arrestjails\nManual online release: /releasejail [playerid]", sizeof(body));
+    ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "Persistent Jail DB Holds", body, "Back", "Close");
     return 1;
 }
 
@@ -33291,6 +33356,12 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/persistentjails", true) || !strcmp(cmdtext, "/dbjails", true) || !strcmp(cmdtext, "/jailholdsdb", true))
+    {
+        ShowPersistentArrestJailHolds(playerid);
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/jaildisconnectlogs", true) || !strcmp(cmdtext, "/jaildclogs", true))
     {
         ShowRecentArrestLogs(playerid);
@@ -35434,7 +35505,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24L.2 Schema Baseline Jail Refresh");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24L.3 Persistent Jail Admin GUI Polish");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -35444,7 +35515,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24L.2: Schema baseline/verify refreshed for player_jail_holds persistent jail table. v0.24L.1: Persistent jail hold foundation.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24L.3: Persistent jail hold admin GUI polish (/persistentjails DB view). v0.24L.2: Schema baseline refreshed for player_jail_holds.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24L.0: Milestone rebase from long v0.24K branch.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22I: Arrest config polish via server_settings: radius/fine controls, /arrestconfig, /setarrestradius, /setarrestfine.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22I.1: /amenus config items now open GUI action menus instead of note-only references.");

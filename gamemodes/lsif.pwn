@@ -11587,7 +11587,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.22F.1 Gang HQ Door Reload Fix");
+    SetGameModeText("SAIF Dev v0.24K.22F.2 Schema Baseline Wanted Refresh");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11716,7 +11716,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.22F.1 Gang HQ Door Reload Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.22F.2 Schema Baseline Wanted Refresh berhasil dijalankan.");
     return 1;
 }
 
@@ -33923,7 +33923,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22F.1 Gang HQ Door Reload Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22F.2 Schema Baseline Wanted Refresh");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -33933,6 +33933,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22F.2: Schema baseline/verify refreshed for death_logs wanted_level_at_death.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22F.1: Gang HQ exterior door/panah pickup now reloads from DB after restart.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22E: Wanted level persists after hospital death respawn; no arrest/reset on death.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22D: Death weapon drop lifetime DB config + /deathdrops audit; no class/death animation changes.");

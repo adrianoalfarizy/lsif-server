@@ -251,6 +251,10 @@
 #define DIALOG_PUBINT_EXT_PICKUP_MODEL_INPUT 1231
 #define DIALOG_PUBINT_INT_PICKUP_MODEL_INPUT 1232
 #define DIALOG_PUBINT_MAP_ICON_INPUT 1233
+#define DIALOG_LIVE_DB_AUDIT_MENU 1234
+#define DIALOG_LIVE_DB_TABLE_SUMMARY 1235
+#define DIALOG_LIVE_DB_CLEANUP_CANDIDATES 1236
+#define DIALOG_LIVE_DB_INTEGRITY 1237
 
 
 
@@ -2415,6 +2419,9 @@ forward OnSourceAuditSummaryLoaded(playerid);
 forward OnSourceAuditDetailLoaded(playerid, datasetIndex);
 forward OnSourceAuditDeprecatedLoaded(playerid);
 forward OnSourceCleanupUpdated(playerid, datasetIndex, actionType);
+forward OnLiveDBTableAuditLoaded(playerid);
+forward OnLiveDBCleanupCandidatesLoaded(playerid);
+forward OnLiveDBIntegrityLoaded(playerid);
 
 forward OnDynamicLocationsLoaded();
 forward OnDynamicLocationCreated(playerid);
@@ -11485,7 +11492,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.21A Cleanup Baseline Pass");
+    SetGameModeText("SAIF Dev v0.24K.21B Live DB Audit Pass");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11612,7 +11619,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.21A Cleanup Baseline Pass berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.21B Live DB Audit Pass berhasil dijalankan.");
     return 1;
 }
 
@@ -12343,6 +12350,7 @@ stock ShowAdminToolsMenu(playerid)
     strcat(body, "Ammu-Nation Config\t/ammuconfig\tOwner\n", sizeof(body));
     strcat(body, "Public Service Config\t/serviceconfig\tOwner\n", sizeof(body));
     strcat(body, "Offline Source Audit\t/sourceauditmenu\tOwner\n", sizeof(body));
+    strcat(body, "Live DB Audit & Integrity\t/livedbaudit\tOwner\n", sizeof(body));
     strcat(body, "Command Reference\t/amenus\tHelper+\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_ADMIN_TOOLS_MENU, DIALOG_STYLE_TABLIST_HEADERS, "SAIF Admin Menus Hub", body, "Open", "Close");
@@ -12357,7 +12365,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "SAIF Admin Menus Hub (/amenus)\n\n", sizeof(body));
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
-    strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
+    strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
     strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
@@ -12399,6 +12407,7 @@ stock ShowSourceAuditActionMenu(playerid)
     strcat(body, "Deprecated/Fallback Records\tTampilkan data template/curated/legacy/unknown\n", sizeof(body));
     strcat(body, "Cleanup Assistant\tDisable/relabel source_tag secara aman\n", sizeof(body));
     strcat(body, "Source Policy & Cleanup Rule\tPanduan aman offline-first\n", sizeof(body));
+    strcat(body, "Live DB Audit & Integrity\tTable count, cleanup candidate, orphan check\n", sizeof(body));
     strcat(body, "Admin Command Reference\tDaftar command admin/editor\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_SOURCE_AUDIT_MENU, DIALOG_STYLE_TABLIST_HEADERS, "SAIF Source Audit Menu", body, "Open", "Back");
@@ -12715,6 +12724,267 @@ public OnSourceCleanupUpdated(playerid, datasetIndex, actionType)
         format(msg, sizeof(msg), "Source relabel selesai: %d row updated pada %s. Runtime direfresh.", affectedRows, datasetLabel);
     }
     SendClientMessage(playerid, COLOR_GREEN, msg);
+    return 1;
+}
+
+
+stock ShowLiveDBAuditMenu(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka live DB audit.");
+        return 0;
+    }
+
+    new body[1024];
+    body[0] = EOS;
+    strcat(body, "Audit\tPurpose\n", sizeof(body));
+    strcat(body, "Table Inventory\tHitung row live DB per kategori tabel\n", sizeof(body));
+    strcat(body, "Cleanup Candidate Counters\tDisabled/deprecated/import/log counters tanpa delete\n", sizeof(body));
+    strcat(body, "Orphan / Integrity Check\tCek relasi player/org/gang yang yatim\n", sizeof(body));
+    strcat(body, "Source Audit Menu\tKembali ke audit source_tag exact/manual/legacy\n", sizeof(body));
+    strcat(body, "Admin Command Reference\tDaftar command admin/editor\n", sizeof(body));
+
+    ShowPlayerDialog(playerid, DIALOG_LIVE_DB_AUDIT_MENU, DIALOG_STYLE_TABLIST_HEADERS, "SAIF Live DB Audit & Integrity", body, "Open", "Back");
+    return 1;
+}
+
+stock ShowLiveDBTableInventory(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka live DB table inventory.");
+        return 0;
+    }
+
+    static query[8192];
+    query[0] = EOS;
+
+    strcat(query, "SELECT 'players' tbl, 'CORE' category, COUNT(*) total, COUNT(*) active, 'accounts' note FROM players ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'player_vehicles','PLAYER',COUNT(*),COUNT(*),'owned vehicles' FROM player_vehicles ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'player_houses','PLAYER',COUNT(*),COUNT(*),'owned houses' FROM player_houses ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'player_businesses','PLAYER',COUNT(*),COUNT(*),'owned businesses' FROM player_businesses ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'player_weapons','PLAYER',COUNT(*),COUNT(*),'saved weapon loadout' FROM player_weapons ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'organizations','ORG',COUNT(*),COUNT(*),'player-made legal groups' FROM organizations ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'organization_members','ORG',COUNT(*),COUNT(*),'org memberships' FROM organization_members ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'gangs','GANG',COUNT(*),COUNT(*),'legacy/runtime gang bank' FROM gangs ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'gang_preset_config','GANG',COUNT(*),SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END),'DB gang presets' FROM gang_preset_config ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'gang_hq_interiors','GANG',COUNT(*),SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END),'gang HQ points' FROM gang_hq_interiors ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'gang_members','GANG',COUNT(*),COUNT(*),'gang memberships' FROM gang_members ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'gang_member_stats','GANG',COUNT(*),COUNT(*),'gang stats' FROM gang_member_stats ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'gang_territories','TURF',COUNT(*),SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END),'turf zones' FROM gang_territories ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'gang_weapon_stash','GANG',COUNT(*),COUNT(*),'HQ stash stock' FROM gang_weapon_stash ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'world_locations','WORLD',COUNT(*),SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END),'dynamic ALT points' FROM world_locations ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'world_objects','WORLD',COUNT(*),SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END),'dynamic objects' FROM world_objects ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'parked_vehicles','WORLD',COUNT(*),SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END),'parked vehicles' FROM parked_vehicles ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'world_pickups','WORLD',COUNT(*),SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END),'offline/world pickups' FROM world_pickups ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'public_interiors','WORLD',COUNT(*),SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END),'public shop interiors' FROM public_interiors ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'business_preset_config','CONFIG',COUNT(*),SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END),'business presets' FROM business_preset_config ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'public_service_config','CONFIG',COUNT(*),SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END),'public service prices' FROM public_service_config ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'weapon_shop_config','CONFIG',COUNT(*),SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END),'Ammu config' FROM weapon_shop_config ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'server_settings','CONFIG',COUNT(*),COUNT(*),'server key/value settings' FROM server_settings ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'parked_vehicle_import_queue','IMPORT',COUNT(*),SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END),'exact parked queue archive' FROM parked_vehicle_import_queue ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'public_interior_import_queue','IMPORT',COUNT(*),SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END),'IPL/ENEX import queue' FROM public_interior_import_queue ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'world_pickup_import_queue','IMPORT',COUNT(*),SUM(CASE WHEN enabled=1 THEN 1 ELSE 0 END),'SCM pickup import queue' FROM world_pickup_import_queue ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'admin_logs','LOG',COUNT(*),COUNT(*),'admin action logs' FROM admin_logs ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'reports','LOG',COUNT(*),SUM(CASE WHEN status='open' THEN 1 ELSE 0 END),'open reports as active' FROM reports ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'feedback_reports','LOG',COUNT(*),SUM(CASE WHEN status='open' THEN 1 ELSE 0 END),'open feedback as active' FROM feedback_reports ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'bans','SECURITY',COUNT(*),SUM(CASE WHEN active=1 THEN 1 ELSE 0 END),'active bans' FROM bans ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'beta_whitelist','SECURITY',COUNT(*),SUM(CASE WHEN active=1 THEN 1 ELSE 0 END),'active whitelist' FROM beta_whitelist ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'job_stats','STAT',COUNT(*),COUNT(*),'job stats' FROM job_stats ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'race_records','STAT',COUNT(*),COUNT(*),'race best times' FROM race_records ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'turf_war_logs','LOG',COUNT(*),COUNT(*),'turf war logs' FROM turf_war_logs ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'gang_weapon_logs','LOG',COUNT(*),COUNT(*),'gang stash logs' FROM gang_weapon_logs ", sizeof(query));
+    strcat(query, "ORDER BY category ASC, tbl ASC", sizeof(query));
+
+    mysql_tquery(g_SQL, query, "OnLiveDBTableAuditLoaded", "i", playerid);
+    SendClientMessage(playerid, COLOR_YELLOW, "Memuat live DB table inventory...");
+    return 1;
+}
+
+stock ShowLiveDBCleanupCandidates(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka cleanup candidate counters.");
+        return 0;
+    }
+
+    static query[8192];
+    query[0] = EOS;
+
+    strcat(query, "SELECT 'disabled world_locations' item, COUNT(*) total, 'review before archive; may replace old static markers' note FROM world_locations WHERE enabled=0 ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'disabled world_objects', COUNT(*), 'disabled editor objects' FROM world_objects WHERE enabled=0 ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'disabled parked_vehicles', COUNT(*), 'disabled/manual/template parked rows' FROM parked_vehicles WHERE enabled=0 ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'disabled world_pickups', COUNT(*), 'disabled pickup rows/templates' FROM world_pickups WHERE enabled=0 ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'disabled public_interiors', COUNT(*), 'manual/exact public interiors disabled' FROM public_interiors WHERE enabled=0 ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'disabled gang_territories', COUNT(*), 'inactive turf rows' FROM gang_territories WHERE enabled=0 ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'active deprecated world_locations', COUNT(*), 'legacy/template/curated/unknown still enabled' FROM world_locations WHERE enabled=1 AND (source_tag='' OR source_tag='unknown' OR source_tag LIKE '%template%' OR source_tag LIKE '%curated%' OR source_tag LIKE '%legacy%' OR source_tag LIKE '%fallback%') ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'active deprecated parked_vehicles', COUNT(*), 'legacy/template/curated/unknown still enabled' FROM parked_vehicles WHERE enabled=1 AND (source_tag='' OR source_tag='unknown' OR source_tag LIKE '%template%' OR source_tag LIKE '%curated%' OR source_tag LIKE '%legacy%' OR source_tag LIKE '%fallback%') ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'active deprecated world_pickups', COUNT(*), 'legacy/template/curated/unknown still enabled' FROM world_pickups WHERE enabled=1 AND (source_tag='' OR source_tag='unknown' OR source_tag LIKE '%template%' OR source_tag LIKE '%curated%' OR source_tag LIKE '%legacy%' OR source_tag LIKE '%fallback%') ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'active deprecated public_interiors', COUNT(*), 'legacy/template/curated/unknown still enabled' FROM public_interiors WHERE enabled=1 AND (source_tag='' OR source_tag='unknown' OR source_tag LIKE '%template%' OR source_tag LIKE '%curated%' OR source_tag LIKE '%legacy%' OR source_tag LIKE '%fallback%') ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'parked import queue rows', COUNT(*), 'archive only after exact import is verified' FROM parked_vehicle_import_queue ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'public interior import unimported', COUNT(*), 'queue rows imported=0' FROM public_interior_import_queue WHERE imported=0 ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'world pickup import queue rows', COUNT(*), 'archive only after SCM import is verified' FROM world_pickup_import_queue ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'admin_logs older 90d', COUNT(*), 'candidate for future retention/archive policy' FROM admin_logs WHERE created_at < (NOW() - INTERVAL 90 DAY) ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'turf_war_logs older 90d', COUNT(*), 'candidate for future retention/archive policy' FROM turf_war_logs WHERE created_at < (NOW() - INTERVAL 90 DAY) ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'gang_weapon_logs older 90d', COUNT(*), 'candidate for future retention/archive policy' FROM gang_weapon_logs WHERE created_at < (NOW() - INTERVAL 90 DAY) ", sizeof(query));
+    strcat(query, "ORDER BY item ASC", sizeof(query));
+
+    mysql_tquery(g_SQL, query, "OnLiveDBCleanupCandidatesLoaded", "i", playerid);
+    SendClientMessage(playerid, COLOR_YELLOW, "Memuat live DB cleanup candidate counters...");
+    return 1;
+}
+
+stock ShowLiveDBIntegrityCheck(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka DB integrity check.");
+        return 0;
+    }
+
+    static query[8192];
+    query[0] = EOS;
+
+    strcat(query, "SELECT 'player_vehicles without player' issue, COUNT(*) total, 'owner_id missing in players' note FROM player_vehicles pv LEFT JOIN players p ON p.id=pv.owner_id WHERE p.id IS NULL ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'player_houses without player', COUNT(*), 'owner_id missing in players' FROM player_houses ph LEFT JOIN players p ON p.id=ph.owner_id WHERE p.id IS NULL ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'player_businesses without player', COUNT(*), 'owner_id missing in players' FROM player_businesses pb LEFT JOIN players p ON p.id=pb.owner_id WHERE p.id IS NULL ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'player_weapons without player', COUNT(*), 'player_id missing in players' FROM player_weapons pw LEFT JOIN players p ON p.id=pw.player_id WHERE p.id IS NULL ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'job_stats without player', COUNT(*), 'player_id missing in players' FROM job_stats js LEFT JOIN players p ON p.id=js.player_id WHERE p.id IS NULL ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'race_records without player', COUNT(*), 'player_id missing in players' FROM race_records rr LEFT JOIN players p ON p.id=rr.player_id WHERE p.id IS NULL ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'organizations without owner player', COUNT(*), 'owner_id missing in players' FROM organizations o LEFT JOIN players p ON p.id=o.owner_id WHERE p.id IS NULL ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'organization_members without player', COUNT(*), 'player_id missing in players' FROM organization_members om LEFT JOIN players p ON p.id=om.player_id WHERE p.id IS NULL ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'organization_members without org', COUNT(*), 'org_id missing in organizations' FROM organization_members om LEFT JOIN organizations o ON o.id=om.org_id WHERE o.id IS NULL ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'gang_members without player', COUNT(*), 'player_id missing in players' FROM gang_members gm LEFT JOIN players p ON p.id=gm.player_id WHERE p.id IS NULL ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'gang_member_stats without player', COUNT(*), 'player_id missing in players' FROM gang_member_stats gs LEFT JOIN players p ON p.id=gs.player_id WHERE p.id IS NULL ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'gang_members without preset', COUNT(*), 'gang_id missing in gang_preset_config' FROM gang_members gm LEFT JOIN gang_preset_config gpc ON gpc.gang_id=gm.gang_id WHERE gpc.gang_id IS NULL ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'gang_stash without preset', COUNT(*), 'gang_id missing in gang_preset_config' FROM gang_weapon_stash gs LEFT JOIN gang_preset_config gpc ON gpc.gang_id=gs.gang_id WHERE gpc.gang_id IS NULL ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'gang_territories org legacy owner', COUNT(*), 'owner_org_id/name should be zero/Neutral in gang-only turf' FROM gang_territories WHERE owner_org_id<>0 OR owner_org_name<>'Neutral' ", sizeof(query));
+    strcat(query, "ORDER BY issue ASC", sizeof(query));
+
+    mysql_tquery(g_SQL, query, "OnLiveDBIntegrityLoaded", "i", playerid);
+    SendClientMessage(playerid, COLOR_YELLOW, "Memuat live DB orphan/integrity check...");
+    return 1;
+}
+
+public OnLiveDBTableAuditLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+
+    new rows = cache_num_rows();
+    new body[4096];
+    new line[220];
+    new tableName[48];
+    new category[24];
+    new note[80];
+    new total;
+    new active;
+
+    body[0] = EOS;
+    strcat(body, "Category\tTable\tRows/Active\tNote\n", sizeof(body));
+
+    if (rows <= 0)
+    {
+        strcat(body, "-\t-\t0/0\tQuery gagal atau tidak ada data.\n", sizeof(body));
+    }
+    else
+    {
+        for (new i = 0; i < rows; i++)
+        {
+            cache_get_value_name(i, "tbl", tableName, sizeof(tableName));
+            cache_get_value_name(i, "category", category, sizeof(category));
+            cache_get_value_name(i, "note", note, sizeof(note));
+            cache_get_value_name_int(i, "total", total);
+            cache_get_value_name_int(i, "active", active);
+
+            format(line, sizeof(line), "%s\t%s\t%d/%d\t%s\n", category, tableName, total, active, note);
+            if ((strlen(body) + strlen(line)) < 3900)
+            {
+                strcat(body, line, sizeof(body));
+            }
+        }
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_LIVE_DB_TABLE_SUMMARY, DIALOG_STYLE_TABLIST_HEADERS, "SAIF Live DB Table Inventory", body, "Back", "Close");
+    return 1;
+}
+
+public OnLiveDBCleanupCandidatesLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+
+    new rows = cache_num_rows();
+    new body[4096];
+    new line[260];
+    new item[80];
+    new note[128];
+    new total;
+
+    body[0] = EOS;
+    strcat(body, "Counter\tRows\tCleanup Rule\n", sizeof(body));
+
+    if (rows <= 0)
+    {
+        strcat(body, "-\t0\tQuery gagal atau tidak ada kandidat.\n", sizeof(body));
+    }
+    else
+    {
+        for (new i = 0; i < rows; i++)
+        {
+            cache_get_value_name(i, "item", item, sizeof(item));
+            cache_get_value_name(i, "note", note, sizeof(note));
+            cache_get_value_name_int(i, "total", total);
+
+            format(line, sizeof(line), "%s\t%d\t%s\n", item, total, note);
+            if ((strlen(body) + strlen(line)) < 3900)
+            {
+                strcat(body, line, sizeof(body));
+            }
+        }
+    }
+
+    strcat(body, "\nRule\t-\tTidak ada DELETE di audit ini. Backup + review detail dulu sebelum archive/cleanup.\n", sizeof(body));
+    ShowPlayerDialog(playerid, DIALOG_LIVE_DB_CLEANUP_CANDIDATES, DIALOG_STYLE_TABLIST_HEADERS, "SAIF DB Cleanup Candidate Counters", body, "Back", "Close");
+    return 1;
+}
+
+public OnLiveDBIntegrityLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+
+    new rows = cache_num_rows();
+    new body[4096];
+    new line[260];
+    new issue[96];
+    new note[128];
+    new total;
+
+    body[0] = EOS;
+    strcat(body, "Issue\tRows\tMeaning\n", sizeof(body));
+
+    if (rows <= 0)
+    {
+        strcat(body, "-\t0\tQuery gagal atau tidak ada issue.\n", sizeof(body));
+    }
+    else
+    {
+        for (new i = 0; i < rows; i++)
+        {
+            cache_get_value_name(i, "issue", issue, sizeof(issue));
+            cache_get_value_name(i, "note", note, sizeof(note));
+            cache_get_value_name_int(i, "total", total);
+
+            format(line, sizeof(line), "%s\t%d\t%s\n", issue, total, note);
+            if ((strlen(body) + strlen(line)) < 3900)
+            {
+                strcat(body, line, sizeof(body));
+            }
+        }
+    }
+
+    strcat(body, "\nRule\t-\tRows > 0 bukan otomatis delete. Pakai hasil ini untuk patch cleanup spesifik.\n", sizeof(body));
+    ShowPlayerDialog(playerid, DIALOG_LIVE_DB_INTEGRITY, DIALOG_STYLE_TABLIST_HEADERS, "SAIF Live DB Orphan / Integrity Check", body, "Back", "Close");
     return 1;
 }
 
@@ -13533,7 +13803,8 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 10: ShowAmmuConfigMenu(playerid);
             case 11: ShowPublicServiceConfigMenu(playerid);
             case 12: ShowSourceAuditActionMenu(playerid);
-            case 13: ShowAdminToolsReference(playerid);
+            case 13: ShowLiveDBAuditMenu(playerid);
+            case 14: ShowAdminToolsReference(playerid);
         }
         return 1;
     }
@@ -13555,7 +13826,8 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 2: ShowSourceDeprecatedRecords(playerid);
             case 3: ShowSourceCleanupAssistant(playerid);
             case 4: ShowSourceAuditPolicy(playerid);
-            case 5: ShowAdminToolsReference(playerid);
+            case 5: ShowLiveDBAuditMenu(playerid);
+            case 6: ShowAdminToolsReference(playerid);
         }
         return 1;
     }
@@ -13586,6 +13858,34 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         if (response)
         {
             ShowSourceAuditDatasetMenu(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_LIVE_DB_AUDIT_MENU)
+    {
+        if (!response)
+        {
+            ShowAdminToolsMenu(playerid);
+            return 1;
+        }
+
+        switch (listitem)
+        {
+            case 0: ShowLiveDBTableInventory(playerid);
+            case 1: ShowLiveDBCleanupCandidates(playerid);
+            case 2: ShowLiveDBIntegrityCheck(playerid);
+            case 3: ShowSourceAuditActionMenu(playerid);
+            case 4: ShowAdminToolsReference(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_LIVE_DB_TABLE_SUMMARY || dialogid == DIALOG_LIVE_DB_CLEANUP_CANDIDATES || dialogid == DIALOG_LIVE_DB_INTEGRITY)
+    {
+        if (response)
+        {
+            ShowLiveDBAuditMenu(playerid);
         }
         return 1;
     }
@@ -30939,6 +31239,30 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/livedbaudit", true) || !strcmp(cmdtext, "/dbaudit", true) || !strcmp(cmdtext, "/dbreview", true))
+    {
+        ShowLiveDBAuditMenu(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/dbtables", true) || !strcmp(cmdtext, "/dbinventory", true))
+    {
+        ShowLiveDBTableInventory(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/dbcleanupcandidates", true) || !strcmp(cmdtext, "/dbcandidates", true))
+    {
+        ShowLiveDBCleanupCandidates(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/dbintegrity", true) || !strcmp(cmdtext, "/dborphans", true))
+    {
+        ShowLiveDBIntegrityCheck(playerid);
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/sourcedisabletag", true, 17))
     {
         new datasetStr[16];
@@ -32930,7 +33254,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.21A Cleanup Baseline Pass");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.21B Live DB Audit Pass");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -32940,7 +33264,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.21A: Cleanup baseline pass; compiler warnings reduced, legacy static flags wrapped safely, no live gameplay migration.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.21B: Live DB audit menu, cleanup candidate counters, and orphan/integrity checks added without deleting data.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19.5: Public interior single transform removes delayed facing/camera snap on enter/exit.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19.4: Nearby Map Icon Manager now fills slots 80-99 with nearest public interiors and dynamic locations around each player.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24N: Source cleanup assistant, safe disable by source_tag, relabel fallback tags, and runtime refresh.");
@@ -34523,6 +34847,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/adminmenu - Dashboard admin berbasis dialog");
         SendClientMessage(playerid, COLOR_WHITE, "/betamenu - Dashboard beta/whitelist berbasis dialog");
         SendClientMessage(playerid, COLOR_WHITE, "/amenus - Admin menus hub");
+        SendClientMessage(playerid, COLOR_WHITE, "/livedbaudit - Live DB table inventory, cleanup counters, integrity check");
         SendClientMessage(playerid, COLOR_WHITE, "/sourceauditmenu, /sourceaudit, /sourcedetail, /sourcedeprecated, /sourcecleanup, /sourcepolicy - Source audit tools, Owner only");
         SendClientMessage(playerid, COLOR_WHITE, "/version, /changelog, /credits, /staff - Release info commands");
 

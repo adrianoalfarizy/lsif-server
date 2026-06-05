@@ -11767,7 +11767,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.22O Jail Disconnect Audit Safety");
+    SetGameModeText("SAIF Dev v0.24L.0 Milestone Rebase & Version Policy");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11899,7 +11899,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.22O Jail Disconnect Audit Safety berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24L.0 Milestone Rebase & Version Policy berhasil dijalankan.");
     return 1;
 }
 
@@ -35311,7 +35311,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22O Jail Disconnect Audit Safety");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24L.0 Milestone Rebase & Version Policy");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -35321,7 +35321,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22O: Jail disconnect audit safety; jailed player disconnects are recorded in admin_logs.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24L.0: Milestone rebase from long v0.24K branch; no gameplay/DB change. Previous clear: v0.24K.22O jail disconnect audit safety.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22I: Arrest config polish via server_settings: radius/fine controls, /arrestconfig, /setarrestradius, /setarrestfine.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22I.1: /amenus config items now open GUI action menus instead of note-only references.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22M.1: Fixed const warning in jail command guard; no gameplay or DB changes.");

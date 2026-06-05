@@ -2468,6 +2468,7 @@ forward OnDeathConfigLoaded();
 forward OnDeathConfigSaved();
 forward OnRecentDeathLogsLoaded(playerid);
 forward OnRecentArrestLogsLoaded(playerid);
+forward OnPersistentArrestJailHoldLoaded(playerid);
 forward ReleaseArrestJailedPlayer(playerid);
 forward ReapplyPlayerWantedAfterDeath(playerid, wantedLevel);
 forward OnGangColorUpdated(playerid, colorIndex);
@@ -11767,7 +11768,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24L.0 Milestone Rebase & Version Policy");
+    SetGameModeText("SAIF Dev v0.24L.1 Persistent Jail Hold Foundation");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11899,7 +11900,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24L.0 Milestone Rebase & Version Policy berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24L.1 Persistent Jail Hold Foundation berhasil dijalankan.");
     return 1;
 }
 
@@ -12012,6 +12013,7 @@ public OnPlayerDisconnect(playerid, reason)
     if (PlayerArrestJailed[playerid])
     {
         LogArrestJailDisconnect(playerid, reason);
+        SavePersistentArrestJailHold(playerid);
     }
 
     PlayerLoggedIn[playerid] = 0;
@@ -19430,6 +19432,7 @@ public OnAccountLogin(playerid)
     PlayerLoggedIn[playerid] = 1;
 
     ApplyLoadedPlayerData(playerid);
+    LoadPersistentArrestJailHold(playerid);
     LoadPlayerGarage(playerid);
     LoadPlayerHouse(playerid);
     LoadPlayerOrganization(playerid);
@@ -29059,6 +29062,123 @@ stock GetArrestJailSecondsForWanted(wanted)
     return seconds;
 }
 
+
+stock DeletePersistentArrestJailHold(playerid)
+{
+    if (PlayerDBID[playerid] <= 0)
+    {
+        return 0;
+    }
+
+    new query[160];
+    mysql_format(g_SQL, query, sizeof(query), "DELETE FROM player_jail_holds WHERE player_id=%d LIMIT 1", PlayerDBID[playerid]);
+    mysql_tquery(g_SQL, query);
+    return 1;
+}
+
+stock SavePersistentArrestJailHold(playerid)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0)
+    {
+        return 0;
+    }
+
+    if (!PlayerArrestJailed[playerid])
+    {
+        return 0;
+    }
+
+    new remaining = GetArrestJailRemainingSeconds(playerid);
+    if (remaining <= 0)
+    {
+        return DeletePersistentArrestJailHold(playerid);
+    }
+
+    new query[768];
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO player_jail_holds (player_id, remaining_seconds, release_x, release_y, release_z, release_a, release_interior, release_vw, reason, expires_at, updated_at) VALUES (%d, %d, %f, %f, %f, %f, %d, %d, 'arrest_jail_hold', DATE_ADD(NOW(), INTERVAL %d SECOND), NOW()) ON DUPLICATE KEY UPDATE remaining_seconds=VALUES(remaining_seconds), release_x=VALUES(release_x), release_y=VALUES(release_y), release_z=VALUES(release_z), release_a=VALUES(release_a), release_interior=VALUES(release_interior), release_vw=VALUES(release_vw), reason=VALUES(reason), expires_at=VALUES(expires_at), updated_at=NOW()",
+        PlayerDBID[playerid],
+        remaining,
+        g_PoliceArrestReleaseX,
+        g_PoliceArrestReleaseY,
+        g_PoliceArrestReleaseZ,
+        g_PoliceArrestReleaseA,
+        g_PoliceArrestReleaseInterior,
+        g_PoliceArrestReleaseVW,
+        remaining
+    );
+    mysql_tquery(g_SQL, query);
+    return 1;
+}
+
+stock LoadPersistentArrestJailHold(playerid)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0)
+    {
+        return 0;
+    }
+
+    new query[384];
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "SELECT id, GREATEST(0, TIMESTAMPDIFF(SECOND, NOW(), expires_at)) AS remaining_seconds FROM player_jail_holds WHERE player_id=%d LIMIT 1",
+        PlayerDBID[playerid]
+    );
+    mysql_tquery(g_SQL, query, "OnPersistentArrestJailHoldLoaded", "i", playerid);
+    return 1;
+}
+
+public OnPersistentArrestJailHoldLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0)
+    {
+        return 1;
+    }
+
+    if (cache_num_rows() <= 0)
+    {
+        return 1;
+    }
+
+    new remaining = 0;
+    cache_get_value_name_int(0, "remaining_seconds", remaining);
+
+    if (remaining <= 0)
+    {
+        DeletePersistentArrestJailHold(playerid);
+        return 1;
+    }
+
+    if (remaining > POLICE_ARREST_JAIL_TOTAL_SECONDS_MAX)
+    {
+        remaining = POLICE_ARREST_JAIL_TOTAL_SECONDS_MAX;
+    }
+
+    ClearArrestJailState(playerid, 0);
+    PlayerArrestJailed[playerid] = 1;
+    PlayerArrestJailReleaseTick[playerid] = GetTickCount() + (remaining * 1000);
+    PlayerArrestJailTimer[playerid] = SetTimerEx("ReleaseArrestJailedPlayer", remaining * 1000, false, "i", playerid);
+
+    if (g_PoliceArrestBookingEnabled)
+    {
+        ApplyArrestBookingAftermath(playerid);
+    }
+
+    TogglePlayerControllable(playerid, false);
+    ResetPlayerWeapons(playerid);
+    SavePersistentArrestJailHold(playerid);
+
+    new msg[160];
+    format(msg, sizeof(msg), "Status arrest jail hold kamu dipulihkan. Sisa waktu: %d detik.", remaining);
+    SendClientMessage(playerid, COLOR_ORANGE, msg);
+    return 1;
+}
+
 stock StartArrestJailHold(playerid, wanted)
 {
     new seconds = GetArrestJailSecondsForWanted(wanted);
@@ -29075,6 +29195,7 @@ stock StartArrestJailHold(playerid, wanted)
 
     TogglePlayerControllable(playerid, false);
     ResetPlayerWeapons(playerid);
+    SavePersistentArrestJailHold(playerid);
 
     new msg[160];
     format(msg, sizeof(msg), "Kamu ditahan sementara selama %d detik setelah arrest. Tunggu proses booking selesai.", seconds);
@@ -29096,6 +29217,7 @@ public ReleaseArrestJailedPlayer(playerid)
     }
 
     ClearArrestJailState(playerid, 1);
+    DeletePersistentArrestJailHold(playerid);
     ApplyArrestReleasePoint(playerid);
     LogArrestJailRelease(INVALID_PLAYER_ID, playerid, "auto_timer");
     SendClientMessage(playerid, COLOR_GREEN, "Proses booking selesai. Kamu sudah dilepas dari jail hold sementara.");
@@ -33143,6 +33265,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         }
 
         ClearArrestJailState(targetid, 1);
+        DeletePersistentArrestJailHold(targetid);
         ApplyArrestReleasePoint(targetid);
         LogArrestJailRelease(playerid, targetid, "manual_admin");
         SendClientMessage(playerid, COLOR_GREEN, "Target dilepas dari arrest jail hold dan dipindahkan ke release point.");
@@ -35311,7 +35434,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24L.0 Milestone Rebase & Version Policy");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24L.1 Persistent Jail Hold Foundation");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -35321,7 +35444,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24L.0: Milestone rebase from long v0.24K branch; no gameplay/DB change. Previous clear: v0.24K.22O jail disconnect audit safety.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24L.1: Persistent jail hold foundation; arrest jail hold survives reconnect using player_jail_holds table. v0.24L.0: Milestone rebase from long v0.24K branch.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22I: Arrest config polish via server_settings: radius/fine controls, /arrestconfig, /setarrestradius, /setarrestfine.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22I.1: /amenus config items now open GUI action menus instead of note-only references.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22M.1: Fixed const warning in jail command guard; no gameplay or DB changes.");

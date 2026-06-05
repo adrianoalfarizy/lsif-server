@@ -262,6 +262,7 @@
 #define DIALOG_ARREST_CONFIG_MENU 1242
 #define DIALOG_ARREST_RADIUS_INPUT 1243
 #define DIALOG_ARREST_FINE_INPUT 1244
+#define DIALOG_ARREST_JAIL_SECONDS_INPUT 1245
 
 
 
@@ -413,6 +414,10 @@ stock IsClosedBetaEnabled()
 #define POLICE_ARREST_BOOKING_DEFAULT_A 90.0000
 #define POLICE_ARREST_BOOKING_DEFAULT_INTERIOR 0
 #define POLICE_ARREST_BOOKING_DEFAULT_VW 0
+#define POLICE_ARREST_JAIL_ENABLED_DEFAULT 0
+#define POLICE_ARREST_JAIL_SECONDS_PER_WANTED_DEFAULT 0
+#define POLICE_ARREST_JAIL_SECONDS_PER_WANTED_MAX 600
+#define POLICE_ARREST_JAIL_TOTAL_SECONDS_MAX 1800
 
 #define VEHICLE_OWNER_NONE 0
 
@@ -692,6 +697,8 @@ new Float:g_PoliceArrestBookingZ = POLICE_ARREST_BOOKING_DEFAULT_Z;
 new Float:g_PoliceArrestBookingA = POLICE_ARREST_BOOKING_DEFAULT_A;
 new g_PoliceArrestBookingInterior = POLICE_ARREST_BOOKING_DEFAULT_INTERIOR;
 new g_PoliceArrestBookingVW = POLICE_ARREST_BOOKING_DEFAULT_VW;
+new g_PoliceArrestJailEnabled = POLICE_ARREST_JAIL_ENABLED_DEFAULT;
+new g_PoliceArrestJailSecondsPerWanted = POLICE_ARREST_JAIL_SECONDS_PER_WANTED_DEFAULT;
 
 new g_ServerStartTick;
 
@@ -770,6 +777,9 @@ new Float:PlayerDeathA[MAX_PLAYERS];
 new PlayerDeathInterior[MAX_PLAYERS];
 new PlayerDeathVirtualWorld[MAX_PLAYERS];
 new PlayerDeathWantedLevel[MAX_PLAYERS];
+new PlayerArrestJailed[MAX_PLAYERS];
+new PlayerArrestJailReleaseTick[MAX_PLAYERS];
+new PlayerArrestJailTimer[MAX_PLAYERS];
 
 new PlayerMoney[MAX_PLAYERS];
 new PlayerBankMoney[MAX_PLAYERS];
@@ -2445,6 +2455,7 @@ forward OnDeathConfigLoaded();
 forward OnDeathConfigSaved();
 forward OnRecentDeathLogsLoaded(playerid);
 forward OnRecentArrestLogsLoaded(playerid);
+forward ReleaseArrestJailedPlayer(playerid);
 forward ReapplyPlayerWantedAfterDeath(playerid, wantedLevel);
 forward OnGangColorUpdated(playerid, colorIndex);
 forward OnPlayerGangLoaded(playerid);
@@ -2619,7 +2630,7 @@ stock LoadDeathConfigFromDB()
         g_SQL,
         query,
         sizeof(query),
-        "SELECT setting_key, setting_value FROM server_settings WHERE setting_key IN ('hospital_death_fee','death_weapon_drop_lifetime_seconds','police_arrest_radius','police_arrest_fine_per_wanted','police_arrest_booking_enabled','police_arrest_booking_x','police_arrest_booking_y','police_arrest_booking_z','police_arrest_booking_a','police_arrest_booking_interior','police_arrest_booking_vw')"
+        "SELECT setting_key, setting_value FROM server_settings WHERE setting_key IN ('hospital_death_fee','death_weapon_drop_lifetime_seconds','police_arrest_radius','police_arrest_fine_per_wanted','police_arrest_booking_enabled','police_arrest_booking_x','police_arrest_booking_y','police_arrest_booking_z','police_arrest_booking_a','police_arrest_booking_interior','police_arrest_booking_vw','police_arrest_jail_enabled','police_arrest_jail_seconds_per_wanted')"
     );
     mysql_tquery(g_SQL, query, "OnDeathConfigLoaded");
     return 1;
@@ -2633,11 +2644,13 @@ stock SaveDeathConfigToDB()
         g_SQL,
         query,
         sizeof(query),
-        "INSERT INTO server_settings (setting_key, setting_value) VALUES ('hospital_death_fee','%d'),('death_weapon_drop_lifetime_seconds','%d'),('police_arrest_radius','%d'),('police_arrest_fine_per_wanted','%d') ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_at=CURRENT_TIMESTAMP",
+        "INSERT INTO server_settings (setting_key, setting_value) VALUES ('hospital_death_fee','%d'),('death_weapon_drop_lifetime_seconds','%d'),('police_arrest_radius','%d'),('police_arrest_fine_per_wanted','%d'),('police_arrest_jail_enabled','%d'),('police_arrest_jail_seconds_per_wanted','%d') ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_at=CURRENT_TIMESTAMP",
         g_HospitalDeathFee,
         g_DeathWeaponDropLifetimeSeconds,
         g_PoliceArrestRadius,
-        g_PoliceArrestFinePerWanted
+        g_PoliceArrestFinePerWanted,
+        g_PoliceArrestJailEnabled,
+        g_PoliceArrestJailSecondsPerWanted
     );
     mysql_tquery(g_SQL, query);
 
@@ -2735,9 +2748,20 @@ public OnDeathConfigLoaded()
         {
             g_PoliceArrestBookingVW = value;
         }
+        else if (!strcmp(key, "police_arrest_jail_enabled", true))
+        {
+            g_PoliceArrestJailEnabled = value ? 1 : 0;
+        }
+        else if (!strcmp(key, "police_arrest_jail_seconds_per_wanted", true))
+        {
+            if (value >= 0 && value <= POLICE_ARREST_JAIL_SECONDS_PER_WANTED_MAX)
+            {
+                g_PoliceArrestJailSecondsPerWanted = value;
+            }
+        }
     }
 
-    printf("[SAIF] Death/Arrest config loaded from DB: hospital_death_fee=%d death_weapon_drop_lifetime=%d arrest_radius=%d arrest_fine_per_wanted=%d booking_enabled=%d", g_HospitalDeathFee, g_DeathWeaponDropLifetimeSeconds, g_PoliceArrestRadius, g_PoliceArrestFinePerWanted, g_PoliceArrestBookingEnabled);
+    printf("[SAIF] Death/Arrest config loaded from DB: hospital_death_fee=%d death_weapon_drop_lifetime=%d arrest_radius=%d arrest_fine_per_wanted=%d booking_enabled=%d jail_enabled=%d jail_per_wanted=%d", g_HospitalDeathFee, g_DeathWeaponDropLifetimeSeconds, g_PoliceArrestRadius, g_PoliceArrestFinePerWanted, g_PoliceArrestBookingEnabled, g_PoliceArrestJailEnabled, g_PoliceArrestJailSecondsPerWanted);
     return 1;
 }
 
@@ -2973,6 +2997,7 @@ stock ResetPlayerAccountData(playerid)
     PlayerDeathInterior[playerid] = 0;
     PlayerDeathVirtualWorld[playerid] = 0;
     PlayerDeathWantedLevel[playerid] = 0;
+    ClearArrestJailState(playerid, 0);
 
     PlayerMoneyMismatchCount[playerid] = 0;
     PlayerMoneyHUDGraceUntilTick[playerid] = 0;
@@ -11683,7 +11708,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.22J Arrest Booking Foundation");
+    SetGameModeText("SAIF Dev v0.24K.22K.1 Jail Toggle Bool Warning Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11783,6 +11808,9 @@ public OnGameModeInit()
         PlayerDeathInterior[i] = 0;
         PlayerDeathVirtualWorld[i] = 0;
         PlayerDeathWantedLevel[i] = 0;
+        PlayerArrestJailed[i] = 0;
+        PlayerArrestJailReleaseTick[i] = 0;
+        PlayerArrestJailTimer[i] = 0;
 
         PlayerMoneyMismatchCount[i] = 0;
         PlayerMoneyHUDGraceUntilTick[i] = 0;
@@ -11812,7 +11840,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.22J Arrest Booking Foundation berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.22K.1 Jail Toggle Bool Warning Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -11929,6 +11957,7 @@ public OnPlayerDisconnect(playerid, reason)
     PlayerClassSpawnRecoveryQueued[playerid] = 0;
     PlayerLoadoutBlockedAfterDeath[playerid] = 0;
     PlayerMoneyHUDGraceUntilTick[playerid] = 0;
+    ClearArrestJailState(playerid, 0);
     PlayerFindingBank[playerid] = 0;
     PlayerInsidePublicInteriorID[playerid] = 0;
     PlayerPublicInteriorServiceCheckpoint[playerid] = 0;
@@ -12069,6 +12098,8 @@ public OnPlayerDeath(playerid, killerid, WEAPON:reason)
     {
         return 1;
     }
+
+    ClearArrestJailState(playerid, 0);
 
     GetPlayerPos(playerid, PlayerDeathX[playerid], PlayerDeathY[playerid], PlayerDeathZ[playerid]);
     GetPlayerFacingAngle(playerid, PlayerDeathA[playerid]);
@@ -12569,7 +12600,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /arrestlogs, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /releasejail [id], /jailstatus, /arrestlogs, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
@@ -12591,23 +12622,25 @@ stock ShowWantedPoliceArrestReference(playerid)
     strcat(body, "Commands:\n", sizeof(body));
     strcat(body, "/wantedstatus atau /wanted = cek wanted level sendiri.\n", sizeof(body));
     strcat(body, "/arrest [playerid] = police/vigilante arrest target wanted.\n", sizeof(body));
-    strcat(body, "/arrestconfig = Owner config radius/fine/booking arrest.\n/setarrestbooking = simpan posisi Owner sebagai booking point.\n/gotoarrestbooking = teleport Owner ke booking point.\n/togglearrestbooking [0/1] = ON/OFF teleport booking setelah arrest.\n", sizeof(body));
+    strcat(body, "/arrestconfig = Owner config radius/fine/booking/jail arrest.\n/setarrestbooking = simpan posisi Owner sebagai booking point.\n/gotoarrestbooking = teleport Owner ke booking point.\n/togglearrestbooking [0/1] = ON/OFF teleport booking setelah arrest.\n", sizeof(body));
+    strcat(body, "/togglearrestjail [0/1] = ON/OFF temporary jail hold setelah arrest.\n/setarrestjailseconds [0-600] = set jail seconds per wanted.\n", sizeof(body));
+    strcat(body, "/releasejail [id] = Admin release jail hold. /jailstatus = cek status jail sendiri.\n", sizeof(body));
     strcat(body, "/setarrestradius [2-20] = set radius arrest non-admin.\n", sizeof(body));
     strcat(body, "/setarrestfine [0-100000] = set fine per wanted level.\n", sizeof(body));
     strcat(body, "/arrestlogs = Owner audit recent arrest logs dari admin_logs.\n", sizeof(body));
     strcat(body, "/arresthelp, /wantedhelp, /policeref = buka reference ini.\n\n", sizeof(body));
     strcat(body, "Arrest rules:\n", sizeof(body));
-    format(line, sizeof(line), "Current config: radius %d meter, fine $%d per wanted level.\n\n", g_PoliceArrestRadius, g_PoliceArrestFinePerWanted);
+    format(line, sizeof(line), "Current config: radius %d meter, fine $%d/wanted, booking %s, jail %s (%ds/wanted).\n\n", g_PoliceArrestRadius, g_PoliceArrestFinePerWanted, g_PoliceArrestBookingEnabled ? ("ON") : ("OFF"), g_PoliceArrestJailEnabled ? ("ON") : ("OFF"), g_PoliceArrestJailSecondsPerWanted);
     strcat(body, line, sizeof(body));
     strcat(body, "- Police/Vigilante harus dekat target.\n", sizeof(body));
     strcat(body, "- Target harus wanted level > 0.\n", sizeof(body));
     strcat(body, "- Interior dan virtual world harus sama.\n", sizeof(body));
     strcat(body, "- Admin level 3+ bisa pakai sebagai debug/admin flow.\n\n", sizeof(body));
     strcat(body, "Future polish:\n", sizeof(body));
-    strcat(body, "- Jail/booking flow.\n", sizeof(body));
+    strcat(body, "- Booking point + optional temporary jail hold.\n", sizeof(body));
     strcat(body, "- Police station checkpoint interaction.\n", sizeof(body));
     strcat(body, "- Fine/bail/prison release config.\n", sizeof(body));
-    strcat(body, "- Arrest log audit via /arrestlogs; jail/booking integration remains future polish.", sizeof(body));
+    strcat(body, "- Arrest log audit via /arrestlogs; temporary jail hold is foundation-only and not yet persistent across relog.", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "Wanted / Police Arrest Flow", body, "Back", "Close");
     return 1;
@@ -12621,8 +12654,8 @@ stock ShowArrestConfigMenu(playerid)
         return 0;
     }
 
-    new body[1536];
-    new line[192];
+    new body[1792];
+    new line[224];
     body[0] = EOS;
 
     strcat(body, "Action\tCurrent\n", sizeof(body));
@@ -12635,6 +12668,10 @@ stock ShowArrestConfigMenu(playerid)
     format(line, sizeof(line), "Set Booking Point Here\t%.1f, %.1f, %.1f | int %d vw %d\n", g_PoliceArrestBookingX, g_PoliceArrestBookingY, g_PoliceArrestBookingZ, g_PoliceArrestBookingInterior, g_PoliceArrestBookingVW);
     strcat(body, line, sizeof(body));
     strcat(body, "Goto Booking Point\tTeleport Owner to booking point\n", sizeof(body));
+    format(line, sizeof(line), "Toggle Jail Hold\t%s\n", g_PoliceArrestJailEnabled ? ("ON") : ("OFF"));
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Edit Jail Seconds / Wanted\t%d seconds\n", g_PoliceArrestJailSecondsPerWanted);
+    strcat(body, line, sizeof(body));
     strcat(body, "Wanted / Arrest Reference\tFlow rules\n", sizeof(body));
     strcat(body, "Recent Arrest Logs\tAudit POLICE_ARREST\n", sizeof(body));
     strcat(body, "Death / Hospital Config\tOpen related config\n", sizeof(body));
@@ -14390,10 +14427,23 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
                 GotoArrestBookingPoint(playerid);
                 ShowArrestConfigMenu(playerid);
             }
-            case 5: ShowWantedPoliceArrestReference(playerid);
-            case 6: ShowRecentArrestLogs(playerid);
-            case 7: ShowDeathHospitalConfigMenu(playerid);
-            case 8: ShowAdminToolsMenu(playerid);
+            case 5:
+            {
+                g_PoliceArrestJailEnabled = g_PoliceArrestJailEnabled ? 0 : 1;
+                SaveDeathConfigToDB();
+                SendClientMessage(playerid, COLOR_GREEN, g_PoliceArrestJailEnabled ? ("Arrest jail hold: ON") : ("Arrest jail hold: OFF"));
+                ShowArrestConfigMenu(playerid);
+            }
+            case 6:
+            {
+                new prompt[192];
+                format(prompt, sizeof(prompt), "Jail hold sekarang: %d detik per wanted level\n\nMasukkan nilai baru. Range: 0 - %d detik", g_PoliceArrestJailSecondsPerWanted, POLICE_ARREST_JAIL_SECONDS_PER_WANTED_MAX);
+                ShowPlayerDialog(playerid, DIALOG_ARREST_JAIL_SECONDS_INPUT, DIALOG_STYLE_INPUT, "Edit Jail Seconds / Wanted", prompt, "Save", "Back");
+            }
+            case 7: ShowWantedPoliceArrestReference(playerid);
+            case 8: ShowRecentArrestLogs(playerid);
+            case 9: ShowDeathHospitalConfigMenu(playerid);
+            case 10: ShowAdminToolsMenu(playerid);
         }
         return 1;
     }
@@ -14459,6 +14509,39 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 
         new msg[144];
         format(msg, sizeof(msg), "Police arrest fine diset ke $%d per wanted level dan disimpan ke server_settings.", g_PoliceArrestFinePerWanted);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+        ShowArrestConfigMenu(playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_ARREST_JAIL_SECONDS_INPUT)
+    {
+        if (!response)
+        {
+            ShowArrestConfigMenu(playerid);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Jail seconds harus angka. Range: 0 - 600 detik per wanted.");
+            ShowArrestConfigMenu(playerid);
+            return 1;
+        }
+
+        new seconds = strval(inputtext);
+        if (seconds < 0 || seconds > POLICE_ARREST_JAIL_SECONDS_PER_WANTED_MAX)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Range jail seconds per wanted: 0 - 600 detik.");
+            ShowArrestConfigMenu(playerid);
+            return 1;
+        }
+
+        g_PoliceArrestJailSecondsPerWanted = seconds;
+        SaveDeathConfigToDB();
+
+        new msg[160];
+        format(msg, sizeof(msg), "Arrest jail hold diset ke %d detik per wanted level dan disimpan ke server_settings.", g_PoliceArrestJailSecondsPerWanted);
         SendClientMessage(playerid, COLOR_GREEN, msg);
         ShowArrestConfigMenu(playerid);
         return 1;
@@ -28789,6 +28872,100 @@ stock ApplyArrestBookingAftermath(playerid)
     return 1;
 }
 
+stock ClearArrestJailState(playerid, unfreeze)
+{
+    if (PlayerArrestJailTimer[playerid] > 0)
+    {
+        KillTimer(PlayerArrestJailTimer[playerid]);
+        PlayerArrestJailTimer[playerid] = 0;
+    }
+
+    PlayerArrestJailed[playerid] = 0;
+    PlayerArrestJailReleaseTick[playerid] = 0;
+
+    if (unfreeze && IsPlayerConnected(playerid))
+    {
+        TogglePlayerControllable(playerid, true);
+    }
+    return 1;
+}
+
+stock GetArrestJailSecondsForWanted(wanted)
+{
+    if (!g_PoliceArrestJailEnabled || g_PoliceArrestJailSecondsPerWanted <= 0)
+    {
+        return 0;
+    }
+
+    if (wanted < 0) wanted = 0;
+    if (wanted > 6) wanted = 6;
+
+    new seconds = wanted * g_PoliceArrestJailSecondsPerWanted;
+    if (seconds > POLICE_ARREST_JAIL_TOTAL_SECONDS_MAX)
+    {
+        seconds = POLICE_ARREST_JAIL_TOTAL_SECONDS_MAX;
+    }
+    return seconds;
+}
+
+stock StartArrestJailHold(playerid, wanted)
+{
+    new seconds = GetArrestJailSecondsForWanted(wanted);
+    if (seconds <= 0)
+    {
+        return 0;
+    }
+
+    ClearArrestJailState(playerid, 0);
+
+    PlayerArrestJailed[playerid] = 1;
+    PlayerArrestJailReleaseTick[playerid] = GetTickCount() + (seconds * 1000);
+    PlayerArrestJailTimer[playerid] = SetTimerEx("ReleaseArrestJailedPlayer", seconds * 1000, false, "i", playerid);
+
+    TogglePlayerControllable(playerid, false);
+    ResetPlayerWeapons(playerid);
+
+    new msg[160];
+    format(msg, sizeof(msg), "Kamu ditahan sementara selama %d detik setelah arrest. Tunggu proses booking selesai.", seconds);
+    SendClientMessage(playerid, COLOR_ORANGE, msg);
+    return seconds;
+}
+
+public ReleaseArrestJailedPlayer(playerid)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 1;
+    }
+
+    if (!PlayerArrestJailed[playerid])
+    {
+        PlayerArrestJailTimer[playerid] = 0;
+        return 1;
+    }
+
+    ClearArrestJailState(playerid, 1);
+    SendClientMessage(playerid, COLOR_GREEN, "Proses booking selesai. Kamu sudah dilepas dari jail hold sementara.");
+    return 1;
+}
+
+stock ShowArrestJailStatus(playerid)
+{
+    if (!PlayerArrestJailed[playerid])
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "Kamu tidak sedang dalam arrest jail hold.");
+        return 1;
+    }
+
+    new remaining = (PlayerArrestJailReleaseTick[playerid] - GetTickCount()) / 1000;
+    if (remaining < 0) remaining = 0;
+
+    new msg[128];
+    format(msg, sizeof(msg), "Kamu masih dalam arrest jail hold. Sisa waktu: %d detik.", remaining);
+    SendClientMessage(playerid, COLOR_ORANGE, msg);
+    return 1;
+}
+
 stock ProcessPoliceArrest(playerid, targetid)
 {
     if (!IsPlayerConnected(targetid) || !PlayerLoggedIn[targetid])
@@ -28859,6 +29036,7 @@ stock ProcessPoliceArrest(playerid, targetid)
 
     SetPlayerWantedLevel(targetid, 0);
     new bookingApplied = ApplyArrestBookingAftermath(targetid);
+    new jailSeconds = StartArrestJailHold(targetid, wanted);
     SavePlayerData(targetid);
 
     new officerName[MAX_PLAYER_NAME];
@@ -28884,12 +29062,17 @@ stock ProcessPoliceArrest(playerid, targetid)
     {
         SendClientMessage(playerid, COLOR_WHITE, "Target dipindahkan ke police booking point setelah arrest.");
     }
+    if (jailSeconds > 0)
+    {
+        format(msg, sizeof(msg), "Target ditahan sementara selama %d detik untuk booking/jail hold.", jailSeconds);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+    }
 
-    new detail[192];
-    format(detail, sizeof(detail), "wanted:%d->0 | fine:$%d | radius:%d | booking:%d | official arrest flow", wanted, arrestFine, g_PoliceArrestRadius, bookingApplied);
+    new detail[224];
+    format(detail, sizeof(detail), "wanted:%d->0 | fine:$%d | radius:%d | booking:%d | jail:%ds | official arrest flow", wanted, arrestFine, g_PoliceArrestRadius, bookingApplied, jailSeconds);
     LogAdminAction(playerid, targetid, "POLICE_ARREST", detail);
 
-    SendClientMessage(playerid, COLOR_WHITE, "Catatan: ini booking foundation. Jail timer/holding cell penuh akan dibuat terpisah.");
+    SendClientMessage(playerid, COLOR_WHITE, "Catatan: ini jail timer foundation. Persistence/full prison system akan dibuat terpisah.");
     SendClientMessage(targetid, COLOR_WHITE, "Catatan: arrest resmi berbeda dari death hospital; death biasa tetap tidak menghapus wanted.");
     return 1;
 }
@@ -28915,7 +29098,7 @@ stock ShowDeathHospitalConfigMenu(playerid)
     strcat(body, line, sizeof(body));
     strcat(body, "Clear Death Drops\tRemove active runtime pickups\n", sizeof(body));
     strcat(body, "Recent Death Logs\tAudit death/killer/fee/wanted\n", sizeof(body));
-    format(line, sizeof(line), "Wanted / Police Config\tRadius %dm, fine $%d/wanted, booking %s\n", g_PoliceArrestRadius, g_PoliceArrestFinePerWanted, g_PoliceArrestBookingEnabled ? ("ON") : ("OFF"));
+    format(line, sizeof(line), "Wanted / Police Config\tRadius %dm, fine $%d/wanted, booking %s, jail %s/%ds\n", g_PoliceArrestRadius, g_PoliceArrestFinePerWanted, g_PoliceArrestBookingEnabled ? ("ON") : ("OFF"), g_PoliceArrestJailEnabled ? ("ON") : ("OFF"), g_PoliceArrestJailSecondsPerWanted);
     strcat(body, line, sizeof(body));
     strcat(body, "Wanted / Arrest Reference\tFlow rules\n", sizeof(body));
     strcat(body, "Back to Admin Menus\t/amenus\n", sizeof(body));
@@ -32569,6 +32752,111 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (strfind(cmdtext, "/togglearrestjail ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa toggle arrest jail hold.");
+            return 1;
+        }
+
+        new valueStr[8];
+        if (!GetOneParam(cmdtext[18], valueStr, sizeof(valueStr)) || !IsNumericString(valueStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /togglearrestjail [0/1]");
+            return 1;
+        }
+
+        new value = strval(valueStr);
+        g_PoliceArrestJailEnabled = value ? 1 : 0;
+        SaveDeathConfigToDB();
+        SendClientMessage(playerid, COLOR_GREEN, g_PoliceArrestJailEnabled ? ("Arrest jail hold: ON") : ("Arrest jail hold: OFF"));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/togglearrestjail", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /togglearrestjail [0/1]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/setarrestjailseconds ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa mengubah arrest jail seconds.");
+            return 1;
+        }
+
+        new secondsStr[24];
+        if (!GetOneParam(cmdtext[22], secondsStr, sizeof(secondsStr)) || !IsNumericString(secondsStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setarrestjailseconds [0-600]");
+            return 1;
+        }
+
+        new seconds = strval(secondsStr);
+        if (seconds < 0 || seconds > POLICE_ARREST_JAIL_SECONDS_PER_WANTED_MAX)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Range arrest jail seconds per wanted: 0 - 600 detik.");
+            return 1;
+        }
+
+        g_PoliceArrestJailSecondsPerWanted = seconds;
+        SaveDeathConfigToDB();
+
+        new msg[160];
+        format(msg, sizeof(msg), "Arrest jail seconds diset ke %d detik per wanted level.", g_PoliceArrestJailSecondsPerWanted);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/setarrestjailseconds", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setarrestjailseconds [0-600]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/releasejail ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_ADMIN))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Admin yang bisa release jail hold.");
+            return 1;
+        }
+
+        new targetStr[16];
+        if (!GetOneParam(cmdtext[13], targetStr, sizeof(targetStr)) || !IsNumericString(targetStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /releasejail [playerid]");
+            return 1;
+        }
+
+        new targetid = strval(targetStr);
+        if (!IsPlayerConnected(targetid) || !PlayerLoggedIn[targetid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Target tidak online/login.");
+            return 1;
+        }
+
+        ClearArrestJailState(targetid, 1);
+        SendClientMessage(playerid, COLOR_GREEN, "Target dilepas dari arrest jail hold.");
+        SendClientMessage(targetid, COLOR_GREEN, "Kamu dilepas dari arrest jail hold oleh admin.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/releasejail", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /releasejail [playerid]");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/jailstatus", true) || !strcmp(cmdtext, "/arrestjailstatus", true))
+    {
+        ShowArrestJailStatus(playerid);
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/arresthelp", true) || !strcmp(cmdtext, "/wantedhelp", true) || !strcmp(cmdtext, "/policeref", true))
     {
         ShowWantedPoliceArrestReference(playerid);
@@ -34706,7 +34994,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22J Arrest Booking Foundation");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22K.1 Jail Toggle Bool Warning Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -34718,6 +35006,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22I: Arrest config polish via server_settings: radius/fine controls, /arrestconfig, /setarrestradius, /setarrestfine.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22I.1: /amenus config items now open GUI action menus instead of note-only references.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22K.1: Compile warning fix for jail freeze/unfreeze TogglePlayerControllable bool tags; gameplay unchanged from v0.24K.22K.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22J: Arrest booking foundation via server_settings: booking teleport toggle, point set/goto, and GUI config.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22G.1: /amenus includes Wanted / Police Arrest Flow reference; no gameplay or DB changes.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22G: Police arrest foundation; /arrest resets wanted through official arrest flow, not death hospital.");

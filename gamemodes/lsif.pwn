@@ -257,6 +257,11 @@
 #define DIALOG_LIVE_DB_INTEGRITY 1237
 #define DIALOG_DEATH_CONFIG_MENU 1238
 #define DIALOG_DEATH_LOGS 1239
+#define DIALOG_DEATH_HOSPITAL_FEE_INPUT 1240
+#define DIALOG_DEATH_DROP_LIFETIME_INPUT 1241
+#define DIALOG_ARREST_CONFIG_MENU 1242
+#define DIALOG_ARREST_RADIUS_INPUT 1243
+#define DIALOG_ARREST_FINE_INPUT 1244
 
 
 
@@ -11612,7 +11617,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.22I Arrest Config Polish");
+    SetGameModeText("SAIF Dev v0.24K.22I.1 Config Dialog GUI Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11741,7 +11746,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.22I Arrest Config Polish berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.22I.1 Config Dialog GUI Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -12550,28 +12555,24 @@ stock ShowArrestConfigMenu(playerid)
         return 0;
     }
 
-    new body[2048];
+    new body[1536];
     new line[192];
     body[0] = EOS;
 
-    strcat(body, "SAIF Wanted / Police Arrest Config\n\n", sizeof(body));
-    format(line, sizeof(line), "Arrest radius: %d meter\n", g_PoliceArrestRadius);
+    strcat(body, "Action\tCurrent\n", sizeof(body));
+    format(line, sizeof(line), "Edit Arrest Radius\t%d meter\n", g_PoliceArrestRadius);
     strcat(body, line, sizeof(body));
-    format(line, sizeof(line), "Arrest fine per wanted level: $%d\n", g_PoliceArrestFinePerWanted);
+    format(line, sizeof(line), "Edit Arrest Fine / Wanted\t$%d\n", g_PoliceArrestFinePerWanted);
     strcat(body, line, sizeof(body));
-    format(line, sizeof(line), "Example max fine at wanted 6: $%d\n\n", g_PoliceArrestFinePerWanted * 6);
-    strcat(body, line, sizeof(body));
+    strcat(body, "Wanted / Arrest Reference\tFlow rules\n", sizeof(body));
+    strcat(body, "Recent Arrest Logs\tAudit POLICE_ARREST\n", sizeof(body));
+    strcat(body, "Death / Hospital Config\tOpen related config\n", sizeof(body));
+    strcat(body, "Back to Admin Menus\t/amenus\n", sizeof(body));
 
-    strcat(body, "Commands:\n", sizeof(body));
-    strcat(body, "/setarrestradius [2-20] = set non-admin police arrest radius\n", sizeof(body));
-    strcat(body, "/setarrestfine [0-100000] = set fine per wanted level\n", sizeof(body));
-    strcat(body, "/wantedstatus, /arrest [playerid], /arrestlogs\n\n", sizeof(body));
-    strcat(body, "Design note:\n", sizeof(body));
-    strcat(body, "Death/hospital tetap tidak menghapus wanted. Arrest adalah jalur resmi untuk reset wanted. Fine arrest adalah SAIF-controlled server money, bukan native GTA money loss.", sizeof(body));
-
-    ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "Wanted / Police Arrest Config", body, "Back", "Close");
+    ShowPlayerDialog(playerid, DIALOG_ARREST_CONFIG_MENU, DIALOG_STYLE_TABLIST_HEADERS, "Wanted / Police Arrest Config", body, "Open", "Back");
     return 1;
 }
+
 
 stock ShowRecentArrestLogs(playerid)
 {
@@ -14176,10 +14177,202 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 
     if (dialogid == DIALOG_DEATH_CONFIG_MENU)
     {
-        if (response)
+        if (!response)
         {
             ShowAdminToolsMenu(playerid);
+            return 1;
         }
+
+        switch (listitem)
+        {
+            case 0:
+            {
+                new prompt[192];
+                format(prompt, sizeof(prompt), "Hospital death fee sekarang: $%d\n\nMasukkan fee baru. Range: 0 - %d", g_HospitalDeathFee, HOSPITAL_DEATH_FEE_MAX);
+                ShowPlayerDialog(playerid, DIALOG_DEATH_HOSPITAL_FEE_INPUT, DIALOG_STYLE_INPUT, "Edit Hospital Death Fee", prompt, "Save", "Back");
+            }
+            case 1:
+            {
+                new prompt[192];
+                format(prompt, sizeof(prompt), "Death weapon drop lifetime sekarang: %d detik\n\nMasukkan lifetime baru. Range: %d - %d detik", g_DeathWeaponDropLifetimeSeconds, DEATH_WEAPON_DROP_LIFETIME_MIN, DEATH_WEAPON_DROP_LIFETIME_MAX);
+                ShowPlayerDialog(playerid, DIALOG_DEATH_DROP_LIFETIME_INPUT, DIALOG_STYLE_INPUT, "Edit Death Drop Lifetime", prompt, "Save", "Back");
+            }
+            case 2: ShowDeathWeaponDropsAudit(playerid);
+            case 3:
+            {
+                new cleared = ClearAllDeathWeaponDrops();
+                new msg[128];
+                format(msg, sizeof(msg), "Death weapon drops cleared: %d pickup runtime dihapus.", cleared);
+                SendClientMessage(playerid, COLOR_GREEN, msg);
+                ShowDeathHospitalConfigMenu(playerid);
+            }
+            case 4: ShowRecentDeathLogs(playerid);
+            case 5: ShowArrestConfigMenu(playerid);
+            case 6: ShowWantedPoliceArrestReference(playerid);
+            case 7: ShowAdminToolsMenu(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_DEATH_HOSPITAL_FEE_INPUT)
+    {
+        if (!response)
+        {
+            ShowDeathHospitalConfigMenu(playerid);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Hospital fee harus angka. Range: 0 - 1000000.");
+            ShowDeathHospitalConfigMenu(playerid);
+            return 1;
+        }
+
+        new fee = strval(inputtext);
+        if (fee < 0 || fee > HOSPITAL_DEATH_FEE_MAX)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Range hospital fee: 0 - 1000000.");
+            ShowDeathHospitalConfigMenu(playerid);
+            return 1;
+        }
+
+        g_HospitalDeathFee = fee;
+        SaveDeathConfigToDB();
+
+        new msg[128];
+        format(msg, sizeof(msg), "Hospital death fee diset ke $%d dan disimpan ke server_settings.", g_HospitalDeathFee);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+        ShowDeathHospitalConfigMenu(playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_DEATH_DROP_LIFETIME_INPUT)
+    {
+        if (!response)
+        {
+            ShowDeathHospitalConfigMenu(playerid);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Death weapon drop lifetime harus angka. Range: 60 - 3600 detik.");
+            ShowDeathHospitalConfigMenu(playerid);
+            return 1;
+        }
+
+        new seconds = strval(inputtext);
+        if (seconds < DEATH_WEAPON_DROP_LIFETIME_MIN || seconds > DEATH_WEAPON_DROP_LIFETIME_MAX)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Range death weapon drop lifetime: 60 - 3600 detik.");
+            ShowDeathHospitalConfigMenu(playerid);
+            return 1;
+        }
+
+        g_DeathWeaponDropLifetimeSeconds = seconds;
+        SaveDeathConfigToDB();
+
+        new msg[160];
+        format(msg, sizeof(msg), "Death weapon drop lifetime diset ke %d detik. Drop aktif tetap mengikuti timer lamanya.", g_DeathWeaponDropLifetimeSeconds);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+        ShowDeathHospitalConfigMenu(playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_ARREST_CONFIG_MENU)
+    {
+        if (!response)
+        {
+            ShowAdminToolsMenu(playerid);
+            return 1;
+        }
+
+        switch (listitem)
+        {
+            case 0:
+            {
+                new prompt[192];
+                format(prompt, sizeof(prompt), "Arrest radius sekarang: %d meter\n\nMasukkan radius baru. Range: %d - %d meter", g_PoliceArrestRadius, POLICE_ARREST_RADIUS_MIN, POLICE_ARREST_RADIUS_MAX);
+                ShowPlayerDialog(playerid, DIALOG_ARREST_RADIUS_INPUT, DIALOG_STYLE_INPUT, "Edit Arrest Radius", prompt, "Save", "Back");
+            }
+            case 1:
+            {
+                new prompt[192];
+                format(prompt, sizeof(prompt), "Fine arrest sekarang: $%d per wanted level\n\nMasukkan fine baru. Range: 0 - %d", g_PoliceArrestFinePerWanted, POLICE_ARREST_FINE_PER_WANTED_MAX);
+                ShowPlayerDialog(playerid, DIALOG_ARREST_FINE_INPUT, DIALOG_STYLE_INPUT, "Edit Arrest Fine", prompt, "Save", "Back");
+            }
+            case 2: ShowWantedPoliceArrestReference(playerid);
+            case 3: ShowRecentArrestLogs(playerid);
+            case 4: ShowDeathHospitalConfigMenu(playerid);
+            case 5: ShowAdminToolsMenu(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_ARREST_RADIUS_INPUT)
+    {
+        if (!response)
+        {
+            ShowArrestConfigMenu(playerid);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Arrest radius harus angka. Range: 2 - 20 meter.");
+            ShowArrestConfigMenu(playerid);
+            return 1;
+        }
+
+        new radius = strval(inputtext);
+        if (radius < POLICE_ARREST_RADIUS_MIN || radius > POLICE_ARREST_RADIUS_MAX)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Range arrest radius: 2 - 20 meter.");
+            ShowArrestConfigMenu(playerid);
+            return 1;
+        }
+
+        g_PoliceArrestRadius = radius;
+        SaveDeathConfigToDB();
+
+        new msg[128];
+        format(msg, sizeof(msg), "Police arrest radius diset ke %d meter dan disimpan ke server_settings.", g_PoliceArrestRadius);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+        ShowArrestConfigMenu(playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_ARREST_FINE_INPUT)
+    {
+        if (!response)
+        {
+            ShowArrestConfigMenu(playerid);
+            return 1;
+        }
+
+        if (!IsNumericString(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Arrest fine harus angka. Range: 0 - 100000.");
+            ShowArrestConfigMenu(playerid);
+            return 1;
+        }
+
+        new fine = strval(inputtext);
+        if (fine < 0 || fine > POLICE_ARREST_FINE_PER_WANTED_MAX)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Range arrest fine per wanted: 0 - 100000.");
+            ShowArrestConfigMenu(playerid);
+            return 1;
+        }
+
+        g_PoliceArrestFinePerWanted = fine;
+        SaveDeathConfigToDB();
+
+        new msg[144];
+        format(msg, sizeof(msg), "Police arrest fine diset ke $%d per wanted level dan disimpan ke server_settings.", g_PoliceArrestFinePerWanted);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+        ShowArrestConfigMenu(playerid);
         return 1;
     }
 
@@ -28554,37 +28747,27 @@ stock ShowDeathHospitalConfigMenu(playerid)
     }
 
     new body[2048];
-    new line[192];
+    new line[224];
     body[0] = EOS;
 
-    strcat(body, "SAIF Death / Hospital Config\n\n", sizeof(body));
-    format(line, sizeof(line), "Hospital death fee: $%d\n", g_HospitalDeathFee);
+    strcat(body, "Action\tCurrent\n", sizeof(body));
+    format(line, sizeof(line), "Edit Hospital Death Fee\t$%d\n", g_HospitalDeathFee);
     strcat(body, line, sizeof(body));
-    format(line, sizeof(line), "Active dropped weapon pickups: %d / %d\n", CountActiveDeathWeaponDrops(), MAX_DEATH_WEAPON_DROPS);
+    format(line, sizeof(line), "Edit Weapon Drop Lifetime\t%d seconds\n", g_DeathWeaponDropLifetimeSeconds);
     strcat(body, line, sizeof(body));
-    format(line, sizeof(line), "Dropped weapon lifetime: %d seconds\n", g_DeathWeaponDropLifetimeSeconds);
+    format(line, sizeof(line), "Death Drop Audit\t%d/%d active, oldest %ds\n", CountActiveDeathWeaponDrops(), MAX_DEATH_WEAPON_DROPS, GetDeathWeaponDropOldestAgeSeconds());
     strcat(body, line, sizeof(body));
-    format(line, sizeof(line), "Oldest active drop age: %d seconds\n", GetDeathWeaponDropOldestAgeSeconds());
+    strcat(body, "Clear Death Drops\tRemove active runtime pickups\n", sizeof(body));
+    strcat(body, "Recent Death Logs\tAudit death/killer/fee/wanted\n", sizeof(body));
+    format(line, sizeof(line), "Wanted / Police Config\tRadius %dm, fine $%d/wanted\n", g_PoliceArrestRadius, g_PoliceArrestFinePerWanted);
     strcat(body, line, sizeof(body));
-    format(line, sizeof(line), "Arrest radius: %d meter\n", g_PoliceArrestRadius);
-    strcat(body, line, sizeof(body));
-    format(line, sizeof(line), "Arrest fine per wanted level: $%d\n\n", g_PoliceArrestFinePerWanted);
-    strcat(body, line, sizeof(body));
-    strcat(body, "Commands:\n", sizeof(body));
-    strcat(body, "/sethospitalfee [0-1000000] = set manual hospital fee in server_settings\n", sizeof(body));
-    strcat(body, "/setdeathdroplifetime [60-3600] = set expire time untuk death weapon drop baru\n", sizeof(body));
-    strcat(body, "/deathdrops = audit active dropped weapon pickups\n", sizeof(body));
-    strcat(body, "/cleardeathdrops = clear all active runtime dropped weapon pickups\n", sizeof(body));
-    strcat(body, "/deathlogs = show recent death/killer/fee logs\n", sizeof(body));
-    strcat(body, "/wantedstatus = cek wanted level sendiri\n", sizeof(body));
-    strcat(body, "/arrest [playerid] = Police/Admin reset wanted lewat arrest flow\n/arrestconfig = Owner config radius/fine arrest\n/arrestlogs = Owner audit recent arrest actions\n", sizeof(body));
-    strcat(body, "/deathconfig, /hospitalconfig, /hospitalfee = open this reference\n\n", sizeof(body));
-    strcat(body, "Design note:\n", sizeof(body));
-    strcat(body, "Native GTA/SA-MP money loss remains ignored. DB/server money is authoritative; weapon drop lifetime is SAIF-controlled via server_settings. Wanted level persists after death and is recorded in death_logs. Arrest flow (/arrest) is now the official foundation to reset wanted; jail/booking/police station flow remains future polish.", sizeof(body));
+    strcat(body, "Wanted / Arrest Reference\tFlow rules\n", sizeof(body));
+    strcat(body, "Back to Admin Menus\t/amenus\n", sizeof(body));
 
-    ShowPlayerDialog(playerid, DIALOG_DEATH_CONFIG_MENU, DIALOG_STYLE_MSGBOX, "Death / Hospital Config", body, "Back", "Close");
+    ShowPlayerDialog(playerid, DIALOG_DEATH_CONFIG_MENU, DIALOG_STYLE_TABLIST_HEADERS, "Death / Hospital Config", body, "Open", "Back");
     return 1;
 }
+
 
 stock ApplyHospitalDeathRespawn(playerid)
 {
@@ -34327,7 +34510,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22I Arrest Config Polish");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22I.1 Config Dialog GUI Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -34338,6 +34521,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22I: Arrest config polish via server_settings: radius/fine controls, /arrestconfig, /setarrestradius, /setarrestfine.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22I.1: /amenus config items now open GUI action menus instead of note-only references.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22G.1: /amenus includes Wanted / Police Arrest Flow reference; no gameplay or DB changes.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22G: Police arrest foundation; /arrest resets wanted through official arrest flow, not death hospital.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22F.2: Schema baseline/verify refreshed for death_logs wanted_level_at_death.");

@@ -11492,7 +11492,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.21L Clean Schema Baseline Activation");
+    SetGameModeText("SAIF Dev v0.24K.21M Command Reference Cleanup");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11619,7 +11619,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.21L Clean Schema Baseline Activation berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.21M Command Reference Cleanup berhasil dijalankan.");
     return 1;
 }
 
@@ -12351,6 +12351,7 @@ stock ShowAdminToolsMenu(playerid)
     strcat(body, "Public Service Config\t/serviceconfig\tOwner\n", sizeof(body));
     strcat(body, "Offline Source Audit\t/sourceauditmenu\tOwner\n", sizeof(body));
     strcat(body, "Live DB Audit & Integrity\t/livedbaudit\tOwner\n", sizeof(body));
+    strcat(body, "Maintenance Reference\t/maintref\tOwner\n", sizeof(body));
     strcat(body, "Command Reference\t/amenus\tHelper+\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_ADMIN_TOOLS_MENU, DIALOG_STYLE_TABLIST_HEADERS, "SAIF Admin Menus Hub", body, "Open", "Close");
@@ -12365,12 +12366,49 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "SAIF Admin Menus Hub (/amenus)\n\n", sizeof(body));
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
-    strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
+    strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
     strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "SAIF Admin Menu Reference", body, "Back", "Close");
+    return 1;
+}
+
+stock ShowMaintenanceReference(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka maintenance reference.");
+        return 0;
+    }
+
+    new body[3072];
+    body[0] = EOS;
+
+    strcat(body, "SAIF Maintenance Reference\n\n", sizeof(body));
+    strcat(body, "Current cleanup baseline:\n", sizeof(body));
+    strcat(body, "- Runtime DB sudah aligned dengan live DB aktual.\n", sizeof(body));
+    strcat(body, "- Tidak ada table turf_config, business, atau businesses. Jangan diasumsikan di script SQL baru.\n", sizeof(body));
+    strcat(body, "- Business runtime memakai business_preset_config dan player_businesses.\n\n", sizeof(body));
+    strcat(body, "Source tag classes:\n", sizeof(body));
+    strcat(body, "- EXACT: offline_exact_* / exact-source import dari GTA SA offline.\n", sizeof(body));
+    strcat(body, "- MANUAL: dibuat/diedit admin dari editor runtime.\n", sizeof(body));
+    strcat(body, "- RUNTIME: saif_runtime_marker, marker aktif hasil migrasi yang masih dipakai gameplay.\n", sizeof(body));
+    strcat(body, "- DEPRECATED: template/curated/legacy/fallback; archive hanya setelah dry-run.\n", sizeof(body));
+    strcat(body, "- UNKNOWN: harus direview dan dilabel ulang.\n\n", sizeof(body));
+    strcat(body, "Maintenance commands:\n", sizeof(body));
+    strcat(body, "/livedbaudit = menu audit live DB\n", sizeof(body));
+    strcat(body, "/dbtables = table inventory\n", sizeof(body));
+    strcat(body, "/dbcleanupcandidates = disabled/deprecated counters\n", sizeof(body));
+    strcat(body, "/dbintegrity = orphan/integrity counters\n", sizeof(body));
+    strcat(body, "/sourceauditmenu = source-tag audit menu\n", sizeof(body));
+    strcat(body, "/sourcepolicy = exact-source cleanup policy\n\n", sizeof(body));
+    strcat(body, "Safe cleanup rule:\n", sizeof(body));
+    strcat(body, "1. Backup DB. 2. Dry-run SQL. 3. Archive table. 4. Apply. 5. Verify /livedbaudit. 6. Commit maintenance SQL.\n", sizeof(body));
+    strcat(body, "Jangan delete row aktif/exact/manual tanpa audit spesifik. Jangan patch spawn/death/class flow saat cleanup DB.", sizeof(body));
+
+    ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "SAIF Maintenance Reference", body, "Back", "Close");
     return 1;
 }
 
@@ -12408,6 +12446,7 @@ stock ShowSourceAuditActionMenu(playerid)
     strcat(body, "Cleanup Assistant\tDisable/relabel source_tag secara aman\n", sizeof(body));
     strcat(body, "Source Policy & Cleanup Rule\tPanduan aman offline-first\n", sizeof(body));
     strcat(body, "Live DB Audit & Integrity\tTable count, cleanup candidate, orphan check\n", sizeof(body));
+    strcat(body, "Maintenance Reference\tBaseline, source-tag class, safe cleanup rule\n", sizeof(body));
     strcat(body, "Admin Command Reference\tDaftar command admin/editor\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_SOURCE_AUDIT_MENU, DIALOG_STYLE_TABLIST_HEADERS, "SAIF Source Audit Menu", body, "Open", "Back");
@@ -12451,7 +12490,7 @@ stock ShowSourceAuditPolicy(playerid)
     strcat(body, "- Mulai dari disable enabled=0 untuk deprecated yang sudah diganti exact.\n", sizeof(body));
     strcat(body, "- Pastikan public/system core seperti house, gang HQ, business ownership tidak rusak.\n", sizeof(body));
     strcat(body, "- Setelah audit, baru buat patch cleanup spesifik per dataset/source_tag.\n\n", sizeof(body));
-    strcat(body, "Tools:\n/sourceaudit = summary\n/sourcedetail = detail per dataset\n/sourcedeprecated = list record fallback\n/sourcecleanup = cleanup assistant\n/sourcedisabletag [dataset] [tag] = disable fallback aktif\n/sourcerelabeltag [dataset] [old] [new] = label ulang tag non-exact\n/sourcepolicy = policy ini", sizeof(body));
+    strcat(body, "Tools:\n/sourceaudit = summary\n/sourcedetail = detail per dataset\n/sourcedeprecated = list record fallback\n/sourcecleanup = cleanup assistant\n/sourcedisabletag [dataset] [tag] = disable fallback aktif\n/sourcerelabeltag [dataset] [old] [new] = label ulang tag non-exact\n/sourcepolicy = policy ini\n/maintref = baseline/schema/seed maintenance note", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "SAIF Source Policy", body, "Back", "Close");
     return 1;
@@ -12743,6 +12782,7 @@ stock ShowLiveDBAuditMenu(playerid)
     strcat(body, "Cleanup Candidate Counters\tDisabled/deprecated/import/log counters tanpa delete\n", sizeof(body));
     strcat(body, "Orphan / Integrity Check\tCek relasi player/org/gang yang yatim\n", sizeof(body));
     strcat(body, "Source Audit Menu\tKembali ke audit source_tag exact/manual/runtime/deprecated\n", sizeof(body));
+    strcat(body, "Maintenance Reference\tSafe cleanup / schema / seed notes\n", sizeof(body));
     strcat(body, "Admin Command Reference\tDaftar command admin/editor\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_LIVE_DB_AUDIT_MENU, DIALOG_STYLE_TABLIST_HEADERS, "SAIF Live DB Audit & Integrity", body, "Open", "Back");
@@ -13810,7 +13850,8 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 11: ShowPublicServiceConfigMenu(playerid);
             case 12: ShowSourceAuditActionMenu(playerid);
             case 13: ShowLiveDBAuditMenu(playerid);
-            case 14: ShowAdminToolsReference(playerid);
+            case 14: ShowMaintenanceReference(playerid);
+            case 15: ShowAdminToolsReference(playerid);
         }
         return 1;
     }
@@ -13833,7 +13874,8 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 3: ShowSourceCleanupAssistant(playerid);
             case 4: ShowSourceAuditPolicy(playerid);
             case 5: ShowLiveDBAuditMenu(playerid);
-            case 6: ShowAdminToolsReference(playerid);
+            case 6: ShowMaintenanceReference(playerid);
+            case 7: ShowAdminToolsReference(playerid);
         }
         return 1;
     }
@@ -13882,7 +13924,8 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 1: ShowLiveDBCleanupCandidates(playerid);
             case 2: ShowLiveDBIntegrityCheck(playerid);
             case 3: ShowSourceAuditActionMenu(playerid);
-            case 4: ShowAdminToolsReference(playerid);
+            case 4: ShowMaintenanceReference(playerid);
+            case 5: ShowAdminToolsReference(playerid);
         }
         return 1;
     }
@@ -31251,6 +31294,12 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/maintref", true) || !strcmp(cmdtext, "/maintenance", true) || !strcmp(cmdtext, "/dbmaint", true))
+    {
+        ShowMaintenanceReference(playerid);
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/dbtables", true) || !strcmp(cmdtext, "/dbinventory", true))
     {
         ShowLiveDBTableInventory(playerid);
@@ -33260,7 +33309,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.21L Clean Schema Baseline Activation");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.21M Command Reference Cleanup");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -33270,6 +33319,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.21M: Command/admin maintenance reference cleanup; no runtime or DB mutation.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.21L: Clean schema baseline activated for repo/fresh install; live DB runtime unchanged.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.21J: Relabeled active legacy world location runtime markers to saif_runtime_marker; no gameplay rows deleted.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.21H: Aligned schema/seed workflow with latest actual live DB tables; no turf_config/business table assumptions.");
@@ -34856,6 +34906,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "/betamenu - Dashboard beta/whitelist berbasis dialog");
         SendClientMessage(playerid, COLOR_WHITE, "/amenus - Admin menus hub");
         SendClientMessage(playerid, COLOR_WHITE, "/livedbaudit - Live DB table inventory, cleanup counters, integrity check");
+        SendClientMessage(playerid, COLOR_WHITE, "/maintref - Owner maintenance reference: DB baseline, source tags, cleanup rule");
         SendClientMessage(playerid, COLOR_WHITE, "/sourceauditmenu, /sourceaudit, /sourcedetail, /sourcedeprecated, /sourcecleanup, /sourcepolicy - Source audit tools, Owner only");
         SendClientMessage(playerid, COLOR_WHITE, "/version, /changelog, /credits, /staff - Release info commands");
 

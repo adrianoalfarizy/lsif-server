@@ -603,7 +603,9 @@ stock IsLegacyStaticRaceMarkerEnabled() { return 0; }
 #define MAX_DEATH_WEAPON_DROPS 256
 #define DEATH_WEAPON_SLOT_COUNT 13
 #define DEATH_WEAPON_DROP_PICKUP_TYPE 1
-#define DEATH_WEAPON_DROP_LIFETIME_SECONDS 600
+#define DEATH_WEAPON_DROP_LIFETIME_DEFAULT 600
+#define DEATH_WEAPON_DROP_LIFETIME_MIN 60
+#define DEATH_WEAPON_DROP_LIFETIME_MAX 3600
 #define DEATH_WEAPON_DROP_LABEL_DRAW_DISTANCE 18.0
 #define HOSPITAL_DEATH_FEE_DEFAULT 0
 #define HOSPITAL_DEATH_FEE_MAX 1000000
@@ -662,6 +664,7 @@ new g_TurfCaptureSeconds = TURF_CAPTURE_SECONDS;
 new g_TurfGraceSeconds = TURF_ATTACKER_GRACE_SECONDS;
 new g_TurfCooldownSeconds = TURF_COOLDOWN_SECONDS;
 new g_HospitalDeathFee = HOSPITAL_DEATH_FEE_DEFAULT;
+new g_DeathWeaponDropLifetimeSeconds = DEATH_WEAPON_DROP_LIFETIME_DEFAULT;
 
 new g_ServerStartTick;
 
@@ -2581,12 +2584,12 @@ public OnTurfConfigSaved()
 
 stock LoadDeathConfigFromDB()
 {
-    new query[256];
+    new query[384];
     mysql_format(
         g_SQL,
         query,
         sizeof(query),
-        "SELECT setting_key, setting_value FROM server_settings WHERE setting_key='hospital_death_fee'"
+        "SELECT setting_key, setting_value FROM server_settings WHERE setting_key IN ('hospital_death_fee','death_weapon_drop_lifetime_seconds')"
     );
     mysql_tquery(g_SQL, query, "OnDeathConfigLoaded");
     return 1;
@@ -2594,13 +2597,14 @@ stock LoadDeathConfigFromDB()
 
 stock SaveDeathConfigToDB()
 {
-    new query[384];
+    new query[640];
     mysql_format(
         g_SQL,
         query,
         sizeof(query),
-        "INSERT INTO server_settings (setting_key, setting_value) VALUES ('hospital_death_fee','%d') ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_at=CURRENT_TIMESTAMP",
-        g_HospitalDeathFee
+        "INSERT INTO server_settings (setting_key, setting_value) VALUES ('hospital_death_fee','%d'),('death_weapon_drop_lifetime_seconds','%d') ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_at=CURRENT_TIMESTAMP",
+        g_HospitalDeathFee,
+        g_DeathWeaponDropLifetimeSeconds
     );
     mysql_tquery(g_SQL, query, "OnDeathConfigSaved");
     return 1;
@@ -2609,20 +2613,33 @@ stock SaveDeathConfigToDB()
 public OnDeathConfigLoaded()
 {
     new rows = cache_num_rows();
+    new key[64];
     new valueStr[32];
     new value;
 
-    if (rows > 0)
+    for (new i = 0; i < rows; i++)
     {
-        cache_get_value_name(0, "setting_value", valueStr, sizeof(valueStr));
+        cache_get_value_name(i, "setting_key", key, sizeof(key));
+        cache_get_value_name(i, "setting_value", valueStr, sizeof(valueStr));
         value = strval(valueStr);
-        if (value >= 0 && value <= HOSPITAL_DEATH_FEE_MAX)
+
+        if (!strcmp(key, "hospital_death_fee", true))
         {
-            g_HospitalDeathFee = value;
+            if (value >= 0 && value <= HOSPITAL_DEATH_FEE_MAX)
+            {
+                g_HospitalDeathFee = value;
+            }
+        }
+        else if (!strcmp(key, "death_weapon_drop_lifetime_seconds", true))
+        {
+            if (value >= DEATH_WEAPON_DROP_LIFETIME_MIN && value <= DEATH_WEAPON_DROP_LIFETIME_MAX)
+            {
+                g_DeathWeaponDropLifetimeSeconds = value;
+            }
         }
     }
 
-    printf("[SAIF] Death config loaded from DB: hospital_death_fee=%d", g_HospitalDeathFee);
+    printf("[SAIF] Death config loaded from DB: hospital_death_fee=%d death_weapon_drop_lifetime=%d", g_HospitalDeathFee, g_DeathWeaponDropLifetimeSeconds);
     return 1;
 }
 
@@ -11556,7 +11573,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.22C.1 Admin Menus Death Logs Fix");
+    SetGameModeText("SAIF Dev v0.24K.22D Weapon Drop Polish");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11684,7 +11701,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.22C.1 Admin Menus Death Logs Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.22D Weapon Drop Polish berhasil dijalankan.");
     return 1;
 }
 
@@ -12435,7 +12452,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /cleardeathdrops, /deathlogs\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
@@ -20152,7 +20169,7 @@ stock CreateDeathWeaponDrop(playerid, weaponid, ammo, modelid, Float:x, Float:y,
     DeathWeaponDropZ[index] = z;
     format(labelText, sizeof(labelText), "[DROPPED WEAPON]\nWeapon ID: %d | Ammo: %d", weaponid, ammo);
     DeathWeaponDropLabel[index] = Create3DTextLabel(labelText, COLOR_PURPLE, x, y, z + 0.6, DEATH_WEAPON_DROP_LABEL_DRAW_DISTANCE, virtualWorld, true);
-    SetTimerEx("DestroyDeathWeaponDropDelayed", DEATH_WEAPON_DROP_LIFETIME_SECONDS * 1000, false, "ii", index, DeathWeaponDropPickup[index]);
+    SetTimerEx("DestroyDeathWeaponDropDelayed", g_DeathWeaponDropLifetimeSeconds * 1000, false, "ii", index, DeathWeaponDropPickup[index]);
     return 1;
 }
 
@@ -28095,6 +28112,67 @@ stock ClearAllDeathWeaponDrops()
     return cleared;
 }
 
+stock GetDeathWeaponDropOldestAgeSeconds()
+{
+    new nowTick = GetTickCount();
+    new oldestAge = 0;
+    new age;
+
+    for (new i = 0; i < MAX_DEATH_WEAPON_DROPS; i++)
+    {
+        if (DeathWeaponDropPickup[i] == -1) continue;
+        age = (nowTick - DeathWeaponDropCreatedTick[i]) / 1000;
+        if (age > oldestAge)
+        {
+            oldestAge = age;
+        }
+    }
+    return oldestAge;
+}
+
+stock ShowDeathWeaponDropsAudit(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa melihat death weapon drop audit.");
+        return 0;
+    }
+
+    new body[4096];
+    new line[192];
+    new shown = 0;
+    new nowTick = GetTickCount();
+    new age;
+    body[0] = EOS;
+
+    strcat(body, "Death Weapon Drops Audit\n\n", sizeof(body));
+    format(line, sizeof(line), "Active drops: %d / %d\n", CountActiveDeathWeaponDrops(), MAX_DEATH_WEAPON_DROPS);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Lifetime config: %d seconds\n", g_DeathWeaponDropLifetimeSeconds);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Oldest active drop age: %d seconds\n\n", GetDeathWeaponDropOldestAgeSeconds());
+    strcat(body, line, sizeof(body));
+    strcat(body, "Showing max 20 active drops:\n", sizeof(body));
+
+    for (new i = 0; i < MAX_DEATH_WEAPON_DROPS && shown < 20; i++)
+    {
+        if (DeathWeaponDropPickup[i] == -1) continue;
+        age = (nowTick - DeathWeaponDropCreatedTick[i]) / 1000;
+        format(line, sizeof(line), "#%d pickup %d | weapon %d ammo %d | age %ds | int %d vw %d\n", i, DeathWeaponDropPickup[i], DeathWeaponDropWeapon[i], DeathWeaponDropAmmo[i], age, DeathWeaponDropInterior[i], DeathWeaponDropVirtualWorld[i]);
+        strcat(body, line, sizeof(body));
+        shown++;
+    }
+
+    if (shown == 0)
+    {
+        strcat(body, "Tidak ada dropped weapon pickup aktif.\n", sizeof(body));
+    }
+
+    strcat(body, "\nCommands:\n/setdeathdroplifetime [60-3600] = set lifetime untuk drop baru\n/cleardeathdrops = clear semua active dropped weapon runtime pickups", sizeof(body));
+    ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "Death Weapon Drops Audit", body, "Back", "Close");
+    return 1;
+}
+
 stock ApplyHospitalDeathFee(playerid)
 {
     if (g_HospitalDeathFee <= 0)
@@ -28150,15 +28228,19 @@ stock ShowDeathHospitalConfigMenu(playerid)
     strcat(body, line, sizeof(body));
     format(line, sizeof(line), "Active dropped weapon pickups: %d / %d\n", CountActiveDeathWeaponDrops(), MAX_DEATH_WEAPON_DROPS);
     strcat(body, line, sizeof(body));
-    format(line, sizeof(line), "Dropped weapon lifetime: %d seconds\n\n", DEATH_WEAPON_DROP_LIFETIME_SECONDS);
+    format(line, sizeof(line), "Dropped weapon lifetime: %d seconds\n", g_DeathWeaponDropLifetimeSeconds);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Oldest active drop age: %d seconds\n\n", GetDeathWeaponDropOldestAgeSeconds());
     strcat(body, line, sizeof(body));
     strcat(body, "Commands:\n", sizeof(body));
     strcat(body, "/sethospitalfee [0-1000000] = set manual hospital fee in server_settings\n", sizeof(body));
+    strcat(body, "/setdeathdroplifetime [60-3600] = set expire time untuk death weapon drop baru\n", sizeof(body));
+    strcat(body, "/deathdrops = audit active dropped weapon pickups\n", sizeof(body));
     strcat(body, "/cleardeathdrops = clear all active runtime dropped weapon pickups\n", sizeof(body));
     strcat(body, "/deathlogs = show recent death/killer/fee logs\n", sizeof(body));
     strcat(body, "/deathconfig, /hospitalconfig, /hospitalfee = open this reference\n\n", sizeof(body));
     strcat(body, "Design note:\n", sizeof(body));
-    strcat(body, "Native GTA/SA-MP money loss remains ignored. DB/server money is authoritative; this fee is the SAIF-controlled hospital cost.", sizeof(body));
+    strcat(body, "Native GTA/SA-MP money loss remains ignored. DB/server money is authoritative; weapon drop lifetime is SAIF-controlled via server_settings.", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_DEATH_CONFIG_MENU, DIALOG_STYLE_MSGBOX, "Death / Hospital Config", body, "Back", "Close");
     return 1;
@@ -31732,6 +31814,49 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/deathdrops", true) || !strcmp(cmdtext, "/deathdropaudit", true))
+    {
+        ShowDeathWeaponDropsAudit(playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/setdeathdroplifetime ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa mengubah death weapon drop lifetime.");
+            return 1;
+        }
+
+        new valueStr[16];
+        if (!GetOneParam(cmdtext[22], valueStr, sizeof(valueStr)) || !IsNumericString(valueStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setdeathdroplifetime [60-3600]");
+            return 1;
+        }
+
+        new seconds = strval(valueStr);
+        if (seconds < DEATH_WEAPON_DROP_LIFETIME_MIN || seconds > DEATH_WEAPON_DROP_LIFETIME_MAX)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Range death weapon drop lifetime: 60 - 3600 detik.");
+            return 1;
+        }
+
+        g_DeathWeaponDropLifetimeSeconds = seconds;
+        SaveDeathConfigToDB();
+
+        new msg[144];
+        format(msg, sizeof(msg), "Death weapon drop lifetime diset ke %d detik. Drop aktif saat ini tetap mengikuti timer lamanya.", g_DeathWeaponDropLifetimeSeconds);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/setdeathdroplifetime", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setdeathdroplifetime [60-3600]");
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/dbtables", true) || !strcmp(cmdtext, "/dbinventory", true))
     {
         ShowLiveDBTableInventory(playerid);
@@ -33741,7 +33866,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22C.1 Admin Menus Death Logs Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22D Weapon Drop Polish");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -33751,6 +33876,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22D: Death weapon drop lifetime DB config + /deathdrops audit; no class/death animation changes.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22C.1: Fixed /amenus Recent Death Logs mapping; no gameplay or DB changes.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22C: Schema baseline refresh; death_logs masuk DB contract/runtime table count 36; no gameplay changes.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22B: Death log audit; killer/reason/death position/drop count/hospital fee recorded in DB; no class-flow changes.");

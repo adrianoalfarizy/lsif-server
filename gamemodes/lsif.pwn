@@ -11492,7 +11492,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.21J Runtime Marker SourceTag Relabel");
+    SetGameModeText("SAIF Dev v0.24K.21K Source Audit Runtime Tag Alignment");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11619,7 +11619,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.21J Runtime Marker SourceTag Relabel berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.21K Source Audit Runtime Tag Alignment berhasil dijalankan.");
     return 1;
 }
 
@@ -12444,8 +12444,8 @@ stock ShowSourceAuditPolicy(playerid)
     strcat(body, "OFFLINE-FIRST / EXACT-SOURCE-FIRST POLICY\n\n", sizeof(body));
     strcat(body, "1. EXACT = data hasil import/konversi dari source GTA SA offline. Ini prioritas utama.\n", sizeof(body));
     strcat(body, "2. MANUAL = data hasil editor/admin. Boleh dipakai untuk online adaptation, fix titik, dan custom kecil.\n", sizeof(body));
-    strcat(body, "3. DEPRECATED = curated/template/legacy_static. Jangan langsung hapus; audit dulu karena mungkin masih dipakai saat exact belum ada.\n", sizeof(body));
-    strcat(body, "4. UNKNOWN = source_tag kosong/tidak dikenali. Perlu diberi label atau dipindahkan ke exact/manual/deprecated.\n\n", sizeof(body));
+    strcat(body, "3. RUNTIME = saif_runtime_marker; marker aktif hasil migrasi static yang memang masih dipakai gameplay.\n", sizeof(body));
+    strcat(body, "4. DEPRECATED = curated/template/legacy_static/fallback; audit dulu sebelum archive.\n5. UNKNOWN = source_tag kosong/tidak dikenali. Perlu diberi label ke exact/manual/runtime/deprecated.\n\n", sizeof(body));
     strcat(body, "Cleanup rule aman:\n", sizeof(body));
     strcat(body, "- Jangan delete massal dari DB production tanpa backup.\n", sizeof(body));
     strcat(body, "- Mulai dari disable enabled=0 untuk deprecated yang sudah diganti exact.\n", sizeof(body));
@@ -12742,7 +12742,7 @@ stock ShowLiveDBAuditMenu(playerid)
     strcat(body, "Table Inventory\tHitung row live DB per kategori tabel\n", sizeof(body));
     strcat(body, "Cleanup Candidate Counters\tDisabled/deprecated/import/log counters tanpa delete\n", sizeof(body));
     strcat(body, "Orphan / Integrity Check\tCek relasi player/org/gang yang yatim\n", sizeof(body));
-    strcat(body, "Source Audit Menu\tKembali ke audit source_tag exact/manual/legacy\n", sizeof(body));
+    strcat(body, "Source Audit Menu\tKembali ke audit source_tag exact/manual/runtime/deprecated\n", sizeof(body));
     strcat(body, "Admin Command Reference\tDaftar command admin/editor\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_LIVE_DB_AUDIT_MENU, DIALOG_STYLE_TABLIST_HEADERS, "SAIF Live DB Audit & Integrity", body, "Open", "Back");
@@ -12819,10 +12819,10 @@ stock ShowLiveDBCleanupCandidates(playerid)
     strcat(query, "UNION ALL SELECT 'disabled world_pickups', COUNT(*), 'disabled pickup rows/templates' FROM world_pickups WHERE enabled=0 ", sizeof(query));
     strcat(query, "UNION ALL SELECT 'disabled public_interiors', COUNT(*), 'manual/exact public interiors disabled' FROM public_interiors WHERE enabled=0 ", sizeof(query));
     strcat(query, "UNION ALL SELECT 'disabled gang_territories', COUNT(*), 'inactive turf rows' FROM gang_territories WHERE enabled=0 ", sizeof(query));
-    strcat(query, "UNION ALL SELECT 'active deprecated world_locations', COUNT(*), 'legacy/template/curated/unknown still enabled' FROM world_locations WHERE enabled=1 AND (source_tag='' OR source_tag='unknown' OR source_tag LIKE '%template%' OR source_tag LIKE '%curated%' OR source_tag LIKE '%legacy%' OR source_tag LIKE '%fallback%') ", sizeof(query));
-    strcat(query, "UNION ALL SELECT 'active deprecated parked_vehicles', COUNT(*), 'legacy/template/curated/unknown still enabled' FROM parked_vehicles WHERE enabled=1 AND (source_tag='' OR source_tag='unknown' OR source_tag LIKE '%template%' OR source_tag LIKE '%curated%' OR source_tag LIKE '%legacy%' OR source_tag LIKE '%fallback%') ", sizeof(query));
-    strcat(query, "UNION ALL SELECT 'active deprecated world_pickups', COUNT(*), 'legacy/template/curated/unknown still enabled' FROM world_pickups WHERE enabled=1 AND (source_tag='' OR source_tag='unknown' OR source_tag LIKE '%template%' OR source_tag LIKE '%curated%' OR source_tag LIKE '%legacy%' OR source_tag LIKE '%fallback%') ", sizeof(query));
-    strcat(query, "UNION ALL SELECT 'active deprecated public_interiors', COUNT(*), 'legacy/template/curated/unknown still enabled' FROM public_interiors WHERE enabled=1 AND (source_tag='' OR source_tag='unknown' OR source_tag LIKE '%template%' OR source_tag LIKE '%curated%' OR source_tag LIKE '%legacy%' OR source_tag LIKE '%fallback%') ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'active deprecated world_locations', COUNT(*), 'deprecated/unknown source_tag still enabled' FROM world_locations WHERE enabled=1 AND (source_tag='' OR source_tag='unknown' OR source_tag LIKE '%template%' OR source_tag LIKE '%curated%' OR source_tag LIKE '%legacy%' OR source_tag LIKE '%fallback%') ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'active deprecated parked_vehicles', COUNT(*), 'deprecated/unknown source_tag still enabled' FROM parked_vehicles WHERE enabled=1 AND (source_tag='' OR source_tag='unknown' OR source_tag LIKE '%template%' OR source_tag LIKE '%curated%' OR source_tag LIKE '%legacy%' OR source_tag LIKE '%fallback%') ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'active deprecated world_pickups', COUNT(*), 'deprecated/unknown source_tag still enabled' FROM world_pickups WHERE enabled=1 AND (source_tag='' OR source_tag='unknown' OR source_tag LIKE '%template%' OR source_tag LIKE '%curated%' OR source_tag LIKE '%legacy%' OR source_tag LIKE '%fallback%') ", sizeof(query));
+    strcat(query, "UNION ALL SELECT 'active deprecated public_interiors', COUNT(*), 'deprecated/unknown source_tag still enabled' FROM public_interiors WHERE enabled=1 AND (source_tag='' OR source_tag='unknown' OR source_tag LIKE '%template%' OR source_tag LIKE '%curated%' OR source_tag LIKE '%legacy%' OR source_tag LIKE '%fallback%') ", sizeof(query));
     strcat(query, "UNION ALL SELECT 'parked import queue rows', COUNT(*), 'archive only after exact import is verified' FROM parked_vehicle_import_queue ", sizeof(query));
     strcat(query, "UNION ALL SELECT 'public interior import unimported', COUNT(*), 'queue rows imported=0' FROM public_interior_import_queue WHERE imported=0 ", sizeof(query));
     strcat(query, "UNION ALL SELECT 'world pickup import queue rows', COUNT(*), 'archive only after SCM import is verified' FROM world_pickup_import_queue ", sizeof(query));
@@ -13100,15 +13100,21 @@ stock GetSourceAuditClass(const sourceTag[], className[], len)
         return 1;
     }
 
-    if (strfind(sourceTag, "template", true) != -1 || strfind(sourceTag, "curated", true) != -1 || strfind(sourceTag, "legacy_static", true) != -1)
+    if (!strcmp(sourceTag, "saif_runtime_marker", true) || strfind(sourceTag, "runtime", true) != -1)
     {
-        format(className, len, "DEPRECATED");
+        format(className, len, "RUNTIME");
         return 1;
     }
 
     if (strfind(sourceTag, "manual", true) != -1 || strfind(sourceTag, "db_editor", true) != -1)
     {
         format(className, len, "MANUAL");
+        return 1;
+    }
+
+    if (strfind(sourceTag, "template", true) != -1 || strfind(sourceTag, "curated", true) != -1 || strfind(sourceTag, "legacy_static", true) != -1 || strfind(sourceTag, "fallback", true) != -1)
+    {
+        format(className, len, "DEPRECATED");
         return 1;
     }
 
@@ -33254,7 +33260,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.21J Runtime Marker SourceTag Relabel");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.21K Source Audit Runtime Tag Alignment");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -33264,6 +33270,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.21K: Source audit now treats saif_runtime_marker as RUNTIME, not UNKNOWN/deprecated.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.21J: Relabeled active legacy world location runtime markers to saif_runtime_marker; no gameplay rows deleted.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.21H: Aligned schema/seed workflow with latest actual live DB tables; no turf_config/business table assumptions.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19.5: Public interior single transform removes delayed facing/camera snap on enter/exit.");

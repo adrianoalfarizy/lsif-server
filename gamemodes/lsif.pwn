@@ -11492,7 +11492,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.21K Source Audit Runtime Tag Alignment");
+    SetGameModeText("SAIF Dev v0.24K.21L Clean Schema Baseline Activation");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11619,7 +11619,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.21K Source Audit Runtime Tag Alignment berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.21L Clean Schema Baseline Activation berhasil dijalankan.");
     return 1;
 }
 
@@ -33260,7 +33260,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.21K Source Audit Runtime Tag Alignment");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.21L Clean Schema Baseline Activation");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -33270,7 +33270,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.21K: Source audit now treats saif_runtime_marker as RUNTIME, not UNKNOWN/deprecated.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.21L: Clean schema baseline activated for repo/fresh install; live DB runtime unchanged.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.21J: Relabeled active legacy world location runtime markers to saif_runtime_marker; no gameplay rows deleted.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.21H: Aligned schema/seed workflow with latest actual live DB tables; no turf_config/business table assumptions.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19.5: Public interior single transform removes delayed facing/camera snap on enter/exit.");

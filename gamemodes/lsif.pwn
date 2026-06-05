@@ -11768,7 +11768,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24L.1 Persistent Jail Hold Foundation");
+    SetGameModeText("SAIF Dev v0.24L.2 Schema Baseline Jail Refresh");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -35434,7 +35434,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24L.1 Persistent Jail Hold Foundation");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24L.2 Schema Baseline Jail Refresh");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -35444,7 +35444,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24L.1: Persistent jail hold foundation; arrest jail hold survives reconnect using player_jail_holds table. v0.24L.0: Milestone rebase from long v0.24K branch.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24L.2: Schema baseline/verify refreshed for player_jail_holds persistent jail table. v0.24L.1: Persistent jail hold foundation.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24L.0: Milestone rebase from long v0.24K branch.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22I: Arrest config polish via server_settings: radius/fine controls, /arrestconfig, /setarrestradius, /setarrestfine.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22I.1: /amenus config items now open GUI action menus instead of note-only references.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22M.1: Fixed const warning in jail command guard; no gameplay or DB changes.");

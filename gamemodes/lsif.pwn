@@ -395,6 +395,7 @@ stock IsClosedBetaEnabled()
 #define POLICE_COOLDOWN_SECONDS 60
 #define POLICE_BASE_REWARD 900
 #define POLICE_BASE_XP 55
+#define POLICE_ARREST_RADIUS 6.0
 
 #define VEHICLE_OWNER_NONE 0
 
@@ -11587,7 +11588,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.22F.2 Schema Baseline Wanted Refresh");
+    SetGameModeText("SAIF Dev v0.24K.22G Police Arrest Foundation");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11716,7 +11717,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.22F.2 Schema Baseline Wanted Refresh berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.22G Police Arrest Foundation berhasil dijalankan.");
     return 1;
 }
 
@@ -12470,7 +12471,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs, /wantedstatus, /arrest [id]\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
@@ -28266,6 +28267,97 @@ public ReapplyPlayerWantedAfterDeath(playerid, wantedLevel)
     return 1;
 }
 
+
+stock ShowWantedStatus(playerid)
+{
+    new wanted = GetPlayerWantedLevel(playerid);
+    if (wanted < 0) wanted = 0;
+    if (wanted > 6) wanted = 6;
+
+    new msg[144];
+    format(msg, sizeof(msg), "Wanted level kamu saat ini: %d.", wanted);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+
+    if (wanted > 0)
+    {
+        SendClientMessage(playerid, COLOR_ORANGE, "Death/hospital tidak menghapus wanted. Wanted hanya berkurang lewat bribe/service atau arrest resmi.");
+    }
+    else
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "Kamu tidak sedang wanted.");
+    }
+    return 1;
+}
+
+stock ProcessPoliceArrest(playerid, targetid)
+{
+    if (!IsPlayerConnected(targetid) || !PlayerLoggedIn[targetid])
+    {
+        SendClientMessage(playerid, COLOR_RED, "Target tidak online/login.");
+        return 0;
+    }
+
+    if (targetid == playerid)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu tidak bisa arrest diri sendiri.");
+        return 0;
+    }
+
+    if (PlayerJob[playerid] != JOB_POLICE && !IsAdminLevel(playerid, ADMIN_ADMIN))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Police/Vigilante atau Admin yang bisa menggunakan arrest flow.");
+        return 0;
+    }
+
+    new wanted = GetPlayerWantedLevel(targetid);
+    if (wanted <= 0)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Target tidak memiliki wanted level.");
+        return 0;
+    }
+    if (wanted > 6) wanted = 6;
+
+    if (!IsAdminLevel(playerid, ADMIN_ADMIN))
+    {
+        if (GetPlayerInterior(playerid) != GetPlayerInterior(targetid) || GetPlayerVirtualWorld(playerid) != GetPlayerVirtualWorld(targetid))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Target harus berada di interior/virtual world yang sama untuk arrest.");
+            return 0;
+        }
+
+        new Float:px, Float:py, Float:pz;
+        new Float:tx, Float:ty, Float:tz;
+        GetPlayerPos(playerid, px, py, pz);
+        GetPlayerPos(targetid, tx, ty, tz);
+
+        if (GetDistanceBetweenPoints3D(px, py, pz, tx, ty, tz) > POLICE_ARREST_RADIUS)
+        {
+            new msg[144];
+            format(msg, sizeof(msg), "Kamu harus dekat target untuk arrest. Radius: %.1f.", POLICE_ARREST_RADIUS);
+            SendClientMessage(playerid, COLOR_RED, msg);
+            return 0;
+        }
+    }
+
+    SetPlayerWantedLevel(targetid, 0);
+
+    new officerName[MAX_PLAYER_NAME];
+    new targetName[MAX_PLAYER_NAME];
+    GetPlayerName(playerid, officerName, sizeof(officerName));
+    GetPlayerName(targetid, targetName, sizeof(targetName));
+
+    new msg[160];
+    format(msg, sizeof(msg), "Arrest berhasil: %s wanted %d -> 0.", targetName, wanted);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+
+    format(msg, sizeof(msg), "Kamu ditangkap oleh %s. Wanted level direset dari %d ke 0.", officerName, wanted);
+    SendClientMessage(targetid, COLOR_ORANGE, msg);
+
+    SendClientMessage(playerid, COLOR_WHITE, "Catatan: ini foundation arrest. Jail/booking/police station flow akan dibuat di patch berikutnya.");
+    SendClientMessage(targetid, COLOR_WHITE, "Catatan: arrest resmi berbeda dari death hospital; death biasa tetap tidak menghapus wanted.");
+    return 1;
+}
+
 stock ShowDeathHospitalConfigMenu(playerid)
 {
     if (!IsAdminLevel(playerid, ADMIN_OWNER))
@@ -28293,9 +28385,11 @@ stock ShowDeathHospitalConfigMenu(playerid)
     strcat(body, "/deathdrops = audit active dropped weapon pickups\n", sizeof(body));
     strcat(body, "/cleardeathdrops = clear all active runtime dropped weapon pickups\n", sizeof(body));
     strcat(body, "/deathlogs = show recent death/killer/fee logs\n", sizeof(body));
+    strcat(body, "/wantedstatus = cek wanted level sendiri\n", sizeof(body));
+    strcat(body, "/arrest [playerid] = Police/Admin reset wanted lewat arrest flow\n", sizeof(body));
     strcat(body, "/deathconfig, /hospitalconfig, /hospitalfee = open this reference\n\n", sizeof(body));
     strcat(body, "Design note:\n", sizeof(body));
-    strcat(body, "Native GTA/SA-MP money loss remains ignored. DB/server money is authoritative; weapon drop lifetime is SAIF-controlled via server_settings. Wanted level persists after death and is recorded in death_logs; arrest/jail reset must be handled by future police flow, not hospital death.", sizeof(body));
+    strcat(body, "Native GTA/SA-MP money loss remains ignored. DB/server money is authoritative; weapon drop lifetime is SAIF-controlled via server_settings. Wanted level persists after death and is recorded in death_logs. Arrest flow (/arrest) is now the official foundation to reset wanted; jail/booking/police station flow remains future polish.", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_DEATH_CONFIG_MENU, DIALOG_STYLE_MSGBOX, "Death / Hospital Config", body, "Back", "Close");
     return 1;
@@ -31819,6 +31913,33 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/wantedstatus", true) || !strcmp(cmdtext, "/wanted", true))
+    {
+        ShowWantedStatus(playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/arrest ", true) == 0)
+    {
+        new targetStr[16];
+        if (!GetOneParam(cmdtext[8], targetStr, sizeof(targetStr)) || !IsNumericString(targetStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /arrest [playerid]");
+            return 1;
+        }
+
+        new targetid = strval(targetStr);
+        ProcessPoliceArrest(playerid, targetid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/arrest", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /arrest [playerid]");
+        SendClientMessage(playerid, COLOR_WHITE, "Police/Vigilante harus dekat target wanted. Admin bisa gunakan sebagai debug flow.");
+        return 1;
+    }
+
     if (strfind(cmdtext, "/sethospitalfee ", true) == 0)
     {
         if (!IsAdminLevel(playerid, ADMIN_OWNER))
@@ -33923,7 +34044,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22F.2 Schema Baseline Wanted Refresh");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22G Police Arrest Foundation");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -33933,6 +34054,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22G: Police arrest foundation; /arrest resets wanted through official arrest flow, not death hospital.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22F.2: Schema baseline/verify refreshed for death_logs wanted_level_at_death.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22F.1: Gang HQ exterior door/panah pickup now reloads from DB after restart.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22E: Wanted level persists after hospital death respawn; no arrest/reset on death.");
@@ -33946,31 +34068,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.21H: Aligned schema/seed workflow with latest actual live DB tables; no turf_config/business table assumptions.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19.5: Public interior single transform removes delayed facing/camera snap on enter/exit.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19.4: Nearby Map Icon Manager now fills slots 80-99 with nearest public interiors and dynamic locations around each player.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24N: Source cleanup assistant, safe disable by source_tag, relabel fallback tags, and runtime refresh.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24M: Source audit detail menu, deprecated/fallback record review, and source cleanup policy.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24L: Offline/source audit tools, source_tag validation summary, and /amenus audit entry.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K: Gang preset active status, enable/disable, runtime hide, and /amenus command reference cleanup.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24J.4: Business array compile fix after MAX_BUSINESSES 64 expansion.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24F.2: Ammu config dialog fix, edit price/ammo/select action now responds correctly.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24F.1: Configurable Ammu-Nation price/ammo and repeat purchase.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24F: Offline-like Ammu-Nation weapon catalog/pricing, expanded saved loadout.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24E.4: Public interior facing apply fix.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24D: SCM exact pickup import queue, weapon pickups, curated pickup seed tetap deprecated.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24B: Exact offline parked vehicle importer, /parkvehimportdb, /parkvehexactinfo.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24A: Curated parked vehicle seed is deprecated; use exact offline import when possible.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.23F.3: Public interior checkpoint interaction, service point merah, exit fix.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.23F.1: Public interior template fix, safer default coords, shared VW.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.23B: Parked vehicle dialog menu dan interactive editor.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.23E.1: Curated pickup seed is deprecated; use exact SCM/IPL pickup import when available.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.23A.1: Parked vehicle engine default ON setelah create/reload.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.22F.2: Gang HQ interior exit fix dan visitor access.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.22A.3: Runtime turf war config untuk balancing/testing.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.22A.2: Turf HUD compact menggunakan TextDraw kecil.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.22A: Basic turf war system.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.21E: Dynamic turf zone editor.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.21C-D: Dynamic object system dan editor UI.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.21A-B: Dynamic world location dan integration.");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.19B: Weapon license dan saved loadout persistence.");
         SendClientMessage(playerid, COLOR_WHITE, "Core: jobs, race, house, org, business, dealership, garage, fuel.");
         return 1;
     }
@@ -35041,6 +35139,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         {
             SendClientMessage(playerid, COLOR_WHITE, "Tugas: tanggapi panggilan vigilante di checkpoint suspect area.");
             SendClientMessage(playerid, COLOR_WHITE, "Kendaraan valid: Police car, ranger, bike, atau enforcer. Tekan tombol 2 untuk mulai.");
+            SendClientMessage(playerid, COLOR_WHITE, "Arrest foundation: /arrest [id] untuk reset wanted target dekat; /wantedstatus untuk cek wanted sendiri.");
 
             new cooldownLeft = GetPoliceCooldownLeft(playerid);
             if (cooldownLeft > 0)

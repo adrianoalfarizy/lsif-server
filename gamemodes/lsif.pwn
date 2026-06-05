@@ -263,6 +263,7 @@
 #define DIALOG_ARREST_RADIUS_INPUT 1243
 #define DIALOG_ARREST_FINE_INPUT 1244
 #define DIALOG_ARREST_JAIL_SECONDS_INPUT 1245
+#define DIALOG_ARREST_JAIL_LIST 1246
 
 
 
@@ -11766,7 +11767,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.22L.1 Arrest Release Compile Fix");
+    SetGameModeText("SAIF Dev v0.24K.22M.1 Jail Command Const Warning Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11898,7 +11899,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.22L.1 Arrest Release Compile Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.22M.1 Jail Command Const Warning Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -12683,6 +12684,7 @@ stock ShowWantedPoliceArrestReference(playerid)
     strcat(body, "/arrestconfig = Owner config radius/fine/booking/jail arrest.\n/setarrestbooking = simpan posisi Owner sebagai booking point.\n/gotoarrestbooking = teleport Owner ke booking point.\n/togglearrestbooking [0/1] = ON/OFF teleport booking setelah arrest.\n", sizeof(body));
     strcat(body, "/togglearrestjail [0/1] = ON/OFF temporary jail hold setelah arrest.\n/setarrestjailseconds [0-600] = set jail seconds per wanted.\n", sizeof(body));
     strcat(body, "/releasejail [id] = Admin release jail hold. /jailstatus = cek status jail sendiri.\n", sizeof(body));
+    strcat(body, "/arrestjails | /jaillist | /activejails = Owner audit active jail hold runtime.\n", sizeof(body));
     strcat(body, "/setarrestradius [2-20] = set radius arrest non-admin.\n", sizeof(body));
     strcat(body, "/setarrestfine [0-100000] = set fine per wanted level.\n", sizeof(body));
     strcat(body, "/arrestlogs = Owner audit recent arrest logs dari admin_logs.\n", sizeof(body));
@@ -12733,6 +12735,7 @@ stock ShowArrestConfigMenu(playerid)
     format(line, sizeof(line), "Set Jail Release Point Here\t%.1f, %.1f, %.1f | int %d vw %d\n", g_PoliceArrestReleaseX, g_PoliceArrestReleaseY, g_PoliceArrestReleaseZ, g_PoliceArrestReleaseInterior, g_PoliceArrestReleaseVW);
     strcat(body, line, sizeof(body));
     strcat(body, "Goto Jail Release Point\tTeleport Owner to release point\n", sizeof(body));
+    strcat(body, "Active Jail Holds\tList jailed players\n", sizeof(body));
     strcat(body, "Wanted / Arrest Reference\tFlow rules\n", sizeof(body));
     strcat(body, "Recent Arrest Logs\tAudit POLICE_ARREST\n", sizeof(body));
     strcat(body, "Death / Hospital Config\tOpen related config\n", sizeof(body));
@@ -14511,10 +14514,11 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
                 GotoArrestReleasePoint(playerid);
                 ShowArrestConfigMenu(playerid);
             }
-            case 9: ShowWantedPoliceArrestReference(playerid);
-            case 10: ShowRecentArrestLogs(playerid);
-            case 11: ShowDeathHospitalConfigMenu(playerid);
-            case 12: ShowAdminToolsMenu(playerid);
+            case 9: ShowActiveArrestJails(playerid);
+            case 10: ShowWantedPoliceArrestReference(playerid);
+            case 11: ShowRecentArrestLogs(playerid);
+            case 12: ShowDeathHospitalConfigMenu(playerid);
+            case 13: ShowAdminToolsMenu(playerid);
         }
         return 1;
     }
@@ -14615,6 +14619,15 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         format(msg, sizeof(msg), "Arrest jail hold diset ke %d detik per wanted level dan disimpan ke server_settings.", g_PoliceArrestJailSecondsPerWanted);
         SendClientMessage(playerid, COLOR_GREEN, msg);
         ShowArrestConfigMenu(playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_ARREST_JAIL_LIST)
+    {
+        if (response)
+        {
+            ShowArrestConfigMenu(playerid);
+        }
         return 1;
     }
 
@@ -29098,6 +29111,84 @@ stock ShowArrestJailStatus(playerid)
     return 1;
 }
 
+stock GetArrestJailRemainingSeconds(playerid)
+{
+    if (!PlayerArrestJailed[playerid])
+    {
+        return 0;
+    }
+
+    new remaining = (PlayerArrestJailReleaseTick[playerid] - GetTickCount()) / 1000;
+    if (remaining < 0) remaining = 0;
+    return remaining;
+}
+
+stock IsArrestJailAllowedCommand(playerid, const cmdtext[])
+{
+    if (!PlayerArrestJailed[playerid])
+    {
+        return 1;
+    }
+
+    if (IsAdminLevel(playerid, ADMIN_ADMIN))
+    {
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/jailstatus", true) || !strcmp(cmdtext, "/arrestjailstatus", true)) return 1;
+    if (!strcmp(cmdtext, "/wantedstatus", true) || !strcmp(cmdtext, "/wanted", true)) return 1;
+    if (!strcmp(cmdtext, "/help", true) || !strcmp(cmdtext, "/admins", true) || !strcmp(cmdtext, "/stats", true)) return 1;
+    if (strfind(cmdtext, "/report", true) == 0 || strfind(cmdtext, "/bug", true) == 0) return 1;
+    if (strfind(cmdtext, "/suggest", true) == 0 || strfind(cmdtext, "/feedback", true) == 0) return 1;
+    if (strfind(cmdtext, "/pm", true) == 0) return 1;
+
+    new msg[144];
+    format(msg, sizeof(msg), "Kamu sedang arrest jail hold. Sisa waktu: %d detik. Gunakan /jailstatus untuk cek status.", GetArrestJailRemainingSeconds(playerid));
+    SendClientMessage(playerid, COLOR_ORANGE, msg);
+    return 0;
+}
+
+stock ShowActiveArrestJails(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa melihat active jail holds.");
+        return 0;
+    }
+
+    new body[2048];
+    new line[192];
+    new name[MAX_PLAYER_NAME];
+    new count = 0;
+    body[0] = EOS;
+
+    strcat(body, "Player	Remaining	Status
+", sizeof(body));
+
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!IsPlayerConnected(i) || !PlayerLoggedIn[i] || !PlayerArrestJailed[i])
+        {
+            continue;
+        }
+
+        GetPlayerName(i, name, sizeof(name));
+        format(line, sizeof(line), "%s [%d]	%ds	Jailed
+", name, i, GetArrestJailRemainingSeconds(i));
+        strcat(body, line, sizeof(body));
+        count++;
+    }
+
+    if (count <= 0)
+    {
+        strcat(body, "No active jail holds	-	Clear
+", sizeof(body));
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_ARREST_JAIL_LIST, DIALOG_STYLE_TABLIST_HEADERS, "Active Arrest Jail Holds", body, "Back", "Close");
+    return 1;
+}
+
 stock ProcessPoliceArrest(playerid, targetid)
 {
     if (!IsPlayerConnected(targetid) || !PlayerLoggedIn[targetid])
@@ -32691,6 +32782,10 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!IsArrestJailAllowedCommand(playerid, cmdtext))
+    {
+        return 1;
+    }
 
     if (!strcmp(cmdtext, "/amenus", true) || !strcmp(cmdtext, "/adminmenus", true) || !strcmp(cmdtext, "/menuseadmin", true))
     {
@@ -33000,6 +33095,12 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/jailstatus", true) || !strcmp(cmdtext, "/arrestjailstatus", true))
     {
         ShowArrestJailStatus(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/arrestjails", true) || !strcmp(cmdtext, "/jaillist", true) || !strcmp(cmdtext, "/activejails", true))
+    {
+        ShowActiveArrestJails(playerid);
         return 1;
     }
 
@@ -35140,7 +35241,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22L.1 Arrest Release Compile Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22M.1 Jail Command Const Warning Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -35152,6 +35253,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22I: Arrest config polish via server_settings: radius/fine controls, /arrestconfig, /setarrestradius, /setarrestfine.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22I.1: /amenus config items now open GUI action menus instead of note-only references.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22M.1: Fixed const warning in jail command guard; no gameplay or DB changes.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22L.1: Compile fix for arrest release point dialog; removed stray duplicated case block; no gameplay/DB changes.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22J: Arrest booking foundation via server_settings: booking teleport toggle, point set/goto, and GUI config.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22G.1: /amenus includes Wanted / Police Arrest Flow reference; no gameplay or DB changes.");

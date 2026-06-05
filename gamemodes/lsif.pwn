@@ -255,6 +255,7 @@
 #define DIALOG_LIVE_DB_TABLE_SUMMARY 1235
 #define DIALOG_LIVE_DB_CLEANUP_CANDIDATES 1236
 #define DIALOG_LIVE_DB_INTEGRITY 1237
+#define DIALOG_DEATH_CONFIG_MENU 1238
 
 
 
@@ -603,6 +604,8 @@ stock IsLegacyStaticRaceMarkerEnabled() { return 0; }
 #define DEATH_WEAPON_DROP_PICKUP_TYPE 1
 #define DEATH_WEAPON_DROP_LIFETIME_SECONDS 600
 #define DEATH_WEAPON_DROP_LABEL_DRAW_DISTANCE 18.0
+#define HOSPITAL_DEATH_FEE_DEFAULT 0
+#define HOSPITAL_DEATH_FEE_MAX 1000000
 
 #define MAX_PUBLIC_INTERIORS 80
 #define PUBLIC_INTERIOR_PICKUP_MODEL 1318
@@ -656,6 +659,7 @@ new g_TurfHoldSeconds = TURF_HOLD_SECONDS;
 new g_TurfCaptureSeconds = TURF_CAPTURE_SECONDS;
 new g_TurfGraceSeconds = TURF_ATTACKER_GRACE_SECONDS;
 new g_TurfCooldownSeconds = TURF_COOLDOWN_SECONDS;
+new g_HospitalDeathFee = HOSPITAL_DEATH_FEE_DEFAULT;
 
 new g_ServerStartTick;
 
@@ -2403,6 +2407,8 @@ forward CompleteTurfChallengeHold(playerid, territoryIndex, gangid, startTick);
 forward TurfWarTick();
 forward OnTurfConfigLoaded();
 forward OnTurfConfigSaved();
+forward OnDeathConfigLoaded();
+forward OnDeathConfigSaved();
 forward OnGangColorUpdated(playerid, colorIndex);
 forward OnPlayerGangLoaded(playerid);
 forward OnGangCreated(playerid);
@@ -2566,6 +2572,59 @@ public OnTurfConfigLoaded()
 public OnTurfConfigSaved()
 {
     print("[SAIF] Turf config saved to database.");
+    return 1;
+}
+
+stock LoadDeathConfigFromDB()
+{
+    new query[256];
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "SELECT setting_key, setting_value FROM server_settings WHERE setting_key='hospital_death_fee'"
+    );
+    mysql_tquery(g_SQL, query, "OnDeathConfigLoaded");
+    return 1;
+}
+
+stock SaveDeathConfigToDB()
+{
+    new query[384];
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO server_settings (setting_key, setting_value) VALUES ('hospital_death_fee','%d') ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_at=CURRENT_TIMESTAMP",
+        g_HospitalDeathFee
+    );
+    mysql_tquery(g_SQL, query, "OnDeathConfigSaved");
+    return 1;
+}
+
+public OnDeathConfigLoaded()
+{
+    new rows = cache_num_rows();
+    new valueStr[32];
+    new value;
+
+    if (rows > 0)
+    {
+        cache_get_value_name(0, "setting_value", valueStr, sizeof(valueStr));
+        value = strval(valueStr);
+        if (value >= 0 && value <= HOSPITAL_DEATH_FEE_MAX)
+        {
+            g_HospitalDeathFee = value;
+        }
+    }
+
+    printf("[SAIF] Death config loaded from DB: hospital_death_fee=%d", g_HospitalDeathFee);
+    return 1;
+}
+
+public OnDeathConfigSaved()
+{
+    print("[SAIF] Death config saved to database.");
     return 1;
 }
 
@@ -11492,7 +11551,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.21N Fresh Install Bundle Closeout");
+    SetGameModeText("SAIF Dev v0.24K.22A Death Hospital Polish");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11510,6 +11569,7 @@ public OnGameModeInit()
         print("[MYSQL] Berhasil connect ke database lsif_db.");
     }
     LoadTurfConfigFromDB();
+    LoadDeathConfigFromDB();
     LoadWeaponShopConfigFromDB();
     LoadPublicServiceConfigFromDB();
     LoadGangPresetConfigFromDB();
@@ -11619,7 +11679,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.21N Fresh Install Bundle Closeout berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.22A Death Hospital Polish berhasil dijalankan.");
     return 1;
 }
 
@@ -12349,6 +12409,7 @@ stock ShowAdminToolsMenu(playerid)
     strcat(body, "Business Preset DB Config\t/bizpresetmenu\tOwner\n", sizeof(body));
     strcat(body, "Ammu-Nation Config\t/ammuconfig\tOwner\n", sizeof(body));
     strcat(body, "Public Service Config\t/serviceconfig\tOwner\n", sizeof(body));
+    strcat(body, "Death / Hospital Config\t/deathconfig\tOwner\n", sizeof(body));
     strcat(body, "Offline Source Audit\t/sourceauditmenu\tOwner\n", sizeof(body));
     strcat(body, "Live DB Audit & Integrity\t/livedbaudit\tOwner\n", sizeof(body));
     strcat(body, "Maintenance Reference\t/maintref\tOwner\n", sizeof(body));
@@ -12367,7 +12428,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /cleardeathdrops\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
@@ -13848,10 +13909,11 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 9: ShowBusinessPresetMenu(playerid);
             case 10: ShowAmmuConfigMenu(playerid);
             case 11: ShowPublicServiceConfigMenu(playerid);
-            case 12: ShowSourceAuditActionMenu(playerid);
-            case 13: ShowLiveDBAuditMenu(playerid);
-            case 14: ShowMaintenanceReference(playerid);
-            case 15: ShowAdminToolsReference(playerid);
+            case 12: ShowDeathHospitalConfigMenu(playerid);
+            case 13: ShowSourceAuditActionMenu(playerid);
+            case 14: ShowLiveDBAuditMenu(playerid);
+            case 15: ShowMaintenanceReference(playerid);
+            case 16: ShowAdminToolsReference(playerid);
         }
         return 1;
     }
@@ -13906,6 +13968,15 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         if (response)
         {
             ShowSourceAuditDatasetMenu(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_DEATH_CONFIG_MENU)
+    {
+        if (response)
+        {
+            ShowAdminToolsMenu(playerid);
         }
         return 1;
     }
@@ -27797,6 +27868,99 @@ stock CancelPlayerActivitiesOnDeath(playerid)
     return 1;
 }
 
+stock CountActiveDeathWeaponDrops()
+{
+    new count = 0;
+    for (new i = 0; i < MAX_DEATH_WEAPON_DROPS; i++)
+    {
+        if (DeathWeaponDropPickup[i] != -1)
+        {
+            count++;
+        }
+    }
+    return count;
+}
+
+stock ClearAllDeathWeaponDrops()
+{
+    new cleared = 0;
+    for (new i = 0; i < MAX_DEATH_WEAPON_DROPS; i++)
+    {
+        if (DeathWeaponDropPickup[i] != -1)
+        {
+            DestroyDeathWeaponDrop(i);
+            cleared++;
+        }
+    }
+    return cleared;
+}
+
+stock ApplyHospitalDeathFee(playerid)
+{
+    if (g_HospitalDeathFee <= 0)
+    {
+        return 0;
+    }
+
+    new charged = g_HospitalDeathFee;
+    if (PlayerMoney[playerid] < charged)
+    {
+        charged = PlayerMoney[playerid];
+    }
+
+    if (charged <= 0)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Biaya rumah sakit aktif, tapi kamu tidak punya cash. Tidak ada hutang otomatis saat ini.");
+        return 0;
+    }
+
+    PlayerMoney[playerid] -= charged;
+    StartMoneyHUDSyncGrace(playerid, 5000);
+    SyncPlayerMoneyHUD(playerid);
+
+    new msg[144];
+    if (charged >= g_HospitalDeathFee)
+    {
+        format(msg, sizeof(msg), "Biaya rumah sakit: $%d dipotong dari cash kamu.", charged);
+    }
+    else
+    {
+        format(msg, sizeof(msg), "Cash tidak cukup untuk biaya rumah sakit $%d. Terpotong semua cash tersisa: $%d.", g_HospitalDeathFee, charged);
+    }
+    SendClientMessage(playerid, COLOR_ORANGE, msg);
+    return charged;
+}
+
+stock ShowDeathHospitalConfigMenu(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka death/hospital config.");
+        return 0;
+    }
+
+    new body[2048];
+    new line[192];
+    body[0] = EOS;
+
+    strcat(body, "SAIF Death / Hospital Config\n\n", sizeof(body));
+    format(line, sizeof(line), "Hospital death fee: $%d\n", g_HospitalDeathFee);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Active dropped weapon pickups: %d / %d\n", CountActiveDeathWeaponDrops(), MAX_DEATH_WEAPON_DROPS);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Dropped weapon lifetime: %d seconds\n\n", DEATH_WEAPON_DROP_LIFETIME_SECONDS);
+    strcat(body, line, sizeof(body));
+    strcat(body, "Commands:\n", sizeof(body));
+    strcat(body, "/sethospitalfee [0-1000000] = set manual hospital fee in server_settings\n", sizeof(body));
+    strcat(body, "/cleardeathdrops = clear all active runtime dropped weapon pickups\n", sizeof(body));
+    strcat(body, "/deathconfig, /hospitalconfig, /hospitalfee = open this reference\n\n", sizeof(body));
+    strcat(body, "Design note:\n", sizeof(body));
+    strcat(body, "Native GTA/SA-MP money loss remains ignored. DB/server money is authoritative; this fee is the SAIF-controlled hospital cost.", sizeof(body));
+
+    ShowPlayerDialog(playerid, DIALOG_DEATH_CONFIG_MENU, DIALOG_STYLE_MSGBOX, "Death / Hospital Config", body, "Back", "Close");
+    return 1;
+}
+
 stock ApplyHospitalDeathRespawn(playerid)
 {
     new Float:x;
@@ -27813,6 +27977,7 @@ stock ApplyHospitalDeathRespawn(playerid)
     SetCameraBehindPlayer(playerid);
     SetPlayerHealth(playerid, 100.0);
     SetPlayerArmour(playerid, 0.0);
+    ApplyHospitalDeathFee(playerid);
     PlayerLastX[playerid] = x;
     PlayerLastY[playerid] = y;
     PlayerLastZ[playerid] = z;
@@ -31300,6 +31465,64 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/deathconfig", true) || !strcmp(cmdtext, "/hospitalconfig", true) || !strcmp(cmdtext, "/hospitalfee", true))
+    {
+        ShowDeathHospitalConfigMenu(playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/sethospitalfee ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa mengubah hospital fee.");
+            return 1;
+        }
+
+        new feeStr[24];
+        if (!GetOneParam(cmdtext[16], feeStr, sizeof(feeStr)) || !IsNumericString(feeStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /sethospitalfee [0-1000000]");
+            return 1;
+        }
+
+        new fee = strval(feeStr);
+        if (fee < 0 || fee > HOSPITAL_DEATH_FEE_MAX)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Range hospital fee: 0 - 1000000.");
+            return 1;
+        }
+
+        g_HospitalDeathFee = fee;
+        SaveDeathConfigToDB();
+
+        new msg[128];
+        format(msg, sizeof(msg), "Hospital death fee diset ke $%d dan disimpan ke server_settings.", g_HospitalDeathFee);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/sethospitalfee", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /sethospitalfee [0-1000000]");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/cleardeathdrops", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa clear dropped weapon runtime pickups.");
+            return 1;
+        }
+
+        new cleared = ClearAllDeathWeaponDrops();
+        new msg[128];
+        format(msg, sizeof(msg), "Death weapon drops cleared: %d pickup runtime dihapus.", cleared);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/dbtables", true) || !strcmp(cmdtext, "/dbinventory", true))
     {
         ShowLiveDBTableInventory(playerid);
@@ -33309,7 +33532,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.21N Fresh Install Bundle Closeout");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22A Death Hospital Polish");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -33319,7 +33542,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.21N: Fresh-install bundle closeout; DB contract docs/verify only; no runtime or DB mutation.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22A: Death/hospital polish; configurable hospital fee; death drop clear/admin config; no class-flow changes.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.21M: Command/admin maintenance reference cleanup; no runtime or DB mutation.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.21L: Clean schema baseline activated for repo/fresh install; live DB runtime unchanged.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.21J: Relabeled active legacy world location runtime markers to saif_runtime_marker; no gameplay rows deleted.");

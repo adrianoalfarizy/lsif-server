@@ -396,6 +396,11 @@ stock IsClosedBetaEnabled()
 #define POLICE_BASE_REWARD 900
 #define POLICE_BASE_XP 55
 #define POLICE_ARREST_RADIUS 6.0
+#define POLICE_ARREST_RADIUS_DEFAULT 6
+#define POLICE_ARREST_RADIUS_MIN 2
+#define POLICE_ARREST_RADIUS_MAX 20
+#define POLICE_ARREST_FINE_PER_WANTED_DEFAULT 0
+#define POLICE_ARREST_FINE_PER_WANTED_MAX 100000
 
 #define VEHICLE_OWNER_NONE 0
 
@@ -666,6 +671,8 @@ new g_TurfGraceSeconds = TURF_ATTACKER_GRACE_SECONDS;
 new g_TurfCooldownSeconds = TURF_COOLDOWN_SECONDS;
 new g_HospitalDeathFee = HOSPITAL_DEATH_FEE_DEFAULT;
 new g_DeathWeaponDropLifetimeSeconds = DEATH_WEAPON_DROP_LIFETIME_DEFAULT;
+new g_PoliceArrestRadius = POLICE_ARREST_RADIUS_DEFAULT;
+new g_PoliceArrestFinePerWanted = POLICE_ARREST_FINE_PER_WANTED_DEFAULT;
 
 new g_ServerStartTick;
 
@@ -2593,7 +2600,7 @@ stock LoadDeathConfigFromDB()
         g_SQL,
         query,
         sizeof(query),
-        "SELECT setting_key, setting_value FROM server_settings WHERE setting_key IN ('hospital_death_fee','death_weapon_drop_lifetime_seconds')"
+        "SELECT setting_key, setting_value FROM server_settings WHERE setting_key IN ('hospital_death_fee','death_weapon_drop_lifetime_seconds','police_arrest_radius','police_arrest_fine_per_wanted')"
     );
     mysql_tquery(g_SQL, query, "OnDeathConfigLoaded");
     return 1;
@@ -2606,9 +2613,11 @@ stock SaveDeathConfigToDB()
         g_SQL,
         query,
         sizeof(query),
-        "INSERT INTO server_settings (setting_key, setting_value) VALUES ('hospital_death_fee','%d'),('death_weapon_drop_lifetime_seconds','%d') ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_at=CURRENT_TIMESTAMP",
+        "INSERT INTO server_settings (setting_key, setting_value) VALUES ('hospital_death_fee','%d'),('death_weapon_drop_lifetime_seconds','%d'),('police_arrest_radius','%d'),('police_arrest_fine_per_wanted','%d') ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_at=CURRENT_TIMESTAMP",
         g_HospitalDeathFee,
-        g_DeathWeaponDropLifetimeSeconds
+        g_DeathWeaponDropLifetimeSeconds,
+        g_PoliceArrestRadius,
+        g_PoliceArrestFinePerWanted
     );
     mysql_tquery(g_SQL, query, "OnDeathConfigSaved");
     return 1;
@@ -2641,9 +2650,23 @@ public OnDeathConfigLoaded()
                 g_DeathWeaponDropLifetimeSeconds = value;
             }
         }
+        else if (!strcmp(key, "police_arrest_radius", true))
+        {
+            if (value >= POLICE_ARREST_RADIUS_MIN && value <= POLICE_ARREST_RADIUS_MAX)
+            {
+                g_PoliceArrestRadius = value;
+            }
+        }
+        else if (!strcmp(key, "police_arrest_fine_per_wanted", true))
+        {
+            if (value >= 0 && value <= POLICE_ARREST_FINE_PER_WANTED_MAX)
+            {
+                g_PoliceArrestFinePerWanted = value;
+            }
+        }
     }
 
-    printf("[SAIF] Death config loaded from DB: hospital_death_fee=%d death_weapon_drop_lifetime=%d", g_HospitalDeathFee, g_DeathWeaponDropLifetimeSeconds);
+    printf("[SAIF] Death/Arrest config loaded from DB: hospital_death_fee=%d death_weapon_drop_lifetime=%d arrest_radius=%d arrest_fine_per_wanted=%d", g_HospitalDeathFee, g_DeathWeaponDropLifetimeSeconds, g_PoliceArrestRadius, g_PoliceArrestFinePerWanted);
     return 1;
 }
 
@@ -11589,7 +11612,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.22H Arrest Audit Logs");
+    SetGameModeText("SAIF Dev v0.24K.22I Arrest Config Polish");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11718,7 +11741,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.22H Arrest Audit Logs berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.22I Arrest Config Polish berhasil dijalankan.");
     return 1;
 }
 
@@ -12455,6 +12478,7 @@ stock ShowAdminToolsMenu(playerid)
     strcat(body, "Death / Hospital Config\t/deathconfig\tOwner\n", sizeof(body));
     strcat(body, "Recent Death Logs\t/deathlogs\tOwner\n", sizeof(body));
     strcat(body, "Wanted / Police Arrest Flow\t/wantedstatus /arrest\tPolice/Admin\n", sizeof(body));
+    strcat(body, "Wanted / Police Config\t/arrestconfig\tOwner\n", sizeof(body));
     strcat(body, "Recent Arrest Logs\t/arrestlogs\tOwner\n", sizeof(body));
     strcat(body, "Offline Source Audit\t/sourceauditmenu\tOwner\n", sizeof(body));
     strcat(body, "Live DB Audit & Integrity\t/livedbaudit\tOwner\n", sizeof(body));
@@ -12474,7 +12498,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /arrest [id], /arrestlogs, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestlogs, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
@@ -12485,6 +12509,7 @@ stock ShowAdminToolsReference(playerid)
 stock ShowWantedPoliceArrestReference(playerid)
 {
     new body[3072];
+    new line[160];
     body[0] = EOS;
 
     strcat(body, "SAIF Wanted / Police Arrest Flow\n\n", sizeof(body));
@@ -12495,9 +12520,14 @@ stock ShowWantedPoliceArrestReference(playerid)
     strcat(body, "Commands:\n", sizeof(body));
     strcat(body, "/wantedstatus atau /wanted = cek wanted level sendiri.\n", sizeof(body));
     strcat(body, "/arrest [playerid] = police/vigilante arrest target wanted.\n", sizeof(body));
+    strcat(body, "/arrestconfig = Owner config radius/fine arrest.\n", sizeof(body));
+    strcat(body, "/setarrestradius [2-20] = set radius arrest non-admin.\n", sizeof(body));
+    strcat(body, "/setarrestfine [0-100000] = set fine per wanted level.\n", sizeof(body));
     strcat(body, "/arrestlogs = Owner audit recent arrest logs dari admin_logs.\n", sizeof(body));
     strcat(body, "/arresthelp, /wantedhelp, /policeref = buka reference ini.\n\n", sizeof(body));
     strcat(body, "Arrest rules:\n", sizeof(body));
+    format(line, sizeof(line), "Current config: radius %d meter, fine $%d per wanted level.\n\n", g_PoliceArrestRadius, g_PoliceArrestFinePerWanted);
+    strcat(body, line, sizeof(body));
     strcat(body, "- Police/Vigilante harus dekat target.\n", sizeof(body));
     strcat(body, "- Target harus wanted level > 0.\n", sizeof(body));
     strcat(body, "- Interior dan virtual world harus sama.\n", sizeof(body));
@@ -12509,6 +12539,37 @@ stock ShowWantedPoliceArrestReference(playerid)
     strcat(body, "- Arrest log audit via /arrestlogs; jail/booking integration remains future polish.", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "Wanted / Police Arrest Flow", body, "Back", "Close");
+    return 1;
+}
+
+stock ShowArrestConfigMenu(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka arrest config.");
+        return 0;
+    }
+
+    new body[2048];
+    new line[192];
+    body[0] = EOS;
+
+    strcat(body, "SAIF Wanted / Police Arrest Config\n\n", sizeof(body));
+    format(line, sizeof(line), "Arrest radius: %d meter\n", g_PoliceArrestRadius);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Arrest fine per wanted level: $%d\n", g_PoliceArrestFinePerWanted);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Example max fine at wanted 6: $%d\n\n", g_PoliceArrestFinePerWanted * 6);
+    strcat(body, line, sizeof(body));
+
+    strcat(body, "Commands:\n", sizeof(body));
+    strcat(body, "/setarrestradius [2-20] = set non-admin police arrest radius\n", sizeof(body));
+    strcat(body, "/setarrestfine [0-100000] = set fine per wanted level\n", sizeof(body));
+    strcat(body, "/wantedstatus, /arrest [playerid], /arrestlogs\n\n", sizeof(body));
+    strcat(body, "Design note:\n", sizeof(body));
+    strcat(body, "Death/hospital tetap tidak menghapus wanted. Arrest adalah jalur resmi untuk reset wanted. Fine arrest adalah SAIF-controlled server money, bukan native GTA money loss.", sizeof(body));
+
+    ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "Wanted / Police Arrest Config", body, "Back", "Close");
     return 1;
 }
 
@@ -14049,11 +14110,12 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 12: ShowDeathHospitalConfigMenu(playerid);
             case 13: ShowRecentDeathLogs(playerid);
             case 14: ShowWantedPoliceArrestReference(playerid);
-            case 15: ShowRecentArrestLogs(playerid);
-            case 16: ShowSourceAuditActionMenu(playerid);
-            case 17: ShowLiveDBAuditMenu(playerid);
-            case 18: ShowMaintenanceReference(playerid);
-            case 19: ShowAdminToolsReference(playerid);
+            case 15: ShowArrestConfigMenu(playerid);
+            case 16: ShowRecentArrestLogs(playerid);
+            case 17: ShowSourceAuditActionMenu(playerid);
+            case 18: ShowLiveDBAuditMenu(playerid);
+            case 19: ShowMaintenanceReference(playerid);
+            case 20: ShowAdminToolsReference(playerid);
         }
         return 1;
     }
@@ -28426,12 +28488,30 @@ stock ProcessPoliceArrest(playerid, targetid)
         GetPlayerPos(playerid, px, py, pz);
         GetPlayerPos(targetid, tx, ty, tz);
 
-        if (GetDistanceBetweenPoints3D(px, py, pz, tx, ty, tz) > POLICE_ARREST_RADIUS)
+        if (GetDistanceBetweenPoints3D(px, py, pz, tx, ty, tz) > float(g_PoliceArrestRadius))
         {
             new msg[144];
-            format(msg, sizeof(msg), "Kamu harus dekat target untuk arrest. Radius: %.1f.", POLICE_ARREST_RADIUS);
+            format(msg, sizeof(msg), "Kamu harus dekat target untuk arrest. Radius: %d meter.", g_PoliceArrestRadius);
             SendClientMessage(playerid, COLOR_RED, msg);
             return 0;
+        }
+    }
+
+    new arrestFine = 0;
+    if (g_PoliceArrestFinePerWanted > 0)
+    {
+        arrestFine = g_PoliceArrestFinePerWanted * wanted;
+        if (arrestFine > PlayerMoney[targetid])
+        {
+            arrestFine = PlayerMoney[targetid];
+        }
+
+        if (arrestFine > 0)
+        {
+            PlayerMoney[targetid] -= arrestFine;
+            StartMoneyHUDSyncGrace(targetid, 5000);
+            SyncPlayerMoneyHUD(targetid);
+            SavePlayerData(targetid);
         }
     }
 
@@ -28448,9 +28528,16 @@ stock ProcessPoliceArrest(playerid, targetid)
 
     format(msg, sizeof(msg), "Kamu ditangkap oleh %s. Wanted level direset dari %d ke 0.", officerName, wanted);
     SendClientMessage(targetid, COLOR_ORANGE, msg);
+    if (g_PoliceArrestFinePerWanted > 0)
+    {
+        format(msg, sizeof(msg), "Arrest fine: $%d dipotong dari cash. Rate: $%d x wanted level.", arrestFine, g_PoliceArrestFinePerWanted);
+        SendClientMessage(targetid, COLOR_ORANGE, msg);
+        format(msg, sizeof(msg), "Arrest fine charged to target: $%d.", arrestFine);
+        SendClientMessage(playerid, COLOR_WHITE, msg);
+    }
 
-    new detail[128];
-    format(detail, sizeof(detail), "wanted:%d->0 | official arrest flow | no hospital death reset", wanted);
+    new detail[160];
+    format(detail, sizeof(detail), "wanted:%d->0 | fine:$%d | radius:%d | official arrest flow", wanted, arrestFine, g_PoliceArrestRadius);
     LogAdminAction(playerid, targetid, "POLICE_ARREST", detail);
 
     SendClientMessage(playerid, COLOR_WHITE, "Catatan: ini foundation arrest. Jail/booking/police station flow akan dibuat di patch berikutnya.");
@@ -28477,7 +28564,11 @@ stock ShowDeathHospitalConfigMenu(playerid)
     strcat(body, line, sizeof(body));
     format(line, sizeof(line), "Dropped weapon lifetime: %d seconds\n", g_DeathWeaponDropLifetimeSeconds);
     strcat(body, line, sizeof(body));
-    format(line, sizeof(line), "Oldest active drop age: %d seconds\n\n", GetDeathWeaponDropOldestAgeSeconds());
+    format(line, sizeof(line), "Oldest active drop age: %d seconds\n", GetDeathWeaponDropOldestAgeSeconds());
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Arrest radius: %d meter\n", g_PoliceArrestRadius);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Arrest fine per wanted level: $%d\n\n", g_PoliceArrestFinePerWanted);
     strcat(body, line, sizeof(body));
     strcat(body, "Commands:\n", sizeof(body));
     strcat(body, "/sethospitalfee [0-1000000] = set manual hospital fee in server_settings\n", sizeof(body));
@@ -28486,7 +28577,7 @@ stock ShowDeathHospitalConfigMenu(playerid)
     strcat(body, "/cleardeathdrops = clear all active runtime dropped weapon pickups\n", sizeof(body));
     strcat(body, "/deathlogs = show recent death/killer/fee logs\n", sizeof(body));
     strcat(body, "/wantedstatus = cek wanted level sendiri\n", sizeof(body));
-    strcat(body, "/arrest [playerid] = Police/Admin reset wanted lewat arrest flow\n/arrestlogs = Owner audit recent arrest actions\n", sizeof(body));
+    strcat(body, "/arrest [playerid] = Police/Admin reset wanted lewat arrest flow\n/arrestconfig = Owner config radius/fine arrest\n/arrestlogs = Owner audit recent arrest actions\n", sizeof(body));
     strcat(body, "/deathconfig, /hospitalconfig, /hospitalfee = open this reference\n\n", sizeof(body));
     strcat(body, "Design note:\n", sizeof(body));
     strcat(body, "Native GTA/SA-MP money loss remains ignored. DB/server money is authoritative; weapon drop lifetime is SAIF-controlled via server_settings. Wanted level persists after death and is recorded in death_logs. Arrest flow (/arrest) is now the official foundation to reset wanted; jail/booking/police station flow remains future polish.", sizeof(body));
@@ -32019,6 +32110,86 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/arrestconfig", true) || !strcmp(cmdtext, "/policeconfig", true) || !strcmp(cmdtext, "/wantedconfig", true))
+    {
+        ShowArrestConfigMenu(playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/setarrestradius ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa mengubah arrest radius.");
+            return 1;
+        }
+
+        new radiusStr[16];
+        if (!GetOneParam(cmdtext[17], radiusStr, sizeof(radiusStr)) || !IsNumericString(radiusStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setarrestradius [2-20]");
+            return 1;
+        }
+
+        new radius = strval(radiusStr);
+        if (radius < POLICE_ARREST_RADIUS_MIN || radius > POLICE_ARREST_RADIUS_MAX)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Range arrest radius: 2 - 20 meter.");
+            return 1;
+        }
+
+        g_PoliceArrestRadius = radius;
+        SaveDeathConfigToDB();
+
+        new msg[128];
+        format(msg, sizeof(msg), "Police arrest radius diset ke %d meter dan disimpan ke server_settings.", g_PoliceArrestRadius);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/setarrestradius", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setarrestradius [2-20]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/setarrestfine ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa mengubah arrest fine.");
+            return 1;
+        }
+
+        new fineStr[24];
+        if (!GetOneParam(cmdtext[15], fineStr, sizeof(fineStr)) || !IsNumericString(fineStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setarrestfine [0-100000]");
+            return 1;
+        }
+
+        new fine = strval(fineStr);
+        if (fine < 0 || fine > POLICE_ARREST_FINE_PER_WANTED_MAX)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Range arrest fine per wanted: 0 - 100000.");
+            return 1;
+        }
+
+        g_PoliceArrestFinePerWanted = fine;
+        SaveDeathConfigToDB();
+
+        new msg[144];
+        format(msg, sizeof(msg), "Police arrest fine diset ke $%d per wanted level dan disimpan ke server_settings.", g_PoliceArrestFinePerWanted);
+        SendClientMessage(playerid, COLOR_GREEN, msg);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/setarrestfine", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setarrestfine [0-100000]");
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/arresthelp", true) || !strcmp(cmdtext, "/wantedhelp", true) || !strcmp(cmdtext, "/policeref", true))
     {
         ShowWantedPoliceArrestReference(playerid);
@@ -34156,7 +34327,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22H Arrest Audit Logs");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22I Arrest Config Polish");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -34166,7 +34337,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22H: Arrest audit logs via admin_logs + /arrestlogs; no DB schema or death-flow changes.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22I: Arrest config polish via server_settings: radius/fine controls, /arrestconfig, /setarrestradius, /setarrestfine.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22G.1: /amenus includes Wanted / Police Arrest Flow reference; no gameplay or DB changes.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22G: Police arrest foundation; /arrest resets wanted through official arrest flow, not death hospital.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22F.2: Schema baseline/verify refreshed for death_logs wanted_level_at_death.");

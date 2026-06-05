@@ -742,6 +742,7 @@ new Float:PlayerDeathZ[MAX_PLAYERS];
 new Float:PlayerDeathA[MAX_PLAYERS];
 new PlayerDeathInterior[MAX_PLAYERS];
 new PlayerDeathVirtualWorld[MAX_PLAYERS];
+new PlayerDeathWantedLevel[MAX_PLAYERS];
 
 new PlayerMoney[MAX_PLAYERS];
 new PlayerBankMoney[MAX_PLAYERS];
@@ -2416,6 +2417,7 @@ forward OnTurfConfigSaved();
 forward OnDeathConfigLoaded();
 forward OnDeathConfigSaved();
 forward OnRecentDeathLogsLoaded(playerid);
+forward ReapplyPlayerWantedAfterDeath(playerid, wantedLevel);
 forward OnGangColorUpdated(playerid, colorIndex);
 forward OnPlayerGangLoaded(playerid);
 forward OnGangCreated(playerid);
@@ -2874,6 +2876,7 @@ stock ResetPlayerAccountData(playerid)
     PlayerDeathA[playerid] = 0.0;
     PlayerDeathInterior[playerid] = 0;
     PlayerDeathVirtualWorld[playerid] = 0;
+    PlayerDeathWantedLevel[playerid] = 0;
 
     PlayerMoneyMismatchCount[playerid] = 0;
     PlayerMoneyHUDGraceUntilTick[playerid] = 0;
@@ -11573,7 +11576,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.22D Weapon Drop Polish");
+    SetGameModeText("SAIF Dev v0.24K.22E Wanted Persist On Death");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11672,6 +11675,7 @@ public OnGameModeInit()
         PlayerDeathA[i] = 0.0;
         PlayerDeathInterior[i] = 0;
         PlayerDeathVirtualWorld[i] = 0;
+        PlayerDeathWantedLevel[i] = 0;
 
         PlayerMoneyMismatchCount[i] = 0;
         PlayerMoneyHUDGraceUntilTick[i] = 0;
@@ -11701,7 +11705,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.22D Weapon Drop Polish berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.22E Wanted Persist On Death berhasil dijalankan.");
     return 1;
 }
 
@@ -11963,6 +11967,9 @@ public OnPlayerDeath(playerid, killerid, WEAPON:reason)
     GetPlayerFacingAngle(playerid, PlayerDeathA[playerid]);
     PlayerDeathInterior[playerid] = GetPlayerInterior(playerid);
     PlayerDeathVirtualWorld[playerid] = GetPlayerVirtualWorld(playerid);
+    PlayerDeathWantedLevel[playerid] = GetPlayerWantedLevel(playerid);
+    if (PlayerDeathWantedLevel[playerid] < 0) PlayerDeathWantedLevel[playerid] = 0;
+    if (PlayerDeathWantedLevel[playerid] > 6) PlayerDeathWantedLevel[playerid] = 6;
 
     new droppedWeapons = DropPlayerWeaponsAtDeath(playerid, PlayerDeathX[playerid], PlayerDeathY[playerid], PlayerDeathZ[playerid], PlayerDeathInterior[playerid], PlayerDeathVirtualWorld[playerid]);
     LogPlayerDeathEvent(playerid, killerid, reason, droppedWeapons);
@@ -28211,6 +28218,40 @@ stock ApplyHospitalDeathFee(playerid)
     return charged;
 }
 
+stock ApplyDeathWantedPersistence(playerid)
+{
+    new wantedLevel = PlayerDeathWantedLevel[playerid];
+    if (wantedLevel < 0) wantedLevel = 0;
+    if (wantedLevel > 6) wantedLevel = 6;
+
+    SetPlayerWantedLevel(playerid, wantedLevel);
+
+    // Some clients/native death flow can still touch HUD state right after spawn.
+    // Re-apply once after hospital transform so wanted does not silently reset.
+    SetTimerEx("ReapplyPlayerWantedAfterDeath", 750, false, "ii", playerid, wantedLevel);
+
+    if (wantedLevel > 0)
+    {
+        new msg[144];
+        format(msg, sizeof(msg), "Wanted level kamu tetap %d setelah respawn hospital. Death tidak menghapus wanted status.", wantedLevel);
+        SendClientMessage(playerid, COLOR_ORANGE, msg);
+    }
+    return 1;
+}
+
+public ReapplyPlayerWantedAfterDeath(playerid, wantedLevel)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
+    {
+        return 0;
+    }
+
+    if (wantedLevel < 0) wantedLevel = 0;
+    if (wantedLevel > 6) wantedLevel = 6;
+    SetPlayerWantedLevel(playerid, wantedLevel);
+    return 1;
+}
+
 stock ShowDeathHospitalConfigMenu(playerid)
 {
     if (!IsAdminLevel(playerid, ADMIN_OWNER))
@@ -28240,7 +28281,7 @@ stock ShowDeathHospitalConfigMenu(playerid)
     strcat(body, "/deathlogs = show recent death/killer/fee logs\n", sizeof(body));
     strcat(body, "/deathconfig, /hospitalconfig, /hospitalfee = open this reference\n\n", sizeof(body));
     strcat(body, "Design note:\n", sizeof(body));
-    strcat(body, "Native GTA/SA-MP money loss remains ignored. DB/server money is authoritative; weapon drop lifetime is SAIF-controlled via server_settings.", sizeof(body));
+    strcat(body, "Native GTA/SA-MP money loss remains ignored. DB/server money is authoritative; weapon drop lifetime is SAIF-controlled via server_settings. Wanted level persists after death; arrest/jail reset must be handled by future police flow, not hospital death.", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_DEATH_CONFIG_MENU, DIALOG_STYLE_MSGBOX, "Death / Hospital Config", body, "Back", "Close");
     return 1;
@@ -28262,6 +28303,7 @@ stock ApplyHospitalDeathRespawn(playerid)
     SetCameraBehindPlayer(playerid);
     SetPlayerHealth(playerid, 100.0);
     SetPlayerArmour(playerid, 0.0);
+    ApplyDeathWantedPersistence(playerid);
     ApplyHospitalDeathFee(playerid);
     PlayerLastX[playerid] = x;
     PlayerLastY[playerid] = y;
@@ -28271,6 +28313,7 @@ stock ApplyHospitalDeathRespawn(playerid)
     PlayerLastVirtualWorld[playerid] = virtualWorld;
     PlayerDeathRespawnPending[playerid] = 0;
     PlayerClassSpawnRecoveryQueued[playerid] = 0;
+    PlayerDeathWantedLevel[playerid] = 0;
     return 1;
 }
 
@@ -33866,7 +33909,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22D Weapon Drop Polish");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22E Wanted Persist On Death");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -33876,7 +33919,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22D: Death weapon drop lifetime DB config + /deathdrops audit; no class/death animation changes.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22D: Death weapon drop lifetime DB config + /deathdrops audit; no class/death animation changes.{FFFFFF}v0.24K.22E: Wanted level now persists after hospital death respawn; no arrest/reset on death.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22C.1: Fixed /amenus Recent Death Logs mapping; no gameplay or DB changes.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22C: Schema baseline refresh; death_logs masuk DB contract/runtime table count 36; no gameplay changes.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22B: Death log audit; killer/reason/death position/drop count/hospital fee recorded in DB; no class-flow changes.");

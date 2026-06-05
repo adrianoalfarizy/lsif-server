@@ -2077,3 +2077,56 @@ SET exterior_map_icon = CASE
 END
 WHERE exterior_map_icon IS NULL OR exterior_map_icon <= 0;
 
+-- SAIF / LSIF Dev v0.24K.21A
+-- Cleanup Baseline Pass - DB safety/efficiency SQL
+-- Basis: live DB audit v0.24K.20.6
+--
+-- Aman untuk live DB MariaDB 10.11:
+-- 1) Tidak DROP TABLE.
+-- 2) Tidak DROP COLUMN.
+-- 3) DROP hanya duplicate index yang terdeteksi dari live dump.
+-- 4) ADD COLUMN IF NOT EXISTS hanya guard agar schema baseline tidak tertinggal.
+--
+-- Backup dulu sebelum menjalankan SQL ini:
+-- mysqldump -u root -p lsif_db > backup_before_v0.24K.21A.sql
+
+-- ---------------------------------------------------------------------------
+-- 1. Guard schema sync: gang_hq_interiors columns used by current lsif.pwn.
+--    Pada live DB kamu kolom ini sudah ada, jadi statement ini harus no-op.
+-- ---------------------------------------------------------------------------
+ALTER TABLE gang_hq_interiors
+    ADD COLUMN IF NOT EXISTS door_x FLOAT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS door_y FLOAT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS door_z FLOAT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS door_a FLOAT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS int_exit_x FLOAT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS int_exit_y FLOAT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS int_exit_z FLOAT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS int_exit_a FLOAT NOT NULL DEFAULT 0;
+
+-- ---------------------------------------------------------------------------
+-- 2. Duplicate index cleanup detected in live DB dump.
+--    Kedua pasangan index ini mengarah ke kolom yang sama, jadi cukup simpan
+--    index lama yang sudah lebih dulu dipakai query/schema.
+-- ---------------------------------------------------------------------------
+DROP INDEX IF EXISTS idx_parked_vehicles_source_tag ON parked_vehicles;
+DROP INDEX IF EXISTS idx_public_interiors_source_tag ON public_interiors;
+
+-- ---------------------------------------------------------------------------
+-- 3. Optional helper indexes for audit/source-tag workflow.
+--    IF NOT EXISTS menjaga agar aman jika index sudah dibuat di mesin lain.
+-- ---------------------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS idx_world_locations_source_tag ON world_locations (source_tag);
+CREATE INDEX IF NOT EXISTS idx_gang_territories_enabled ON gang_territories (enabled);
+CREATE INDEX IF NOT EXISTS idx_gang_territories_source_tag ON gang_territories (source_tag);
+
+-- ---------------------------------------------------------------------------
+-- 4. Review-only notes. Jangan drop kolom ini dulu.
+-- ---------------------------------------------------------------------------
+-- gang_territories.owner_org_id dan owner_org_name masih kandidat deprecated,
+-- tetapi belum di-drop karena perlu patch runtime terpisah dan validasi konsep
+-- Organization != Gang.
+--
+-- import_queue tables tetap dipertahankan untuk exact-source-first archive.
+
+

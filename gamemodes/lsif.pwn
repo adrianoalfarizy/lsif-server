@@ -275,8 +275,14 @@
 
 #define AUTOSAVE_INTERVAL 300000 // 5 menit dalam milidetik
 
-#define CLOSED_BETA_ENABLED 1
+// Runtime wrapper flags prevent Pawn constant-expression warnings while preserving current behavior.
+#define CLOSED_BETA_ENABLED IsClosedBetaEnabled()
 #define CLOSED_BETA_ALLOW_EMPTY 1 // 1 = kalau whitelist kosong, server tetap bisa dimasuki untuk bootstrap admin
+
+stock IsClosedBetaEnabled()
+{
+    return 1;
+}
 
 #define BETA_MOTD_TITLE "LSIF Closed Beta"
 #define BETA_MOTD_TEXT "Selamat datang di LSIF Closed Beta. Fitur masih dalam tahap testing. Laporkan bug dengan /report."
@@ -530,11 +536,18 @@ new PublicServiceCount;
 // v0.24G.1 Offline-first cleanup policy.
 // Legacy static Pawn markers below are deprecated and should be moved to DB world_locations.
 // Houses/business/gang/turf/bus-route remain hardcoded until their own DB/exact-source migration patches.
-#define SAIF_ENABLE_LEGACY_STATIC_ATM_MARKERS 0
-#define SAIF_ENABLE_LEGACY_STATIC_DEALER_MARKERS 0
-#define SAIF_ENABLE_LEGACY_STATIC_AMMUNATION_MARKERS 0
-#define SAIF_ENABLE_LEGACY_STATIC_JOB_MARKERS 0
-#define SAIF_ENABLE_LEGACY_STATIC_RACE_MARKER 0
+// v0.24K.21A: use runtime wrapper flags to avoid constant-expression warning spam while keeping all legacy markers disabled.
+#define SAIF_ENABLE_LEGACY_STATIC_ATM_MARKERS IsLegacyStaticAtmMarkersEnabled()
+#define SAIF_ENABLE_LEGACY_STATIC_DEALER_MARKERS IsLegacyStaticDealerMarkersEnabled()
+#define SAIF_ENABLE_LEGACY_STATIC_AMMUNATION_MARKERS IsLegacyStaticAmmuNationMarkersEnabled()
+#define SAIF_ENABLE_LEGACY_STATIC_JOB_MARKERS IsLegacyStaticJobMarkersEnabled()
+#define SAIF_ENABLE_LEGACY_STATIC_RACE_MARKER IsLegacyStaticRaceMarkerEnabled()
+
+stock IsLegacyStaticAtmMarkersEnabled() { return 0; }
+stock IsLegacyStaticDealerMarkersEnabled() { return 0; }
+stock IsLegacyStaticAmmuNationMarkersEnabled() { return 0; }
+stock IsLegacyStaticJobMarkersEnabled() { return 0; }
+stock IsLegacyStaticRaceMarkerEnabled() { return 0; }
 #define MAPICON_MAX_SAFE_ID 99
 
 #define MAPICON_BASE_ATM 0
@@ -1157,7 +1170,7 @@ new PlayerOrgInvite[MAX_PLAYERS];
 new PlayerOrgName[MAX_PLAYERS][64];
 new PlayerPendingOrgName[MAX_PLAYERS][64];
 new PlayerOrgBankMoney[MAX_PLAYERS];
-new PlayerOrgColor[MAX_PLAYERS]; // deprecated/unused after v0.20A.1, kept for safe compatibility
+// Deprecated PlayerOrgColor cache removed from compile in v0.24K.21A; org color is DB/config-driven.
 new PlayerSelectedOrgTarget[MAX_PLAYERS];
 
 new PlayerGangID[MAX_PLAYERS];
@@ -1527,18 +1540,11 @@ new Float:GangHQRadius[MAX_PRESET_GANGS] =
     GANG_HQ_ACCESS_RADIUS
 };
 
-new GangHQName[MAX_PRESET_GANGS][64] =
-{
-    "Grove Street HQ",
-    "Ballas HQ",
-    "Los Santos Vagos HQ",
-    "Varrios Los Aztecas HQ",
-    "San Fierro Rifa HQ",
-    "San Fierro Triads HQ",
-    "Da Nang Boys HQ",
-    "The Mafia HQ",
-    "Russian Mafia HQ"
-};
+/*
+    v0.24K.21A cleanup:
+    GangHQName[] was unused legacy display hardcode. Runtime HQ display now comes
+    from DB/preset config, so the stale static array is kept out of compilation.
+*/
 
 new PresetGangEnabled[MAX_PRESET_GANGS] =
 {
@@ -2432,6 +2438,11 @@ forward OnParkedVehicleOfflineSeedChunk4(playerid);
 forward OnParkedVehicleOfflineSeedFinished(playerid);
 forward OnParkedVehicleOfflineSeedClearedOnly(playerid);
 forward OnParkedVehicleOfflineSeedInfoLoaded(playerid);
+forward OnParkedVehicleCuratedSeedDeprecatedDisabled(playerid);
+forward OnExactOfflineParkedVehicleImportCleared(playerid);
+forward OnExactOfflineParkedVehicleImportFinished(playerid);
+forward OnExactOfflineParkedVehicleImportClearedOnly(playerid);
+forward OnExactOfflineParkedVehicleImportInfoLoaded(playerid);
 forward OnWorldPickupsLoaded();
 forward OnWorldPickupCreated(playerid);
 forward OnWorldPickupUpdated(playerid);
@@ -2440,6 +2451,7 @@ forward OnWorldPickupSeedClearedForSeed(playerid);
 forward OnWorldPickupSeedCleared(playerid);
 forward OnWorldPickupSeedReloadDelayed(playerid);
 forward OnWorldPickupSeedInfoLoaded(playerid);
+forward OnWorldPickupSeedDeprecatedDisabled(playerid);
 forward OnExactSCMWorldPickupImportCleared(playerid);
 forward OnExactSCMWorldPickupImportFinished(playerid);
 forward OnExactSCMWorldPickupImportClearedOnly(playerid);
@@ -11473,7 +11485,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.20.6 Death Money Sync Grace");
+    SetGameModeText("SAIF Dev v0.24K.21A Cleanup Baseline Pass");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11600,7 +11612,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.20.6 Death Money Sync Grace berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.21A Cleanup Baseline Pass berhasil dijalankan.");
     return 1;
 }
 
@@ -12810,7 +12822,7 @@ stock ShowSourceDeprecatedRecords(playerid)
     return 1;
 }
 
-stock GetSourceAuditClass(sourceTag[], className[], len)
+stock GetSourceAuditClass(const sourceTag[], className[], len)
 {
     if (strfind(sourceTag, "offline_exact", true) != -1 || strfind(sourceTag, "exact", true) != -1)
     {
@@ -13460,6 +13472,22 @@ stock ShowHelpCategory(playerid, category)
 
     ShowPlayerDialog(playerid, DIALOG_HELP_DETAIL, DIALOG_STYLE_MSGBOX, title, body, "Kembali", "Tutup");
     return 1;
+}
+
+
+stock Float:NormalizeDynamicObjectAngle(Float:angle)
+{
+    while (angle < 0.0)
+    {
+        angle += 360.0;
+    }
+
+    while (angle >= 360.0)
+    {
+        angle -= 360.0;
+    }
+
+    return float(floatround(angle));
 }
 
 public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
@@ -19700,7 +19728,7 @@ public DestroyDeathWeaponDropDelayed(index, pickupid)
 
 stock DropPlayerWeaponsAtDeath(playerid, Float:x, Float:y, Float:z, interior, virtualWorld)
 {
-    new weaponid;
+    new t_WEAPON:weaponid;
     new ammo;
     new modelid;
     new dropped = 0;
@@ -19708,12 +19736,12 @@ stock DropPlayerWeaponsAtDeath(playerid, Float:x, Float:y, Float:z, interior, vi
     new Float:offsetY;
     for (new slot = 0; slot < DEATH_WEAPON_SLOT_COUNT; slot++)
     {
-        GetPlayerWeaponData(playerid, slot, weaponid, ammo);
-        if (weaponid <= 0 || ammo <= 0) continue;
-        modelid = GetPickupModelFromWeaponID(weaponid);
+        GetPlayerWeaponData(playerid, t_WEAPON_SLOT:slot, weaponid, ammo);
+        if (_:weaponid <= 0 || ammo <= 0) continue;
+        modelid = GetPickupModelFromWeaponID(_:weaponid);
         if (modelid <= 0) continue;
         GetDeathWeaponDropOffset(dropped, offsetX, offsetY);
-        CreateDeathWeaponDrop(playerid, weaponid, ammo, modelid, x + offsetX, y + offsetY, z + 0.2, interior, virtualWorld);
+        CreateDeathWeaponDrop(playerid, _:weaponid, ammo, modelid, x + offsetX, y + offsetY, z + 0.2, interior, virtualWorld);
         dropped++;
     }
     return dropped;
@@ -22317,7 +22345,7 @@ stock HandleWorldPickupPickup(playerid, pickupid)
                 {
                     amount = GetDefaultAmmoForWeaponPickup(weaponid);
                 }
-                GivePlayerWeapon(playerid, weaponid, amount);
+                GivePlayerWeapon(playerid, t_WEAPON:weaponid, amount);
                 format(msg, sizeof(msg), "Offline weapon pickup diambil. Weapon ID %d | Ammo %d.", weaponid, amount);
                 SendClientMessage(playerid, COLOR_GREEN, msg);
             }
@@ -24543,21 +24571,6 @@ stock ShowDynamicObjectPurgeConfirm(playerid, objectId)
 
     ShowPlayerDialog(playerid, DIALOG_OBJ_PURGE_CONFIRM, DIALOG_STYLE_MSGBOX, "Purge Object + Location", body, "Purge", "Back");
     return 1;
-}
-
-stock Float:NormalizeDynamicObjectAngle(Float:angle)
-{
-    while (angle < 0.0)
-    {
-        angle += 360.0;
-    }
-
-    while (angle >= 360.0)
-    {
-        angle -= 360.0;
-    }
-
-    return float(floatround(angle));
 }
 
 stock UpdateDynamicObjectRotation(playerid, dbid, Float:rx, Float:ry, Float:rz)
@@ -32917,7 +32930,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.20.6 Death Money Sync Grace");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.21A Cleanup Baseline Pass");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -32927,7 +32940,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.20.6: Death money HUD sync grace prevents native death money changes from triggering anti-cheat; v0.24K.20.5 class-selection bypass remains clear.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.21A: Cleanup baseline pass; compiler warnings reduced, legacy static flags wrapped safely, no live gameplay migration.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19.5: Public interior single transform removes delayed facing/camera snap on enter/exit.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19.4: Nearby Map Icon Manager now fills slots 80-99 with nearest public interiors and dynamic locations around each player.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24N: Source cleanup assistant, safe disable by source_tag, relabel fallback tags, and runtime refresh.");

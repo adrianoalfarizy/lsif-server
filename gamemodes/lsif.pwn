@@ -406,6 +406,13 @@ stock IsClosedBetaEnabled()
 #define POLICE_ARREST_RADIUS_MAX 20
 #define POLICE_ARREST_FINE_PER_WANTED_DEFAULT 0
 #define POLICE_ARREST_FINE_PER_WANTED_MAX 100000
+#define POLICE_ARREST_BOOKING_ENABLED_DEFAULT 1
+#define POLICE_ARREST_BOOKING_DEFAULT_X 1552.5068
+#define POLICE_ARREST_BOOKING_DEFAULT_Y -1675.6949
+#define POLICE_ARREST_BOOKING_DEFAULT_Z 16.1953
+#define POLICE_ARREST_BOOKING_DEFAULT_A 90.0000
+#define POLICE_ARREST_BOOKING_DEFAULT_INTERIOR 0
+#define POLICE_ARREST_BOOKING_DEFAULT_VW 0
 
 #define VEHICLE_OWNER_NONE 0
 
@@ -678,6 +685,13 @@ new g_HospitalDeathFee = HOSPITAL_DEATH_FEE_DEFAULT;
 new g_DeathWeaponDropLifetimeSeconds = DEATH_WEAPON_DROP_LIFETIME_DEFAULT;
 new g_PoliceArrestRadius = POLICE_ARREST_RADIUS_DEFAULT;
 new g_PoliceArrestFinePerWanted = POLICE_ARREST_FINE_PER_WANTED_DEFAULT;
+new g_PoliceArrestBookingEnabled = POLICE_ARREST_BOOKING_ENABLED_DEFAULT;
+new Float:g_PoliceArrestBookingX = POLICE_ARREST_BOOKING_DEFAULT_X;
+new Float:g_PoliceArrestBookingY = POLICE_ARREST_BOOKING_DEFAULT_Y;
+new Float:g_PoliceArrestBookingZ = POLICE_ARREST_BOOKING_DEFAULT_Z;
+new Float:g_PoliceArrestBookingA = POLICE_ARREST_BOOKING_DEFAULT_A;
+new g_PoliceArrestBookingInterior = POLICE_ARREST_BOOKING_DEFAULT_INTERIOR;
+new g_PoliceArrestBookingVW = POLICE_ARREST_BOOKING_DEFAULT_VW;
 
 new g_ServerStartTick;
 
@@ -2600,12 +2614,12 @@ public OnTurfConfigSaved()
 
 stock LoadDeathConfigFromDB()
 {
-    new query[384];
+    new query[768];
     mysql_format(
         g_SQL,
         query,
         sizeof(query),
-        "SELECT setting_key, setting_value FROM server_settings WHERE setting_key IN ('hospital_death_fee','death_weapon_drop_lifetime_seconds','police_arrest_radius','police_arrest_fine_per_wanted')"
+        "SELECT setting_key, setting_value FROM server_settings WHERE setting_key IN ('hospital_death_fee','death_weapon_drop_lifetime_seconds','police_arrest_radius','police_arrest_fine_per_wanted','police_arrest_booking_enabled','police_arrest_booking_x','police_arrest_booking_y','police_arrest_booking_z','police_arrest_booking_a','police_arrest_booking_interior','police_arrest_booking_vw')"
     );
     mysql_tquery(g_SQL, query, "OnDeathConfigLoaded");
     return 1;
@@ -2613,7 +2627,8 @@ stock LoadDeathConfigFromDB()
 
 stock SaveDeathConfigToDB()
 {
-    new query[640];
+    new query[768];
+
     mysql_format(
         g_SQL,
         query,
@@ -2623,6 +2638,29 @@ stock SaveDeathConfigToDB()
         g_DeathWeaponDropLifetimeSeconds,
         g_PoliceArrestRadius,
         g_PoliceArrestFinePerWanted
+    );
+    mysql_tquery(g_SQL, query);
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO server_settings (setting_key, setting_value) VALUES ('police_arrest_booking_enabled','%d'),('police_arrest_booking_interior','%d'),('police_arrest_booking_vw','%d') ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_at=CURRENT_TIMESTAMP",
+        g_PoliceArrestBookingEnabled,
+        g_PoliceArrestBookingInterior,
+        g_PoliceArrestBookingVW
+    );
+    mysql_tquery(g_SQL, query);
+
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "INSERT INTO server_settings (setting_key, setting_value) VALUES ('police_arrest_booking_x','%f'),('police_arrest_booking_y','%f'),('police_arrest_booking_z','%f'),('police_arrest_booking_a','%f') ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_at=CURRENT_TIMESTAMP",
+        g_PoliceArrestBookingX,
+        g_PoliceArrestBookingY,
+        g_PoliceArrestBookingZ,
+        g_PoliceArrestBookingA
     );
     mysql_tquery(g_SQL, query, "OnDeathConfigSaved");
     return 1;
@@ -2669,9 +2707,37 @@ public OnDeathConfigLoaded()
                 g_PoliceArrestFinePerWanted = value;
             }
         }
+        else if (!strcmp(key, "police_arrest_booking_enabled", true))
+        {
+            g_PoliceArrestBookingEnabled = value ? 1 : 0;
+        }
+        else if (!strcmp(key, "police_arrest_booking_x", true))
+        {
+            g_PoliceArrestBookingX = floatstr(valueStr);
+        }
+        else if (!strcmp(key, "police_arrest_booking_y", true))
+        {
+            g_PoliceArrestBookingY = floatstr(valueStr);
+        }
+        else if (!strcmp(key, "police_arrest_booking_z", true))
+        {
+            g_PoliceArrestBookingZ = floatstr(valueStr);
+        }
+        else if (!strcmp(key, "police_arrest_booking_a", true))
+        {
+            g_PoliceArrestBookingA = floatstr(valueStr);
+        }
+        else if (!strcmp(key, "police_arrest_booking_interior", true))
+        {
+            g_PoliceArrestBookingInterior = value;
+        }
+        else if (!strcmp(key, "police_arrest_booking_vw", true))
+        {
+            g_PoliceArrestBookingVW = value;
+        }
     }
 
-    printf("[SAIF] Death/Arrest config loaded from DB: hospital_death_fee=%d death_weapon_drop_lifetime=%d arrest_radius=%d arrest_fine_per_wanted=%d", g_HospitalDeathFee, g_DeathWeaponDropLifetimeSeconds, g_PoliceArrestRadius, g_PoliceArrestFinePerWanted);
+    printf("[SAIF] Death/Arrest config loaded from DB: hospital_death_fee=%d death_weapon_drop_lifetime=%d arrest_radius=%d arrest_fine_per_wanted=%d booking_enabled=%d", g_HospitalDeathFee, g_DeathWeaponDropLifetimeSeconds, g_PoliceArrestRadius, g_PoliceArrestFinePerWanted, g_PoliceArrestBookingEnabled);
     return 1;
 }
 
@@ -11617,7 +11683,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.22I.1 Config Dialog GUI Fix");
+    SetGameModeText("SAIF Dev v0.24K.22J Arrest Booking Foundation");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11746,7 +11812,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.22I.1 Config Dialog GUI Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.22J Arrest Booking Foundation berhasil dijalankan.");
     return 1;
 }
 
@@ -12503,7 +12569,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestlogs, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /arrestlogs, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
@@ -12525,7 +12591,7 @@ stock ShowWantedPoliceArrestReference(playerid)
     strcat(body, "Commands:\n", sizeof(body));
     strcat(body, "/wantedstatus atau /wanted = cek wanted level sendiri.\n", sizeof(body));
     strcat(body, "/arrest [playerid] = police/vigilante arrest target wanted.\n", sizeof(body));
-    strcat(body, "/arrestconfig = Owner config radius/fine arrest.\n", sizeof(body));
+    strcat(body, "/arrestconfig = Owner config radius/fine/booking arrest.\n/setarrestbooking = simpan posisi Owner sebagai booking point.\n/gotoarrestbooking = teleport Owner ke booking point.\n/togglearrestbooking [0/1] = ON/OFF teleport booking setelah arrest.\n", sizeof(body));
     strcat(body, "/setarrestradius [2-20] = set radius arrest non-admin.\n", sizeof(body));
     strcat(body, "/setarrestfine [0-100000] = set fine per wanted level.\n", sizeof(body));
     strcat(body, "/arrestlogs = Owner audit recent arrest logs dari admin_logs.\n", sizeof(body));
@@ -12564,6 +12630,11 @@ stock ShowArrestConfigMenu(playerid)
     strcat(body, line, sizeof(body));
     format(line, sizeof(line), "Edit Arrest Fine / Wanted\t$%d\n", g_PoliceArrestFinePerWanted);
     strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Toggle Booking Teleport\t%s\n", g_PoliceArrestBookingEnabled ? ("ON") : ("OFF"));
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Set Booking Point Here\t%.1f, %.1f, %.1f | int %d vw %d\n", g_PoliceArrestBookingX, g_PoliceArrestBookingY, g_PoliceArrestBookingZ, g_PoliceArrestBookingInterior, g_PoliceArrestBookingVW);
+    strcat(body, line, sizeof(body));
+    strcat(body, "Goto Booking Point\tTeleport Owner to booking point\n", sizeof(body));
     strcat(body, "Wanted / Arrest Reference\tFlow rules\n", sizeof(body));
     strcat(body, "Recent Arrest Logs\tAudit POLICE_ARREST\n", sizeof(body));
     strcat(body, "Death / Hospital Config\tOpen related config\n", sizeof(body));
@@ -14302,10 +14373,27 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
                 format(prompt, sizeof(prompt), "Fine arrest sekarang: $%d per wanted level\n\nMasukkan fine baru. Range: 0 - %d", g_PoliceArrestFinePerWanted, POLICE_ARREST_FINE_PER_WANTED_MAX);
                 ShowPlayerDialog(playerid, DIALOG_ARREST_FINE_INPUT, DIALOG_STYLE_INPUT, "Edit Arrest Fine", prompt, "Save", "Back");
             }
-            case 2: ShowWantedPoliceArrestReference(playerid);
-            case 3: ShowRecentArrestLogs(playerid);
-            case 4: ShowDeathHospitalConfigMenu(playerid);
-            case 5: ShowAdminToolsMenu(playerid);
+            case 2:
+            {
+                g_PoliceArrestBookingEnabled = g_PoliceArrestBookingEnabled ? 0 : 1;
+                SaveDeathConfigToDB();
+                SendClientMessage(playerid, COLOR_GREEN, g_PoliceArrestBookingEnabled ? ("Arrest booking teleport: ON") : ("Arrest booking teleport: OFF"));
+                ShowArrestConfigMenu(playerid);
+            }
+            case 3:
+            {
+                SetArrestBookingPointFromPlayer(playerid);
+                ShowArrestConfigMenu(playerid);
+            }
+            case 4:
+            {
+                GotoArrestBookingPoint(playerid);
+                ShowArrestConfigMenu(playerid);
+            }
+            case 5: ShowWantedPoliceArrestReference(playerid);
+            case 6: ShowRecentArrestLogs(playerid);
+            case 7: ShowDeathHospitalConfigMenu(playerid);
+            case 8: ShowAdminToolsMenu(playerid);
         }
         return 1;
     }
@@ -28640,6 +28728,67 @@ stock ShowWantedStatus(playerid)
     return 1;
 }
 
+stock SetArrestBookingPointFromPlayer(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa mengubah arrest booking point.");
+        return 0;
+    }
+
+    GetPlayerPos(playerid, g_PoliceArrestBookingX, g_PoliceArrestBookingY, g_PoliceArrestBookingZ);
+    GetPlayerFacingAngle(playerid, g_PoliceArrestBookingA);
+    g_PoliceArrestBookingInterior = GetPlayerInterior(playerid);
+    g_PoliceArrestBookingVW = GetPlayerVirtualWorld(playerid);
+    SaveDeathConfigToDB();
+
+    new msg[192];
+    format(msg, sizeof(msg), "Arrest booking point disimpan: %.2f, %.2f, %.2f | int %d | vw %d.", g_PoliceArrestBookingX, g_PoliceArrestBookingY, g_PoliceArrestBookingZ, g_PoliceArrestBookingInterior, g_PoliceArrestBookingVW);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    return 1;
+}
+
+stock GotoArrestBookingPoint(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa goto arrest booking point.");
+        return 0;
+    }
+
+    SetPlayerInterior(playerid, g_PoliceArrestBookingInterior);
+    SetPlayerVirtualWorld(playerid, g_PoliceArrestBookingVW);
+    SetPlayerPos(playerid, g_PoliceArrestBookingX, g_PoliceArrestBookingY, g_PoliceArrestBookingZ);
+    SetPlayerFacingAngle(playerid, g_PoliceArrestBookingA);
+    SetCameraBehindPlayer(playerid);
+    SendClientMessage(playerid, COLOR_GREEN, "Teleport ke arrest booking point.");
+    return 1;
+}
+
+stock ApplyArrestBookingAftermath(playerid)
+{
+    if (!g_PoliceArrestBookingEnabled)
+    {
+        return 0;
+    }
+
+    SetPlayerInterior(playerid, g_PoliceArrestBookingInterior);
+    SetPlayerVirtualWorld(playerid, g_PoliceArrestBookingVW);
+    SetPlayerPos(playerid, g_PoliceArrestBookingX, g_PoliceArrestBookingY, g_PoliceArrestBookingZ);
+    SetPlayerFacingAngle(playerid, g_PoliceArrestBookingA);
+    SetCameraBehindPlayer(playerid);
+
+    PlayerLastX[playerid] = g_PoliceArrestBookingX;
+    PlayerLastY[playerid] = g_PoliceArrestBookingY;
+    PlayerLastZ[playerid] = g_PoliceArrestBookingZ;
+    PlayerLastA[playerid] = g_PoliceArrestBookingA;
+    PlayerLastInterior[playerid] = g_PoliceArrestBookingInterior;
+    PlayerLastVirtualWorld[playerid] = g_PoliceArrestBookingVW;
+
+    SendClientMessage(playerid, COLOR_ORANGE, "Kamu dibawa ke police booking point setelah arrest.");
+    return 1;
+}
+
 stock ProcessPoliceArrest(playerid, targetid)
 {
     if (!IsPlayerConnected(targetid) || !PlayerLoggedIn[targetid])
@@ -28709,6 +28858,8 @@ stock ProcessPoliceArrest(playerid, targetid)
     }
 
     SetPlayerWantedLevel(targetid, 0);
+    new bookingApplied = ApplyArrestBookingAftermath(targetid);
+    SavePlayerData(targetid);
 
     new officerName[MAX_PLAYER_NAME];
     new targetName[MAX_PLAYER_NAME];
@@ -28729,11 +28880,16 @@ stock ProcessPoliceArrest(playerid, targetid)
         SendClientMessage(playerid, COLOR_WHITE, msg);
     }
 
-    new detail[160];
-    format(detail, sizeof(detail), "wanted:%d->0 | fine:$%d | radius:%d | official arrest flow", wanted, arrestFine, g_PoliceArrestRadius);
+    if (bookingApplied)
+    {
+        SendClientMessage(playerid, COLOR_WHITE, "Target dipindahkan ke police booking point setelah arrest.");
+    }
+
+    new detail[192];
+    format(detail, sizeof(detail), "wanted:%d->0 | fine:$%d | radius:%d | booking:%d | official arrest flow", wanted, arrestFine, g_PoliceArrestRadius, bookingApplied);
     LogAdminAction(playerid, targetid, "POLICE_ARREST", detail);
 
-    SendClientMessage(playerid, COLOR_WHITE, "Catatan: ini foundation arrest. Jail/booking/police station flow akan dibuat di patch berikutnya.");
+    SendClientMessage(playerid, COLOR_WHITE, "Catatan: ini booking foundation. Jail timer/holding cell penuh akan dibuat terpisah.");
     SendClientMessage(targetid, COLOR_WHITE, "Catatan: arrest resmi berbeda dari death hospital; death biasa tetap tidak menghapus wanted.");
     return 1;
 }
@@ -28759,7 +28915,7 @@ stock ShowDeathHospitalConfigMenu(playerid)
     strcat(body, line, sizeof(body));
     strcat(body, "Clear Death Drops\tRemove active runtime pickups\n", sizeof(body));
     strcat(body, "Recent Death Logs\tAudit death/killer/fee/wanted\n", sizeof(body));
-    format(line, sizeof(line), "Wanted / Police Config\tRadius %dm, fine $%d/wanted\n", g_PoliceArrestRadius, g_PoliceArrestFinePerWanted);
+    format(line, sizeof(line), "Wanted / Police Config\tRadius %dm, fine $%d/wanted, booking %s\n", g_PoliceArrestRadius, g_PoliceArrestFinePerWanted, g_PoliceArrestBookingEnabled ? ("ON") : ("OFF"));
     strcat(body, line, sizeof(body));
     strcat(body, "Wanted / Arrest Reference\tFlow rules\n", sizeof(body));
     strcat(body, "Back to Admin Menus\t/amenus\n", sizeof(body));
@@ -32293,9 +32449,49 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
-    if (!strcmp(cmdtext, "/arrestconfig", true) || !strcmp(cmdtext, "/policeconfig", true) || !strcmp(cmdtext, "/wantedconfig", true))
+    if (!strcmp(cmdtext, "/arrestconfig", true) || !strcmp(cmdtext, "/policeconfig", true) || !strcmp(cmdtext, "/wantedconfig", true) || !strcmp(cmdtext, "/arrestbooking", true))
     {
         ShowArrestConfigMenu(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/setarrestbooking", true))
+    {
+        SetArrestBookingPointFromPlayer(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/gotoarrestbooking", true))
+    {
+        GotoArrestBookingPoint(playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/togglearrestbooking ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa toggle arrest booking.");
+            return 1;
+        }
+
+        new valueStr[8];
+        if (!GetOneParam(cmdtext[21], valueStr, sizeof(valueStr)) || !IsNumericString(valueStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /togglearrestbooking [0/1]");
+            return 1;
+        }
+
+        new value = strval(valueStr);
+        g_PoliceArrestBookingEnabled = value ? 1 : 0;
+        SaveDeathConfigToDB();
+        SendClientMessage(playerid, COLOR_GREEN, g_PoliceArrestBookingEnabled ? ("Arrest booking teleport: ON") : ("Arrest booking teleport: OFF"));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/togglearrestbooking", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /togglearrestbooking [0/1]");
         return 1;
     }
 
@@ -34510,7 +34706,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22I.1 Config Dialog GUI Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22J Arrest Booking Foundation");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -34522,6 +34718,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22I: Arrest config polish via server_settings: radius/fine controls, /arrestconfig, /setarrestradius, /setarrestfine.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22I.1: /amenus config items now open GUI action menus instead of note-only references.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22J: Arrest booking foundation via server_settings: booking teleport toggle, point set/goto, and GUI config.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22G.1: /amenus includes Wanted / Police Arrest Flow reference; no gameplay or DB changes.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22G: Police arrest foundation; /arrest resets wanted through official arrest flow, not death hospital.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22F.2: Schema baseline/verify refreshed for death_logs wanted_level_at_death.");

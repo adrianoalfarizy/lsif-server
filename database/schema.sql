@@ -2129,4 +2129,34 @@ CREATE INDEX IF NOT EXISTS idx_gang_territories_source_tag ON gang_territories (
 --
 -- import_queue tables tetap dipertahankan untuk exact-source-first archive.
 
+-- ==========================================================
+-- SAIF / LSIF Dev v0.24K.22B
+-- Death Log Audit Schema
+-- Run once on live DB before deploying the v0.24K.22B gamemode.
+-- ==========================================================
+
+CREATE TABLE IF NOT EXISTS death_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    death_token VARCHAR(40) NOT NULL,
+    victim_id INT NOT NULL DEFAULT 0,
+    victim_name VARCHAR(24) NOT NULL DEFAULT '',
+    killer_id INT NOT NULL DEFAULT 0,
+    killer_name VARCHAR(24) NOT NULL DEFAULT '',
+    reason_id INT NOT NULL DEFAULT 0,
+    reason_name VARCHAR(40) NOT NULL DEFAULT '',
+    death_x FLOAT NOT NULL DEFAULT 0,
+    death_y FLOAT NOT NULL DEFAULT 0,
+    death_z FLOAT NOT NULL DEFAULT 0,
+    death_a FLOAT NOT NULL DEFAULT 0,
+    death_interior INT NOT NULL DEFAULT 0,
+    death_virtual_world INT NOT NULL DEFAULT 0,
+    dropped_weapon_count INT NOT NULL DEFAULT 0,
+    hospital_fee_charged INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_death_logs_token (death_token),
+    KEY idx_death_logs_victim_id (victim_id),
+    KEY idx_death_logs_killer_id (killer_id),
+    KEY idx_death_logs_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 

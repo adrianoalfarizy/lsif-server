@@ -11556,7 +11556,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.22B Death Log Audit");
+    SetGameModeText("SAIF Dev v0.24K.22C.1 Admin Menus Death Logs Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11684,7 +11684,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.22B Death Log Audit berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.22C.1 Admin Menus Death Logs Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -13917,10 +13917,11 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 10: ShowAmmuConfigMenu(playerid);
             case 11: ShowPublicServiceConfigMenu(playerid);
             case 12: ShowDeathHospitalConfigMenu(playerid);
-            case 13: ShowSourceAuditActionMenu(playerid);
-            case 14: ShowLiveDBAuditMenu(playerid);
-            case 15: ShowMaintenanceReference(playerid);
-            case 16: ShowAdminToolsReference(playerid);
+            case 13: ShowRecentDeathLogs(playerid);
+            case 14: ShowSourceAuditActionMenu(playerid);
+            case 15: ShowLiveDBAuditMenu(playerid);
+            case 16: ShowMaintenanceReference(playerid);
+            case 17: ShowAdminToolsReference(playerid);
         }
         return 1;
     }
@@ -28062,7 +28063,7 @@ public OnRecentDeathLogsLoaded(playerid)
         }
     }
 
-    strcat(body, "\nData ini hanya audit. Death/class selection flow tidak diubah oleh v0.24K.22B.", sizeof(body));
+    strcat(body, "\nData ini hanya audit. Death/class selection flow tidak diubah oleh v0.24K.22B/v0.24K.22C.", sizeof(body));
     ShowPlayerDialog(playerid, DIALOG_DEATH_LOGS, DIALOG_STYLE_MSGBOX, "Death Logs", body, "Back", "Close");
     return 1;
 }
@@ -33740,7 +33741,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22B Death Log Audit");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.22C.1 Admin Menus Death Logs Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -33750,6 +33751,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22C.1: Fixed /amenus Recent Death Logs mapping; no gameplay or DB changes.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22C: Schema baseline refresh; death_logs masuk DB contract/runtime table count 36; no gameplay changes.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22B: Death log audit; killer/reason/death position/drop count/hospital fee recorded in DB; no class-flow changes.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.21M: Command/admin maintenance reference cleanup; no runtime or DB mutation.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.21L: Clean schema baseline activated for repo/fresh install; live DB runtime unchanged.");

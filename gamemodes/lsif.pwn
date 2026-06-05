@@ -11492,7 +11492,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24K.21C Deprecated Template Archive Pass");
+    SetGameModeText("SAIF Dev v0.24K.21D Orphan Integrity Archive Pass");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11619,7 +11619,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24K.21C Deprecated Template Archive Pass berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24K.21D Orphan Integrity Archive Pass berhasil dijalankan.");
     return 1;
 }
 
@@ -33254,7 +33254,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.21C Deprecated Template Archive Pass");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24K.21D Orphan Integrity Archive Pass");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -33264,7 +33264,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.21C: Added safe SQL maintenance script to archive disabled deprecated curated template rows; runtime logic unchanged from v0.24K.21B.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24K.21D: Added safe orphan integrity archive maintenance scripts; runtime logic unchanged from v0.24K.21C.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19.5: Public interior single transform removes delayed facing/camera snap on enter/exit.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.19.4: Nearby Map Icon Manager now fills slots 80-99 with nearest public interiors and dynamic locations around each player.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24N: Source cleanup assistant, safe disable by source_tag, relabel fallback tags, and runtime refresh.");

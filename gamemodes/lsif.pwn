@@ -264,6 +264,10 @@
 #define DIALOG_ARREST_FINE_INPUT 1244
 #define DIALOG_ARREST_JAIL_SECONDS_INPUT 1245
 #define DIALOG_ARREST_JAIL_LIST 1246
+#define DIALOG_WANTED_TOOLS_MENU 1247
+#define DIALOG_WANTED_SET_INPUT 1248
+#define DIALOG_WANTED_ADD_INPUT 1249
+#define DIALOG_WANTED_CLEAR_INPUT 1250
 
 
 
@@ -11771,7 +11775,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.25A.1 Public Service Expansion Baseline");
+    SetGameModeText("SAIF Dev v0.25A.2 Wanted Admin Tools");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11905,7 +11909,8 @@ public OnGameModeInit()
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
     print("[SAIF] Public Service Expansion baseline aktif: 24/7, restaurants, hospital, police, gym, barber, tattoo via DB config.");
-    print("[SAIF] Gamemode v0.25A.1 Public Service Expansion Baseline berhasil dijalankan.");
+    print("[SAIF] Wanted Admin Tools aktif: /setwanted, /addwanted, /clearwanted, /wantedtools untuk admin testing arrest/jail.");
+    print("[SAIF] Gamemode v0.25A.2 Wanted Admin Tools berhasil dijalankan.");
     return 1;
 }
 
@@ -12672,7 +12677,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
@@ -12693,6 +12698,8 @@ stock ShowWantedPoliceArrestReference(playerid)
     strcat(body, "- Wanted reset resmi dilakukan lewat arrest flow, bukan death flow.\n\n", sizeof(body));
     strcat(body, "Commands:\n", sizeof(body));
     strcat(body, "/wantedstatus atau /wanted = cek wanted level sendiri.\n", sizeof(body));
+    strcat(body, "/wantedtools = Admin tools untuk set/add/clear wanted saat testing.\n", sizeof(body));
+    strcat(body, "/setwanted [playerid] [0-6], /addwanted [playerid] [1-6], /clearwanted [playerid] = Admin wanted debug tools.\n", sizeof(body));
     strcat(body, "/arrest [playerid] = police/vigilante arrest target wanted.\n", sizeof(body));
     strcat(body, "/arrestconfig = Owner config radius/fine/booking/jail arrest.\n/setarrestbooking = simpan posisi Owner sebagai booking point.\n/gotoarrestbooking = teleport Owner ke booking point.\n/togglearrestbooking [0/1] = ON/OFF teleport booking setelah arrest.\n", sizeof(body));
     strcat(body, "/togglearrestjail [0/1] = ON/OFF temporary jail hold setelah arrest.\n/setarrestjailseconds [0-600] = set jail seconds per wanted.\n", sizeof(body));
@@ -12727,7 +12734,7 @@ stock ShowArrestConfigMenu(playerid)
         return 0;
     }
 
-    new body[2304];
+    new body[3072];
     new line[256];
     body[0] = EOS;
 
@@ -12751,13 +12758,74 @@ stock ShowArrestConfigMenu(playerid)
     strcat(body, "Booking / Release Point Safety\tShow fallback and current points\n", sizeof(body));
     strcat(body, "Active Jail Holds\tList online jailed players\n", sizeof(body));
     strcat(body, "Persistent Jail DB Holds\tList saved jail holds\n", sizeof(body));
+    strcat(body, "Wanted Admin Tools\tSet/add/clear wanted for testing\n", sizeof(body));
     strcat(body, "Jail Hold UX / Rules\tBlocked actions while jailed\n", sizeof(body));
     strcat(body, "Wanted / Arrest Reference\tFlow rules\n", sizeof(body));
-    strcat(body, "Recent Arrest / Jail Logs\tAudit POLICE_ARREST / ARREST_JAIL_RELEASE\n", sizeof(body));
+    strcat(body, "Recent Arrest / Jail / Wanted Logs\tAudit arrest, jail release, wanted tools\n", sizeof(body));
     strcat(body, "Death / Hospital Config\tOpen related config\n", sizeof(body));
     strcat(body, "Back to Admin Menus\t/amenus\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_ARREST_CONFIG_MENU, DIALOG_STYLE_TABLIST_HEADERS, "Wanted / Police Arrest Config", body, "Open", "Back");
+    return 1;
+}
+
+
+stock ClampWantedLevelValue(value)
+{
+    if (value < 0) return 0;
+    if (value > 6) return 6;
+    return value;
+}
+
+stock ApplyAdminWantedTool(adminid, targetid, newWanted, const actionName[], const actionLabel[])
+{
+    if (!IsAdminLevel(adminid, ADMIN_ADMIN))
+    {
+        SendClientMessage(adminid, COLOR_RED, "Hanya Admin level 3+ yang bisa memakai wanted admin tools.");
+        return 0;
+    }
+
+    if (!IsPlayerConnected(targetid) || !PlayerLoggedIn[targetid])
+    {
+        SendClientMessage(adminid, COLOR_RED, "Target tidak online/login.");
+        return 0;
+    }
+
+    newWanted = ClampWantedLevelValue(newWanted);
+    new oldWanted = ClampWantedLevelValue(GetPlayerWantedLevel(targetid));
+    SetPlayerWantedLevel(targetid, newWanted);
+
+    new msg[160];
+    format(msg, sizeof(msg), "Wanted target diset: %d -> %d.", oldWanted, newWanted);
+    SendClientMessage(adminid, COLOR_GREEN, msg);
+
+    format(msg, sizeof(msg), "Admin mengubah wanted level kamu: %d -> %d. Alasan: %s.", oldWanted, newWanted, actionLabel);
+    SendClientMessage(targetid, COLOR_ORANGE, msg);
+
+    new detail[192];
+    format(detail, sizeof(detail), "wanted:%d->%d | source:admin_wanted_tools | action:%s", oldWanted, newWanted, actionLabel);
+    LogAdminAction(adminid, targetid, actionName, detail);
+    return 1;
+}
+
+stock ShowWantedAdminToolsMenu(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_ADMIN))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Admin level 3+ yang bisa membuka wanted admin tools.");
+        return 0;
+    }
+
+    new body[1024];
+    body[0] = EOS;
+    strcat(body, "Action\tUsage\n", sizeof(body));
+    strcat(body, "Set Wanted Level\tplayerid + level 0-6\n", sizeof(body));
+    strcat(body, "Add Wanted Level\tplayerid + amount 1-6\n", sizeof(body));
+    strcat(body, "Clear Wanted Level\tplayerid\n", sizeof(body));
+    strcat(body, "Wanted / Arrest Reference\tFlow rules\n", sizeof(body));
+    strcat(body, "Back to Wanted / Police Config\t/arrestconfig\n", sizeof(body));
+
+    ShowPlayerDialog(playerid, DIALOG_WANTED_TOOLS_MENU, DIALOG_STYLE_TABLIST_HEADERS, "Wanted Admin Tools", body, "Open", "Back");
     return 1;
 }
 
@@ -12772,7 +12840,7 @@ stock ShowRecentArrestLogs(playerid)
 
     mysql_tquery(
         g_SQL,
-        "SELECT id, admin_name, target_name, action, detail, created_at FROM admin_logs WHERE action IN ('POLICE_ARREST','ARREST_JAIL_RELEASE','ARREST_JAIL_DISCONNECT') ORDER BY id DESC LIMIT 12",
+        "SELECT id, admin_name, target_name, action, detail, created_at FROM admin_logs WHERE action IN ('POLICE_ARREST','ARREST_JAIL_RELEASE','ARREST_JAIL_DISCONNECT','WANTED_ADMIN_SET','WANTED_ADMIN_ADD','WANTED_ADMIN_CLEAR') ORDER BY id DESC LIMIT 12",
         "OnRecentArrestLogsLoaded",
         "i",
         playerid
@@ -12789,7 +12857,7 @@ public OnRecentArrestLogsLoaded(playerid)
     new line[320];
     body[0] = EOS;
 
-    strcat(body, "Recent Arrest / Jail Logs\n\n", sizeof(body));
+    strcat(body, "Recent Arrest / Jail / Wanted Logs\n\n", sizeof(body));
 
     if (rows <= 0)
     {
@@ -14536,12 +14604,131 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 9: ShowArrestPointSafety(playerid);
             case 10: ShowActiveArrestJails(playerid);
             case 11: ShowPersistentArrestJailHolds(playerid);
-            case 12: ShowArrestJailHelp(playerid);
-            case 13: ShowWantedPoliceArrestReference(playerid);
-            case 14: ShowRecentArrestLogs(playerid);
-            case 15: ShowDeathHospitalConfigMenu(playerid);
-            case 16: ShowAdminToolsMenu(playerid);
+            case 12: ShowWantedAdminToolsMenu(playerid);
+            case 13: ShowArrestJailHelp(playerid);
+            case 14: ShowWantedPoliceArrestReference(playerid);
+            case 15: ShowRecentArrestLogs(playerid);
+            case 16: ShowDeathHospitalConfigMenu(playerid);
+            case 17: ShowAdminToolsMenu(playerid);
         }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_WANTED_TOOLS_MENU)
+    {
+        if (!response)
+        {
+            ShowArrestConfigMenu(playerid);
+            return 1;
+        }
+
+        switch (listitem)
+        {
+            case 0:
+            {
+                ShowPlayerDialog(playerid, DIALOG_WANTED_SET_INPUT, DIALOG_STYLE_INPUT, "Set Wanted Level", "Masukkan: playerid wanted_level\nRange wanted_level: 0 - 6", "Set", "Back");
+            }
+            case 1:
+            {
+                ShowPlayerDialog(playerid, DIALOG_WANTED_ADD_INPUT, DIALOG_STYLE_INPUT, "Add Wanted Level", "Masukkan: playerid amount\nRange amount: 1 - 6. Hasil akhir tetap clamp 0 - 6.", "Add", "Back");
+            }
+            case 2:
+            {
+                ShowPlayerDialog(playerid, DIALOG_WANTED_CLEAR_INPUT, DIALOG_STYLE_INPUT, "Clear Wanted Level", "Masukkan: playerid", "Clear", "Back");
+            }
+            case 3: ShowWantedPoliceArrestReference(playerid);
+            case 4: ShowArrestConfigMenu(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_WANTED_SET_INPUT)
+    {
+        if (!response)
+        {
+            ShowWantedAdminToolsMenu(playerid);
+            return 1;
+        }
+
+        new targetStr[16], wantedStr[16];
+        if (!GetTwoParams(inputtext, targetStr, sizeof(targetStr), wantedStr, sizeof(wantedStr)) || !IsNumericString(targetStr) || !IsNumericString(wantedStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan input: playerid wanted_level. Contoh: 3 2");
+            ShowWantedAdminToolsMenu(playerid);
+            return 1;
+        }
+
+        new targetid = strval(targetStr);
+        new wanted = strval(wantedStr);
+        if (wanted < 0 || wanted > 6)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Wanted level harus 0 - 6.");
+            ShowWantedAdminToolsMenu(playerid);
+            return 1;
+        }
+
+        ApplyAdminWantedTool(playerid, targetid, wanted, "WANTED_ADMIN_SET", "set");
+        ShowWantedAdminToolsMenu(playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_WANTED_ADD_INPUT)
+    {
+        if (!response)
+        {
+            ShowWantedAdminToolsMenu(playerid);
+            return 1;
+        }
+
+        new targetStr[16], amountStr[16];
+        if (!GetTwoParams(inputtext, targetStr, sizeof(targetStr), amountStr, sizeof(amountStr)) || !IsNumericString(targetStr) || !IsNumericString(amountStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan input: playerid amount. Contoh: 3 1");
+            ShowWantedAdminToolsMenu(playerid);
+            return 1;
+        }
+
+        new targetid = strval(targetStr);
+        new amount = strval(amountStr);
+        if (amount < 1 || amount > 6)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Amount wanted harus 1 - 6.");
+            ShowWantedAdminToolsMenu(playerid);
+            return 1;
+        }
+
+        if (!IsPlayerConnected(targetid) || !PlayerLoggedIn[targetid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Target tidak online/login.");
+            ShowWantedAdminToolsMenu(playerid);
+            return 1;
+        }
+
+        new wanted = ClampWantedLevelValue(GetPlayerWantedLevel(targetid) + amount);
+        ApplyAdminWantedTool(playerid, targetid, wanted, "WANTED_ADMIN_ADD", "add");
+        ShowWantedAdminToolsMenu(playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_WANTED_CLEAR_INPUT)
+    {
+        if (!response)
+        {
+            ShowWantedAdminToolsMenu(playerid);
+            return 1;
+        }
+
+        new targetStr[16];
+        if (!GetOneParam(inputtext, targetStr, sizeof(targetStr)) || !IsNumericString(targetStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan input: playerid. Contoh: 3");
+            ShowWantedAdminToolsMenu(playerid);
+            return 1;
+        }
+
+        new targetid = strval(targetStr);
+        ApplyAdminWantedTool(playerid, targetid, 0, "WANTED_ADMIN_CLEAR", "clear");
+        ShowWantedAdminToolsMenu(playerid);
         return 1;
     }
 
@@ -33635,6 +33822,110 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/wantedtools", true) || !strcmp(cmdtext, "/wantedadmin", true) || !strcmp(cmdtext, "/wanteddebug", true))
+    {
+        ShowWantedAdminToolsMenu(playerid);
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/setwanted ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_ADMIN))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Admin level 3+ yang bisa memakai /setwanted.");
+            return 1;
+        }
+
+        new targetStr[16], wantedStr[16];
+        if (!GetTwoParams(cmdtext[11], targetStr, sizeof(targetStr), wantedStr, sizeof(wantedStr)) || !IsNumericString(targetStr) || !IsNumericString(wantedStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setwanted [playerid] [0-6]");
+            return 1;
+        }
+
+        new targetid = strval(targetStr);
+        new wanted = strval(wantedStr);
+        if (wanted < 0 || wanted > 6)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Wanted level harus 0 - 6.");
+            return 1;
+        }
+
+        ApplyAdminWantedTool(playerid, targetid, wanted, "WANTED_ADMIN_SET", "set");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/setwanted", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /setwanted [playerid] [0-6]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/addwanted ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_ADMIN))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Admin level 3+ yang bisa memakai /addwanted.");
+            return 1;
+        }
+
+        new targetStr[16], amountStr[16];
+        if (!GetTwoParams(cmdtext[11], targetStr, sizeof(targetStr), amountStr, sizeof(amountStr)) || !IsNumericString(targetStr) || !IsNumericString(amountStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /addwanted [playerid] [1-6]");
+            return 1;
+        }
+
+        new targetid = strval(targetStr);
+        new amount = strval(amountStr);
+        if (amount < 1 || amount > 6)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Amount wanted harus 1 - 6.");
+            return 1;
+        }
+        if (!IsPlayerConnected(targetid) || !PlayerLoggedIn[targetid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Target tidak online/login.");
+            return 1;
+        }
+
+        new wanted = ClampWantedLevelValue(GetPlayerWantedLevel(targetid) + amount);
+        ApplyAdminWantedTool(playerid, targetid, wanted, "WANTED_ADMIN_ADD", "add");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/addwanted", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /addwanted [playerid] [1-6]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/clearwanted ", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_ADMIN))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Admin level 3+ yang bisa memakai /clearwanted.");
+            return 1;
+        }
+
+        new targetStr[16];
+        if (!GetOneParam(cmdtext[13], targetStr, sizeof(targetStr)) || !IsNumericString(targetStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /clearwanted [playerid]");
+            return 1;
+        }
+
+        new targetid = strval(targetStr);
+        ApplyAdminWantedTool(playerid, targetid, 0, "WANTED_ADMIN_CLEAR", "clear");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/clearwanted", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /clearwanted [playerid]");
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/wantedstatus", true) || !strcmp(cmdtext, "/wanted", true))
     {
         ShowWantedStatus(playerid);
@@ -35772,7 +36063,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25A.1 Public Service Expansion Baseline");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25A.2 Wanted Admin Tools");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -35782,6 +36073,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.25A.2: Wanted Admin Tools; /setwanted, /addwanted, /clearwanted, and /wantedtools for controlled arrest/jail testing.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.1: Public Service Expansion baseline; service menus/config active for 24/7, restaurants, hospital, police, gym, barber, and tattoo.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24L.7: Arrest/jail closeout audit; v0.24L foundation marked ready for final checklist, no gameplay/DB mutation.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24L.6: Jail release/booking polish; safer fallback points, clearer point summary, and release/booking transforms are centralized.");

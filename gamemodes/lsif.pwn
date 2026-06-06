@@ -219,6 +219,7 @@
 #define DIALOG_SKIN_ADMIN_MOVEMENT_INPUT 1257
 #define DIALOG_SKIN_ADMIN_ANIM_INPUT 1258
 #define DIALOG_SKIN_PROFILE_INFO 1259
+#define DIALOG_SKIN_WARDROBE_MENU 1260
 #define DIALOG_GANG_PRESET_MENU 1192
 #define DIALOG_GANG_PRESET_LIST 1193
 #define DIALOG_GANG_PRESET_SELECT_INPUT 1194
@@ -829,6 +830,8 @@ new PlayerDeathVirtualWorld[MAX_PLAYERS];
 new PlayerDeathWantedLevel[MAX_PLAYERS];
 new PlayerPersistentWantedLevel[MAX_PLAYERS];
 new PlayerCurrentSkin[MAX_PLAYERS];
+new PlayerOwnedSkin[MAX_PLAYERS][MAX_SKIN_CATALOG_ITEMS];
+new PlayerOwnedSkinCount[MAX_PLAYERS];
 new PlayerArrestJailed[MAX_PLAYERS];
 new PlayerArrestJailReleaseTick[MAX_PLAYERS];
 new PlayerArrestJailTimer[MAX_PLAYERS];
@@ -2536,6 +2539,7 @@ forward OnSourceCleanupUpdated(playerid, datasetIndex, actionType);
 forward OnLiveDBTableAuditLoaded(playerid);
 forward OnLiveDBCleanupCandidatesLoaded(playerid);
 forward OnLiveDBIntegrityLoaded(playerid);
+forward OnPlayerSkinOwnershipLoaded(playerid);
 
 forward OnDynamicLocationsLoaded();
 forward OnDynamicLocationCreated(playerid);
@@ -3106,6 +3110,7 @@ stock ResetPlayerAccountData(playerid)
     PlayerPersistentWantedLevel[playerid] = 0;
     PlayerCurrentSkin[playerid] = DEFAULT_SKIN;
     PlayerEditingSkinCatalogIndex[playerid] = -1;
+    ResetPlayerSkinOwnership(playerid);
     SetPlayerWantedLevel(playerid, 0);
     ClearArrestJailState(playerid, 0);
 
@@ -3117,6 +3122,9 @@ stock ResetPlayerAccountData(playerid)
     PlayerTurfHudVisible[playerid] = 0;
     PlayerWeaponLicense[playerid] = DEFAULT_WEAPON_LICENSE;
     PlayerPersistentWantedLevel[playerid] = 0;
+    ResetPlayerSkinOwnership(playerid);
+    MarkPlayerSkinOwnedRuntime(playerid, PlayerCurrentSkin[playerid]);
+    GrantPlayerSkinOwnership(playerid, PlayerCurrentSkin[playerid], "register_default");
     SetPlayerWantedLevel(playerid, 0);
     ResetPlayerWeaponLoadoutData(playerid);
 
@@ -11930,7 +11938,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.25A.5.2 Skin Movement Normalization");
+    SetGameModeText("SAIF Dev v0.25A.5.3 Skin Wardrobe Ownership");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -12073,7 +12081,7 @@ public OnGameModeInit()
     print("[SAIF] Police Job Wanted Integrity aktif: police color biru tua dan wanted player diblokir dari police duty.");
     print("[SAIF] Skin Catalog baseline aktif: clothing store skin shop DB-based via skin_catalog.");
     print("[SAIF] Skin Movement Normalization foundation aktif: movement_profile/anim_profile DB-based config.");
-    print("[SAIF] Gamemode v0.25A.5.2 Skin Movement Normalization berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.25A.5.3 Skin Wardrobe Ownership berhasil dijalankan.");
     return 1;
 }
 
@@ -12861,7 +12869,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/skinshop, /skins, /clothes, /myskin, /skinprofile, /skinmovement, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/skinshop, /skins, /clothes, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
@@ -16616,6 +16624,16 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         return 1;
     }
 
+    if (dialogid == DIALOG_SKIN_WARDROBE_MENU)
+    {
+        if (!response)
+        {
+            return 1;
+        }
+        ProcessSkinWardrobeEquip(playerid, listitem);
+        return 1;
+    }
+
     if (dialogid == DIALOG_SKIN_ADMIN_MENU)
     {
         if (!response)
@@ -16626,16 +16644,18 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         switch (listitem)
         {
             case 0: ShowSkinCatalogAdminList(playerid);
-            case 1:
+            case 1: ShowSkinWardrobeMenu(playerid);
+            case 2:
             {
                 LoadSkinCatalogFromDB();
-                SendClientMessage(playerid, COLOR_GREEN, "Skin catalog direload dari database.");
+                LoadPlayerSkinOwnership(playerid);
+                SendClientMessage(playerid, COLOR_GREEN, "Skin catalog dan wardrobe ownership direload dari database.");
                 ShowSkinCatalogAdminMenu(playerid);
             }
-            case 2: ShowSkinCatalogRuntimeSummary(playerid);
-            case 3: ShowPlayerSkinProfile(playerid);
-            case 4: ShowSkinCatalogInfo(playerid);
-            case 5: ShowAdminToolsMenu(playerid);
+            case 3: ShowSkinCatalogRuntimeSummary(playerid);
+            case 4: ShowPlayerSkinProfile(playerid);
+            case 5: ShowSkinCatalogInfo(playerid);
+            case 6: ShowAdminToolsMenu(playerid);
         }
         return 1;
     }
@@ -20267,6 +20287,9 @@ public OnAccountRegister(playerid)
     PlayerStarterPackClaimed[playerid] = 0;
     PlayerWeaponLicense[playerid] = DEFAULT_WEAPON_LICENSE;
     PlayerPersistentWantedLevel[playerid] = 0;
+    ResetPlayerSkinOwnership(playerid);
+    MarkPlayerSkinOwnedRuntime(playerid, PlayerCurrentSkin[playerid]);
+    GrantPlayerSkinOwnership(playerid, PlayerCurrentSkin[playerid], "register_default");
     SetPlayerWantedLevel(playerid, 0);
     ResetPlayerWeaponLoadoutData(playerid);
     PlayerSpawnHouse[playerid] = 0;
@@ -20337,6 +20360,11 @@ public OnAccountLogin(playerid)
     {
         ClearPoliceJobForWantedPlayer(playerid, "persistent_wanted_login");
     }
+
+    ResetPlayerSkinOwnership(playerid);
+    MarkPlayerSkinOwnedRuntime(playerid, PlayerCurrentSkin[playerid]);
+    GrantPlayerSkinOwnership(playerid, PlayerCurrentSkin[playerid], "current_skin_login");
+    LoadPlayerSkinOwnership(playerid);
 
     ApplyLoadedPlayerData(playerid);
     LoadPersistentArrestJailHold(playerid);
@@ -24106,6 +24134,125 @@ stock IsPlayerInClothingStore(playerid)
 }
 
 
+
+stock ResetPlayerSkinOwnership(playerid)
+{
+    if (playerid < 0 || playerid >= MAX_PLAYERS) return 0;
+
+    PlayerOwnedSkinCount[playerid] = 0;
+    for (new i = 0; i < MAX_SKIN_CATALOG_ITEMS; i++)
+    {
+        PlayerOwnedSkin[playerid][i] = 0;
+    }
+    return 1;
+}
+
+stock MarkPlayerSkinOwnedRuntime(playerid, skinid)
+{
+    if (playerid < 0 || playerid >= MAX_PLAYERS) return 0;
+
+    new skinIndex = GetSkinCatalogIndexBySkinID(skinid);
+    if (skinIndex < 0) return 0;
+
+    if (!PlayerOwnedSkin[playerid][skinIndex])
+    {
+        PlayerOwnedSkin[playerid][skinIndex] = 1;
+        PlayerOwnedSkinCount[playerid]++;
+    }
+    return 1;
+}
+
+stock IsPlayerSkinOwned(playerid, skinid)
+{
+    if (playerid < 0 || playerid >= MAX_PLAYERS) return 0;
+
+    new skinIndex = GetSkinCatalogIndexBySkinID(skinid);
+    if (skinIndex < 0) return 0;
+
+    if (PlayerOwnedSkin[playerid][skinIndex]) return 1;
+    if (PlayerCurrentSkin[playerid] == NormalizePlayerSkinValue(skinid)) return 1;
+    return 0;
+}
+
+stock CountPlayerOwnedActiveSkins(playerid)
+{
+    new count = 0;
+    for (new i = 0; i < SkinCatalogCount; i++)
+    {
+        if (!SkinCatalogEnabled[i]) continue;
+        if (PlayerOwnedSkin[playerid][i]) count++;
+    }
+    return count;
+}
+
+stock GetOwnedSkinIndexByVisibleListitem(playerid, listitem)
+{
+    new visible = 0;
+    for (new i = 0; i < SkinCatalogCount; i++)
+    {
+        if (!SkinCatalogEnabled[i]) continue;
+        if (!PlayerOwnedSkin[playerid][i]) continue;
+        if (visible == listitem) return i;
+        visible++;
+    }
+    return -1;
+}
+
+stock LoadPlayerSkinOwnership(playerid)
+{
+    if (!PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0) return 0;
+
+    new query[160];
+    mysql_format(g_SQL, query, sizeof(query), "SELECT skin_id FROM player_skins WHERE player_id=%d ORDER BY skin_id ASC", PlayerDBID[playerid]);
+    mysql_tquery(g_SQL, query, "OnPlayerSkinOwnershipLoaded", "i", playerid);
+    return 1;
+}
+
+public OnPlayerSkinOwnershipLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid]) return 1;
+
+    ResetPlayerSkinOwnership(playerid);
+    MarkPlayerSkinOwnedRuntime(playerid, PlayerCurrentSkin[playerid]);
+
+    new rows = cache_num_rows();
+    for (new i = 0; i < rows; i++)
+    {
+        new skinid;
+        cache_get_value_name_int(i, "skin_id", skinid);
+        MarkPlayerSkinOwnedRuntime(playerid, NormalizePlayerSkinValue(skinid));
+    }
+
+    new msg[96];
+    format(msg, sizeof(msg), "[SAIF] Wardrobe loaded for player %d: %d owned active/catalog skins.", playerid, PlayerOwnedSkinCount[playerid]);
+    print(msg);
+    return 1;
+}
+
+stock GrantPlayerSkinOwnership(playerid, skinid, const source[])
+{
+    if (!PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0) return 0;
+
+    skinid = NormalizePlayerSkinValue(skinid);
+    MarkPlayerSkinOwnedRuntime(playerid, skinid);
+
+    new query[320];
+    mysql_format(g_SQL, query, sizeof(query), "INSERT INTO player_skins (player_id, skin_id, source_tag, acquired_at, last_equipped_at, times_equipped) VALUES (%d, %d, '%e', NOW(), NOW(), 1) ON DUPLICATE KEY UPDATE last_equipped_at=NOW(), times_equipped=times_equipped+1", PlayerDBID[playerid], skinid, source);
+    mysql_tquery(g_SQL, query);
+    return 1;
+}
+
+stock RecordPlayerSkinEquip(playerid, skinid)
+{
+    if (!PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0) return 0;
+
+    skinid = NormalizePlayerSkinValue(skinid);
+    new query[192];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE player_skins SET last_equipped_at=NOW(), times_equipped=times_equipped+1 WHERE player_id=%d AND skin_id=%d LIMIT 1", PlayerDBID[playerid], skinid);
+    mysql_tquery(g_SQL, query);
+    return 1;
+}
+
 stock IsValidSkinProfileText(const text[])
 {
     new len = strlen(text);
@@ -24166,7 +24313,7 @@ stock ShowPlayerSkinProfile(playerid)
     {
         NormalizeSkinCatalogProfiles(skinIndex);
         format(body, sizeof(body),
-               "Skin Profile\n\nName: %s\nSkin ID: %d\nCategory: %s\nMovement Profile: %s\nAnimation Profile: %s\n\nStatus:\n- v0.25A.5.2 memakai profile DB sebagai baseline normalization.\n- cj_like/default aman: tidak memaksa animasi/kecepatan.\n- Profile lanjutan akan dipakai bertahap untuk normalisasi non-CJ skin.",
+               "Skin Profile\n\nName: %s\nSkin ID: %d\nCategory: %s\nMovement Profile: %s\nAnimation Profile: %s\n\nStatus:\n- v0.25A.5.3 memakai profile DB sebagai baseline normalization dan player_skins sebagai wardrobe ownership.\n- cj_like/default aman: tidak memaksa animasi/kecepatan.\n- Profile lanjutan akan dipakai bertahap untuk normalisasi non-CJ skin.",
                SkinCatalogName[skinIndex],
                PlayerCurrentSkin[playerid],
                SkinCatalogCategory[skinIndex],
@@ -24258,13 +24405,21 @@ stock ShowSkinShopMenu(playerid)
     }
 
     new body[4096];
-    new line[160];
-    format(body, sizeof(body), "Name\tSkin\tPrice\tCategory\n");
+    new line[192];
+    format(body, sizeof(body), "Name	Skin	Price	Category	Status
+");
 
     for (new i = 0; i < SkinCatalogCount; i++)
     {
         if (!SkinCatalogEnabled[i]) continue;
-        format(line, sizeof(line), "%s\t%d\t$%d\t%s\n", SkinCatalogName[i], SkinCatalogSkinID[i], SkinCatalogPrice[i], SkinCatalogCategory[i]);
+
+        new status[24];
+        if (PlayerCurrentSkin[playerid] == SkinCatalogSkinID[i]) format(status, sizeof(status), "Equipped");
+        else if (IsPlayerSkinOwned(playerid, SkinCatalogSkinID[i])) format(status, sizeof(status), "Owned");
+        else format(status, sizeof(status), "New");
+
+        format(line, sizeof(line), "%s	%d	$%d	%s	%s
+", SkinCatalogName[i], SkinCatalogSkinID[i], SkinCatalogPrice[i], SkinCatalogCategory[i], status);
         strcat(body, line, sizeof(body));
     }
 
@@ -24288,26 +24443,99 @@ stock ProcessSkinShopPurchase(playerid, listitem)
         return 0;
     }
 
+    new skinid = SkinCatalogSkinID[skinIndex];
     new price = SkinCatalogPrice[skinIndex];
-    if (PlayerCurrentSkin[playerid] == SkinCatalogSkinID[skinIndex])
+    new alreadyOwned = IsPlayerSkinOwned(playerid, skinid);
+
+    if (PlayerCurrentSkin[playerid] == skinid)
     {
-        SetSAIFPlayerSkin(playerid, SkinCatalogSkinID[skinIndex], 1);
-        SendClientMessage(playerid, COLOR_WHITE, "Skin ini sudah kamu pakai. Skin di-apply ulang tanpa biaya.");
+        SetSAIFPlayerSkin(playerid, skinid, 1);
+        GrantPlayerSkinOwnership(playerid, skinid, "already_equipped");
+        SendClientMessage(playerid, COLOR_WHITE, "Skin ini sudah kamu pakai. Skin di-apply ulang tanpa biaya dan dipastikan tersimpan di wardrobe.");
         return 1;
     }
 
-    if (price > 0 && !TakePlayerCash(playerid, price))
+    if (!alreadyOwned)
     {
-        SendClientMessage(playerid, COLOR_RED, "Cash kamu tidak cukup untuk membeli skin ini.");
-        ShowSkinShopMenu(playerid);
+        if (price > 0 && !TakePlayerCash(playerid, price))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Cash kamu tidak cukup untuk membeli skin ini.");
+            ShowSkinShopMenu(playerid);
+            return 0;
+        }
+        if (price > 0) GrantPlayerSkinOwnership(playerid, skinid, "purchase");
+        else GrantPlayerSkinOwnership(playerid, skinid, "free_claim");
+    }
+    else
+    {
+        RecordPlayerSkinEquip(playerid, skinid);
+    }
+
+    SetSAIFPlayerSkin(playerid, skinid, 1);
+    SavePlayerData(playerid);
+
+    new msg[220];
+    if (alreadyOwned)
+    {
+        format(msg, sizeof(msg), "Wardrobe: kamu memakai ulang %s (skin %d) tanpa biaya. Cash: $%d.", SkinCatalogName[skinIndex], skinid, PlayerMoney[playerid]);
+    }
+    else
+    {
+        format(msg, sizeof(msg), "Clothing Store: kamu membeli dan memakai %s (skin %d) seharga $%d. Cash tersisa: $%d.", SkinCatalogName[skinIndex], skinid, price, PlayerMoney[playerid]);
+    }
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    return 1;
+}
+
+stock ShowSkinWardrobeMenu(playerid)
+{
+    if (!IsPlayerInClothingStore(playerid) && !IsAdminLevel(playerid, ADMIN_ADMIN))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus berada di Clothing Store untuk mengganti skin dari wardrobe.");
         return 0;
     }
 
-    SetSAIFPlayerSkin(playerid, SkinCatalogSkinID[skinIndex], 1);
+    if (CountPlayerOwnedActiveSkins(playerid) <= 0)
+    {
+        ShowPlayerDialog(playerid, DIALOG_SKIN_PROFILE_INFO, DIALOG_STYLE_MSGBOX, "My Wardrobe", "Kamu belum punya skin aktif di wardrobe. Beli skin dulu di Clothing Store.", "Close", "Close");
+        return 1;
+    }
+
+    new body[4096];
+    new line[192];
+    format(body, sizeof(body), "Name	Skin	Category	Profile	Status
+");
+
+    for (new i = 0; i < SkinCatalogCount; i++)
+    {
+        if (!SkinCatalogEnabled[i]) continue;
+        if (!PlayerOwnedSkin[playerid][i]) continue;
+
+        format(line, sizeof(line), "%s	%d	%s	%s	%s
+", SkinCatalogName[i], SkinCatalogSkinID[i], SkinCatalogCategory[i], SkinCatalogMovementProfile[i], PlayerCurrentSkin[playerid] == SkinCatalogSkinID[i] ? ("Equipped") : ("Owned"));
+        strcat(body, line, sizeof(body));
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_SKIN_WARDROBE_MENU, DIALOG_STYLE_TABLIST_HEADERS, "My Wardrobe", body, "Equip", "Close");
+    return 1;
+}
+
+stock ProcessSkinWardrobeEquip(playerid, listitem)
+{
+    new skinIndex = GetOwnedSkinIndexByVisibleListitem(playerid, listitem);
+    if (skinIndex < 0)
+    {
+        ShowSkinWardrobeMenu(playerid);
+        return 0;
+    }
+
+    new skinid = SkinCatalogSkinID[skinIndex];
+    SetSAIFPlayerSkin(playerid, skinid, 1);
+    RecordPlayerSkinEquip(playerid, skinid);
     SavePlayerData(playerid);
 
     new msg[180];
-    format(msg, sizeof(msg), "Clothing Store: kamu memakai %s (skin %d) seharga $%d. Cash tersisa: $%d.", SkinCatalogName[skinIndex], SkinCatalogSkinID[skinIndex], price, PlayerMoney[playerid]);
+    format(msg, sizeof(msg), "Wardrobe: kamu memakai %s (skin %d) tanpa biaya.", SkinCatalogName[skinIndex], skinid);
     SendClientMessage(playerid, COLOR_GREEN, msg);
     return 1;
 }
@@ -24336,6 +24564,7 @@ stock ShowSkinCatalogAdminMenu(playerid)
     new body[512];
     body[0] = EOS;
     strcat(body, "List / Edit Skin Catalog\n", sizeof(body));
+    strcat(body, "Open My Wardrobe\n", sizeof(body));
     strcat(body, "Reload Skin Catalog\n", sizeof(body));
     strcat(body, "Runtime Summary / Audit\n", sizeof(body));
     strcat(body, "Skin Movement Profile / Audit\n", sizeof(body));
@@ -24397,6 +24626,7 @@ stock ShowSkinCatalogAdminAction(playerid, skinIndex)
 stock ShowSkinCatalogRuntimeSummary(playerid)
 {
     new active = 0, disabled = 0, freeCount = 0;
+    new ownedBySelf = CountPlayerOwnedActiveSkins(playerid);
     for (new i = 0; i < SkinCatalogCount; i++)
     {
         if (SkinCatalogEnabled[i]) active++;
@@ -24406,11 +24636,12 @@ stock ShowSkinCatalogRuntimeSummary(playerid)
 
     new body[768];
     format(body, sizeof(body),
-           "Skin Catalog Runtime Summary\\n\\nLoaded Items: %d\\nActive: %d\\nDisabled: %d\\nFree Items: %d\\n\\nPlayer current skin uses players.skin.\\nClothing store service uses public interior type: clothing/binco/zip/suburban/prolaps/victim.\\nMovement normalization baseline uses movement_profile field; deep movement handling will be patched later.",
+           "Skin Catalog Runtime Summary\n\nLoaded Items: %d\nActive: %d\nDisabled: %d\nFree Items: %d\nOwned by You: %d\n\nPlayer current skin uses players.skin.\nOwned wardrobe uses player_skins.\nClothing store service uses public interior type: clothing/binco/zip/suburban/prolaps/victim.\nMovement normalization baseline uses movement_profile field; deep movement handling will be patched later.",
            SkinCatalogCount,
            active,
            disabled,
-           freeCount
+           freeCount,
+           ownedBySelf
           );
     ShowPlayerDialog(playerid, DIALOG_SKIN_ADMIN_INFO, DIALOG_STYLE_MSGBOX, "Skin Catalog Audit", body, "Back", "Close");
     return 1;
@@ -24423,7 +24654,7 @@ stock ShowSkinCatalogInfo(playerid)
         DIALOG_SKIN_ADMIN_INFO,
         DIALOG_STYLE_MSGBOX,
         "Skin Catalog Info",
-        "SAIF v0.25A.5.1 Skin Catalog Baseline\\n\\n- skin_catalog = DB catalog skin shop.\\n- players.skin = persistent equipped skin.\\n- Clothing Store public interior opens /skinshop from service checkpoint.\\n- movement_profile and anim_profile are stored for future movement normalization.\\n- Patch ini belum mengubah movement/animation secara agresif.",
+        "SAIF v0.25A.5.3 Skin Wardrobe Ownership\n\n- skin_catalog = DB catalog skin shop.\n- player_skins = owned/purchased wardrobe skins.\n- players.skin = persistent equipped skin.\n- Clothing Store opens /skinshop and /wardrobe from service checkpoint.\n- Owned skins can be re-equipped without paying again.\n- movement_profile and anim_profile remain DB-backed foundation fields.",
         "Back",
         "Close"
     );
@@ -36512,6 +36743,12 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/wardrobe", true) || !strcmp(cmdtext, "/myskins", true) || !strcmp(cmdtext, "/ownedskins", true))
+    {
+        ShowSkinWardrobeMenu(playerid);
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/skinconfig", true) || !strcmp(cmdtext, "/skincatalog", true) || !strcmp(cmdtext, "/skinadmin", true))
     {
         ShowSkinCatalogAdminMenu(playerid);
@@ -36526,7 +36763,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
             return 1;
         }
         LoadSkinCatalogFromDB();
-        SendClientMessage(playerid, COLOR_GREEN, "Skin catalog reload dari database diminta.");
+        LoadPlayerSkinOwnership(playerid);
+        SendClientMessage(playerid, COLOR_GREEN, "Skin catalog dan wardrobe ownership reload dari database diminta.");
         return 1;
     }
 
@@ -36542,7 +36780,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         new msg[180];
         if (skinIndex != -1)
         {
-            format(msg, sizeof(msg), "Skin kamu: %s | Skin ID %d | Category %s | Movement %s | Anim %s", SkinCatalogName[skinIndex], PlayerCurrentSkin[playerid], SkinCatalogCategory[skinIndex], SkinCatalogMovementProfile[skinIndex], SkinCatalogAnimProfile[skinIndex]);
+            format(msg, sizeof(msg), "Skin kamu: %s | Skin ID %d | Category %s | Movement %s | Anim %s | Owned %s", SkinCatalogName[skinIndex], PlayerCurrentSkin[playerid], SkinCatalogCategory[skinIndex], SkinCatalogMovementProfile[skinIndex], SkinCatalogAnimProfile[skinIndex], IsPlayerSkinOwned(playerid, PlayerCurrentSkin[playerid]) ? ("YES") : ("NO"));
         }
         else
         {
@@ -37319,7 +37557,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25A.5.2 Skin Movement Normalization");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25A.5.3 Skin Wardrobe Ownership");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -37329,7 +37567,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.25A.5.2: Skin Movement Normalization foundation; movement_profile/anim_profile editable from DB-backed skin config.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.25A.5.3: Skin Wardrobe Ownership; player_skins tracks purchased/owned skins and owned skins can be re-equipped without paying again.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.5.1: Skin Catalog Baseline; clothing store skin shop DB-based and player skin persists to players.skin.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.4.1: Wanted Persistence + Identity Rule; wanted level saves to DB, gang and job are mutually exclusive.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.4: Police Job Wanted Integrity; police job uses dark blue color and wanted players cannot join/start police duty.");

@@ -802,6 +802,7 @@ new Float:PlayerDeathA[MAX_PLAYERS];
 new PlayerDeathInterior[MAX_PLAYERS];
 new PlayerDeathVirtualWorld[MAX_PLAYERS];
 new PlayerDeathWantedLevel[MAX_PLAYERS];
+new PlayerPersistentWantedLevel[MAX_PLAYERS];
 new PlayerArrestJailed[MAX_PLAYERS];
 new PlayerArrestJailReleaseTick[MAX_PLAYERS];
 new PlayerArrestJailTimer[MAX_PLAYERS];
@@ -3075,6 +3076,8 @@ stock ResetPlayerAccountData(playerid)
     PlayerDeathInterior[playerid] = 0;
     PlayerDeathVirtualWorld[playerid] = 0;
     PlayerDeathWantedLevel[playerid] = 0;
+    PlayerPersistentWantedLevel[playerid] = 0;
+    SetPlayerWantedLevel(playerid, 0);
     ClearArrestJailState(playerid, 0);
 
     PlayerMoneyMismatchCount[playerid] = 0;
@@ -3084,6 +3087,8 @@ stock ResetPlayerAccountData(playerid)
     PlayerStarterPackClaimed[playerid] = 0;
     PlayerTurfHudVisible[playerid] = 0;
     PlayerWeaponLicense[playerid] = DEFAULT_WEAPON_LICENSE;
+    PlayerPersistentWantedLevel[playerid] = 0;
+    SetPlayerWantedLevel(playerid, 0);
     ResetPlayerWeaponLoadoutData(playerid);
 
     SyncPlayerMoneyHUD(playerid);
@@ -3180,7 +3185,7 @@ stock SavePlayerData(playerid, notify = 0)
     new Float:x, Float:y, Float:z, Float:a;
     new interior;
     new virtualWorld;
-    new query[768];
+    new query[896];
 
     GetSafePlayerSavePosition(playerid, x, y, z, a, interior, virtualWorld);
 
@@ -3188,7 +3193,7 @@ stock SavePlayerData(playerid, notify = 0)
         g_SQL,
         query,
         sizeof(query),
-        "UPDATE players SET money=%d, bank_money=%d, xp=%d, level=%d, admin_level=%d, current_job=%d, spawn_house=%d, starter_pack_claimed=%d, weapon_license=%d, pos_x=%f, pos_y=%f, pos_z=%f, pos_a=%f, pos_interior=%d, pos_virtual_world=%d WHERE id=%d LIMIT 1",
+        "UPDATE players SET money=%d, bank_money=%d, xp=%d, level=%d, admin_level=%d, current_job=%d, spawn_house=%d, starter_pack_claimed=%d, weapon_license=%d, wanted_level=%d, pos_x=%f, pos_y=%f, pos_z=%f, pos_a=%f, pos_interior=%d, pos_virtual_world=%d WHERE id=%d LIMIT 1",
         PlayerMoney[playerid],
         PlayerBankMoney[playerid],
         PlayerXP[playerid],
@@ -3198,6 +3203,7 @@ stock SavePlayerData(playerid, notify = 0)
         PlayerSpawnHouse[playerid],
         PlayerStarterPackClaimed[playerid],
         PlayerWeaponLicense[playerid],
+        ClampWantedLevelValue(GetPlayerWantedLevel(playerid)),
         x,
         y,
         z,
@@ -6034,6 +6040,97 @@ stock ApplyPlayerGangNameColor(playerid)
     return 1;
 }
 
+stock ResetPlayerJobIdentity(playerid, const reason[])
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 0;
+    }
+
+    new hadJob = PlayerJob[playerid] != JOB_NONE || PlayerWorking[playerid] || PlayerWorkType[playerid] != WORK_NONE;
+
+    if (!hadJob)
+    {
+        return 0;
+    }
+
+    DisablePlayerCheckpoint(playerid);
+    PlayerJob[playerid] = JOB_NONE;
+    PlayerWorking[playerid] = 0;
+    PlayerWorkType[playerid] = WORK_NONE;
+    PlayerWorkPoint[playerid] = -1;
+    PlayerWorkExitTick[playerid] = 0;
+    ResetTaxiWorkData(playerid);
+    ResetTruckerWorkData(playerid);
+    ResetBusWorkData(playerid);
+    ResetPoliceWorkData(playerid);
+
+    ApplyPlayerGangNameColor(playerid);
+
+    if (PlayerLoggedIn[playerid] && PlayerDBID[playerid] > 0)
+    {
+        SavePlayerData(playerid);
+    }
+
+    new msg[160];
+    format(msg, sizeof(msg), "Job kamu dibersihkan karena identity rule SAIF: %s.", reason);
+    SendClientMessage(playerid, COLOR_ORANGE, msg);
+    return 1;
+}
+
+stock CanJoinJobByIdentity(playerid, notify)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
+    {
+        return 0;
+    }
+
+    if (PlayerGangID[playerid] > 0)
+    {
+        if (notify)
+        {
+            new msg[160];
+            format(msg, sizeof(msg), "Kamu anggota gang %s. Keluar gang dengan /leavegang dulu sebelum mengambil job.", PlayerGangName[playerid]);
+            SendClientMessage(playerid, COLOR_RED, msg);
+        }
+        return 0;
+    }
+
+    return 1;
+}
+
+stock CanJoinGangByIdentity(playerid, notify)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
+    {
+        return 0;
+    }
+
+    if (PlayerWorking[playerid])
+    {
+        if (notify)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu sedang menjalankan job/mission. Selesaikan atau /cancelwork dulu sebelum join gang.");
+        }
+        return 0;
+    }
+
+    if (PlayerJob[playerid] != JOB_NONE)
+    {
+        if (notify)
+        {
+            new jobName[32];
+            new msg[160];
+            GetJobName(PlayerJob[playerid], jobName, sizeof(jobName));
+            format(msg, sizeof(msg), "Kamu masih punya job %s. Gunakan /leavejob dulu sebelum join gang.", jobName);
+            SendClientMessage(playerid, COLOR_RED, msg);
+        }
+        return 0;
+    }
+
+    return 1;
+}
+
 stock ResetPlayerGangData(playerid)
 {
     PlayerGangID[playerid] = 0;
@@ -6323,6 +6420,11 @@ stock ProcessJoinPresetGang(playerid, gangid)
     if (PlayerGangID[playerid] > 0)
     {
         SendClientMessage(playerid, COLOR_RED, "Kamu sudah tergabung dalam gang. Gunakan /leavegang dulu.");
+        return 0;
+    }
+
+    if (!CanJoinGangByIdentity(playerid, 1))
+    {
         return 0;
     }
 
@@ -11798,7 +11900,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.25A.4 Police Job Wanted Integrity");
+    SetGameModeText("SAIF Dev v0.25A.4.1 Wanted Persistence Identity Rule");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11898,6 +12000,7 @@ public OnGameModeInit()
         PlayerDeathInterior[i] = 0;
         PlayerDeathVirtualWorld[i] = 0;
         PlayerDeathWantedLevel[i] = 0;
+        PlayerPersistentWantedLevel[i] = 0;
         PlayerArrestJailed[i] = 0;
         PlayerArrestJailReleaseTick[i] = 0;
         PlayerArrestJailTimer[i] = 0;
@@ -11935,7 +12038,7 @@ public OnGameModeInit()
     print("[SAIF] Wanted Admin Tools aktif: /setwanted, /addwanted, /clearwanted, /wantedtools untuk admin testing arrest/jail.");
     print("[SAIF] Crime wanted hooks aktif: assault/murder player akan menaikkan wanted otomatis dengan throttle aman.");
     print("[SAIF] Police Job Wanted Integrity aktif: police color biru tua dan wanted player diblokir dari police duty.");
-    print("[SAIF] Gamemode v0.25A.4 Police Job Wanted Integrity berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.25A.4.1 Wanted Persistence Identity Rule berhasil dijalankan.");
     return 1;
 }
 
@@ -12806,8 +12909,7 @@ stock AddCrimeWantedLevel(attackerid, victimid, amount, const actionName[], cons
         return 0;
     }
 
-    SetPlayerWantedLevel(attackerid, newWanted);
-    ClearPoliceJobForWantedPlayer(attackerid, "crime_wanted");
+    SetSAIFWantedLevel(attackerid, newWanted, "crime_wanted");
 
     new msg[192];
     format(msg, sizeof(msg), "Crime wanted: %s. Wanted level naik %d -> %d.", crimeLabel, oldWanted, newWanted);
@@ -12885,6 +12987,8 @@ stock ShowCrimeWantedHookReference(playerid)
     strcat(body, "- Attacker/victim harus satu interior dan virtual world.\n", sizeof(body));
     strcat(body, "- Police/Vigilante yang menyerang target wanted tidak diberi crime wanted.\n", sizeof(body));
     strcat(body, "- Player wanted tidak bisa join/start Police/Vigilante sampai wanted 0.\n", sizeof(body));
+    strcat(body, "- Wanted level disimpan ke players.wanted_level sehingga relog tidak menghapus wanted.\n", sizeof(body));
+    strcat(body, "- Identity rule: anggota gang tidak bisa join job; player ber-job tidak bisa join gang.\n", sizeof(body));
     strcat(body, "- Vehicle crime, robbery, weapon license, dan gang/turf crime belum diaktifkan di patch ini.\n\n", sizeof(body));
     strcat(body, "Audit actions: WANTED_CRIME_ASSAULT dan WANTED_CRIME_MURDER masuk /arrestlogs.\n", sizeof(body));
     ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "Crime Wanted Hooks", body, "Back", "Close");
@@ -12922,6 +13026,8 @@ stock ShowWantedPoliceArrestReference(playerid)
     strcat(body, "- Police/Vigilante harus dekat target.\n", sizeof(body));
     strcat(body, "- Player dengan wanted level > 0 tidak bisa join/start Police/Vigilante.\n", sizeof(body));
     strcat(body, "- Police/Vigilante aktif memakai warna nama biru tua.\n", sizeof(body));
+    strcat(body, "- Wanted level persistent di DB; relog tidak membersihkan wanted.\n", sizeof(body));
+    strcat(body, "- Gang dan job eksklusif: /leavegang sebelum join job, /leavejob sebelum join gang.\n", sizeof(body));
     strcat(body, "- Target harus wanted level > 0.\n", sizeof(body));
     strcat(body, "- Interior dan virtual world harus sama.\n", sizeof(body));
     strcat(body, "- Admin level 3+ bisa pakai sebagai debug/admin flow.\n\n", sizeof(body));
@@ -13066,6 +13172,46 @@ stock CanJoinPoliceJob(playerid, notify)
     return 1;
 }
 
+stock SavePlayerWantedLevelToDB(playerid)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0)
+    {
+        return 0;
+    }
+
+    new wanted = ClampWantedLevelValue(GetPlayerWantedLevel(playerid));
+    PlayerPersistentWantedLevel[playerid] = wanted;
+
+    new query[192];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE players SET wanted_level=%d WHERE id=%d LIMIT 1", wanted, PlayerDBID[playerid]);
+    mysql_tquery(g_SQL, query);
+    return 1;
+}
+
+stock SetSAIFWantedLevel(playerid, wanted, const source[])
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 0;
+    }
+
+    wanted = ClampWantedLevelValue(wanted);
+    SetPlayerWantedLevel(playerid, wanted);
+    PlayerPersistentWantedLevel[playerid] = wanted;
+
+    if (PlayerLoggedIn[playerid] && PlayerDBID[playerid] > 0)
+    {
+        SavePlayerWantedLevelToDB(playerid);
+    }
+
+    if (wanted > 0)
+    {
+        ClearPoliceJobForWantedPlayer(playerid, source);
+    }
+
+    return 1;
+}
+
 stock ApplyAdminWantedTool(adminid, targetid, newWanted, const actionName[], const actionLabel[])
 {
     if (!IsAdminLevel(adminid, ADMIN_ADMIN))
@@ -13082,8 +13228,7 @@ stock ApplyAdminWantedTool(adminid, targetid, newWanted, const actionName[], con
 
     newWanted = ClampWantedLevelValue(newWanted);
     new oldWanted = ClampWantedLevelValue(GetPlayerWantedLevel(targetid));
-    SetPlayerWantedLevel(targetid, newWanted);
-    ClearPoliceJobForWantedPlayer(targetid, "admin_wanted_tool");
+    SetSAIFWantedLevel(targetid, newWanted, "admin_wanted_tool");
 
     new msg[160];
     format(msg, sizeof(msg), "Wanted target diset: %d -> %d.", oldWanted, newWanted);
@@ -19812,7 +19957,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             g_SQL,
             query,
             sizeof(query),
-            "SELECT id, money, bank_money, xp, level, admin_level, skin, current_job, spawn_house, starter_pack_claimed, weapon_license, pos_x, pos_y, pos_z, pos_a, pos_interior, pos_virtual_world FROM players WHERE username='%e' AND password_hash=SHA2('%e', 256) LIMIT 1",
+            "SELECT id, money, bank_money, xp, level, admin_level, skin, current_job, spawn_house, starter_pack_claimed, weapon_license, wanted_level, pos_x, pos_y, pos_z, pos_a, pos_interior, pos_virtual_world FROM players WHERE username='%e' AND password_hash=SHA2('%e', 256) LIMIT 1",
             username,
             inputtext
         );
@@ -19863,6 +20008,8 @@ public OnAccountRegister(playerid)
     PlayerJob[playerid] = JOB_NONE;
     PlayerStarterPackClaimed[playerid] = 0;
     PlayerWeaponLicense[playerid] = DEFAULT_WEAPON_LICENSE;
+    PlayerPersistentWantedLevel[playerid] = 0;
+    SetPlayerWantedLevel(playerid, 0);
     ResetPlayerWeaponLoadoutData(playerid);
     PlayerSpawnHouse[playerid] = 0;
     PlayerSpawnHouse[playerid] = 0;
@@ -19912,6 +20059,8 @@ public OnAccountLogin(playerid)
     cache_get_value_name_int(0, "spawn_house", PlayerSpawnHouse[playerid]);
     cache_get_value_name_int(0, "starter_pack_claimed", PlayerStarterPackClaimed[playerid]);
     cache_get_value_name_int(0, "weapon_license", PlayerWeaponLicense[playerid]);
+    cache_get_value_name_int(0, "wanted_level", PlayerPersistentWantedLevel[playerid]);
+    PlayerPersistentWantedLevel[playerid] = ClampWantedLevelValue(PlayerPersistentWantedLevel[playerid]);
 
     cache_get_value_name_float(0, "pos_x", PlayerLastX[playerid]);
     cache_get_value_name_float(0, "pos_y", PlayerLastY[playerid]);
@@ -19923,6 +20072,12 @@ public OnAccountLogin(playerid)
     SanitizeLoadedSpawnPosition(playerid);
 
     PlayerLoggedIn[playerid] = 1;
+
+    SetPlayerWantedLevel(playerid, PlayerPersistentWantedLevel[playerid]);
+    if (PlayerPersistentWantedLevel[playerid] > 0)
+    {
+        ClearPoliceJobForWantedPlayer(playerid, "persistent_wanted_login");
+    }
 
     ApplyLoadedPlayerData(playerid);
     LoadPersistentArrestJailHold(playerid);
@@ -19991,6 +20146,10 @@ stock HandleVehicleMissionKey(playerid)
     {
         SendClientMessage(playerid, COLOR_YELLOW, "Tombol 2 digunakan untuk mulai vehicle mission saat kamu menjadi driver kendaraan job.");
         SendClientMessage(playerid, COLOR_WHITE, "Contoh: Taxi/Cabbie, delivery van, truck, bus, atau police vehicle.");
+        return 1;
+    }
+    if (!CanJoinJobByIdentity(playerid, 1))
+    {
         return 1;
     }
     if (IsPlayerInTaxiVehicle(playerid))
@@ -23597,7 +23756,7 @@ stock ProcessPublicServicePurchase(playerid, const type[], listitem)
         new wanted = GetPlayerWantedLevel(playerid);
         wanted -= PublicServiceWantedReduce[serviceIndex];
         if (wanted < 0) wanted = 0;
-        SetPlayerWantedLevel(playerid, wanted);
+        SetSAIFWantedLevel(playerid, wanted, "public_service_wanted_reduce");
     }
 
     SavePlayerData(playerid);
@@ -23943,7 +24102,7 @@ stock HandleWorldPickupPickup(playerid, pickupid)
             {
                 wanted -= amount;
                 if (wanted < 0) wanted = 0;
-                SetPlayerWantedLevel(playerid, wanted);
+                SetSAIFWantedLevel(playerid, wanted, "police_bribe_pickup");
                 format(msg, sizeof(msg), "Police bribe diambil. Wanted level sekarang: %d.", wanted);
                 SendClientMessage(playerid, COLOR_GREEN, msg);
             }
@@ -29409,7 +29568,7 @@ stock ApplyDeathWantedPersistence(playerid)
     if (wantedLevel < 0) wantedLevel = 0;
     if (wantedLevel > 6) wantedLevel = 6;
 
-    SetPlayerWantedLevel(playerid, wantedLevel);
+    SetSAIFWantedLevel(playerid, wantedLevel, "death_hospital_respawn");
 
     // Some clients/native death flow can still touch HUD state right after spawn.
     // Re-apply once after hospital transform so wanted does not silently reset.
@@ -29433,7 +29592,7 @@ public ReapplyPlayerWantedAfterDeath(playerid, wantedLevel)
 
     if (wantedLevel < 0) wantedLevel = 0;
     if (wantedLevel > 6) wantedLevel = 6;
-    SetPlayerWantedLevel(playerid, wantedLevel);
+    SetSAIFWantedLevel(playerid, wantedLevel, "death_hospital_reapply");
     return 1;
 }
 
@@ -30228,7 +30387,7 @@ stock ProcessPoliceArrest(playerid, targetid)
         }
     }
 
-    SetPlayerWantedLevel(targetid, 0);
+    SetSAIFWantedLevel(targetid, 0, "police_arrest_reset");
     new bookingApplied = ApplyArrestBookingAftermath(targetid);
     new jailSeconds = StartArrestJailHold(targetid, wanted);
     SavePlayerData(targetid);
@@ -32511,6 +32670,12 @@ public OnPlayerGangLoaded(playerid)
     cache_get_value_name_int(0, "captures", PlayerGangCaptures[playerid]);
     cache_get_value_name_int(0, "defends", PlayerGangDefends[playerid]);
     cache_get_value_name_int(0, "wars_participated", PlayerGangWars[playerid]);
+
+    if (PlayerJob[playerid] != JOB_NONE || PlayerWorking[playerid] || PlayerWorkType[playerid] != WORK_NONE)
+    {
+        ResetPlayerJobIdentity(playerid, "gang_membership_loaded");
+    }
+
     ApplyPlayerGangNameColor(playerid);
 
     new msg[144];
@@ -36372,7 +36537,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25A.4 Police Job Wanted Integrity");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25A.4.1 Wanted Persistence Identity Rule");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -36382,6 +36547,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.25A.4.1: Wanted Persistence + Identity Rule; wanted level saves to DB, gang and job are mutually exclusive.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.4: Police Job Wanted Integrity; police job uses dark blue color and wanted players cannot join/start police duty.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.3: Crime Wanted Hook Foundation; assault/murder player can raise wanted automatically, with admin wanted tools retained.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.2: Wanted Admin Tools; /setwanted, /addwanted, /clearwanted, and /wantedtools for controlled arrest/jail testing.");
@@ -37174,6 +37340,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "bus - Bus/Coach route + tombol 2.");
         SendClientMessage(playerid, COLOR_WHITE, "police - Police/Vigilante basic call + tombol 2. Wanted level 0 wajib.");
         SendClientMessage(playerid, COLOR_CYAN, "Cara utama: naik kendaraan job lalu tekan tombol 2. /joinjob dan /work tetap fallback.");
+        SendClientMessage(playerid, COLOR_WHITE, "Identity rule: anggota gang tidak bisa punya job; player ber-job tidak bisa join gang.");
         return 1;
     }
 
@@ -37182,6 +37349,11 @@ public OnPlayerCommandText(playerid, cmdtext[])
         if (PlayerWorking[playerid])
         {
             SendClientMessage(playerid, COLOR_RED, "Selesaikan atau batalkan pekerjaan aktif dulu.");
+            return 1;
+        }
+
+        if (!CanJoinJobByIdentity(playerid, 1))
+        {
             return 1;
         }
 
@@ -37200,6 +37372,11 @@ public OnPlayerCommandText(playerid, cmdtext[])
         if (PlayerWorking[playerid])
         {
             SendClientMessage(playerid, COLOR_RED, "Selesaikan atau batalkan pekerjaan aktif dulu.");
+            return 1;
+        }
+
+        if (!CanJoinJobByIdentity(playerid, 1))
+        {
             return 1;
         }
 
@@ -37223,6 +37400,11 @@ public OnPlayerCommandText(playerid, cmdtext[])
             return 1;
         }
 
+        if (!CanJoinJobByIdentity(playerid, 1))
+        {
+            return 1;
+        }
+
         PlayerJob[playerid] = JOB_TRUCKER;
         ApplyPlayerGangNameColor(playerid);
 
@@ -37242,6 +37424,11 @@ public OnPlayerCommandText(playerid, cmdtext[])
             return 1;
         }
 
+        if (!CanJoinJobByIdentity(playerid, 1))
+        {
+            return 1;
+        }
+
         PlayerJob[playerid] = JOB_BUS;
         ApplyPlayerGangNameColor(playerid);
         SavePlayerData(playerid);
@@ -37255,6 +37442,11 @@ public OnPlayerCommandText(playerid, cmdtext[])
         if (PlayerWorking[playerid])
         {
             SendClientMessage(playerid, COLOR_RED, "Selesaikan atau batalkan pekerjaan aktif dulu.");
+            return 1;
+        }
+
+        if (!CanJoinJobByIdentity(playerid, 1))
+        {
             return 1;
         }
 
@@ -37304,6 +37496,11 @@ public OnPlayerCommandText(playerid, cmdtext[])
         if (PlayerJob[playerid] == JOB_NONE)
         {
             SendClientMessage(playerid, COLOR_RED, "Kamu belum punya job. Gunakan /jobs.");
+            return 1;
+        }
+
+        if (!CanJoinJobByIdentity(playerid, 1))
+        {
             return 1;
         }
 

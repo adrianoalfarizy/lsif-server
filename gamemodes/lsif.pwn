@@ -216,6 +216,9 @@
 #define DIALOG_SKIN_ADMIN_ACTION 1254
 #define DIALOG_SKIN_ADMIN_PRICE_INPUT 1255
 #define DIALOG_SKIN_ADMIN_INFO 1256
+#define DIALOG_SKIN_ADMIN_MOVEMENT_INPUT 1257
+#define DIALOG_SKIN_ADMIN_ANIM_INPUT 1258
+#define DIALOG_SKIN_PROFILE_INFO 1259
 #define DIALOG_GANG_PRESET_MENU 1192
 #define DIALOG_GANG_PRESET_LIST 1193
 #define DIALOG_GANG_PRESET_SELECT_INPUT 1194
@@ -11927,7 +11930,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.25A.5.1 Skin Catalog Baseline");
+    SetGameModeText("SAIF Dev v0.25A.5.2 Skin Movement Normalization");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -12069,7 +12072,8 @@ public OnGameModeInit()
     print("[SAIF] Crime wanted hooks aktif: assault/murder player akan menaikkan wanted otomatis dengan throttle aman.");
     print("[SAIF] Police Job Wanted Integrity aktif: police color biru tua dan wanted player diblokir dari police duty.");
     print("[SAIF] Skin Catalog baseline aktif: clothing store skin shop DB-based via skin_catalog.");
-    print("[SAIF] Gamemode v0.25A.5.1 Skin Catalog Baseline berhasil dijalankan.");
+    print("[SAIF] Skin Movement Normalization foundation aktif: movement_profile/anim_profile DB-based config.");
+    print("[SAIF] Gamemode v0.25A.5.2 Skin Movement Normalization berhasil dijalankan.");
     return 1;
 }
 
@@ -12857,7 +12861,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/skinshop, /skins, /clothes, /myskin, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/skinshop, /skins, /clothes, /myskin, /skinprofile, /skinmovement, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
@@ -16629,8 +16633,9 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
                 ShowSkinCatalogAdminMenu(playerid);
             }
             case 2: ShowSkinCatalogRuntimeSummary(playerid);
-            case 3: ShowSkinCatalogInfo(playerid);
-            case 4: ShowAdminToolsMenu(playerid);
+            case 3: ShowPlayerSkinProfile(playerid);
+            case 4: ShowSkinCatalogInfo(playerid);
+            case 5: ShowAdminToolsMenu(playerid);
         }
         return 1;
     }
@@ -16678,18 +16683,30 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             }
             case 1:
             {
+                new body[256];
+                format(body, sizeof(body), "Skin: %s (%d)\nMovement profile saat ini: %s\n\nMasukkan profile baru. Contoh: cj_like, normal, heavy, light, work, gang.\nHanya huruf/angka/_/- maksimal 31 karakter.", SkinCatalogName[skinIndex], SkinCatalogSkinID[skinIndex], SkinCatalogMovementProfile[skinIndex]);
+                ShowPlayerDialog(playerid, DIALOG_SKIN_ADMIN_MOVEMENT_INPUT, DIALOG_STYLE_INPUT, "Edit Movement Profile", body, "Save", "Back");
+            }
+            case 2:
+            {
+                new body[256];
+                format(body, sizeof(body), "Skin: %s (%d)\nAnimation profile saat ini: %s\n\nMasukkan profile baru. Contoh: default, cj_like, normal, female, work, gang.\nHanya huruf/angka/_/- maksimal 31 karakter.", SkinCatalogName[skinIndex], SkinCatalogSkinID[skinIndex], SkinCatalogAnimProfile[skinIndex]);
+                ShowPlayerDialog(playerid, DIALOG_SKIN_ADMIN_ANIM_INPUT, DIALOG_STYLE_INPUT, "Edit Animation Profile", body, "Save", "Back");
+            }
+            case 3:
+            {
                 SkinCatalogEnabled[skinIndex] = SkinCatalogEnabled[skinIndex] ? 0 : 1;
                 SaveSkinCatalogItem(skinIndex);
                 SendClientMessage(playerid, COLOR_GREEN, "Status skin catalog diperbarui.");
                 ShowSkinCatalogAdminAction(playerid, skinIndex);
             }
-            case 2:
+            case 4:
             {
                 SetSAIFPlayerSkin(playerid, SkinCatalogSkinID[skinIndex], 1);
-                SendClientMessage(playerid, COLOR_GREEN, "Skin di-equip ke karakter kamu untuk test.");
+                SendClientMessage(playerid, COLOR_GREEN, "Skin di-equip ke karakter kamu untuk test dan movement profile di-apply sebagai baseline.");
                 ShowSkinCatalogAdminAction(playerid, skinIndex);
             }
-            case 3: ShowSkinCatalogAdminList(playerid);
+            case 5: ShowSkinCatalogAdminList(playerid);
         }
         return 1;
     }
@@ -16728,6 +16745,71 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         SaveSkinCatalogItem(skinIndex);
         SendClientMessage(playerid, COLOR_GREEN, "Harga skin catalog tersimpan.");
         ShowSkinCatalogAdminAction(playerid, skinIndex);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_SKIN_ADMIN_MOVEMENT_INPUT)
+    {
+        new skinIndex = PlayerEditingSkinCatalogIndex[playerid];
+        if (!response)
+        {
+            ShowSkinCatalogAdminAction(playerid, skinIndex);
+            return 1;
+        }
+
+        if (skinIndex < 0 || skinIndex >= SkinCatalogCount)
+        {
+            ShowSkinCatalogAdminList(playerid);
+            return 1;
+        }
+
+        if (!IsValidSkinProfileText(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Movement profile tidak valid. Pakai huruf/angka/_/- maksimal 31 karakter.");
+            ShowSkinCatalogAdminAction(playerid, skinIndex);
+            return 1;
+        }
+
+        format(SkinCatalogMovementProfile[skinIndex], SKIN_PROFILE_SIZE, "%s", inputtext);
+        NormalizeSkinCatalogProfiles(skinIndex);
+        SaveSkinCatalogItem(skinIndex);
+        SendClientMessage(playerid, COLOR_GREEN, "Movement profile skin catalog tersimpan.");
+        ShowSkinCatalogAdminAction(playerid, skinIndex);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_SKIN_ADMIN_ANIM_INPUT)
+    {
+        new skinIndex = PlayerEditingSkinCatalogIndex[playerid];
+        if (!response)
+        {
+            ShowSkinCatalogAdminAction(playerid, skinIndex);
+            return 1;
+        }
+
+        if (skinIndex < 0 || skinIndex >= SkinCatalogCount)
+        {
+            ShowSkinCatalogAdminList(playerid);
+            return 1;
+        }
+
+        if (!IsValidSkinProfileText(inputtext))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Animation profile tidak valid. Pakai huruf/angka/_/- maksimal 31 karakter.");
+            ShowSkinCatalogAdminAction(playerid, skinIndex);
+            return 1;
+        }
+
+        format(SkinCatalogAnimProfile[skinIndex], SKIN_PROFILE_SIZE, "%s", inputtext);
+        NormalizeSkinCatalogProfiles(skinIndex);
+        SaveSkinCatalogItem(skinIndex);
+        SendClientMessage(playerid, COLOR_GREEN, "Animation profile skin catalog tersimpan.");
+        ShowSkinCatalogAdminAction(playerid, skinIndex);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_SKIN_PROFILE_INFO)
+    {
         return 1;
     }
 
@@ -24008,6 +24090,7 @@ public OnSkinCatalogLoaded()
         SkinCatalogSkinID[i] = NormalizePlayerSkinValue(SkinCatalogSkinID[i]);
         if (SkinCatalogPrice[i] < 0) SkinCatalogPrice[i] = 0;
         if (SkinCatalogEnabled[i] != 0) SkinCatalogEnabled[i] = 1;
+        NormalizeSkinCatalogProfiles(i);
         SkinCatalogCount++;
     }
 
@@ -24020,6 +24103,80 @@ stock IsPlayerInClothingStore(playerid)
     new idx = GetPlayerPublicInteriorIndex(playerid);
     if (idx == -1) return 0;
     return IsPublicInteriorClothingType(PublicInteriorType[idx]);
+}
+
+
+stock IsValidSkinProfileText(const text[])
+{
+    new len = strlen(text);
+    if (len < 1 || len >= SKIN_PROFILE_SIZE) return 0;
+
+    for (new i = 0; i < len; i++)
+    {
+        new c = text[i];
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-')
+        {
+            continue;
+        }
+        return 0;
+    }
+    return 1;
+}
+
+stock NormalizeSkinCatalogProfiles(skinIndex)
+{
+    if (skinIndex < 0 || skinIndex >= MAX_SKIN_CATALOG_ITEMS) return 0;
+
+    if (!IsValidSkinProfileText(SkinCatalogMovementProfile[skinIndex]))
+    {
+        format(SkinCatalogMovementProfile[skinIndex], SKIN_PROFILE_SIZE, "cj_like");
+    }
+    if (!IsValidSkinProfileText(SkinCatalogAnimProfile[skinIndex]))
+    {
+        format(SkinCatalogAnimProfile[skinIndex], SKIN_PROFILE_SIZE, "default");
+    }
+    return 1;
+}
+
+stock ApplySkinMovementNormalization(playerid)
+{
+    if (!IsPlayerConnected(playerid)) return 0;
+
+    new skinIndex = GetSkinCatalogIndexBySkinID(PlayerCurrentSkin[playerid]);
+    if (skinIndex == -1) return 0;
+
+    NormalizeSkinCatalogProfiles(skinIndex);
+
+    // v0.25A.5.2 foundation: movement_profile/anim_profile are DB-backed and applied as the active runtime profile.
+    // For safety, cj_like/default intentionally does not force animations or velocity changes yet.
+    // Deep movement/animation handling will be patched later after profile behavior is tested per skin.
+    return 1;
+}
+
+stock ShowPlayerSkinProfile(playerid)
+{
+    new skinIndex = GetSkinCatalogIndexBySkinID(PlayerCurrentSkin[playerid]);
+    new body[768];
+
+    if (skinIndex == -1)
+    {
+        format(body, sizeof(body), "Skin Profile\n\nSkin ID: %d\nCatalog: not found\n\nMovement normalization: fallback/native.\nGunakan Clothing Store untuk memilih skin dari skin_catalog.", PlayerCurrentSkin[playerid]);
+    }
+    else
+    {
+        NormalizeSkinCatalogProfiles(skinIndex);
+        format(body, sizeof(body),
+               "Skin Profile\n\nName: %s\nSkin ID: %d\nCategory: %s\nMovement Profile: %s\nAnimation Profile: %s\n\nStatus:\n- v0.25A.5.2 memakai profile DB sebagai baseline normalization.\n- cj_like/default aman: tidak memaksa animasi/kecepatan.\n- Profile lanjutan akan dipakai bertahap untuk normalisasi non-CJ skin.",
+               SkinCatalogName[skinIndex],
+               PlayerCurrentSkin[playerid],
+               SkinCatalogCategory[skinIndex],
+               SkinCatalogMovementProfile[skinIndex],
+               SkinCatalogAnimProfile[skinIndex]
+              );
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_SKIN_PROFILE_INFO, DIALOG_STYLE_MSGBOX, "Skin Movement Profile", body, "Close", "Close");
+    return 1;
 }
 
 stock GetSkinCatalogIndexBySkinID(skinid)
@@ -24072,6 +24229,7 @@ stock SetSAIFPlayerSkin(playerid, skinid, saveToDB)
     skinid = NormalizePlayerSkinValue(skinid);
     PlayerCurrentSkin[playerid] = skinid;
     SetPlayerSkin(playerid, skinid);
+    ApplySkinMovementNormalization(playerid);
 
     if (saveToDB)
     {
@@ -24159,8 +24317,10 @@ stock SaveSkinCatalogItem(skinIndex)
     if (skinIndex < 0 || skinIndex >= SkinCatalogCount) return 0;
     if (SkinCatalogDBID[skinIndex] <= 0) return 0;
 
-    new query[384];
-    mysql_format(g_SQL, query, sizeof(query), "UPDATE skin_catalog SET price=%d, enabled=%d WHERE id=%d LIMIT 1", SkinCatalogPrice[skinIndex], SkinCatalogEnabled[skinIndex], SkinCatalogDBID[skinIndex]);
+    NormalizeSkinCatalogProfiles(skinIndex);
+
+    new query[512];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE skin_catalog SET price=%d, enabled=%d, movement_profile='%e', anim_profile='%e' WHERE id=%d LIMIT 1", SkinCatalogPrice[skinIndex], SkinCatalogEnabled[skinIndex], SkinCatalogMovementProfile[skinIndex], SkinCatalogAnimProfile[skinIndex], SkinCatalogDBID[skinIndex]);
     mysql_tquery(g_SQL, query);
     return 1;
 }
@@ -24178,6 +24338,7 @@ stock ShowSkinCatalogAdminMenu(playerid)
     strcat(body, "List / Edit Skin Catalog\n", sizeof(body));
     strcat(body, "Reload Skin Catalog\n", sizeof(body));
     strcat(body, "Runtime Summary / Audit\n", sizeof(body));
+    strcat(body, "Skin Movement Profile / Audit\n", sizeof(body));
     strcat(body, "Info\n", sizeof(body));
     strcat(body, "Back to Admin Menus\n", sizeof(body));
     ShowPlayerDialog(playerid, DIALOG_SKIN_ADMIN_MENU, DIALOG_STYLE_LIST, "Skin Catalog Config", body, "Open", "Close");
@@ -24219,11 +24380,14 @@ stock ShowSkinCatalogAdminAction(playerid, skinIndex)
     new title[96];
     new body[512];
     format(title, sizeof(title), "Skin: %s (%d)", SkinCatalogName[skinIndex], SkinCatalogSkinID[skinIndex]);
+    NormalizeSkinCatalogProfiles(skinIndex);
     format(body, sizeof(body),
-           "Action\tValue\nEdit Price\t$%d\nToggle Enabled\t%s\nEquip Self For Test\tMovement %s\nBack to List\t%s",
+           "Action\tValue\nEdit Price\t$%d\nEdit Movement Profile\t%s\nEdit Animation Profile\t%s\nToggle Enabled\t%s\nEquip Self For Test\tSkin %d\nBack to List\t%s",
            SkinCatalogPrice[skinIndex],
-           SkinCatalogEnabled[skinIndex] ? ("ON") : ("OFF"),
            SkinCatalogMovementProfile[skinIndex],
+           SkinCatalogAnimProfile[skinIndex],
+           SkinCatalogEnabled[skinIndex] ? ("ON") : ("OFF"),
+           SkinCatalogSkinID[skinIndex],
            SkinCatalogCategory[skinIndex]
           );
     ShowPlayerDialog(playerid, DIALOG_SKIN_ADMIN_ACTION, DIALOG_STYLE_TABLIST_HEADERS, title, body, "Select", "Back");
@@ -36366,13 +36530,19 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/skinprofile", true) || !strcmp(cmdtext, "/skinmovement", true) || !strcmp(cmdtext, "/skinprofiles", true))
+    {
+        ShowPlayerSkinProfile(playerid);
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/myskin", true))
     {
         new skinIndex = GetSkinCatalogIndexBySkinID(PlayerCurrentSkin[playerid]);
         new msg[180];
         if (skinIndex != -1)
         {
-            format(msg, sizeof(msg), "Skin kamu: %s | Skin ID %d | Category %s | Movement %s", SkinCatalogName[skinIndex], PlayerCurrentSkin[playerid], SkinCatalogCategory[skinIndex], SkinCatalogMovementProfile[skinIndex]);
+            format(msg, sizeof(msg), "Skin kamu: %s | Skin ID %d | Category %s | Movement %s | Anim %s", SkinCatalogName[skinIndex], PlayerCurrentSkin[playerid], SkinCatalogCategory[skinIndex], SkinCatalogMovementProfile[skinIndex], SkinCatalogAnimProfile[skinIndex]);
         }
         else
         {
@@ -37149,7 +37319,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25A.5.1 Skin Catalog Baseline");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25A.5.2 Skin Movement Normalization");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -37159,6 +37329,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.25A.5.2: Skin Movement Normalization foundation; movement_profile/anim_profile editable from DB-backed skin config.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.5.1: Skin Catalog Baseline; clothing store skin shop DB-based and player skin persists to players.skin.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.4.1: Wanted Persistence + Identity Rule; wanted level saves to DB, gang and job are mutually exclusive.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.4: Police Job Wanted Integrity; police job uses dark blue color and wanted players cannot join/start police duty.");

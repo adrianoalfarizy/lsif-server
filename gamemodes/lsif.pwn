@@ -2470,6 +2470,7 @@ forward OnRecentDeathLogsLoaded(playerid);
 forward OnRecentArrestLogsLoaded(playerid);
 forward OnPersistentArrestJailHoldLoaded(playerid);
 forward OnPersistentArrestJailHoldsListLoaded(playerid);
+forward SaveAllPersistentArrestJailHolds();
 forward ReleaseArrestJailedPlayer(playerid);
 forward ReapplyPlayerWantedAfterDeath(playerid, wantedLevel);
 forward OnGangColorUpdated(playerid, colorIndex);
@@ -11769,7 +11770,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24L.3 Persistent Jail Admin GUI Polish");
+    SetGameModeText("SAIF Dev v0.24L.4 Offline-Paused Jail Hold");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11901,7 +11902,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24L.1 Persistent Jail Hold Foundation berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24L.4 Offline-Paused Jail Hold berhasil dijalankan.");
     return 1;
 }
 
@@ -11909,6 +11910,7 @@ public OnGameModeExit()
 {
     print("[LSIF] Menyimpan semua data player sebelum gamemode exit...");
     SaveAllPlayers();
+    SaveAllPersistentArrestJailHolds();
 
     if (g_AutosaveTimer)
     {
@@ -29117,6 +29119,25 @@ stock SavePersistentArrestJailHold(playerid)
     return 1;
 }
 
+public SaveAllPersistentArrestJailHolds()
+{
+    new savedCount = 0;
+
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (IsPlayerConnected(i) && PlayerLoggedIn[i] && PlayerArrestJailed[i])
+        {
+            SavePersistentArrestJailHold(i);
+            savedCount++;
+        }
+    }
+
+    new msg[128];
+    format(msg, sizeof(msg), "[SAIF] %d active arrest jail holds disimpan dengan offline-paused remaining_seconds.", savedCount);
+    print(msg);
+    return savedCount;
+}
+
 stock LoadPersistentArrestJailHold(playerid)
 {
     if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0)
@@ -29129,7 +29150,7 @@ stock LoadPersistentArrestJailHold(playerid)
         g_SQL,
         query,
         sizeof(query),
-        "SELECT id, GREATEST(0, TIMESTAMPDIFF(SECOND, NOW(), expires_at)) AS remaining_seconds FROM player_jail_holds WHERE player_id=%d LIMIT 1",
+        "SELECT id, remaining_seconds FROM player_jail_holds WHERE player_id=%d LIMIT 1",
         PlayerDBID[playerid]
     );
     mysql_tquery(g_SQL, query, "OnPersistentArrestJailHoldLoaded", "i", playerid);
@@ -29177,7 +29198,7 @@ public OnPersistentArrestJailHoldLoaded(playerid)
     SavePersistentArrestJailHold(playerid);
 
     new msg[160];
-    format(msg, sizeof(msg), "Status arrest jail hold kamu dipulihkan. Sisa waktu: %d detik.", remaining);
+    format(msg, sizeof(msg), "Status arrest jail hold kamu dipulihkan. Countdown hanya berjalan saat online. Sisa waktu: %d detik.", remaining);
     SendClientMessage(playerid, COLOR_ORANGE, msg);
     return 1;
 }
@@ -29201,7 +29222,7 @@ stock StartArrestJailHold(playerid, wanted)
     SavePersistentArrestJailHold(playerid);
 
     new msg[160];
-    format(msg, sizeof(msg), "Kamu ditahan sementara selama %d detik setelah arrest. Tunggu proses booking selesai.", seconds);
+    format(msg, sizeof(msg), "Kamu ditahan sementara selama %d detik online setelah arrest. Countdown pause saat offline.", seconds);
     SendClientMessage(playerid, COLOR_ORANGE, msg);
     return seconds;
 }
@@ -29381,7 +29402,7 @@ stock ShowPersistentArrestJailHolds(playerid)
         g_SQL,
         query,
         sizeof(query),
-        "SELECT h.id, h.player_id, COALESCE(p.username, 'UNKNOWN') AS username, GREATEST(0, TIMESTAMPDIFF(SECOND, NOW(), h.expires_at)) AS remaining_seconds, h.reason, h.expires_at, h.updated_at FROM player_jail_holds h LEFT JOIN players p ON p.id = h.player_id ORDER BY h.expires_at ASC LIMIT 20"
+        "SELECT h.id, h.player_id, COALESCE(p.username, 'UNKNOWN') AS username, h.remaining_seconds, h.reason, h.expires_at, h.updated_at FROM player_jail_holds h LEFT JOIN players p ON p.id = h.player_id ORDER BY h.remaining_seconds ASC, h.updated_at ASC LIMIT 20"
     );
     mysql_tquery(g_SQL, query, "OnPersistentArrestJailHoldsListLoaded", "i", playerid);
     return 1;
@@ -35505,7 +35526,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24L.3 Persistent Jail Admin GUI Polish");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24L.4 Offline-Paused Jail Hold");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -35515,7 +35536,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24L.3: Persistent jail hold admin GUI polish (/persistentjails DB view). v0.24L.2: Schema baseline refreshed for player_jail_holds.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24L.4: Jail hold countdown pauses while offline and saves remaining time on disconnect/restart.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24L.0: Milestone rebase from long v0.24K branch.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22I: Arrest config polish via server_settings: radius/fine controls, /arrestconfig, /setarrestradius, /setarrestfine.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22I.1: /amenus config items now open GUI action menus instead of note-only references.");

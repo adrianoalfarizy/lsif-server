@@ -11771,7 +11771,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24L.5 Jail UX Restriction Polish");
+    SetGameModeText("SAIF Dev v0.24L.6 Jail Release Booking Polish");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11904,7 +11904,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24L.5 Jail UX Restriction Polish berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24L.6 Jail Release Booking Polish berhasil dijalankan.");
     return 1;
 }
 
@@ -12671,7 +12671,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
@@ -12747,6 +12747,7 @@ stock ShowArrestConfigMenu(playerid)
     format(line, sizeof(line), "Set Jail Release Point Here\t%.1f, %.1f, %.1f | int %d vw %d\n", g_PoliceArrestReleaseX, g_PoliceArrestReleaseY, g_PoliceArrestReleaseZ, g_PoliceArrestReleaseInterior, g_PoliceArrestReleaseVW);
     strcat(body, line, sizeof(body));
     strcat(body, "Goto Jail Release Point\tTeleport Owner to release point\n", sizeof(body));
+    strcat(body, "Booking / Release Point Safety\tShow fallback and current points\n", sizeof(body));
     strcat(body, "Active Jail Holds\tList online jailed players\n", sizeof(body));
     strcat(body, "Persistent Jail DB Holds\tList saved jail holds\n", sizeof(body));
     strcat(body, "Jail Hold UX / Rules\tBlocked actions while jailed\n", sizeof(body));
@@ -14530,13 +14531,14 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
                 GotoArrestReleasePoint(playerid);
                 ShowArrestConfigMenu(playerid);
             }
-            case 9: ShowActiveArrestJails(playerid);
-            case 10: ShowPersistentArrestJailHolds(playerid);
-            case 11: ShowArrestJailHelp(playerid);
-            case 12: ShowWantedPoliceArrestReference(playerid);
-            case 13: ShowRecentArrestLogs(playerid);
-            case 14: ShowDeathHospitalConfigMenu(playerid);
-            case 15: ShowAdminToolsMenu(playerid);
+            case 9: ShowArrestPointSafety(playerid);
+            case 10: ShowActiveArrestJails(playerid);
+            case 11: ShowPersistentArrestJailHolds(playerid);
+            case 12: ShowArrestJailHelp(playerid);
+            case 13: ShowWantedPoliceArrestReference(playerid);
+            case 14: ShowRecentArrestLogs(playerid);
+            case 15: ShowDeathHospitalConfigMenu(playerid);
+            case 16: ShowAdminToolsMenu(playerid);
         }
         return 1;
     }
@@ -28914,6 +28916,129 @@ stock ShowWantedStatus(playerid)
     return 1;
 }
 
+
+stock IsSafeArrestWorldPoint(Float:x, Float:y, Float:z)
+{
+    if (x > -0.5 && x < 0.5 && y > -0.5 && y < 0.5 && z > -0.5 && z < 0.5)
+    {
+        return 0;
+    }
+
+    if (z < -100.0 || z > 2000.0)
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
+stock ResetArrestBookingPointToDefault(saveToDB)
+{
+    g_PoliceArrestBookingX = POLICE_ARREST_BOOKING_DEFAULT_X;
+    g_PoliceArrestBookingY = POLICE_ARREST_BOOKING_DEFAULT_Y;
+    g_PoliceArrestBookingZ = POLICE_ARREST_BOOKING_DEFAULT_Z;
+    g_PoliceArrestBookingA = POLICE_ARREST_BOOKING_DEFAULT_A;
+    g_PoliceArrestBookingInterior = POLICE_ARREST_BOOKING_DEFAULT_INTERIOR;
+    g_PoliceArrestBookingVW = POLICE_ARREST_BOOKING_DEFAULT_VW;
+
+    if (saveToDB)
+    {
+        SaveDeathConfigToDB();
+    }
+    return 1;
+}
+
+stock ResetArrestReleasePointToDefault(saveToDB)
+{
+    g_PoliceArrestReleaseX = POLICE_ARREST_RELEASE_DEFAULT_X;
+    g_PoliceArrestReleaseY = POLICE_ARREST_RELEASE_DEFAULT_Y;
+    g_PoliceArrestReleaseZ = POLICE_ARREST_RELEASE_DEFAULT_Z;
+    g_PoliceArrestReleaseA = POLICE_ARREST_RELEASE_DEFAULT_A;
+    g_PoliceArrestReleaseInterior = POLICE_ARREST_RELEASE_DEFAULT_INTERIOR;
+    g_PoliceArrestReleaseVW = POLICE_ARREST_RELEASE_DEFAULT_VW;
+
+    if (saveToDB)
+    {
+        SaveDeathConfigToDB();
+    }
+    return 1;
+}
+
+stock EnsureArrestBookingPointSafe(saveToDB)
+{
+    if (!IsSafeArrestWorldPoint(g_PoliceArrestBookingX, g_PoliceArrestBookingY, g_PoliceArrestBookingZ))
+    {
+        ResetArrestBookingPointToDefault(saveToDB);
+        return 0;
+    }
+    return 1;
+}
+
+stock EnsureArrestReleasePointSafe(saveToDB)
+{
+    if (!IsSafeArrestWorldPoint(g_PoliceArrestReleaseX, g_PoliceArrestReleaseY, g_PoliceArrestReleaseZ))
+    {
+        ResetArrestReleasePointToDefault(saveToDB);
+        return 0;
+    }
+    return 1;
+}
+
+stock ApplyArrestSafeTransform(playerid, Float:x, Float:y, Float:z, Float:a, interior, virtualWorld, saveLastPosition)
+{
+    if (!IsPlayerConnected(playerid))
+    {
+        return 0;
+    }
+
+    SetPlayerInterior(playerid, interior);
+    SetPlayerVirtualWorld(playerid, virtualWorld);
+    SetPlayerPos(playerid, x, y, z);
+    SetPlayerFacingAngle(playerid, a);
+    SetCameraBehindPlayer(playerid);
+
+    PlayerLastX[playerid] = x;
+    PlayerLastY[playerid] = y;
+    PlayerLastZ[playerid] = z;
+    PlayerLastA[playerid] = a;
+    PlayerLastInterior[playerid] = interior;
+    PlayerLastVirtualWorld[playerid] = virtualWorld;
+
+    if (saveLastPosition)
+    {
+        SavePlayerData(playerid);
+    }
+    return 1;
+}
+
+stock ShowArrestPointSafety(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka arrest point safety.");
+        return 0;
+    }
+
+    new body[1536];
+    new line[256];
+    body[0] = EOS;
+
+    strcat(body, "Arrest Booking / Release Point Safety\n\n", sizeof(body));
+    format(line, sizeof(line), "Booking: %.2f, %.2f, %.2f | A %.2f | int %d | vw %d | %s\n", g_PoliceArrestBookingX, g_PoliceArrestBookingY, g_PoliceArrestBookingZ, g_PoliceArrestBookingA, g_PoliceArrestBookingInterior, g_PoliceArrestBookingVW, IsSafeArrestWorldPoint(g_PoliceArrestBookingX, g_PoliceArrestBookingY, g_PoliceArrestBookingZ) ? ("SAFE") : ("FALLBACK NEEDED"));
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Release: %.2f, %.2f, %.2f | A %.2f | int %d | vw %d | %s\n\n", g_PoliceArrestReleaseX, g_PoliceArrestReleaseY, g_PoliceArrestReleaseZ, g_PoliceArrestReleaseA, g_PoliceArrestReleaseInterior, g_PoliceArrestReleaseVW, IsSafeArrestWorldPoint(g_PoliceArrestReleaseX, g_PoliceArrestReleaseY, g_PoliceArrestReleaseZ) ? ("SAFE") : ("FALLBACK NEEDED"));
+    strcat(body, line, sizeof(body));
+    strcat(body, "Fallback default:\n", sizeof(body));
+    format(line, sizeof(line), "- Booking default: %.2f, %.2f, %.2f | int %d vw %d\n", POLICE_ARREST_BOOKING_DEFAULT_X, POLICE_ARREST_BOOKING_DEFAULT_Y, POLICE_ARREST_BOOKING_DEFAULT_Z, POLICE_ARREST_BOOKING_DEFAULT_INTERIOR, POLICE_ARREST_BOOKING_DEFAULT_VW);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "- Release default: %.2f, %.2f, %.2f | int %d vw %d\n\n", POLICE_ARREST_RELEASE_DEFAULT_X, POLICE_ARREST_RELEASE_DEFAULT_Y, POLICE_ARREST_RELEASE_DEFAULT_Z, POLICE_ARREST_RELEASE_DEFAULT_INTERIOR, POLICE_ARREST_RELEASE_DEFAULT_VW);
+    strcat(body, line, sizeof(body));
+    strcat(body, "Commands:\n/setarrestbooking = save current position as booking point.\n/gotoarrestbooking = goto booking point.\n/setarrestrelease = save current position as jail release point.\n/gotoarrestrelease = goto release point.\n", sizeof(body));
+
+    ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "Booking / Release Point Safety", body, "Back", "Close");
+    return 1;
+}
+
 stock SetArrestBookingPointFromPlayer(playerid)
 {
     if (!IsAdminLevel(playerid, ADMIN_OWNER))
@@ -28942,11 +29067,12 @@ stock GotoArrestBookingPoint(playerid)
         return 0;
     }
 
-    SetPlayerInterior(playerid, g_PoliceArrestBookingInterior);
-    SetPlayerVirtualWorld(playerid, g_PoliceArrestBookingVW);
-    SetPlayerPos(playerid, g_PoliceArrestBookingX, g_PoliceArrestBookingY, g_PoliceArrestBookingZ);
-    SetPlayerFacingAngle(playerid, g_PoliceArrestBookingA);
-    SetCameraBehindPlayer(playerid);
+    if (!EnsureArrestBookingPointSafe(1))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Arrest booking point invalid, dikembalikan ke default aman LSPD.");
+    }
+
+    ApplyArrestSafeTransform(playerid, g_PoliceArrestBookingX, g_PoliceArrestBookingY, g_PoliceArrestBookingZ, g_PoliceArrestBookingA, g_PoliceArrestBookingInterior, g_PoliceArrestBookingVW, 0);
     SendClientMessage(playerid, COLOR_GREEN, "Teleport ke arrest booking point.");
     return 1;
 }
@@ -28979,11 +29105,12 @@ stock GotoArrestReleasePoint(playerid)
         return 0;
     }
 
-    SetPlayerInterior(playerid, g_PoliceArrestReleaseInterior);
-    SetPlayerVirtualWorld(playerid, g_PoliceArrestReleaseVW);
-    SetPlayerPos(playerid, g_PoliceArrestReleaseX, g_PoliceArrestReleaseY, g_PoliceArrestReleaseZ);
-    SetPlayerFacingAngle(playerid, g_PoliceArrestReleaseA);
-    SetCameraBehindPlayer(playerid);
+    if (!EnsureArrestReleasePointSafe(1))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Arrest release point invalid, dikembalikan ke default aman LSPD.");
+    }
+
+    ApplyArrestSafeTransform(playerid, g_PoliceArrestReleaseX, g_PoliceArrestReleaseY, g_PoliceArrestReleaseZ, g_PoliceArrestReleaseA, g_PoliceArrestReleaseInterior, g_PoliceArrestReleaseVW, 0);
     SendClientMessage(playerid, COLOR_GREEN, "Teleport ke arrest jail release point.");
     return 1;
 }
@@ -28995,19 +29122,12 @@ stock ApplyArrestReleasePoint(playerid)
         return 0;
     }
 
-    SetPlayerInterior(playerid, g_PoliceArrestReleaseInterior);
-    SetPlayerVirtualWorld(playerid, g_PoliceArrestReleaseVW);
-    SetPlayerPos(playerid, g_PoliceArrestReleaseX, g_PoliceArrestReleaseY, g_PoliceArrestReleaseZ);
-    SetPlayerFacingAngle(playerid, g_PoliceArrestReleaseA);
-    SetCameraBehindPlayer(playerid);
+    if (!EnsureArrestReleasePointSafe(1))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Release point invalid, server memakai fallback default LSPD.");
+    }
 
-    PlayerLastX[playerid] = g_PoliceArrestReleaseX;
-    PlayerLastY[playerid] = g_PoliceArrestReleaseY;
-    PlayerLastZ[playerid] = g_PoliceArrestReleaseZ;
-    PlayerLastA[playerid] = g_PoliceArrestReleaseA;
-    PlayerLastInterior[playerid] = g_PoliceArrestReleaseInterior;
-    PlayerLastVirtualWorld[playerid] = g_PoliceArrestReleaseVW;
-    SavePlayerData(playerid);
+    ApplyArrestSafeTransform(playerid, g_PoliceArrestReleaseX, g_PoliceArrestReleaseY, g_PoliceArrestReleaseZ, g_PoliceArrestReleaseA, g_PoliceArrestReleaseInterior, g_PoliceArrestReleaseVW, 1);
     return 1;
 }
 
@@ -29018,19 +29138,12 @@ stock ApplyArrestBookingAftermath(playerid)
         return 0;
     }
 
-    SetPlayerInterior(playerid, g_PoliceArrestBookingInterior);
-    SetPlayerVirtualWorld(playerid, g_PoliceArrestBookingVW);
-    SetPlayerPos(playerid, g_PoliceArrestBookingX, g_PoliceArrestBookingY, g_PoliceArrestBookingZ);
-    SetPlayerFacingAngle(playerid, g_PoliceArrestBookingA);
-    SetCameraBehindPlayer(playerid);
+    if (!EnsureArrestBookingPointSafe(1))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Booking point invalid, server memakai fallback default LSPD.");
+    }
 
-    PlayerLastX[playerid] = g_PoliceArrestBookingX;
-    PlayerLastY[playerid] = g_PoliceArrestBookingY;
-    PlayerLastZ[playerid] = g_PoliceArrestBookingZ;
-    PlayerLastA[playerid] = g_PoliceArrestBookingA;
-    PlayerLastInterior[playerid] = g_PoliceArrestBookingInterior;
-    PlayerLastVirtualWorld[playerid] = g_PoliceArrestBookingVW;
-
+    ApplyArrestSafeTransform(playerid, g_PoliceArrestBookingX, g_PoliceArrestBookingY, g_PoliceArrestBookingZ, g_PoliceArrestBookingA, g_PoliceArrestBookingInterior, g_PoliceArrestBookingVW, 1);
     SendClientMessage(playerid, COLOR_ORANGE, "Kamu dibawa ke police booking point setelah arrest.");
     return 1;
 }
@@ -33192,6 +33305,12 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/arrestpoints", true) || !strcmp(cmdtext, "/jailpoints", true) || !strcmp(cmdtext, "/bookingpoints", true))
+    {
+        ShowArrestPointSafety(playerid);
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/setarrestbooking", true))
     {
         SetArrestBookingPointFromPlayer(playerid);
@@ -35594,7 +35713,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24L.5 Jail UX Restriction Polish");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24L.6 Jail Release Booking Polish");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -35604,7 +35723,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.24L.5: Jail hold UX polish; jailed players get clearer status and key/checkpoint interactions are blocked while detained.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24L.6: Jail release/booking polish; safer fallback points, clearer point summary, and release/booking transforms are centralized.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24L.0: Milestone rebase from long v0.24K branch.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22I: Arrest config polish via server_settings: radius/fine controls, /arrestconfig, /setarrestradius, /setarrestfine.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22I.1: /amenus config items now open GUI action menus instead of note-only references.");

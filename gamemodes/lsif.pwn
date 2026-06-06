@@ -11771,7 +11771,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24L.7 Arrest Jail Closeout Audit");
+    SetGameModeText("SAIF Dev v0.25A.1 Public Service Expansion Baseline");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11904,7 +11904,8 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24L.7 Arrest Jail Closeout Audit berhasil dijalankan.");
+    print("[SAIF] Public Service Expansion baseline aktif: 24/7, restaurants, hospital, police, gym, barber, tattoo via DB config.");
+    print("[SAIF] Gamemode v0.25A.1 Public Service Expansion Baseline berhasil dijalankan.");
     return 1;
 }
 
@@ -12671,7 +12672,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
@@ -14165,6 +14166,7 @@ stock ShowHelpCategory(playerid, category)
             strcat(body, "/givelicense [id]: Owner only.\n", sizeof(body));
             strcat(body, "/ammuconfig: Owner config harga/ammo Ammu-Nation.", sizeof(body));
             strcat(body, "\n/serviceconfig: Owner config harga/efek public shops/services.", sizeof(body));
+            strcat(body, "\n/servicestatus atau /serviceaudit: ringkasan runtime public service config.", sizeof(body));
         }
         case 9:
         {
@@ -18722,6 +18724,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             SendClientMessage(playerid, COLOR_GREEN, "Public service config reload dari DB diminta.");
             ShowPublicServiceConfigMenu(playerid);
         }
+        else if (listitem == 2) ShowPublicServiceRuntimeSummary(playerid);
         else ShowPublicServiceConfigInfo(playerid);
         return 1;
     }
@@ -18769,7 +18772,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             ShowPublicServiceConfigAction(playerid, serviceIndex);
             return 1;
         }
-        if (!IsNumericString(inputtext) || strval(inputtext) <= 0)
+        if (!IsNumericString(inputtext))
         {
             SendClientMessage(playerid, COLOR_RED, "Value harus angka minimal 0.");
             ShowPublicServiceConfigAction(playerid, serviceIndex);
@@ -23161,7 +23164,7 @@ stock ShowPublicServiceConfigMenu(playerid)
         SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa mengatur public service config.");
         return 0;
     }
-    ShowPlayerDialog(playerid, DIALOG_SERVICE_CONFIG_MENU, DIALOG_STYLE_LIST, "Public Service Config", "List / Edit Service Config\nReload Config From DB\nInfo", "Pilih", "Tutup");
+    ShowPlayerDialog(playerid, DIALOG_SERVICE_CONFIG_MENU, DIALOG_STYLE_LIST, "Public Service Config", "List / Edit Service Config\nReload Config From DB\nRuntime Summary / Audit\nInfo", "Pilih", "Tutup");
     return 1;
 }
 
@@ -23198,8 +23201,58 @@ stock ShowPublicServiceConfigAction(playerid, serviceIndex)
 stock ShowPublicServiceConfigInfo(playerid)
 {
     new body[768];
-    format(body, sizeof(body), "Public service config disimpan di DB table public_service_config.\n\nItem ini mengatur menu 24/7, restaurant, gym, barber, tattoo, hospital, police, cityhall, casino.\n\nYang bisa diedit:\n- price\n- health add\n- armor add\n- XP reward\n- wanted reduce\n- enable/disable\n\nCommand:\n/serviceconfig\n/servicereload\n\nPlayer biasa hanya bisa membeli/menggunakan service dari checkpoint merah.");
+    format(body, sizeof(body), "Public service config disimpan di DB table public_service_config.\n\nItem ini mengatur menu 24/7, restaurant, gym, barber, tattoo, hospital, police, cityhall, casino.\n\nYang bisa diedit:\n- price\n- health add\n- armor add\n- XP reward\n- wanted reduce\n- enable/disable\n\nCommand:\n/serviceconfig\n/servicereload\n/servicestatus\n/serviceaudit\n\nPlayer biasa hanya bisa membeli/menggunakan service dari checkpoint merah.");
     ShowPlayerDialog(playerid, DIALOG_SERVICE_CONFIG_INFO, DIALOG_STYLE_MSGBOX, "Public Service Config Info", body, "OK", "Back");
+    return 1;
+}
+
+stock ShowPublicServiceRuntimeSummary(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa melihat public service runtime summary.");
+        return 0;
+    }
+
+    new serviceTypes[11][32] =
+    {
+        "247", "burgershot", "cluckinbell", "pizzastack", "hospital",
+        "police", "gym", "barber", "tattoo", "cityhall", "casino"
+    };
+
+    new body[1536];
+    new line[160];
+    new totalEnabled = 0;
+    body[0] = EOS;
+
+    strcat(body, "Public Service Runtime Summary\n\n", sizeof(body));
+    format(line, sizeof(line), "Loaded rows: %d / %d max\n", PublicServiceCount, MAX_PUBLIC_SERVICE_ITEMS);
+    strcat(body, line, sizeof(body));
+    strcat(body, "Type\tActive\tTotal\n", sizeof(body));
+
+    for (new t = 0; t < sizeof(serviceTypes); t++)
+    {
+        new active = 0;
+        new total = 0;
+        for (new i = 0; i < PublicServiceCount; i++)
+        {
+            if (strcmp(PublicServiceType[i], serviceTypes[t], true)) continue;
+            total++;
+            if (PublicServiceEnabled[i])
+            {
+                active++;
+                totalEnabled++;
+            }
+        }
+        format(line, sizeof(line), "%s\t%d\t%d\n", serviceTypes[t], active, total);
+        strcat(body, line, sizeof(body));
+    }
+
+    format(line, sizeof(line), "\nTotal active services: %d\n", totalEnabled);
+    strcat(body, line, sizeof(body));
+    strcat(body, "\nCatatan v0.25A.1:\n- Semua data menu dibaca dari public_service_config.\n- Public interior exact rows tetap memakai shared virtual world.\n- Service dibuka dari checkpoint merah/kasir, bukan command utama player.\n- Command /serviceconfig tetap Owner-only untuk edit harga/efek/enable.", sizeof(body));
+
+    ShowPlayerDialog(playerid, DIALOG_SERVICE_CONFIG_INFO, DIALOG_STYLE_MSGBOX, "Public Service Runtime Summary", body, "OK", "Back");
     return 1;
 }
 
@@ -34945,6 +34998,12 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/servicestatus", true) || !strcmp(cmdtext, "/serviceaudit", true))
+    {
+        ShowPublicServiceRuntimeSummary(playerid);
+        return 1;
+    }
+
 
     if (!strcmp(cmdtext, "/adminmenu", true))
     {
@@ -35713,7 +35772,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24L.7 Arrest Jail Closeout Audit");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25A.1 Public Service Expansion Baseline");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -35723,6 +35782,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.25A.1: Public Service Expansion baseline; service menus/config active for 24/7, restaurants, hospital, police, gym, barber, and tattoo.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24L.7: Arrest/jail closeout audit; v0.24L foundation marked ready for final checklist, no gameplay/DB mutation.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24L.6: Jail release/booking polish; safer fallback points, clearer point summary, and release/booking transforms are centralized.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24L.0: Milestone rebase from long v0.24K branch.");

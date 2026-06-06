@@ -11771,7 +11771,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.24L.6 Jail Release Booking Polish");
+    SetGameModeText("SAIF Dev v0.24L.7 Arrest Jail Closeout Audit");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11904,7 +11904,7 @@ public OnGameModeInit()
     print("[SAIF] Business preset position/price/income/create dapat dioverride via business_preset_config DB + /bizpresetmenu.");
     print("[SAIF] Dynamic Object System aktif: persistent object mapping dasar.");
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
-    print("[SAIF] Gamemode v0.24L.6 Jail Release Booking Polish berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.24L.7 Arrest Jail Closeout Audit berhasil dijalankan.");
     return 1;
 }
 
@@ -35713,7 +35713,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24L.6 Jail Release Booking Polish");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.24L.7 Arrest Jail Closeout Audit");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -35723,6 +35723,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.24L.7: Arrest/jail closeout audit; v0.24L foundation marked ready for final checklist, no gameplay/DB mutation.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24L.6: Jail release/booking polish; safer fallback points, clearer point summary, and release/booking transforms are centralized.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24L.0: Milestone rebase from long v0.24K branch.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24K.22I: Arrest config polish via server_settings: radius/fine controls, /arrestconfig, /setarrestradius, /setarrestfine.");

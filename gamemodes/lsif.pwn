@@ -430,6 +430,13 @@ stock IsClosedBetaEnabled()
 #define POLICE_ARREST_JAIL_SECONDS_PER_WANTED_MAX 600
 #define POLICE_ARREST_JAIL_TOTAL_SECONDS_MAX 1800
 
+#define CRIME_WANTED_ASSAULT 1
+#define CRIME_WANTED_ASSAULT_POLICE 2
+#define CRIME_WANTED_MURDER 2
+#define CRIME_WANTED_MURDER_POLICE 3
+#define CRIME_WANTED_ASSAULT_COOLDOWN_SECONDS 30
+#define CRIME_WANTED_KILL_COOLDOWN_SECONDS 5
+
 #define VEHICLE_OWNER_NONE 0
 
 #define ADMIN_NONE      0
@@ -798,6 +805,9 @@ new PlayerArrestJailed[MAX_PLAYERS];
 new PlayerArrestJailReleaseTick[MAX_PLAYERS];
 new PlayerArrestJailTimer[MAX_PLAYERS];
 new PlayerArrestJailNoticeTick[MAX_PLAYERS];
+new PlayerCrimeLastAssaultTarget[MAX_PLAYERS];
+new PlayerCrimeLastAssaultTick[MAX_PLAYERS];
+new PlayerCrimeLastKillTick[MAX_PLAYERS];
 
 new PlayerMoney[MAX_PLAYERS];
 new PlayerBankMoney[MAX_PLAYERS];
@@ -11775,7 +11785,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.25A.2 Wanted Admin Tools");
+    SetGameModeText("SAIF Dev v0.25A.3 Crime Wanted Hook Foundation");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11910,7 +11920,8 @@ public OnGameModeInit()
     print("[SAIF] Dynamic Parked Vehicle System aktif: offline-like parked vehicle persistence.");
     print("[SAIF] Public Service Expansion baseline aktif: 24/7, restaurants, hospital, police, gym, barber, tattoo via DB config.");
     print("[SAIF] Wanted Admin Tools aktif: /setwanted, /addwanted, /clearwanted, /wantedtools untuk admin testing arrest/jail.");
-    print("[SAIF] Gamemode v0.25A.2 Wanted Admin Tools berhasil dijalankan.");
+    print("[SAIF] Crime wanted hooks aktif: assault/murder player akan menaikkan wanted otomatis dengan throttle aman.");
+    print("[SAIF] Gamemode v0.25A.3 Crime Wanted Hook Foundation berhasil dijalankan.");
     return 1;
 }
 
@@ -11974,6 +11985,7 @@ public OnPlayerConnect(playerid)
     HideClassSelectionForAuth(playerid);
 
     ResetPlayerAccountData(playerid);
+    ResetCrimeWantedRuntimeState(playerid);
     PlayerEditingWorldPickupID[playerid] = 0;
     PlayerEditingPublicInteriorID[playerid] = 0;
     PlayerEditingGangPresetID[playerid] = 0;
@@ -12034,6 +12046,7 @@ public OnPlayerDisconnect(playerid, reason)
     PlayerClassSpawnRecoveryQueued[playerid] = 0;
     PlayerLoadoutBlockedAfterDeath[playerid] = 0;
     PlayerMoneyHUDGraceUntilTick[playerid] = 0;
+    ResetCrimeWantedRuntimeState(playerid);
     ClearArrestJailState(playerid, 0);
     PlayerFindingBank[playerid] = 0;
     PlayerInsidePublicInteriorID[playerid] = 0;
@@ -12169,11 +12182,23 @@ public OnPlayerRequestClass(playerid, classid)
     return 0;
 }
 
+public OnPlayerGiveDamage(playerid, damagedid, Float:amount, WEAPON:weaponid, bodypart)
+{
+    #pragma unused bodypart
+    HandleCrimeAssaultWanted(playerid, damagedid, amount, _:weaponid);
+    return 1;
+}
+
 public OnPlayerDeath(playerid, killerid, WEAPON:reason)
 {
     if (!PlayerLoggedIn[playerid])
     {
         return 1;
+    }
+
+    if (killerid != INVALID_PLAYER_ID && killerid != playerid && IsPlayerConnected(killerid) && PlayerLoggedIn[killerid])
+    {
+        HandleCrimeMurderWanted(killerid, playerid, _:reason);
     }
 
     ClearArrestJailState(playerid, 0);
@@ -12677,11 +12702,172 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "SAIF Admin Menu Reference", body, "Back", "Close");
+    return 1;
+}
+
+stock ResetCrimeWantedRuntimeState(playerid)
+{
+    PlayerCrimeLastAssaultTarget[playerid] = INVALID_PLAYER_ID;
+    PlayerCrimeLastAssaultTick[playerid] = 0;
+    PlayerCrimeLastKillTick[playerid] = 0;
+    return 1;
+}
+
+stock IsPlayerPoliceAuthority(playerid)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
+    {
+        return 0;
+    }
+
+    if (PlayerJob[playerid] == JOB_POLICE || PlayerWorkType[playerid] == WORK_POLICE)
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
+stock ShouldIgnoreCrimeWantedAgainstTarget(attackerid, victimid)
+{
+    if (!IsPlayerConnected(attackerid) || !IsPlayerConnected(victimid))
+    {
+        return 1;
+    }
+
+    if (!PlayerLoggedIn[attackerid] || !PlayerLoggedIn[victimid])
+    {
+        return 1;
+    }
+
+    if (attackerid == victimid)
+    {
+        return 1;
+    }
+
+    if (GetPlayerInterior(attackerid) != GetPlayerInterior(victimid))
+    {
+        return 1;
+    }
+
+    if (GetPlayerVirtualWorld(attackerid) != GetPlayerVirtualWorld(victimid))
+    {
+        return 1;
+    }
+
+    // Police/Vigilante pursuing an already-wanted target should not receive crime wanted.
+    if (IsPlayerPoliceAuthority(attackerid) && GetPlayerWantedLevel(victimid) > 0)
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
+stock AddCrimeWantedLevel(attackerid, victimid, amount, const actionName[], const crimeLabel[], weaponid)
+{
+    if (ShouldIgnoreCrimeWantedAgainstTarget(attackerid, victimid))
+    {
+        return 0;
+    }
+
+    if (amount <= 0)
+    {
+        return 0;
+    }
+
+    new oldWanted = ClampWantedLevelValue(GetPlayerWantedLevel(attackerid));
+    new newWanted = ClampWantedLevelValue(oldWanted + amount);
+    if (newWanted <= oldWanted)
+    {
+        return 0;
+    }
+
+    SetPlayerWantedLevel(attackerid, newWanted);
+
+    new msg[192];
+    format(msg, sizeof(msg), "Crime wanted: %s. Wanted level naik %d -> %d.", crimeLabel, oldWanted, newWanted);
+    SendClientMessage(attackerid, COLOR_ORANGE, msg);
+
+    if (IsPlayerConnected(victimid) && PlayerLoggedIn[victimid])
+    {
+        format(msg, sizeof(msg), "Pelaku mendapatkan wanted karena %s terhadap kamu.", crimeLabel);
+        SendClientMessage(victimid, COLOR_YELLOW, msg);
+    }
+
+    new detail[224];
+    format(detail, sizeof(detail), "crime:%s | wanted:%d->%d | amount:%d | victim:%d | weapon:%d | source:crime_hook", crimeLabel, oldWanted, newWanted, amount, victimid, weaponid);
+    LogAdminAction(INVALID_PLAYER_ID, attackerid, actionName, detail);
+    return 1;
+}
+
+stock HandleCrimeAssaultWanted(attackerid, victimid, Float:amount, weaponid)
+{
+    if (ShouldIgnoreCrimeWantedAgainstTarget(attackerid, victimid))
+    {
+        return 0;
+    }
+
+    if (amount <= 0.0)
+    {
+        return 0;
+    }
+
+    new now = gettime();
+    if (PlayerCrimeLastAssaultTarget[attackerid] == victimid && (now - PlayerCrimeLastAssaultTick[attackerid]) < CRIME_WANTED_ASSAULT_COOLDOWN_SECONDS)
+    {
+        return 0;
+    }
+
+    PlayerCrimeLastAssaultTarget[attackerid] = victimid;
+    PlayerCrimeLastAssaultTick[attackerid] = now;
+
+    new wantedAdd = IsPlayerPoliceAuthority(victimid) ? CRIME_WANTED_ASSAULT_POLICE : CRIME_WANTED_ASSAULT;
+    return AddCrimeWantedLevel(attackerid, victimid, wantedAdd, "WANTED_CRIME_ASSAULT", IsPlayerPoliceAuthority(victimid) ? ("assault_police") : ("assault_player"), weaponid);
+}
+
+stock HandleCrimeMurderWanted(killerid, victimid, weaponid)
+{
+    if (ShouldIgnoreCrimeWantedAgainstTarget(killerid, victimid))
+    {
+        return 0;
+    }
+
+    new now = gettime();
+    if ((now - PlayerCrimeLastKillTick[killerid]) < CRIME_WANTED_KILL_COOLDOWN_SECONDS)
+    {
+        return 0;
+    }
+
+    PlayerCrimeLastKillTick[killerid] = now;
+
+    new wantedAdd = IsPlayerPoliceAuthority(victimid) ? CRIME_WANTED_MURDER_POLICE : CRIME_WANTED_MURDER;
+    return AddCrimeWantedLevel(killerid, victimid, wantedAdd, "WANTED_CRIME_MURDER", IsPlayerPoliceAuthority(victimid) ? ("murder_police") : ("murder_player"), weaponid);
+}
+
+stock ShowCrimeWantedHookReference(playerid)
+{
+    new body[1536];
+    body[0] = EOS;
+    strcat(body, "Crime Wanted Hook Foundation\n\n", sizeof(body));
+    strcat(body, "Rule awal yang aktif:\n", sizeof(body));
+    strcat(body, "- Hit/assault player biasa: wanted +1, throttle 30 detik per target terakhir.\n", sizeof(body));
+    strcat(body, "- Hit/assault police/vigilante player: wanted +2.\n", sizeof(body));
+    strcat(body, "- Kill player biasa: wanted +2.\n", sizeof(body));
+    strcat(body, "- Kill police/vigilante player: wanted +3.\n", sizeof(body));
+    strcat(body, "- Wanted tetap clamp 0-6 mengikuti native GTA/SA-MP.\n\n", sizeof(body));
+    strcat(body, "Guard aman:\n", sizeof(body));
+    strcat(body, "- Hanya player online dan sudah login.\n", sizeof(body));
+    strcat(body, "- Attacker/victim harus satu interior dan virtual world.\n", sizeof(body));
+    strcat(body, "- Police/Vigilante yang menyerang target wanted tidak diberi crime wanted.\n", sizeof(body));
+    strcat(body, "- Vehicle crime, robbery, weapon license, dan gang/turf crime belum diaktifkan di patch ini.\n\n", sizeof(body));
+    strcat(body, "Audit actions: WANTED_CRIME_ASSAULT dan WANTED_CRIME_MURDER masuk /arrestlogs.\n", sizeof(body));
+    ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "Crime Wanted Hooks", body, "Back", "Close");
     return 1;
 }
 
@@ -12700,6 +12886,7 @@ stock ShowWantedPoliceArrestReference(playerid)
     strcat(body, "/wantedstatus atau /wanted = cek wanted level sendiri.\n", sizeof(body));
     strcat(body, "/wantedtools = Admin tools untuk set/add/clear wanted saat testing.\n", sizeof(body));
     strcat(body, "/setwanted [playerid] [0-6], /addwanted [playerid] [1-6], /clearwanted [playerid] = Admin wanted debug tools.\n", sizeof(body));
+    strcat(body, "/crimewanted atau /crimehooks = Lihat rule wanted otomatis dari assault/murder player.\n", sizeof(body));
     strcat(body, "/arrest [playerid] = police/vigilante arrest target wanted.\n", sizeof(body));
     strcat(body, "/arrestconfig = Owner config radius/fine/booking/jail arrest.\n/setarrestbooking = simpan posisi Owner sebagai booking point.\n/gotoarrestbooking = teleport Owner ke booking point.\n/togglearrestbooking [0/1] = ON/OFF teleport booking setelah arrest.\n", sizeof(body));
     strcat(body, "/togglearrestjail [0/1] = ON/OFF temporary jail hold setelah arrest.\n/setarrestjailseconds [0-600] = set jail seconds per wanted.\n", sizeof(body));
@@ -12759,6 +12946,7 @@ stock ShowArrestConfigMenu(playerid)
     strcat(body, "Active Jail Holds\tList online jailed players\n", sizeof(body));
     strcat(body, "Persistent Jail DB Holds\tList saved jail holds\n", sizeof(body));
     strcat(body, "Wanted Admin Tools\tSet/add/clear wanted for testing\n", sizeof(body));
+    strcat(body, "Crime Wanted Hooks\tAuto wanted from assault/murder\n", sizeof(body));
     strcat(body, "Jail Hold UX / Rules\tBlocked actions while jailed\n", sizeof(body));
     strcat(body, "Wanted / Arrest Reference\tFlow rules\n", sizeof(body));
     strcat(body, "Recent Arrest / Jail / Wanted Logs\tAudit arrest, jail release, wanted tools\n", sizeof(body));
@@ -12840,7 +13028,7 @@ stock ShowRecentArrestLogs(playerid)
 
     mysql_tquery(
         g_SQL,
-        "SELECT id, admin_name, target_name, action, detail, created_at FROM admin_logs WHERE action IN ('POLICE_ARREST','ARREST_JAIL_RELEASE','ARREST_JAIL_DISCONNECT','WANTED_ADMIN_SET','WANTED_ADMIN_ADD','WANTED_ADMIN_CLEAR') ORDER BY id DESC LIMIT 12",
+        "SELECT id, admin_name, target_name, action, detail, created_at FROM admin_logs WHERE action IN ('POLICE_ARREST','ARREST_JAIL_RELEASE','ARREST_JAIL_DISCONNECT','WANTED_ADMIN_SET','WANTED_ADMIN_ADD','WANTED_ADMIN_CLEAR','WANTED_CRIME_ASSAULT','WANTED_CRIME_MURDER') ORDER BY id DESC LIMIT 12",
         "OnRecentArrestLogsLoaded",
         "i",
         playerid
@@ -12861,7 +13049,7 @@ public OnRecentArrestLogsLoaded(playerid)
 
     if (rows <= 0)
     {
-        strcat(body, "Belum ada arrest/jail log. /arrest, jail release, dan disconnect saat jailed akan tercatat di admin_logs.\n", sizeof(body));
+        strcat(body, "Belum ada arrest/jail/wanted log. /arrest, jail release, disconnect saat jailed, admin wanted tools, dan crime hooks akan tercatat di admin_logs.\n", sizeof(body));
     }
     else
     {
@@ -12888,7 +13076,7 @@ public OnRecentArrestLogsLoaded(playerid)
         }
     }
 
-    strcat(body, "\nLog memakai admin_logs; tidak ada table baru. Death biasa tetap tidak menghapus wanted. Disconnect saat jailed dicatat sebagai audit.", sizeof(body));
+    strcat(body, "\nLog memakai admin_logs; tidak ada table baru. Death biasa tetap tidak menghapus wanted. Crime hooks assault/murder juga dicatat sebagai audit.", sizeof(body));
     ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "Recent Arrest / Jail Logs", body, "Back", "Close");
     return 1;
 }
@@ -14605,11 +14793,12 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 10: ShowActiveArrestJails(playerid);
             case 11: ShowPersistentArrestJailHolds(playerid);
             case 12: ShowWantedAdminToolsMenu(playerid);
-            case 13: ShowArrestJailHelp(playerid);
-            case 14: ShowWantedPoliceArrestReference(playerid);
-            case 15: ShowRecentArrestLogs(playerid);
-            case 16: ShowDeathHospitalConfigMenu(playerid);
-            case 17: ShowAdminToolsMenu(playerid);
+            case 13: ShowCrimeWantedHookReference(playerid);
+            case 14: ShowArrestJailHelp(playerid);
+            case 15: ShowWantedPoliceArrestReference(playerid);
+            case 16: ShowRecentArrestLogs(playerid);
+            case 17: ShowDeathHospitalConfigMenu(playerid);
+            case 18: ShowAdminToolsMenu(playerid);
         }
         return 1;
     }
@@ -14637,7 +14826,8 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
                 ShowPlayerDialog(playerid, DIALOG_WANTED_CLEAR_INPUT, DIALOG_STYLE_INPUT, "Clear Wanted Level", "Masukkan: playerid", "Clear", "Back");
             }
             case 3: ShowWantedPoliceArrestReference(playerid);
-            case 4: ShowArrestConfigMenu(playerid);
+            case 4: ShowCrimeWantedHookReference(playerid);
+            case 5: ShowArrestConfigMenu(playerid);
         }
         return 1;
     }
@@ -33822,6 +34012,12 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/crimewanted", true) || !strcmp(cmdtext, "/crimehooks", true) || !strcmp(cmdtext, "/crimewantedhelp", true))
+    {
+        ShowCrimeWantedHookReference(playerid);
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/wantedtools", true) || !strcmp(cmdtext, "/wantedadmin", true) || !strcmp(cmdtext, "/wanteddebug", true))
     {
         ShowWantedAdminToolsMenu(playerid);
@@ -36063,7 +36259,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25A.2 Wanted Admin Tools");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25A.3 Crime Wanted Hook Foundation");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -36073,6 +36269,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.25A.3: Crime Wanted Hook Foundation; assault/murder player can raise wanted automatically, with admin wanted tools retained.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.2: Wanted Admin Tools; /setwanted, /addwanted, /clearwanted, and /wantedtools for controlled arrest/jail testing.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.1: Public Service Expansion baseline; service menus/config active for 24/7, restaurants, hospital, police, gym, barber, and tattoo.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.24L.7: Arrest/jail closeout audit; v0.24L foundation marked ready for final checklist, no gameplay/DB mutation.");

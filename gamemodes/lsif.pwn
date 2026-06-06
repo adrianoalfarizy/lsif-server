@@ -11,6 +11,7 @@
 #define COLOR_GRAY      0xAAAAAAFF
 #define COLOR_GREY      COLOR_GRAY
 #define COLOR_PURPLE    0xAA66CCFF
+#define COLOR_POLICE_DARK_BLUE 0x003399FF
 
 #define MYSQL_HOST      "localhost"
 #define MYSQL_USER      "lsif_user"
@@ -4308,6 +4309,10 @@ stock StartPoliceWork(playerid)
         SendClientMessage(playerid, COLOR_RED, "Kamu belum bekerja sebagai police/vigilante. Naik police vehicle lalu tekan tombol 2 untuk auto-join.");
         return 0;
     }
+    if (!CanJoinPoliceJob(playerid, 1))
+    {
+        return 0;
+    }
     if (PlayerWorking[playerid])
     {
         SendClientMessage(playerid, COLOR_RED, "Kamu sedang menjalankan pekerjaan lain.");
@@ -6007,6 +6012,14 @@ stock ApplyPlayerGangNameColor(playerid)
     if (!IsPlayerConnected(playerid))
     {
         return 0;
+    }
+
+    // v0.25A.4: Police/Vigilante duty has visible dark-blue name color.
+    // Police duty color intentionally overrides gang/default color while the job is active.
+    if (PlayerJob[playerid] == JOB_POLICE || PlayerWorkType[playerid] == WORK_POLICE)
+    {
+        SetPlayerColor(playerid, COLOR_POLICE_DARK_BLUE);
+        return 1;
     }
 
     if (PlayerGangID[playerid] > 0)
@@ -11785,7 +11798,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.25A.3 Crime Wanted Hook Foundation");
+    SetGameModeText("SAIF Dev v0.25A.4 Police Job Wanted Integrity");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -11921,7 +11934,8 @@ public OnGameModeInit()
     print("[SAIF] Public Service Expansion baseline aktif: 24/7, restaurants, hospital, police, gym, barber, tattoo via DB config.");
     print("[SAIF] Wanted Admin Tools aktif: /setwanted, /addwanted, /clearwanted, /wantedtools untuk admin testing arrest/jail.");
     print("[SAIF] Crime wanted hooks aktif: assault/murder player akan menaikkan wanted otomatis dengan throttle aman.");
-    print("[SAIF] Gamemode v0.25A.3 Crime Wanted Hook Foundation berhasil dijalankan.");
+    print("[SAIF] Police Job Wanted Integrity aktif: police color biru tua dan wanted player diblokir dari police duty.");
+    print("[SAIF] Gamemode v0.25A.4 Police Job Wanted Integrity berhasil dijalankan.");
     return 1;
 }
 
@@ -12257,6 +12271,8 @@ public OnPlayerSpawn(playerid)
         StartMoneyHUDSyncGrace(playerid, 5000);
         SyncPlayerMoneyHUD(playerid);
         ApplyLSIFMapIcons(playerid);
+        ClearPoliceJobForWantedPlayer(playerid, "death_respawn_wanted");
+        ApplyPlayerGangNameColor(playerid);
         SavePlayerData(playerid);
 
         SendClientMessage(playerid, COLOR_CYAN, "Kamu respawn di rumah sakit terdekat.");
@@ -12284,6 +12300,8 @@ public OnPlayerSpawn(playerid)
     ResetPlayerWeapons(playerid);
     SetTimerEx("ApplySavedWeaponLoadout", 1000, false, "i", playerid);
     ApplyLSIFMapIcons(playerid);
+    ClearPoliceJobForWantedPlayer(playerid, "spawn_wanted");
+    ApplyPlayerGangNameColor(playerid);
 
     SendClientMessage(playerid, COLOR_CYAN, "Kamu berhasil spawn di Los Santos.");
     SendClientMessage(playerid, COLOR_WHITE, "Closed Beta: gunakan /betaguide untuk alur awal dan /bugreport jika menemukan bug.");
@@ -12789,6 +12807,7 @@ stock AddCrimeWantedLevel(attackerid, victimid, amount, const actionName[], cons
     }
 
     SetPlayerWantedLevel(attackerid, newWanted);
+    ClearPoliceJobForWantedPlayer(attackerid, "crime_wanted");
 
     new msg[192];
     format(msg, sizeof(msg), "Crime wanted: %s. Wanted level naik %d -> %d.", crimeLabel, oldWanted, newWanted);
@@ -12865,6 +12884,7 @@ stock ShowCrimeWantedHookReference(playerid)
     strcat(body, "- Hanya player online dan sudah login.\n", sizeof(body));
     strcat(body, "- Attacker/victim harus satu interior dan virtual world.\n", sizeof(body));
     strcat(body, "- Police/Vigilante yang menyerang target wanted tidak diberi crime wanted.\n", sizeof(body));
+    strcat(body, "- Player wanted tidak bisa join/start Police/Vigilante sampai wanted 0.\n", sizeof(body));
     strcat(body, "- Vehicle crime, robbery, weapon license, dan gang/turf crime belum diaktifkan di patch ini.\n\n", sizeof(body));
     strcat(body, "Audit actions: WANTED_CRIME_ASSAULT dan WANTED_CRIME_MURDER masuk /arrestlogs.\n", sizeof(body));
     ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "Crime Wanted Hooks", body, "Back", "Close");
@@ -12900,6 +12920,8 @@ stock ShowWantedPoliceArrestReference(playerid)
     format(line, sizeof(line), "Current config: radius %d meter, fine $%d/wanted, booking %s, jail %s (%ds/wanted).\nRelease point: %.1f, %.1f, %.1f | int %d vw %d.\n\n", g_PoliceArrestRadius, g_PoliceArrestFinePerWanted, g_PoliceArrestBookingEnabled ? ("ON") : ("OFF"), g_PoliceArrestJailEnabled ? ("ON") : ("OFF"), g_PoliceArrestJailSecondsPerWanted, g_PoliceArrestReleaseX, g_PoliceArrestReleaseY, g_PoliceArrestReleaseZ, g_PoliceArrestReleaseInterior, g_PoliceArrestReleaseVW);
     strcat(body, line, sizeof(body));
     strcat(body, "- Police/Vigilante harus dekat target.\n", sizeof(body));
+    strcat(body, "- Player dengan wanted level > 0 tidak bisa join/start Police/Vigilante.\n", sizeof(body));
+    strcat(body, "- Police/Vigilante aktif memakai warna nama biru tua.\n", sizeof(body));
     strcat(body, "- Target harus wanted level > 0.\n", sizeof(body));
     strcat(body, "- Interior dan virtual world harus sama.\n", sizeof(body));
     strcat(body, "- Admin level 3+ bisa pakai sebagai debug/admin flow.\n\n", sizeof(body));
@@ -12965,6 +12987,85 @@ stock ClampWantedLevelValue(value)
     return value;
 }
 
+stock IsPlayerBlockedFromPoliceJob(playerid)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
+    {
+        return 1;
+    }
+
+    if (GetPlayerWantedLevel(playerid) > 0)
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
+stock ClearPoliceJobForWantedPlayer(playerid, const reason[])
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
+    {
+        return 0;
+    }
+
+    if (GetPlayerWantedLevel(playerid) <= 0)
+    {
+        return 0;
+    }
+
+    new changed = 0;
+
+    if (PlayerWorking[playerid] && PlayerWorkType[playerid] == WORK_POLICE)
+    {
+        DisablePlayerCheckpoint(playerid);
+        PlayerWorking[playerid] = 0;
+        PlayerWorkType[playerid] = WORK_NONE;
+        PlayerWorkPoint[playerid] = -1;
+        ResetPoliceWorkData(playerid);
+        changed = 1;
+    }
+
+    if (PlayerJob[playerid] == JOB_POLICE)
+    {
+        PlayerJob[playerid] = JOB_NONE;
+        changed = 1;
+    }
+
+    if (changed)
+    {
+        new msg[160];
+        format(msg, sizeof(msg), "Police/Vigilante duty dicabut karena kamu memiliki wanted level. Reason: %s.", reason);
+        SendClientMessage(playerid, COLOR_ORANGE, msg);
+        ApplyPlayerGangNameColor(playerid);
+        SavePlayerData(playerid);
+    }
+
+    return changed;
+}
+
+stock CanJoinPoliceJob(playerid, notify)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
+    {
+        return 0;
+    }
+
+    if (GetPlayerWantedLevel(playerid) > 0)
+    {
+        if (notify)
+        {
+            new msg[144];
+            format(msg, sizeof(msg), "Kamu tidak bisa join Police/Vigilante saat memiliki wanted level %d. Hapus wanted dulu lewat arrest/bribe/service.", GetPlayerWantedLevel(playerid));
+            SendClientMessage(playerid, COLOR_RED, msg);
+        }
+        ClearPoliceJobForWantedPlayer(playerid, "wanted_block");
+        return 0;
+    }
+
+    return 1;
+}
+
 stock ApplyAdminWantedTool(adminid, targetid, newWanted, const actionName[], const actionLabel[])
 {
     if (!IsAdminLevel(adminid, ADMIN_ADMIN))
@@ -12982,6 +13083,7 @@ stock ApplyAdminWantedTool(adminid, targetid, newWanted, const actionName[], con
     newWanted = ClampWantedLevelValue(newWanted);
     new oldWanted = ClampWantedLevelValue(GetPlayerWantedLevel(targetid));
     SetPlayerWantedLevel(targetid, newWanted);
+    ClearPoliceJobForWantedPlayer(targetid, "admin_wanted_tool");
 
     new msg[160];
     format(msg, sizeof(msg), "Wanted target diset: %d -> %d.", oldWanted, newWanted);
@@ -19896,6 +19998,7 @@ stock HandleVehicleMissionKey(playerid)
         if (PlayerJob[playerid] != JOB_TAXI)
         {
             PlayerJob[playerid] = JOB_TAXI;
+            ApplyPlayerGangNameColor(playerid);
             SavePlayerData(playerid);
             SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Taxi Driver.");
         }
@@ -19907,6 +20010,7 @@ stock HandleVehicleMissionKey(playerid)
         if (PlayerJob[playerid] != JOB_COURIER)
         {
             PlayerJob[playerid] = JOB_COURIER;
+            ApplyPlayerGangNameColor(playerid);
             SavePlayerData(playerid);
             SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Courier.");
         }
@@ -19918,6 +20022,7 @@ stock HandleVehicleMissionKey(playerid)
         if (PlayerJob[playerid] != JOB_TRUCKER)
         {
             PlayerJob[playerid] = JOB_TRUCKER;
+            ApplyPlayerGangNameColor(playerid);
             SavePlayerData(playerid);
             SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Trucker.");
         }
@@ -19929,6 +20034,7 @@ stock HandleVehicleMissionKey(playerid)
         if (PlayerJob[playerid] != JOB_BUS)
         {
             PlayerJob[playerid] = JOB_BUS;
+            ApplyPlayerGangNameColor(playerid);
             SavePlayerData(playerid);
             SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Bus Driver.");
         }
@@ -19937,11 +20043,18 @@ stock HandleVehicleMissionKey(playerid)
     }
     if (IsPlayerInPoliceVehicle(playerid))
     {
+        if (!CanJoinPoliceJob(playerid, 1))
+        {
+            return 1;
+        }
+
         if (PlayerJob[playerid] != JOB_POLICE)
         {
             PlayerJob[playerid] = JOB_POLICE;
+            ApplyPlayerGangNameColor(playerid);
             SavePlayerData(playerid);
             SendClientMessage(playerid, COLOR_CYAN, "Vehicle mission: kamu otomatis aktif sebagai Police / Vigilante.");
+            SendClientMessage(playerid, COLOR_WHITE, "Nama kamu memakai warna biru tua police selama job aktif.");
         }
         StartPoliceWork(playerid);
         return 1;
@@ -36259,7 +36372,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25A.3 Crime Wanted Hook Foundation");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25A.4 Police Job Wanted Integrity");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -36269,6 +36382,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.25A.4: Police Job Wanted Integrity; police job uses dark blue color and wanted players cannot join/start police duty.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.3: Crime Wanted Hook Foundation; assault/murder player can raise wanted automatically, with admin wanted tools retained.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.2: Wanted Admin Tools; /setwanted, /addwanted, /clearwanted, and /wantedtools for controlled arrest/jail testing.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.1: Public Service Expansion baseline; service menus/config active for 24/7, restaurants, hospital, police, gym, barber, and tattoo.");
@@ -37058,7 +37172,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "taxi - Taxi/Cabbie + tombol 2.");
         SendClientMessage(playerid, COLOR_WHITE, "trucker - Truck + tombol 2.");
         SendClientMessage(playerid, COLOR_WHITE, "bus - Bus/Coach route + tombol 2.");
-        SendClientMessage(playerid, COLOR_WHITE, "police - Police/Vigilante basic call + tombol 2.");
+        SendClientMessage(playerid, COLOR_WHITE, "police - Police/Vigilante basic call + tombol 2. Wanted level 0 wajib.");
         SendClientMessage(playerid, COLOR_CYAN, "Cara utama: naik kendaraan job lalu tekan tombol 2. /joinjob dan /work tetap fallback.");
         return 1;
     }
@@ -37072,6 +37186,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         }
 
         PlayerJob[playerid] = JOB_COURIER;
+        ApplyPlayerGangNameColor(playerid);
 
         SendClientMessage(playerid, COLOR_GREEN, "Kamu sekarang bekerja sebagai Courier.");
         SendClientMessage(playerid, COLOR_WHITE, "Gunakan /work untuk mulai mengantar paket.");
@@ -37089,6 +37204,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         }
 
         PlayerJob[playerid] = JOB_TAXI;
+        ApplyPlayerGangNameColor(playerid);
 
         SendClientMessage(playerid, COLOR_GREEN, "Kamu sekarang bekerja sebagai Taxi Driver.");
         SendClientMessage(playerid, COLOR_WHITE, "Gunakan /work saat berada di Taxi/Cabbie.");
@@ -37108,6 +37224,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         }
 
         PlayerJob[playerid] = JOB_TRUCKER;
+        ApplyPlayerGangNameColor(playerid);
 
         SendClientMessage(playerid, COLOR_GREEN, "Kamu sekarang bekerja sebagai Trucker.");
         SendClientMessage(playerid, COLOR_WHITE, "Gunakan /work saat berada di kendaraan truck.");
@@ -37126,6 +37243,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         }
 
         PlayerJob[playerid] = JOB_BUS;
+        ApplyPlayerGangNameColor(playerid);
         SavePlayerData(playerid);
         SendClientMessage(playerid, COLOR_GREEN, "Kamu sekarang bekerja sebagai Bus Driver.");
         SendClientMessage(playerid, COLOR_WHITE, "Naik Bus/Coach lalu tekan tombol 2 untuk mulai route.");
@@ -37140,9 +37258,16 @@ public OnPlayerCommandText(playerid, cmdtext[])
             return 1;
         }
 
+        if (!CanJoinPoliceJob(playerid, 1))
+        {
+            return 1;
+        }
+
         PlayerJob[playerid] = JOB_POLICE;
+        ApplyPlayerGangNameColor(playerid);
         SavePlayerData(playerid);
         SendClientMessage(playerid, COLOR_GREEN, "Kamu sekarang aktif sebagai Police / Vigilante.");
+        SendClientMessage(playerid, COLOR_WHITE, "Nama kamu memakai warna biru tua police selama job aktif.");
         SendClientMessage(playerid, COLOR_WHITE, "Naik kendaraan polisi lalu tekan tombol 2 untuk mulai call.");
         return 1;
     }
@@ -37168,6 +37293,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
         }
 
         PlayerJob[playerid] = JOB_NONE;
+        ApplyPlayerGangNameColor(playerid);
+        SavePlayerData(playerid);
         SendClientMessage(playerid, COLOR_YELLOW, "Kamu keluar dari job saat ini.");
         return 1;
     }

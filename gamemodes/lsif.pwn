@@ -1848,6 +1848,7 @@ new PlayerPendingSkinShopIndex[MAX_PLAYERS];
 new PlayerSkinPreviewActive[MAX_PLAYERS];
 new PlayerSkinPreviewOriginalSkin[MAX_PLAYERS];
 new PlayerSkinPreviewToken[MAX_PLAYERS];
+new PlayerSkinPreviewFrozen[MAX_PLAYERS];
 new PlayerSkinShopCategoryFilter[MAX_PLAYERS][SKIN_CATEGORY_SIZE];
 new PlayerWeaponLicense[MAX_PLAYERS];
 new PlayerSavedWeaponOwned[MAX_PLAYERS][MAX_SAVED_WEAPON_LOADOUT];
@@ -3125,6 +3126,7 @@ stock ResetPlayerAccountData(playerid)
     PlayerSkinPreviewActive[playerid] = 0;
     PlayerSkinPreviewOriginalSkin[playerid] = DEFAULT_SKIN;
     PlayerSkinPreviewToken[playerid] = 0;
+    PlayerSkinPreviewFrozen[playerid] = 0;
     PlayerSkinShopCategoryFilter[playerid][0] = EOS;
     ResetPlayerSkinOwnership(playerid);
     SetPlayerWantedLevel(playerid, 0);
@@ -11954,7 +11956,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.25A.5.7.1 Preview Fix");
+    SetGameModeText("SAIF Dev v0.25A.5.7.2 Frozen Preview");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -12062,6 +12064,7 @@ public OnGameModeInit()
         PlayerSkinPreviewActive[i] = 0;
         PlayerSkinPreviewOriginalSkin[i] = DEFAULT_SKIN;
         PlayerSkinPreviewToken[i] = 0;
+        PlayerSkinPreviewFrozen[i] = 0;
         PlayerSkinShopCategoryFilter[i][0] = EOS;
         PlayerArrestJailed[i] = 0;
         PlayerArrestJailReleaseTick[i] = 0;
@@ -12102,7 +12105,7 @@ public OnGameModeInit()
     print("[SAIF] Police Job Wanted Integrity aktif: police color biru tua dan wanted player diblokir dari police duty.");
     print("[SAIF] Skin Catalog baseline aktif: clothing store skin shop DB-based via skin_catalog.");
     print("[SAIF] Skin Movement Normalization foundation aktif: movement_profile/anim_profile DB-based config.");
-    print("[SAIF] Gamemode v0.25A.5.7.1 Dialog-Free Skin Preview Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.25A.5.7.2 Frozen Skin Preview Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -16721,6 +16724,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             return 1;
         }
 
+        RestorePlayerControlAfterSkinPreview(playerid);
         PlayerSkinPreviewActive[playerid] = 0;
         PlayerSkinPreviewToken[playerid]++;
         ExecuteSkinShopPurchase(playerid, skinIndex);
@@ -24529,6 +24533,7 @@ stock SetSAIFPlayerSkin(playerid, skinid, saveToDB)
     if (!IsPlayerConnected(playerid)) return 0;
 
     skinid = NormalizePlayerSkinValue(skinid);
+    RestorePlayerControlAfterSkinPreview(playerid);
     PlayerSkinPreviewActive[playerid] = 0;
     PlayerSkinPreviewToken[playerid]++;
     PlayerSkinPreviewOriginalSkin[playerid] = skinid;
@@ -24874,6 +24879,30 @@ stock ShowSkinItemActionMenu(playerid, skinIndex)
     return 1;
 }
 
+stock FreezePlayerForSkinPreview(playerid)
+{
+    if (!IsPlayerConnected(playerid)) return 0;
+    if (PlayerArrestJailed[playerid]) return 0;
+
+    TogglePlayerControllable(playerid, false);
+    PlayerSkinPreviewFrozen[playerid] = 1;
+    return 1;
+}
+
+stock RestorePlayerControlAfterSkinPreview(playerid)
+{
+    if (!IsPlayerConnected(playerid)) return 0;
+    if (!PlayerSkinPreviewFrozen[playerid]) return 0;
+
+    PlayerSkinPreviewFrozen[playerid] = 0;
+
+    // Jangan unfreeze player yang sedang arrest jail hold. Jail system yang berhak release.
+    if (PlayerArrestJailed[playerid]) return 0;
+
+    TogglePlayerControllable(playerid, true);
+    return 1;
+}
+
 stock BeginSkinTryOnPreview(playerid, skinIndex)
 {
     if (skinIndex < 0 || skinIndex >= SkinCatalogCount) return 0;
@@ -24889,12 +24918,13 @@ stock BeginSkinTryOnPreview(playerid, skinIndex)
 
     new token = PlayerSkinPreviewToken[playerid];
     SetPlayerSkin(playerid, SkinCatalogSkinID[skinIndex]);
+    FreezePlayerForSkinPreview(playerid);
 
     new msg[220];
-    format(msg, sizeof(msg), "Preview skin: %s (%d) selama %d detik. Dialog ditutup dulu agar kamu bisa melihat karakter.", SkinCatalogName[skinIndex], SkinCatalogSkinID[skinIndex], SKIN_PREVIEW_VIEW_SECONDS);
+    format(msg, sizeof(msg), "Preview skin: %s (%d) selama %d detik. Player dibekukan sementara; kamu masih bisa geser POV untuk melihat karakter.", SkinCatalogName[skinIndex], SkinCatalogSkinID[skinIndex], SKIN_PREVIEW_VIEW_SECONDS);
     SendClientMessage(playerid, COLOR_WHITE, msg);
-    SendClientMessage(playerid, COLOR_YELLOW, "Preview ini sementara: belum tersimpan, belum masuk wardrobe, dan belum memotong cash. Gunakan /skinrestore untuk batal cepat.");
-    GameTextForPlayer(playerid, "~b~Skin Preview~n~~w~lihat karakter dulu", 2500, 3);
+    SendClientMessage(playerid, COLOR_YELLOW, "Preview ini sementara: belum tersimpan, belum masuk wardrobe, dan belum memotong cash. Kamu hanya bisa geser POV; gunakan /skinrestore untuk batal cepat.");
+    GameTextForPlayer(playerid, "~b~Skin Preview~n~~w~geser POV untuk lihat", 2500, 3);
 
     SetTimerEx("ShowSkinPreviewFollowup", SKIN_PREVIEW_VIEW_SECONDS * 1000, false, "iii", playerid, skinIndex, token);
     return 1;
@@ -24915,7 +24945,8 @@ public ShowSkinPreviewFollowup(playerid, skinIndex, token)
         return 1;
     }
 
-    SendClientMessage(playerid, COLOR_WHITE, "Preview selesai. Pilih Buy/Equip untuk menyimpan, atau Back/Cancel untuk mengembalikan skin asli.");
+    RestorePlayerControlAfterSkinPreview(playerid);
+    SendClientMessage(playerid, COLOR_WHITE, "Preview selesai. Kontrol dikembalikan. Pilih Buy/Equip untuk menyimpan, atau Back/Cancel untuk mengembalikan skin asli.");
     ShowSkinItemActionMenu(playerid, skinIndex);
     return 1;
 }
@@ -24926,6 +24957,7 @@ stock CancelActiveSkinPreview(playerid, showMessage)
 
     new restoreSkin = NormalizePlayerSkinValue(PlayerSkinPreviewOriginalSkin[playerid]);
     SetPlayerSkin(playerid, restoreSkin);
+    RestorePlayerControlAfterSkinPreview(playerid);
     PlayerSkinPreviewActive[playerid] = 0;
     PlayerSkinPreviewToken[playerid]++;
     PlayerSkinPreviewOriginalSkin[playerid] = PlayerCurrentSkin[playerid];
@@ -24951,6 +24983,7 @@ stock ProcessSkinShopBuyOrEquipFromIndex(playerid, skinIndex)
 
     if (PlayerCurrentSkin[playerid] == skinid || alreadyOwned || SkinCatalogPrice[skinIndex] <= 0)
     {
+        RestorePlayerControlAfterSkinPreview(playerid);
         PlayerSkinPreviewActive[playerid] = 0;
         PlayerSkinPreviewToken[playerid]++;
         return ExecuteSkinShopPurchase(playerid, skinIndex);
@@ -24978,6 +25011,7 @@ stock ExecuteSkinShopPurchase(playerid, skinIndex)
     new price = SkinCatalogPrice[skinIndex];
     new alreadyOwned = IsPlayerSkinOwned(playerid, skinid);
 
+    RestorePlayerControlAfterSkinPreview(playerid);
     PlayerSkinPreviewActive[playerid] = 0;
     PlayerSkinPreviewToken[playerid]++;
     PlayerSkinPreviewOriginalSkin[playerid] = PlayerCurrentSkin[playerid];
@@ -25187,7 +25221,7 @@ stock ShowSkinCatalogRuntimeSummary(playerid)
 
     new body[768];
     format(body, sizeof(body),
-           "Skin Catalog Runtime Summary\n\nLoaded Items: %d\nActive: %d\nDisabled: %d\nFree Items: %d\nOwned by You: %d\n\nPlayer current skin uses players.skin.\nOwned wardrobe uses player_skins.\nClothing store service uses public interior type: clothing/binco/zip/suburban/prolaps/victim.\nOwned display uses explicit YES/NO columns in Skin Shop, Wardrobe, and admin list.\nSkin Shop item action supports temporary preview/try-on before buy/equip.\nMovement normalization baseline uses movement_profile field; deep movement handling will be patched later.",
+           "Skin Catalog Runtime Summary\n\nLoaded Items: %d\nActive: %d\nDisabled: %d\nFree Items: %d\nOwned by You: %d\n\nPlayer current skin uses players.skin.\nOwned wardrobe uses player_skins.\nClothing store service uses public interior type: clothing/binco/zip/suburban/prolaps/victim.\nOwned display uses explicit YES/NO columns in Skin Shop, Wardrobe, and admin list.\nSkin Shop item action supports frozen temporary preview/try-on before buy/equip.\nMovement normalization baseline uses movement_profile field; deep movement handling will be patched later.",
            SkinCatalogCount,
            active,
            disabled,
@@ -25205,7 +25239,7 @@ stock ShowSkinCatalogInfo(playerid)
         DIALOG_SKIN_ADMIN_INFO,
         DIALOG_STYLE_MSGBOX,
         "Skin Catalog Info",
-        "SAIF v0.25A.5.7 Skin Preview Try-On Polish\n\n- skin_catalog = DB catalog skin shop.\n- player_skins = owned/purchased wardrobe skins.\n- players.skin = persistent equipped skin.\n- Clothing Store opens /skinshop and /wardrobe from service checkpoint.\n- New skin purchases show a confirm dialog before cash is deducted.\n- Owned skins can be re-equipped without paying again.\n- Skin Shop, Wardrobe, and Skin Catalog admin list show explicit Owned column/status.\n- Skin Shop item selection opens Preview / Buy so players can try skin temporarily before paying.\n- Cancel/Back restores original skin without DB/cash changes.\n- Skin Shop and Wardrobe support category filter per player session.\n- movement_profile and anim_profile remain DB-backed foundation fields.",
+        "SAIF v0.25A.5.7.2 Frozen Skin Preview Fix\n\n- skin_catalog = DB catalog skin shop.\n- player_skins = owned/purchased wardrobe skins.\n- players.skin = persistent equipped skin.\n- Clothing Store opens /skinshop and /wardrobe from service checkpoint.\n- New skin purchases show a confirm dialog before cash is deducted.\n- Owned skins can be re-equipped without paying again.\n- Skin Shop, Wardrobe, and Skin Catalog admin list show explicit Owned column/status.\n- Skin Shop item selection opens Preview / Buy so players can try skin temporarily before paying.\n- Preview closes dialog and freezes movement; players can still rotate POV to inspect the skin.\n- Cancel/Back restores original skin and control without DB/cash changes.\n- Skin Shop and Wardrobe support category filter per player session.\n- movement_profile and anim_profile remain DB-backed foundation fields.",
         "Back",
         "Close"
     );
@@ -38129,7 +38163,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25A.5.7.1 Dialog-Free Skin Preview Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25A.5.7.2 Frozen Skin Preview Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -38139,7 +38173,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.25A.5.7.1: Dialog-Free Skin Preview Fix; Preview closes dialog first so players can see the skin before Buy/Equip follow-up.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.25A.5.7.2: Frozen Skin Preview Fix; preview now freezes movement so players can only rotate POV while viewing the try-on skin.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.5.6.1: Owned Column Display Fix; /skinshop, /wardrobe, and /skinconfig list now show explicit Owned column/status.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.5.6: Wardrobe Filter Polish; /wardrobe now supports category filter while skin shop filters, wardrobe ownership, and purchase confirmation remain active.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.5.1: Skin Catalog Baseline; clothing store skin shop DB-based and player skin persists to players.skin.");

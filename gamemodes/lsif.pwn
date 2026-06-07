@@ -237,6 +237,14 @@
 #define DIALOG_VEHICLE_MISSION_POOL_LIST 1275
 #define DIALOG_VEHICLE_MISSION_POOL_ACTION 1276
 #define DIALOG_VEHICLE_MISSION_POOL_INFO 1277
+#define DIALOG_VEHICLE_MISSION_POOL_POINT_LIST 1278
+#define DIALOG_VEHICLE_MISSION_POOL_POINT_ACTION 1279
+#define DIALOG_VEHICLE_MISSION_POOL_POINT_RADIUS_INPUT 1280
+#define DIALOG_VEHICLE_MISSION_POOL_FIRE_OFFSET_X_INPUT 1281
+#define DIALOG_VEHICLE_MISSION_POOL_FIRE_OFFSET_Y_INPUT 1282
+#define DIALOG_VEHICLE_MISSION_POOL_FIRE_OFFSET_Z_INPUT 1283
+#define DIALOG_VEHICLE_MISSION_POOL_POINT_DELETE_CONFIRM 1284
+#define DIALOG_VEHICLE_MISSION_POOL_POINT_INFO 1285
 
 #define DIALOG_GANG_PRESET_MENU 1192
 #define DIALOG_GANG_PRESET_LIST 1193
@@ -1008,6 +1016,7 @@ new Float:VehicleMissionPoolFireOffsetX[MAX_VEHICLE_MISSION_POOL_POINTS];
 new Float:VehicleMissionPoolFireOffsetY[MAX_VEHICLE_MISSION_POOL_POINTS];
 new Float:VehicleMissionPoolFireOffsetZ[MAX_VEHICLE_MISSION_POOL_POINTS];
 new PlayerEditingVehicleMissionPoolMission[MAX_PLAYERS];
+new PlayerEditingVehicleMissionPoolRow[MAX_PLAYERS];
 
 new PlayerTruckerStage[MAX_PLAYERS];
 new PlayerTruckerRoute[MAX_PLAYERS];
@@ -2651,6 +2660,8 @@ forward OnVehicleMissionPointsLoaded();
 forward OnVehicleMissionPointSaved(playerid);
 forward OnVehicleMissionPointPoolLoaded();
 forward OnVehicleMissionPoolPointSaved(playerid);
+forward OnVehicleMissionPoolPointUpdated(playerid);
+forward OnVehicleMissionPoolPointDeleted(playerid);
 
 forward OnDynamicLocationsLoaded();
 forward OnDynamicLocationCreated(playerid);
@@ -4837,7 +4848,7 @@ stock LoadVehicleMissionPointsFromDB()
 
 stock LoadVehicleMissionPointPoolFromDB()
 {
-    mysql_tquery(g_SQL, "SELECT id, mission_code, point_name, enabled, spawn_x, spawn_y, spawn_z, spawn_a, checkpoint_x, checkpoint_y, checkpoint_z, checkpoint_radius, fire_offset_x, fire_offset_y, fire_offset_z FROM vehicle_mission_point_pool WHERE enabled=1 ORDER BY mission_code ASC, id ASC", "OnVehicleMissionPointPoolLoaded");
+    mysql_tquery(g_SQL, "SELECT id, mission_code, point_name, enabled, spawn_x, spawn_y, spawn_z, spawn_a, checkpoint_x, checkpoint_y, checkpoint_z, checkpoint_radius, fire_offset_x, fire_offset_y, fire_offset_z FROM vehicle_mission_point_pool ORDER BY mission_code ASC, enabled DESC, id ASC", "OnVehicleMissionPointPoolLoaded");
     return 1;
 }
 
@@ -4911,7 +4922,12 @@ public OnVehicleMissionPointPoolLoaded()
         }
     }
 
-    printf("[SAIF] Vehicle mission random point pool loaded: %d active row(s), runtime cap %d.", VehicleMissionPoolCount, MAX_VEHICLE_MISSION_POOL_POINTS);
+    new activeRows = 0;
+    for (new j = 0; j < VehicleMissionPoolCount; j++)
+    {
+        if (VehicleMissionPoolEnabled[j]) activeRows++;
+    }
+    printf("[SAIF] Vehicle mission random point pool loaded: %d row(s), active %d, runtime cap %d.", VehicleMissionPoolCount, activeRows, MAX_VEHICLE_MISSION_POOL_POINTS);
     return 1;
 }
 
@@ -5113,10 +5129,181 @@ stock ShowVehicleMissionPoolActionMenu(playerid, missionIndex)
     strcat(body, "Add Spawn + Checkpoint Here\n", sizeof(body));
     strcat(body, "Add Spawn Only Here\n", sizeof(body));
     strcat(body, "Add Checkpoint Only Here\n", sizeof(body));
+    strcat(body, "Manage Existing Pool Points\n", sizeof(body));
     strcat(body, "Show Pool Audit\n", sizeof(body));
     strcat(body, "Reload Pool From DB\n", sizeof(body));
     strcat(body, "Back to Mission List", sizeof(body));
     ShowPlayerDialog(playerid, DIALOG_VEHICLE_MISSION_POOL_ACTION, DIALOG_STYLE_LIST, title, body, "Select", "Back");
+    return 1;
+}
+
+
+stock GetVehicleMissionPoolRowByListItem(missionIndex, listitem)
+{
+    new seen = 0;
+    for (new i = 0; i < VehicleMissionPoolCount; i++)
+    {
+        if (VehicleMissionPoolMissionIndex[i] != missionIndex) continue;
+        if (seen == listitem) return i;
+        seen++;
+    }
+    return VEH_MISSION_POOL_NONE;
+}
+
+stock CountVehicleMissionPoolRowsAll(missionIndex)
+{
+    new count = 0;
+    for (new i = 0; i < VehicleMissionPoolCount; i++)
+    {
+        if (VehicleMissionPoolMissionIndex[i] == missionIndex) count++;
+    }
+    return count;
+}
+
+stock ShowVehicleMissionPoolPointList(playerid, missionIndex)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER)) return 0;
+    if (missionIndex < 0 || missionIndex >= MAX_VEHICLE_MISSION_POINT_CONFIG) return ShowVehicleMissionPoolMissionList(playerid);
+
+    PlayerEditingVehicleMissionPoolMission[playerid] = missionIndex;
+
+    new body[4096], line[256];
+    body[0] = EOS;
+    strcat(body, "ID\tEN\tName\tSpawn\tCheckpoint\tFire\n", sizeof(body));
+
+    new shown = 0;
+    for (new i = 0; i < VehicleMissionPoolCount; i++)
+    {
+        if (VehicleMissionPoolMissionIndex[i] != missionIndex) continue;
+        format(line, sizeof(line), "%d\t%s\t%s\t%.1f %.1f %.1f\t%.1f %.1f %.1f r%.1f\t%.2f %.2f %.2f\n",
+            VehicleMissionPoolDBID[i],
+            VehicleMissionPoolEnabled[i] ? ("ON") : ("OFF"),
+            VehicleMissionPoolName[i],
+            VehicleMissionPoolSpawnX[i], VehicleMissionPoolSpawnY[i], VehicleMissionPoolSpawnZ[i],
+            VehicleMissionPoolCheckpointX[i], VehicleMissionPoolCheckpointY[i], VehicleMissionPoolCheckpointZ[i], VehicleMissionPoolCheckpointRadius[i],
+            VehicleMissionPoolFireOffsetX[i], VehicleMissionPoolFireOffsetY[i], VehicleMissionPoolFireOffsetZ[i]);
+        strcat(body, line, sizeof(body));
+        shown++;
+    }
+
+    if (!shown)
+    {
+        strcat(body, "0\t-\tBelum ada pool point untuk mission ini\t-\t-\t-\n", sizeof(body));
+    }
+
+    new title[96];
+    format(title, sizeof(title), "Manage Pool Points: %s", VehicleMissionPointLabel[missionIndex]);
+    ShowPlayerDialog(playerid, DIALOG_VEHICLE_MISSION_POOL_POINT_LIST, DIALOG_STYLE_TABLIST_HEADERS, title, body, "Edit", "Back");
+    return 1;
+}
+
+stock ShowVehicleMissionPoolPointActionMenu(playerid, poolIndex)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER)) return 0;
+    if (poolIndex < 0 || poolIndex >= VehicleMissionPoolCount)
+    {
+        return ShowVehicleMissionPoolPointList(playerid, PlayerEditingVehicleMissionPoolMission[playerid]);
+    }
+
+    PlayerEditingVehicleMissionPoolRow[playerid] = poolIndex;
+    PlayerEditingVehicleMissionPoolMission[playerid] = VehicleMissionPoolMissionIndex[poolIndex];
+
+    new title[112], body[1200];
+    format(title, sizeof(title), "Pool Point #%d: %s", VehicleMissionPoolDBID[poolIndex], VehicleMissionPoolName[poolIndex]);
+    body[0] = EOS;
+    strcat(body, "Goto Spawn\n", sizeof(body));
+    strcat(body, "Goto Checkpoint\n", sizeof(body));
+    strcat(body, "Set Spawn Here\n", sizeof(body));
+    strcat(body, "Set Checkpoint Here\n", sizeof(body));
+    strcat(body, "Edit Checkpoint Radius\n", sizeof(body));
+    strcat(body, "Edit Fire Offset X\n", sizeof(body));
+    strcat(body, "Edit Fire Offset Y\n", sizeof(body));
+    strcat(body, "Edit Fire Offset Z\n", sizeof(body));
+    strcat(body, "Reset Fire Offset to Hood Default\n", sizeof(body));
+    strcat(body, "Toggle Enabled\n", sizeof(body));
+    strcat(body, "Delete Pool Point\n", sizeof(body));
+    strcat(body, "Info / Audit\n", sizeof(body));
+    strcat(body, "Back to Pool List", sizeof(body));
+    ShowPlayerDialog(playerid, DIALOG_VEHICLE_MISSION_POOL_POINT_ACTION, DIALOG_STYLE_LIST, title, body, "Select", "Back");
+    return 1;
+}
+
+stock SaveVehicleMissionPoolPointToDB(poolIndex, playerid = INVALID_PLAYER_ID)
+{
+    if (poolIndex < 0 || poolIndex >= VehicleMissionPoolCount) return 0;
+    if (VehicleMissionPoolDBID[poolIndex] <= 0) return 0;
+
+    new query[1024];
+    mysql_format(g_SQL, query, sizeof(query),
+        "UPDATE vehicle_mission_point_pool SET enabled=%d, spawn_x=%.4f, spawn_y=%.4f, spawn_z=%.4f, spawn_a=%.4f, checkpoint_x=%.4f, checkpoint_y=%.4f, checkpoint_z=%.4f, checkpoint_radius=%.2f, fire_offset_x=%.4f, fire_offset_y=%.4f, fire_offset_z=%.4f WHERE id=%d LIMIT 1",
+        VehicleMissionPoolEnabled[poolIndex],
+        VehicleMissionPoolSpawnX[poolIndex], VehicleMissionPoolSpawnY[poolIndex], VehicleMissionPoolSpawnZ[poolIndex], VehicleMissionPoolSpawnA[poolIndex],
+        VehicleMissionPoolCheckpointX[poolIndex], VehicleMissionPoolCheckpointY[poolIndex], VehicleMissionPoolCheckpointZ[poolIndex], VehicleMissionPoolCheckpointRadius[poolIndex],
+        VehicleMissionPoolFireOffsetX[poolIndex], VehicleMissionPoolFireOffsetY[poolIndex], VehicleMissionPoolFireOffsetZ[poolIndex],
+        VehicleMissionPoolDBID[poolIndex]);
+
+    if (playerid != INVALID_PLAYER_ID) mysql_tquery(g_SQL, query, "OnVehicleMissionPoolPointUpdated", "i", playerid);
+    else mysql_tquery(g_SQL, query);
+    return 1;
+}
+
+public OnVehicleMissionPoolPointUpdated(playerid)
+{
+    LoadVehicleMissionPointPoolFromDB();
+    if (IsPlayerConnected(playerid))
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "Mission pool point tersimpan ke DB dan reload diminta.");
+        ShowVehicleMissionPoolPointList(playerid, PlayerEditingVehicleMissionPoolMission[playerid]);
+    }
+    return 1;
+}
+
+stock DeleteVehicleMissionPoolPoint(poolIndex, playerid = INVALID_PLAYER_ID)
+{
+    if (poolIndex < 0 || poolIndex >= VehicleMissionPoolCount) return 0;
+    if (VehicleMissionPoolDBID[poolIndex] <= 0) return 0;
+
+    new query[192];
+    mysql_format(g_SQL, query, sizeof(query), "DELETE FROM vehicle_mission_point_pool WHERE id=%d LIMIT 1", VehicleMissionPoolDBID[poolIndex]);
+    if (playerid != INVALID_PLAYER_ID) mysql_tquery(g_SQL, query, "OnVehicleMissionPoolPointDeleted", "i", playerid);
+    else mysql_tquery(g_SQL, query);
+    return 1;
+}
+
+public OnVehicleMissionPoolPointDeleted(playerid)
+{
+    LoadVehicleMissionPointPoolFromDB();
+    if (IsPlayerConnected(playerid))
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "Mission pool point dihapus dari DB dan reload diminta.");
+        ShowVehicleMissionPoolPointList(playerid, PlayerEditingVehicleMissionPoolMission[playerid]);
+    }
+    return 1;
+}
+
+stock ShowVehicleMissionPoolPointInfo(playerid, poolIndex)
+{
+    if (poolIndex < 0 || poolIndex >= VehicleMissionPoolCount) return ShowVehicleMissionPoolPointList(playerid, PlayerEditingVehicleMissionPoolMission[playerid]);
+
+    new body[1800], line[220];
+    body[0] = EOS;
+    format(line, sizeof(line), "DB ID: %d\n", VehicleMissionPoolDBID[poolIndex]);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Mission: %s (%s)\n", VehicleMissionPointLabel[VehicleMissionPoolMissionIndex[poolIndex]], VehicleMissionPointCode[VehicleMissionPoolMissionIndex[poolIndex]]);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Name: %s\nEnabled: %s\n\n", VehicleMissionPoolName[poolIndex], VehicleMissionPoolEnabled[poolIndex] ? ("YES") : ("NO"));
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Spawn: %.4f, %.4f, %.4f, %.4f\n", VehicleMissionPoolSpawnX[poolIndex], VehicleMissionPoolSpawnY[poolIndex], VehicleMissionPoolSpawnZ[poolIndex], VehicleMissionPoolSpawnA[poolIndex]);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Checkpoint: %.4f, %.4f, %.4f radius %.2f\n", VehicleMissionPoolCheckpointX[poolIndex], VehicleMissionPoolCheckpointY[poolIndex], VehicleMissionPoolCheckpointZ[poolIndex], VehicleMissionPoolCheckpointRadius[poolIndex]);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Fire offset: X %.4f | Y %.4f | Z %.4f\n\n", VehicleMissionPoolFireOffsetX[poolIndex], VehicleMissionPoolFireOffsetY[poolIndex], VehicleMissionPoolFireOffsetZ[poolIndex]);
+    strcat(body, line, sizeof(body));
+    strcat(body, "Catatan:\n", sizeof(body));
+    strcat(body, "- Row ON ikut random selection runtime. Row OFF tetap tersimpan tapi tidak dipilih.\n", sizeof(body));
+    strcat(body, "- Firefighter memakai spawn/checkpoint/fire offset dari row yang sama.\n", sizeof(body));
+    strcat(body, "- Jika semua row OFF/kosong, sistem fallback ke Single Default Points.\n", sizeof(body));
+    ShowPlayerDialog(playerid, DIALOG_VEHICLE_MISSION_POOL_POINT_INFO, DIALOG_STYLE_MSGBOX, "Mission Pool Point Info", body, "Back", "Close");
     return 1;
 }
 
@@ -13416,7 +13603,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.25B.7.2 Mission Pool Command Fix");
+    SetGameModeText("SAIF Dev v0.25B.8 Mission Pool Management Editor");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -13570,8 +13757,8 @@ public OnGameModeInit()
     print("[SAIF] Police Job Wanted Integrity aktif: police color biru tua dan wanted player diblokir dari police duty.");
     print("[SAIF] Skin Catalog baseline aktif: clothing store skin shop DB-based via skin_catalog.");
     print("[SAIF] Skin Movement Normalization foundation aktif: movement_profile/anim_profile DB-based config.");
-    print("[SAIF] Vehicle Mission v0.25B.7.2 aktif: mission pool command aliases membuka Random Point Pool langsung.");
-    print("[SAIF] Gamemode v0.25B.7.2 Mission Pool Command Fix berhasil dijalankan.");
+    print("[SAIF] Vehicle Mission v0.25B.8 aktif: Mission Pool Management Editor siap untuk list/edit/goto/toggle/delete pool point.");
+    print("[SAIF] Gamemode v0.25B.8 Mission Pool Management Editor berhasil dijalankan.");
     return 1;
 }
 
@@ -16396,7 +16583,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             {
                 new body[1200];
                 body[0] = EOS;
-                strcat(body, "Vehicle Mission Point Editor v0.25B.7.2\n\n", sizeof(body));
+                strcat(body, "Vehicle Mission Point Editor v0.25B.8\n\n", sizeof(body));
                 strcat(body, "vehicle_mission_points = single default/fallback per mission.\n", sizeof(body));
                 strcat(body, "vehicle_mission_point_pool = banyak point aktif per mission dan dipilih random saat runtime.\n", sizeof(body));
                 strcat(body, "Firefighter memakai spawn/checkpoint/fire offset dari row pool yang sama jika tersedia.\n", sizeof(body));
@@ -16527,15 +16714,174 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 0: AddVehicleMissionPoolPointHere(playerid, missionIndex, 2);
             case 1: AddVehicleMissionPoolPointHere(playerid, missionIndex, 0);
             case 2: AddVehicleMissionPoolPointHere(playerid, missionIndex, 1);
-            case 3: ShowVehicleMissionPoolAudit(playerid, missionIndex);
-            case 4:
+            case 3: ShowVehicleMissionPoolPointList(playerid, missionIndex);
+            case 4: ShowVehicleMissionPoolAudit(playerid, missionIndex);
+            case 5:
             {
                 LoadVehicleMissionPointPoolFromDB();
                 SendClientMessage(playerid, COLOR_GREEN, "Random mission point pool reload diminta dari DB.");
                 ShowVehicleMissionPoolActionMenu(playerid, missionIndex);
             }
-            case 5: ShowVehicleMissionPoolMissionList(playerid);
+            case 6: ShowVehicleMissionPoolMissionList(playerid);
         }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_VEHICLE_MISSION_POOL_POINT_LIST)
+    {
+        new missionIndex = PlayerEditingVehicleMissionPoolMission[playerid];
+        if (!response)
+        {
+            ShowVehicleMissionPoolActionMenu(playerid, missionIndex);
+            return 1;
+        }
+
+        new poolIndex = GetVehicleMissionPoolRowByListItem(missionIndex, listitem);
+        if (poolIndex == VEH_MISSION_POOL_NONE)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Tidak ada pool point pada baris itu.");
+            ShowVehicleMissionPoolActionMenu(playerid, missionIndex);
+            return 1;
+        }
+        ShowVehicleMissionPoolPointActionMenu(playerid, poolIndex);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_VEHICLE_MISSION_POOL_POINT_ACTION)
+    {
+        new poolIndex = PlayerEditingVehicleMissionPoolRow[playerid];
+        new missionIndex = PlayerEditingVehicleMissionPoolMission[playerid];
+        if (!response)
+        {
+            ShowVehicleMissionPoolPointList(playerid, missionIndex);
+            return 1;
+        }
+        if (poolIndex < 0 || poolIndex >= VehicleMissionPoolCount)
+        {
+            ShowVehicleMissionPoolPointList(playerid, missionIndex);
+            return 1;
+        }
+
+        new Float:x, Float:y, Float:z, Float:a;
+        switch (listitem)
+        {
+            case 0:
+            {
+                SetPlayerInterior(playerid, 0);
+                SetPlayerVirtualWorld(playerid, 0);
+                SetPlayerPos(playerid, VehicleMissionPoolSpawnX[poolIndex], VehicleMissionPoolSpawnY[poolIndex], VehicleMissionPoolSpawnZ[poolIndex]);
+                SetPlayerFacingAngle(playerid, VehicleMissionPoolSpawnA[poolIndex]);
+                SetCameraBehindPlayer(playerid);
+                ShowVehicleMissionPoolPointActionMenu(playerid, poolIndex);
+            }
+            case 1:
+            {
+                SetPlayerInterior(playerid, 0);
+                SetPlayerVirtualWorld(playerid, 0);
+                SetPlayerPos(playerid, VehicleMissionPoolCheckpointX[poolIndex], VehicleMissionPoolCheckpointY[poolIndex], VehicleMissionPoolCheckpointZ[poolIndex]);
+                SetCameraBehindPlayer(playerid);
+                ShowVehicleMissionPoolPointActionMenu(playerid, poolIndex);
+            }
+            case 2:
+            {
+                GetPlayerPos(playerid, x, y, z);
+                GetPlayerFacingAngle(playerid, a);
+                VehicleMissionPoolSpawnX[poolIndex] = x;
+                VehicleMissionPoolSpawnY[poolIndex] = y;
+                VehicleMissionPoolSpawnZ[poolIndex] = z;
+                VehicleMissionPoolSpawnA[poolIndex] = a;
+                SaveVehicleMissionPoolPointToDB(poolIndex, playerid);
+            }
+            case 3:
+            {
+                GetPlayerPos(playerid, x, y, z);
+                VehicleMissionPoolCheckpointX[poolIndex] = x;
+                VehicleMissionPoolCheckpointY[poolIndex] = y;
+                VehicleMissionPoolCheckpointZ[poolIndex] = z;
+                if (VehicleMissionPoolCheckpointRadius[poolIndex] <= 0.0) VehicleMissionPoolCheckpointRadius[poolIndex] = VEH_MISSION_POINT_DEFAULT_RADIUS;
+                SaveVehicleMissionPoolPointToDB(poolIndex, playerid);
+            }
+            case 4:
+            {
+                ShowPlayerDialog(playerid, DIALOG_VEHICLE_MISSION_POOL_POINT_RADIUS_INPUT, DIALOG_STYLE_INPUT, "Edit Pool Checkpoint Radius", "Masukkan radius checkpoint pool point (1.0 - 50.0):", "Save", "Back");
+            }
+            case 5:
+            {
+                ShowPlayerDialog(playerid, DIALOG_VEHICLE_MISSION_POOL_FIRE_OFFSET_X_INPUT, DIALOG_STYLE_INPUT, "Edit Pool Fire Offset X", "Masukkan fire offset X (-10.0 sampai 10.0):", "Save", "Back");
+            }
+            case 6:
+            {
+                ShowPlayerDialog(playerid, DIALOG_VEHICLE_MISSION_POOL_FIRE_OFFSET_Y_INPUT, DIALOG_STYLE_INPUT, "Edit Pool Fire Offset Y", "Masukkan fire offset Y (-10.0 sampai 10.0):", "Save", "Back");
+            }
+            case 7:
+            {
+                ShowPlayerDialog(playerid, DIALOG_VEHICLE_MISSION_POOL_FIRE_OFFSET_Z_INPUT, DIALOG_STYLE_INPUT, "Edit Pool Fire Offset Z", "Masukkan fire offset Z (-10.0 sampai 10.0):", "Save", "Back");
+            }
+            case 8:
+            {
+                VehicleMissionPoolFireOffsetX[poolIndex] = 0.0;
+                VehicleMissionPoolFireOffsetY[poolIndex] = 2.1;
+                VehicleMissionPoolFireOffsetZ[poolIndex] = 0.55;
+                SaveVehicleMissionPoolPointToDB(poolIndex, playerid);
+            }
+            case 9:
+            {
+                VehicleMissionPoolEnabled[poolIndex] = !VehicleMissionPoolEnabled[poolIndex];
+                SaveVehicleMissionPoolPointToDB(poolIndex, playerid);
+            }
+            case 10:
+            {
+                ShowPlayerDialog(playerid, DIALOG_VEHICLE_MISSION_POOL_POINT_DELETE_CONFIRM, DIALOG_STYLE_MSGBOX, "Delete Pool Point", "Hapus pool point ini dari DB? Gunakan Disable kalau hanya ingin menyimpan tapi tidak dipakai random.", "Delete", "Cancel");
+            }
+            case 11: ShowVehicleMissionPoolPointInfo(playerid, poolIndex);
+            case 12: ShowVehicleMissionPoolPointList(playerid, missionIndex);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_VEHICLE_MISSION_POOL_POINT_RADIUS_INPUT)
+    {
+        new poolIndex = PlayerEditingVehicleMissionPoolRow[playerid];
+        if (!response) return ShowVehicleMissionPoolPointActionMenu(playerid, poolIndex);
+        new Float:value = floatstr(inputtext);
+        if (value < 1.0 || value > 50.0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Radius pool checkpoint harus 1.0 sampai 50.0.");
+            return ShowVehicleMissionPoolPointActionMenu(playerid, poolIndex);
+        }
+        VehicleMissionPoolCheckpointRadius[poolIndex] = value;
+        SaveVehicleMissionPoolPointToDB(poolIndex, playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_VEHICLE_MISSION_POOL_FIRE_OFFSET_X_INPUT || dialogid == DIALOG_VEHICLE_MISSION_POOL_FIRE_OFFSET_Y_INPUT || dialogid == DIALOG_VEHICLE_MISSION_POOL_FIRE_OFFSET_Z_INPUT)
+    {
+        new poolIndex = PlayerEditingVehicleMissionPoolRow[playerid];
+        if (!response) return ShowVehicleMissionPoolPointActionMenu(playerid, poolIndex);
+        new Float:value = floatstr(inputtext);
+        if (value < -10.0 || value > 10.0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Fire offset pool harus dalam range -10.0 sampai 10.0.");
+            return ShowVehicleMissionPoolPointActionMenu(playerid, poolIndex);
+        }
+        if (dialogid == DIALOG_VEHICLE_MISSION_POOL_FIRE_OFFSET_X_INPUT) VehicleMissionPoolFireOffsetX[poolIndex] = value;
+        else if (dialogid == DIALOG_VEHICLE_MISSION_POOL_FIRE_OFFSET_Y_INPUT) VehicleMissionPoolFireOffsetY[poolIndex] = value;
+        else VehicleMissionPoolFireOffsetZ[poolIndex] = value;
+        SaveVehicleMissionPoolPointToDB(poolIndex, playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_VEHICLE_MISSION_POOL_POINT_DELETE_CONFIRM)
+    {
+        new poolIndex = PlayerEditingVehicleMissionPoolRow[playerid];
+        if (!response) return ShowVehicleMissionPoolPointActionMenu(playerid, poolIndex);
+        DeleteVehicleMissionPoolPoint(poolIndex, playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_VEHICLE_MISSION_POOL_POINT_INFO)
+    {
+        if (response) ShowVehicleMissionPoolPointActionMenu(playerid, PlayerEditingVehicleMissionPoolRow[playerid]);
         return 1;
     }
 
@@ -22455,7 +22801,7 @@ stock ShowFirefighterMissionStatus(playerid)
     new vehicleid = PlayerFireMissionVehicle[playerid];
 
     body[0] = EOS;
-    strcat(body, "SAIF v0.25B.7.2 Mission Pool Command Fix Status\n\n", sizeof(body));
+    strcat(body, "SAIF v0.25B.8 Mission Pool Management Editor Status\n\n", sizeof(body));
 
     format(line, sizeof(line), "Working: %s | WorkType: %d | Fire target vehicle: %d\n", PlayerWorking[playerid] ? ("YES") : ("NO"), PlayerWorkType[playerid], vehicleid);
     strcat(body, line, sizeof(body));
@@ -22512,7 +22858,7 @@ stock ShowVehicleMissionBaselineAudit(playerid)
     GetVehicleMissionEligibility(playerid, eligibility, sizeof(eligibility));
 
     body[0] = EOS;
-    strcat(body, "SAIF v0.25B.7.2 Mission Pool Command Fix\n\n", sizeof(body));
+    strcat(body, "SAIF v0.25B.8 Mission Pool Management Editor\n\n", sizeof(body));
     strcat(body, "Current Runtime:\n", sizeof(body));
     format(line, sizeof(line), "Vehicle ID: %d | Model: %d | Candidate: %s\n", vehicleId, vehicleModel, missionName);
     strcat(body, line, sizeof(body));
@@ -40417,7 +40763,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25B.7.2 Mission Pool Command Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25B.8 Mission Pool Management Editor");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -40427,6 +40773,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.25B.8: Mission Pool Management Editor; list/edit/goto/toggle/delete random pool points lewat dialog.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25B.7.2: Mission pool command aliases fix; /missionpool membuka Random Point Pool langsung.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25B.7.1: Weapon tag warning fix untuk APAR/fire extinguisher GivePlayerWeapon.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25B.7: Vehicle Mission Point Pool DB-based untuk banyak spawn/checkpoint random per mission.");

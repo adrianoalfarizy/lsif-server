@@ -13416,7 +13416,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.25B.7.1 Weapon Tag Warning Fix");
+    SetGameModeText("SAIF Dev v0.25B.7.2 Mission Pool Command Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -13570,8 +13570,8 @@ public OnGameModeInit()
     print("[SAIF] Police Job Wanted Integrity aktif: police color biru tua dan wanted player diblokir dari police duty.");
     print("[SAIF] Skin Catalog baseline aktif: clothing store skin shop DB-based via skin_catalog.");
     print("[SAIF] Skin Movement Normalization foundation aktif: movement_profile/anim_profile DB-based config.");
-    print("[SAIF] Vehicle Mission v0.25B.7.1 aktif: mission point pool DB-based random untuk spawn/checkpoint/fire offset.");
-    print("[SAIF] Gamemode v0.25B.7.1 Weapon Tag Warning Fix berhasil dijalankan.");
+    print("[SAIF] Vehicle Mission v0.25B.7.2 aktif: mission pool command aliases membuka Random Point Pool langsung.");
+    print("[SAIF] Gamemode v0.25B.7.2 Mission Pool Command Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -14367,7 +14367,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /missiontarget, /vehmissionconfig, /missionpointmenu, /missionpool, /jobpointpool, /jobpointmenu, /taxirequest, /taxistatus, /canceltaxi, /medicrequest, /medicstatus, /cancelmedic, /firestatus, /firemission\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /missiontarget, /vehmissionconfig, /missionpointmenu, /missionpool, /vehmissionpool, /jobpointpool, /vmpool, /pointpool, /jobpool, /jobpointmenu, /taxirequest, /taxistatus, /canceltaxi, /medicrequest, /medicstatus, /cancelmedic, /firestatus, /firemission\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
@@ -16396,7 +16396,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             {
                 new body[1200];
                 body[0] = EOS;
-                strcat(body, "Vehicle Mission Point Editor v0.25B.7.1\n\n", sizeof(body));
+                strcat(body, "Vehicle Mission Point Editor v0.25B.7.2\n\n", sizeof(body));
                 strcat(body, "vehicle_mission_points = single default/fallback per mission.\n", sizeof(body));
                 strcat(body, "vehicle_mission_point_pool = banyak point aktif per mission dan dipilih random saat runtime.\n", sizeof(body));
                 strcat(body, "Firefighter memakai spawn/checkpoint/fire offset dari row pool yang sama jika tersedia.\n", sizeof(body));
@@ -22455,7 +22455,7 @@ stock ShowFirefighterMissionStatus(playerid)
     new vehicleid = PlayerFireMissionVehicle[playerid];
 
     body[0] = EOS;
-    strcat(body, "SAIF v0.25B.7.1 Weapon Tag Warning Fix Status\n\n", sizeof(body));
+    strcat(body, "SAIF v0.25B.7.2 Mission Pool Command Fix Status\n\n", sizeof(body));
 
     format(line, sizeof(line), "Working: %s | WorkType: %d | Fire target vehicle: %d\n", PlayerWorking[playerid] ? ("YES") : ("NO"), PlayerWorkType[playerid], vehicleid);
     strcat(body, line, sizeof(body));
@@ -22512,7 +22512,7 @@ stock ShowVehicleMissionBaselineAudit(playerid)
     GetVehicleMissionEligibility(playerid, eligibility, sizeof(eligibility));
 
     body[0] = EOS;
-    strcat(body, "SAIF v0.25B.7.1 Weapon Tag Warning Fix\n\n", sizeof(body));
+    strcat(body, "SAIF v0.25B.7.2 Mission Pool Command Fix\n\n", sizeof(body));
     strcat(body, "Current Runtime:\n", sizeof(body));
     format(line, sizeof(line), "Vehicle ID: %d | Model: %d | Candidate: %s\n", vehicleId, vehicleModel, missionName);
     strcat(body, line, sizeof(body));
@@ -37599,7 +37599,18 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
-    if (!strcmp(cmdtext, "/vehmissionconfig", true) || !strcmp(cmdtext, "/missionpointmenu", true) || !strcmp(cmdtext, "/jobpointmenu", true) || !strcmp(cmdtext, "/missionpoints", true) || !strcmp(cmdtext, "/missionpool", true) || !strcmp(cmdtext, "/jobpointpool", true) || !strcmp(cmdtext, "/vehmissionpool", true))
+    if (strfind(cmdtext, "/missionpool", true) == 0 || strfind(cmdtext, "/vehmissionpool", true) == 0 || strfind(cmdtext, "/jobpointpool", true) == 0 || strfind(cmdtext, "/vmpool", true) == 0 || strfind(cmdtext, "/pointpool", true) == 0 || strfind(cmdtext, "/jobpool", true) == 0)
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka Vehicle Mission Point Pool.");
+            return 1;
+        }
+        ShowVehicleMissionPoolMissionList(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/vehmissionconfig", true) || !strcmp(cmdtext, "/missionpointmenu", true) || !strcmp(cmdtext, "/jobpointmenu", true) || !strcmp(cmdtext, "/missionpoints", true))
     {
         ShowVehicleMissionPointEditorMenu(playerid);
         return 1;
@@ -40406,7 +40417,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25B.7.1 Weapon Tag Warning Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25B.7.2 Mission Pool Command Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -40416,6 +40427,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.25B.7.2: Mission pool command aliases fix; /missionpool membuka Random Point Pool langsung.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25B.7.1: Weapon tag warning fix untuk APAR/fire extinguisher GivePlayerWeapon.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25B.7: Vehicle Mission Point Pool DB-based untuk banyak spawn/checkpoint random per mission.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25B.3: Taxi ride flow uses real passenger request + ALT accept + passenger seat + dropoff checkpoint.");

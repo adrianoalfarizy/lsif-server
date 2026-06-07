@@ -429,6 +429,7 @@ stock IsClosedBetaEnabled()
 #define VEHICLE_MISSION_FIREFIGHTER_XP 35
 #define FIRE_MISSION_BURNING_MODEL 401
 #define FIRE_MISSION_BURNING_HEALTH 250.0
+#define FIRE_MISSION_TARGET_CHECKPOINT_SIZE 6.0
 
 #define MAX_BUS_STOPS 6
 #define BUS_COOLDOWN_SECONDS 45
@@ -3978,7 +3979,7 @@ stock StartTaxiWork(playerid)
 
     GameTextForPlayer(playerid, "~y~Taxi Duty", 3000, 3);
     SendClientMessage(playerid, COLOR_GREEN, "Taxi duty aktif. Cari player yang memakai /taxirequest lalu tekan ALT di dekatnya.");
-    SendClientMessage(playerid, COLOR_WHITE, "v0.25B.4: Taxi target player asli; Paramedic target player injured asli dengan ALT treatment.");
+    SendClientMessage(playerid, COLOR_WHITE, "v0.25B.5: Taxi/Paramedic target player asli; Firefighter target burning vehicle object + ALT extinguish.");
 
     return 1;
 }
@@ -4653,6 +4654,9 @@ stock StartFirefighterWork(playerid)
     SetVehicleHealth(vehicleid, FIRE_MISSION_BURNING_HEALTH);
     PlayerFireMissionVehicle[playerid] = vehicleid;
 
+    // v0.25B.5: checkpoint hanya guide lokasi target. Completion tetap wajib ALT.
+    SetPlayerCheckpoint(playerid, spawnX, spawnY, z, FIRE_MISSION_TARGET_CHECKPOINT_SIZE);
+
     PlayerWorking[playerid] = 1;
     PlayerWorkType[playerid] = WORK_FIREFIGHTER;
     PlayerWorkPoint[playerid] = -1;
@@ -4660,8 +4664,8 @@ stock StartFirefighterWork(playerid)
     PlayerWorkExitTick[playerid] = 0;
 
     GameTextForPlayer(playerid, "~r~Firefighter Mission", 3000, 3);
-    SendClientMessage(playerid, COLOR_GREEN, "Firefighter mission aktif. Burning vehicle sudah dibuat di dekatmu.");
-    SendClientMessage(playerid, COLOR_WHITE, "Dekati burning vehicle target lalu tekan ALT untuk memadamkan. /cancelwork untuk batal.");
+    SendClientMessage(playerid, COLOR_GREEN, "Firefighter mission aktif. Burning vehicle sudah dibuat dan checkpoint guide ditandai.");
+    SendClientMessage(playerid, COLOR_WHITE, "Ikuti checkpoint target, lalu tekan ALT di dekat burning vehicle untuk memadamkan. /firestatus untuk audit.");
     return 1;
 }
 
@@ -4972,6 +4976,7 @@ stock CompleteFirefighterAlt(playerid)
         return 0;
     }
 
+    DisablePlayerCheckpoint(playerid);
     DestroyVehicle(vehicleid);
     PlayerFireMissionVehicle[playerid] = INVALID_VEHICLE_ID;
 
@@ -12586,7 +12591,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.25B.4 Paramedic Player Treatment Flow");
+    SetGameModeText("SAIF Dev v0.25B.5 Firefighter Burning Vehicle Polish");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -12735,8 +12740,8 @@ public OnGameModeInit()
     print("[SAIF] Police Job Wanted Integrity aktif: police color biru tua dan wanted player diblokir dari police duty.");
     print("[SAIF] Skin Catalog baseline aktif: clothing store skin shop DB-based via skin_catalog.");
     print("[SAIF] Skin Movement Normalization foundation aktif: movement_profile/anim_profile DB-based config.");
-    print("[SAIF] Vehicle Mission v0.25B.4 aktif: Paramedic ALT treatment memakai player injured asli dan /medicrequest optional.");
-    print("[SAIF] Gamemode v0.25B.4 Paramedic Player Treatment Flow berhasil dijalankan.");
+    print("[SAIF] Vehicle Mission v0.25B.5 aktif: Firefighter burning vehicle target memakai checkpoint guide + ALT extinguish polish.");
+    print("[SAIF] Gamemode v0.25B.5 Firefighter Burning Vehicle Polish berhasil dijalankan.");
     return 1;
 }
 
@@ -13531,7 +13536,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /missiontarget, /taxirequest, /taxistatus, /canceltaxi\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /missiontarget, /taxirequest, /taxistatus, /canceltaxi, /medicrequest, /medicstatus, /cancelmedic, /firestatus, /firemission\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
@@ -21428,6 +21433,44 @@ stock GetVehicleMissionEligibility(playerid, output[], size)
     return 0;
 }
 
+stock ShowFirefighterMissionStatus(playerid)
+{
+    new body[2048];
+    new line[256];
+    new vehicleid = PlayerFireMissionVehicle[playerid];
+
+    body[0] = EOS;
+    strcat(body, "SAIF v0.25B.5 Firefighter Burning Vehicle Status\n\n", sizeof(body));
+
+    format(line, sizeof(line), "Working: %s | WorkType: %d | Fire target vehicle: %d\n", PlayerWorking[playerid] ? ("YES") : ("NO"), PlayerWorkType[playerid], vehicleid);
+    strcat(body, line, sizeof(body));
+
+    if (PlayerWorking[playerid] && PlayerWorkType[playerid] == WORK_FIREFIGHTER && vehicleid > 0 && vehicleid != INVALID_VEHICLE_ID)
+    {
+        new Float:px, Float:py, Float:pz;
+        new Float:vx, Float:vy, Float:vz;
+        GetPlayerPos(playerid, px, py, pz);
+        GetVehiclePos(vehicleid, vx, vy, vz);
+
+        new Float:distance = GetDistanceBetweenPoints3D(px, py, pz, vx, vy, vz);
+        format(line, sizeof(line), "Target position: %.2f, %.2f, %.2f | Distance: %.2f m\n", vx, vy, vz, distance);
+        strcat(body, line, sizeof(body));
+        strcat(body, "\nFlow:\n", sizeof(body));
+        strcat(body, "1. Ikuti checkpoint guide ke burning vehicle.\n", sizeof(body));
+        strcat(body, "2. Dekati target sampai radius ALT.\n", sizeof(body));
+        strcat(body, "3. Tekan ALT untuk extinguish dan complete mission.\n", sizeof(body));
+        strcat(body, "4. /cancelwork membatalkan mission dan menghapus target.\n", sizeof(body));
+    }
+    else
+    {
+        strcat(body, "Tidak ada firefighter mission aktif untuk player ini.\n\n", sizeof(body));
+        strcat(body, "Cara mulai: naik Firetruck sebagai driver, tekan tombol 2, ikuti checkpoint, lalu ALT dekat burning vehicle.\n", sizeof(body));
+    }
+
+    ShowPlayerDialog(playerid, DIALOG_VEHICLE_MISSION_INFO, DIALOG_STYLE_MSGBOX, "Firefighter Mission Status", body, "Back", "Close");
+    return 1;
+}
+
 stock ShowVehicleMissionBaselineAudit(playerid)
 {
     new body[4096];
@@ -21452,7 +21495,7 @@ stock ShowVehicleMissionBaselineAudit(playerid)
     GetVehicleMissionEligibility(playerid, eligibility, sizeof(eligibility));
 
     body[0] = EOS;
-    strcat(body, "SAIF v0.25B.4 Paramedic Player Treatment Flow\n\n", sizeof(body));
+    strcat(body, "SAIF v0.25B.5 Firefighter Burning Vehicle Polish\n\n", sizeof(body));
     strcat(body, "Current Runtime:\n", sizeof(body));
     format(line, sizeof(line), "Vehicle ID: %d | Model: %d | Candidate: %s\n", vehicleId, vehicleModel, missionName);
     strcat(body, line, sizeof(body));
@@ -21487,6 +21530,7 @@ stock ShowVehicleMissionBaselineAudit(playerid)
     strcat(body, "- Wanted player tidak bisa start Police/Vigilante.\n", sizeof(body));
     strcat(body, "- v0.25B.3 menambah Taxi ride flow: passenger /taxirequest, driver ALT accept, passenger masuk taxi, lalu driver antar ke checkpoint dropoff.\n", sizeof(body));
     strcat(body, "- v0.25B.4 menambah Paramedic player treatment flow: /medicrequest optional, ALT heal player injured asli, dan request cleanup.\n", sizeof(body));
+    strcat(body, "- v0.25B.5 menambah Firefighter checkpoint guide, /firestatus audit, dan ALT extinguish cleanup untuk burning vehicle.\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_VEHICLE_MISSION_INFO, DIALOG_STYLE_MSGBOX, "Vehicle Mission Baseline", body, "Back", "Close");
     return 1;
@@ -34137,6 +34181,12 @@ public OnPlayerEnterCheckpoint(playerid)
         return 1;
     }
 
+    if (PlayerWorking[playerid] && PlayerWorkType[playerid] == WORK_FIREFIGHTER)
+    {
+        SendClientMessage(playerid, COLOR_CYAN, "Firefighter target sudah dekat. Turun/dekati burning vehicle lalu tekan ALT untuk memadamkan.");
+        return 1;
+    }
+
     if (PlayerWorking[playerid] && PlayerWorkType[playerid] == WORK_COURIER)
     {
         CompleteCourierWork(playerid);
@@ -36624,6 +36674,12 @@ public OnPlayerCommandText(playerid, cmdtext[])
                 SendClientMessage(playerid, COLOR_YELLOW, "Tidak ada injured/requested player di radius paramedic ALT.");
             }
         }
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/firestatus", true) || !strcmp(cmdtext, "/firemission", true) || !strcmp(cmdtext, "/firetarget", true) || !strcmp(cmdtext, "/firefighterstatus", true))
+    {
+        ShowFirefighterMissionStatus(playerid);
         return 1;
     }
 
@@ -39317,7 +39373,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25B.4 Paramedic Player Treatment Flow");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25B.5 Firefighter Burning Vehicle Polish");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -39327,7 +39383,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.25B.4: Paramedic flow supports /medicrequest + ALT treatment for real injured players and job_stats progress.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.25B.5: Firefighter flow adds burning vehicle checkpoint guide, /firestatus audit, and ALT extinguish cleanup.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25B.3: Taxi ride flow uses real passenger request + ALT accept + passenger seat + dropoff checkpoint.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.5.10: Skin System Closeout Audit; /skinaudit and /skinstatus summarize catalog, wardrobe, preview, profile, and clothing-store runtime health.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.5.9: Skin Preview Safety Cleanup; preview state is safely restored on public interior exit, disconnect, and death cleanup.");

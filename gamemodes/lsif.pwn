@@ -13844,7 +13844,8 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.25B.10.3 Skin Profile Removal Cleanup");
+    UsePlayerPedAnims();
+    SetGameModeText("SAIF Dev v0.26A.1.1 CJ-like Skin Movement Restore");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -13999,7 +14000,8 @@ public OnGameModeInit()
     print("[SAIF] Skin Catalog baseline aktif: clothing store skin shop DB-based via skin_catalog.");
     print("[SAIF] Skin profile movement cleanup aktif: native GTA SA per-skin movement digunakan.");
     print("[SAIF] Vehicle Mission v0.25B.10 tetap aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
-    print("[SAIF] Gamemode v0.25B.10.3 Skin Profile Removal Cleanup berhasil dijalankan.");
+    print("[SAIF] Org Economy v0.26A.1.1 aktif: baseline audit + CJ-like skin movement restore.");
+    print("[SAIF] Gamemode v0.26A.1.1 CJ-like Skin Movement Restore berhasil dijalankan.");
     return 1;
 }
 
@@ -14767,6 +14769,7 @@ stock ShowAdminToolsMenu(playerid)
     strcat(body, "Turf Zone Editor\t/turfmenu\tOwner\n", sizeof(body));
     strcat(body, "Gang Preset DB Config\t/gangpresetmenu\tOwner\n", sizeof(body));
     strcat(body, "Business Preset DB Config\t/bizpresetmenu\tOwner\n", sizeof(body));
+    strcat(body, "Organization Economy Baseline\t/orgeconomy\tHelper+\n", sizeof(body));
     strcat(body, "Ammu-Nation Config\t/ammuconfig\tOwner\n", sizeof(body));
     strcat(body, "Public Service Config\t/serviceconfig\tOwner\n", sizeof(body));
     strcat(body, "Vehicle Mission Baseline\t/vehmission\tPlayer\n", sizeof(body));
@@ -14795,7 +14798,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /vehmissioncloseout, /vehiclemissionhealth, /missiontarget, /vehmissionconfig, /missionpointmenu, /missionpool, /vehmissionpool, /jobpointpool, /vmpool, /pointpool, /jobpool, /jobpointmenu, /taxirequest, /taxistatus, /canceltaxi, /busrequest, /busstatus, /cancelbus, /medicrequest, /medicstatus, /cancelmedic, /firestatus, /firemission\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/orgeconomy, /orgeconomyaudit, /orgstatus, /orgeconomyhealth, /orgbiz, /orgbusiness, /orgfinance\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /vehmissioncloseout, /vehiclemissionhealth, /missiontarget, /vehmissionconfig, /missionpointmenu, /missionpool, /vehmissionpool, /jobpointpool, /vmpool, /pointpool, /jobpool, /jobpointmenu, /taxirequest, /taxistatus, /canceltaxi, /busrequest, /busstatus, /cancelbus, /medicrequest, /medicstatus, /cancelmedic, /firestatus, /firemission\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /cjmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
@@ -16772,20 +16775,21 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 7: ShowTurfEditorMenu(playerid);
             case 8: ShowGangPresetMenu(playerid);
             case 9: ShowBusinessPresetMenu(playerid);
-            case 10: ShowAmmuConfigMenu(playerid);
-            case 11: ShowPublicServiceConfigMenu(playerid);
-            case 12: ShowVehicleMissionBaselineAudit(playerid);
-            case 13: ShowVehicleMissionPointEditorMenu(playerid);
-            case 14: ShowSkinCatalogAdminMenu(playerid);
-            case 15: ShowDeathHospitalConfigMenu(playerid);
-            case 16: ShowRecentDeathLogs(playerid);
-            case 17: ShowWantedPoliceArrestReference(playerid);
-            case 18: ShowArrestConfigMenu(playerid);
-            case 19: ShowRecentArrestLogs(playerid);
-            case 20: ShowSourceAuditActionMenu(playerid);
-            case 21: ShowLiveDBAuditMenu(playerid);
-            case 22: ShowMaintenanceReference(playerid);
-            case 23: ShowAdminToolsReference(playerid);
+            case 10: ShowOrgEconomyBaselineAudit(playerid);
+            case 11: ShowAmmuConfigMenu(playerid);
+            case 12: ShowPublicServiceConfigMenu(playerid);
+            case 13: ShowVehicleMissionBaselineAudit(playerid);
+            case 14: ShowVehicleMissionPointEditorMenu(playerid);
+            case 15: ShowSkinCatalogAdminMenu(playerid);
+            case 16: ShowDeathHospitalConfigMenu(playerid);
+            case 17: ShowRecentDeathLogs(playerid);
+            case 18: ShowWantedPoliceArrestReference(playerid);
+            case 19: ShowArrestConfigMenu(playerid);
+            case 20: ShowRecentArrestLogs(playerid);
+            case 21: ShowSourceAuditActionMenu(playerid);
+            case 22: ShowLiveDBAuditMenu(playerid);
+            case 23: ShowMaintenanceReference(playerid);
+            case 24: ShowAdminToolsReference(playerid);
         }
         return 1;
     }
@@ -26930,7 +26934,7 @@ stock ShowPlayerSkinProfile(playerid)
 Skin ID: %d
 Catalog: not found
 
-Movement/animation profile sudah dihapus. SAIF mengikuti movement bawaan GTA SA/open.mp per skin.", PlayerCurrentSkin[playerid]);
+Movement/animation profile detail sudah dihapus. SAIF mengaktifkan CJ-like baseline movement via UsePlayerPedAnims().", PlayerCurrentSkin[playerid]);
     }
     else
     {
@@ -26944,7 +26948,8 @@ Owned: %s
 
 Movement Rule:
 - movement_profile dan anim_profile sudah dihapus.
-- SAIF memakai movement/animation bawaan GTA SA/open.mp per skin.
+- SAIF memakai CJ-like baseline movement via UsePlayerPedAnims().
+- Profile palsu seperti heavy/light sudah dihapus dari DB/menu.
 - Tidak ada speed multiplier, velocity forcing, atau looped animation forcing.",
                SkinCatalogName[skinIndex],
                PlayerCurrentSkin[playerid],
@@ -38106,6 +38111,123 @@ public OnPlayerKeyStateChange(playerid, KEY:newkeys, KEY:oldkeys)
     return 1;
 }
 
+
+stock ShowOrgEconomyBaselineAudit(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_HELPER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+        return 0;
+    }
+
+    new onlinePlayers = 0;
+    new onlineOrgMembers = 0;
+    new onlineOrgOwners = 0;
+    new onlineOrgAdmins = 0;
+    new onlineBusinessOwners = 0;
+    new onlineGangMembers = 0;
+    new onlineJobPlayers = 0;
+    new totalOrgBankRuntime = 0;
+    new totalOwnedBusinessIncomeRuntime = 0;
+
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!IsPlayerConnected(i) || !PlayerLoggedIn[i])
+        {
+            continue;
+        }
+
+        onlinePlayers++;
+
+        if (PlayerOrgID[i] > 0)
+        {
+            onlineOrgMembers++;
+            if (PlayerOrgRank[i] >= ORG_RANK_OWNER) onlineOrgOwners++;
+            if (PlayerOrgRank[i] >= ORG_RANK_ADMIN) onlineOrgAdmins++;
+            totalOrgBankRuntime += PlayerOrgBankMoney[i];
+        }
+
+        if (PlayerBusinessDBID[i] > 0 && PlayerBusinessIndex[i] != -1)
+        {
+            onlineBusinessOwners++;
+            totalOwnedBusinessIncomeRuntime += GetBusinessIncomePerMinute(PlayerBusinessIndex[i], PlayerBusinessLevel[i]);
+        }
+
+        if (PlayerGangID[i] > 0) onlineGangMembers++;
+        if (PlayerJob[i] != JOB_NONE) onlineJobPlayers++;
+    }
+
+    new enabledBusinessPresets = 0;
+    new businessPresetIncome = 0;
+    for (new b = 0; b < MAX_BUSINESSES; b++)
+    {
+        if (BusinessEnabled[b] && strlen(BusinessName[b]) > 0)
+        {
+            enabledBusinessPresets++;
+            businessPresetIncome += BusinessIncomePerMinute[b];
+        }
+    }
+
+    new body[4096];
+    new line[192];
+    body[0] = EOS;
+
+    strcat(body, "SAIF v0.26A.1.1 CJ-like Skin Movement Restore\n\n", sizeof(body));
+    strcat(body, "Contract:\n", sizeof(body));
+    strcat(body, "- Organization = player-made legal/economic group.\n", sizeof(body));
+    strcat(body, "- Gang = preset/offline-like turf group, not org.\n", sizeof(body));
+    strcat(body, "- Business workflow valid: business_preset_config + player_businesses.\n", sizeof(body));
+    strcat(body, "- Do not assume turf_config, business, or businesses table exists.\n\n", sizeof(body));
+
+    strcat(body, "Runtime Online Summary:\n", sizeof(body));
+    format(line, sizeof(line), "Online players: %d\n", onlinePlayers); strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Online org members: %d | owners: %d | admins+: %d\n", onlineOrgMembers, onlineOrgOwners, onlineOrgAdmins); strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Online business owners: %d | runtime business income/min: $%d\n", onlineBusinessOwners, totalOwnedBusinessIncomeRuntime); strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Online gang members: %d | online job players: %d\n", onlineGangMembers, onlineJobPlayers); strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Org bank runtime sum from online cache: $%d\n\n", totalOrgBankRuntime); strcat(body, line, sizeof(body));
+
+    strcat(body, "Business Preset Runtime:\n", sizeof(body));
+    format(line, sizeof(line), "Enabled business presets: %d/%d\n", enabledBusinessPresets, MAX_BUSINESSES); strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Base income/min from enabled presets: $%d\n\n", businessPresetIncome); strcat(body, line, sizeof(body));
+
+    strcat(body, "Current Player Context:\n", sizeof(body));
+    if (PlayerOrgID[playerid] > 0)
+    {
+        new rankName[32];
+        GetOrgRankName(PlayerOrgRank[playerid], rankName, sizeof(rankName));
+        format(line, sizeof(line), "Your org: %s | ID %d | rank %s (%d) | bank cache $%d\n", PlayerOrgName[playerid], PlayerOrgID[playerid], rankName, PlayerOrgRank[playerid], PlayerOrgBankMoney[playerid]);
+        strcat(body, line, sizeof(body));
+    }
+    else
+    {
+        strcat(body, "Your org: none\n", sizeof(body));
+    }
+
+    if (PlayerBusinessDBID[playerid] > 0 && PlayerBusinessIndex[playerid] != -1)
+    {
+        format(line, sizeof(line), "Your business: %s | DBID %d | level %d | income/min $%d\n", BusinessName[PlayerBusinessIndex[playerid]], PlayerBusinessDBID[playerid], PlayerBusinessLevel[playerid], GetBusinessIncomePerMinute(PlayerBusinessIndex[playerid], PlayerBusinessLevel[playerid]));
+        strcat(body, line, sizeof(body));
+    }
+    else
+    {
+        strcat(body, "Your business: none\n", sizeof(body));
+    }
+
+    strcat(body, "\nNext v0.26 direction:\n", sizeof(body));
+    strcat(body, "1. Org business ownership bridge.\n", sizeof(body));
+    strcat(body, "2. Org bank use-case real economy.\n", sizeof(body));
+    strcat(body, "3. Payroll and org fleet later.\n", sizeof(body));
+    strcat(body, "4. Keep player-owned business safe until org ownership migration is explicit.\n\n", sizeof(body));
+
+    strcat(body, "Commands:\n", sizeof(body));
+    strcat(body, "/org, /orginfo, /orgmembers, /orgbank, /orgdeposit, /orgwithdraw\n", sizeof(body));
+    strcat(body, "/businesses, /mybiz, /collectbiz, /bizpresetmenu\n", sizeof(body));
+    strcat(body, "/orgeconomy, /orgstatus, /orgeconomyhealth, /orgbiz, /orgfinance", sizeof(body));
+
+    ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "Org Economy Baseline Audit", body, "Close", "");
+    return 1;
+}
+
 public OnPlayerCommandText(playerid, cmdtext[])
 {
     if (!PlayerLoggedIn[playerid])
@@ -38122,6 +38244,12 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/amenus", true) || !strcmp(cmdtext, "/adminmenus", true) || !strcmp(cmdtext, "/menuseadmin", true))
     {
         ShowAdminToolsMenu(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/orgeconomy", true) || !strcmp(cmdtext, "/orgeconomyaudit", true) || !strcmp(cmdtext, "/orgstatus", true) || !strcmp(cmdtext, "/orgeconomyhealth", true) || !strcmp(cmdtext, "/orgbiz", true) || !strcmp(cmdtext, "/orgbusiness", true) || !strcmp(cmdtext, "/orgfinance", true))
+    {
+        ShowOrgEconomyBaselineAudit(playerid);
         return 1;
     }
 
@@ -40227,6 +40355,15 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/cjmovement", true) || !strcmp(cmdtext, "/skinmovement", true) || !strcmp(cmdtext, "/skinmovementruntime", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "========== SKIN MOVEMENT ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "CJ-like baseline movement: ENABLED via UsePlayerPedAnims().");
+        SendClientMessage(playerid, COLOR_WHITE, "movement_profile / anim_profile DB config: REMOVED, karena heavy/light/etc tidak memberi efek nyata.");
+        SendClientMessage(playerid, COLOR_WHITE, "Speed multiplier / velocity forcing / looped animation forcing: OFF.");
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/skinprofile", true) || !strcmp(cmdtext, "/skinprofiles", true))
     {
         ShowPlayerSkinProfile(playerid);
@@ -41016,7 +41153,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25B.10.3 Skin Profile Removal Cleanup");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.1 CJ-like Skin Movement Restore");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -41026,7 +41163,9 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.25B.10.2: Skin Profile Removal Cleanup; confirms CJ-like runtime baseline, profile contract, and no exploit-prone speed forcing.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.1: CJ-like Skin Movement Restore; UsePlayerPedAnims aktif, profile DB tetap dihapus.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1: Org Economy Baseline Audit; /orgeconomy, /orgstatus, /orgeconomyhealth.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.25B.10.3: Skin Profile Removal Cleanup; removes ineffective movement_profile/anim_profile from active skin system and DB.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25B.10: Vehicle Mission Closeout Audit; /vehmissioncloseout, /vehiclemissionhealth.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25B.9: Bus Player Passenger Flow; /busrequest, driver ALT board passenger, passenger bonus per stop.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25B.8: Mission Pool Management Editor; list/edit/goto/toggle/delete random pool points lewat dialog.");

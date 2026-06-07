@@ -13849,7 +13849,8 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.25B.10 Vehicle Mission Closeout Audit");
+    UsePlayerPedAnims(); // v0.25B.10.1: CJ-like player movement baseline for all skins.
+    SetGameModeText("SAIF Dev v0.25B.10.1.1 Skin Movement Compile Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -14002,9 +14003,9 @@ public OnGameModeInit()
     print("[SAIF] Crime wanted hooks aktif: assault/murder player akan menaikkan wanted otomatis dengan throttle aman.");
     print("[SAIF] Police Job Wanted Integrity aktif: police color biru tua dan wanted player diblokir dari police duty.");
     print("[SAIF] Skin Catalog baseline aktif: clothing store skin shop DB-based via skin_catalog.");
-    print("[SAIF] Skin Movement Normalization foundation aktif: movement_profile/anim_profile DB-based config.");
-    print("[SAIF] Vehicle Mission v0.25B.10 aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
-    print("[SAIF] Gamemode v0.25B.10 Vehicle Mission Closeout Audit berhasil dijalankan.");
+    print("[SAIF] Skin Movement Runtime aktif: UsePlayerPedAnims CJ-like baseline + movement_profile/anim_profile DB audit.");
+    print("[SAIF] Vehicle Mission v0.25B.10 tetap aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
+    print("[SAIF] Gamemode v0.25B.10.1.1 Skin Movement Compile Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -14800,7 +14801,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /vehmissioncloseout, /vehiclemissionhealth, /missiontarget, /vehmissionconfig, /missionpointmenu, /missionpool, /vehmissionpool, /jobpointpool, /vmpool, /pointpool, /jobpool, /jobpointmenu, /taxirequest, /taxistatus, /canceltaxi, /busrequest, /busstatus, /cancelbus, /medicrequest, /medicstatus, /cancelmedic, /firestatus, /firemission\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /vehmissioncloseout, /vehiclemissionhealth, /missiontarget, /vehmissionconfig, /missionpointmenu, /missionpool, /vehmissionpool, /jobpointpool, /vmpool, /pointpool, /jobpool, /jobpointmenu, /taxirequest, /taxistatus, /canceltaxi, /busrequest, /busstatus, /cancelbus, /medicrequest, /medicstatus, /cancelmedic, /firestatus, /firemission\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /skinmovementruntime, /skinmovementaudit, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
@@ -19047,7 +19048,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
                 ShowPlayerDialog(playerid, DIALOG_SKIN_PREVIEW_SECONDS_INPUT, DIALOG_STYLE_INPUT, "Edit Skin Preview Duration", body, "Save", "Back");
             }
             case 6: ShowSkinCatalogRuntimeSummary(playerid);
-            case 7: ShowPlayerSkinProfile(playerid);
+            case 7: ShowSkinMovementRuntimeAudit(playerid);
             case 8: ShowSkinSystemCloseoutAudit(playerid);
             case 9: ShowSkinCatalogInfo(playerid);
             case 10: ShowAdminToolsMenu(playerid);
@@ -23104,7 +23105,7 @@ stock ShowVehicleMissionBaselineAudit(playerid)
     GetVehicleMissionEligibility(playerid, eligibility, sizeof(eligibility));
 
     body[0] = EOS;
-    strcat(body, "SAIF v0.25B.10 Vehicle Mission Closeout Audit\n\n", sizeof(body));
+    strcat(body, "SAIF v0.25B.10 Vehicle Mission Baseline Audit + v0.25B.10.1.1 Skin Movement Compile Fix\n\n", sizeof(body));
     strcat(body, "Current Runtime:\n", sizeof(body));
     format(line, sizeof(line), "Vehicle ID: %d | Model: %d | Candidate: %s\n", vehicleId, vehicleModel, missionName);
     strcat(body, line, sizeof(body));
@@ -23183,7 +23184,7 @@ stock ShowVehicleMissionCloseoutAudit(playerid)
     }
 
     body[0] = EOS;
-    strcat(body, "SAIF v0.25B.10 Vehicle Mission Closeout Audit\n\n", sizeof(body));
+    strcat(body, "SAIF v0.25B.10 Vehicle Mission Closeout Audit + v0.25B.10.1.1 Skin Movement Compile Fix\n\n", sizeof(body));
 
     strcat(body, "Mission Contract:\n", sizeof(body));
     strcat(body, "- Tombol 2 = start vehicle duty/mission.\n", sizeof(body));
@@ -27045,10 +27046,25 @@ stock ApplySkinMovementNormalization(playerid)
 
     NormalizeSkinCatalogProfiles(skinIndex);
 
-    // v0.25A.5.2 foundation: movement_profile/anim_profile are DB-backed and applied as the active runtime profile.
-    // For safety, cj_like/default intentionally does not force animations or velocity changes yet.
-    // Deep movement/animation handling will be patched later after profile behavior is tested per skin.
+    // v0.25B.10.1 runtime apply:
+    // UsePlayerPedAnims() is enabled in OnGameModeInit as the safe CJ-like movement baseline.
+    // movement_profile/anim_profile remain DB-backed per-skin metadata for audit and future deeper handling.
+    // Do not force velocity/looped animations here; that would risk exploits and broken jail/preview/death states.
     return 1;
+}
+
+stock CountInvalidSkinProfileRowsRuntime()
+{
+    new invalidRows = 0;
+
+    for (new i = 0; i < SkinCatalogCount; i++)
+    {
+        if (!IsValidSkinProfileText(SkinCatalogMovementProfile[i]) || !IsValidSkinProfileText(SkinCatalogAnimProfile[i]))
+        {
+            invalidRows++;
+        }
+    }
+    return invalidRows;
 }
 
 stock ShowPlayerSkinProfile(playerid)
@@ -27074,6 +27090,39 @@ stock ShowPlayerSkinProfile(playerid)
     }
 
     ShowPlayerDialog(playerid, DIALOG_SKIN_PROFILE_INFO, DIALOG_STYLE_MSGBOX, "Skin Movement Profile", body, "Close", "Close");
+    return 1;
+}
+
+stock ShowSkinMovementRuntimeAudit(playerid)
+{
+    new currentIndex = GetSkinCatalogIndexBySkinID(PlayerCurrentSkin[playerid]);
+    if (currentIndex != -1) NormalizeSkinCatalogProfiles(currentIndex);
+
+    new invalidProfiles = CountInvalidSkinProfileRowsRuntime();
+    new cjLike = 0, nativeProfile = 0, defaultAnim = 0;
+    for (new i = 0; i < SkinCatalogCount; i++)
+    {
+        NormalizeSkinCatalogProfiles(i);
+        if (!strcmp(SkinCatalogMovementProfile[i], "cj_like", true)) cjLike++;
+        if (!strcmp(SkinCatalogMovementProfile[i], "native", true) || !strcmp(SkinCatalogMovementProfile[i], "default", true)) nativeProfile++;
+        if (!strcmp(SkinCatalogAnimProfile[i], "default", true)) defaultAnim++;
+    }
+
+    new body[1536];
+    format(body, sizeof(body),
+           "Skin Movement Runtime Audit\n\nRuntime Apply:\n- UsePlayerPedAnims: ENABLED at OnGameModeInit\n- Baseline behavior: CJ-like player movement for all skins\n- Per-skin DB profile: movement_profile + anim_profile\n- Velocity forcing: OFF / not used\n- Looped animation forcing: OFF / not used\n\nCatalog Summary:\nLoaded Catalog: %d\nmovement_profile cj_like: %d\nmovement_profile native/default: %d\nanim_profile default: %d\nInvalid Profile Rows: %d\n\nCurrent Player:\nSkin ID: %d\nCatalog: %s\nMovement Profile: %s\nAnimation Profile: %s\n\nSafety Notes:\n- Runtime movement is now actually applied through global player ped animations.\n- Profile fields remain editable from /skinconfig for future per-skin behavior.\n- This patch intentionally avoids speed multipliers to prevent movement exploits.",
+           SkinCatalogCount,
+           cjLike,
+           nativeProfile,
+           defaultAnim,
+           invalidProfiles,
+           PlayerCurrentSkin[playerid],
+           currentIndex == -1 ? ("not found") : SkinCatalogName[currentIndex],
+           currentIndex == -1 ? ("fallback") : SkinCatalogMovementProfile[currentIndex],
+           currentIndex == -1 ? ("fallback") : SkinCatalogAnimProfile[currentIndex]
+          );
+
+    ShowPlayerDialog(playerid, DIALOG_SKIN_PROFILE_INFO, DIALOG_STYLE_MSGBOX, "Skin Movement Runtime Audit", body, "Close", "Close");
     return 1;
 }
 
@@ -27782,7 +27831,7 @@ stock ShowSkinCatalogAdminMenu(playerid)
     strcat(body, "Reload Skin Catalog\n", sizeof(body));
     strcat(body, "Edit Preview Duration\n", sizeof(body));
     strcat(body, "Runtime Summary / Audit\n", sizeof(body));
-    strcat(body, "Skin Movement Profile / Audit\n", sizeof(body));
+    strcat(body, "Skin Movement Runtime / Audit\n", sizeof(body));
     strcat(body, "Skin System Closeout / Audit\n", sizeof(body));
     strcat(body, "Info\n", sizeof(body));
     strcat(body, "Back to Admin Menus\n", sizeof(body));
@@ -27852,7 +27901,7 @@ stock ShowSkinCatalogRuntimeSummary(playerid)
 
     new body[1024];
     format(body, sizeof(body),
-           "Skin Catalog Runtime Summary\n\nLoaded Items: %d\nActive: %d\nDisabled: %d\nFree Items: %d\nOwned by You: %d\n\nPlayer current skin uses players.skin.\nOwned wardrobe uses player_skins.\nClothing store service uses public interior type: clothing/binco/zip/suburban/prolaps/victim.\nOwned display uses explicit YES/NO columns in Skin Shop, Wardrobe, and admin list.\nSkin Shop item action supports frozen temporary preview/try-on before buy/equip.\nSkin preview duration: %d seconds from server_settings.skin_preview_seconds.\nPreview safety cleanup is active for public interior exit, disconnect, and death cleanup.\nSkin closeout audit is available from /skinaudit, /skinstatus, and /skinconfig.\nMovement normalization baseline uses movement_profile field; deep movement handling will be patched later.",
+           "Skin Catalog Runtime Summary\n\nLoaded Items: %d\nActive: %d\nDisabled: %d\nFree Items: %d\nOwned by You: %d\n\nPlayer current skin uses players.skin.\nOwned wardrobe uses player_skins.\nClothing store service uses public interior type: clothing/binco/zip/suburban/prolaps/victim.\nOwned display uses explicit YES/NO columns in Skin Shop, Wardrobe, and admin list.\nSkin Shop item action supports frozen temporary preview/try-on before buy/equip.\nSkin preview duration: %d seconds from server_settings.skin_preview_seconds.\nPreview safety cleanup is active for public interior exit, disconnect, and death cleanup.\nSkin closeout audit is available from /skinaudit, /skinstatus, and /skinconfig.\nMovement runtime is active via UsePlayerPedAnims CJ-like baseline; profile fields remain DB-backed for audit/future tuning.",
            SkinCatalogCount,
            active,
            disabled,
@@ -27980,7 +28029,7 @@ stock ShowSkinCatalogInfo(playerid)
         DIALOG_SKIN_ADMIN_INFO,
         DIALOG_STYLE_MSGBOX,
         "Skin Catalog Info",
-        "SAIF v0.25A.5.10 Skin System Closeout Audit\n\n- skin_catalog = DB catalog skin shop.\n- player_skins = owned/purchased wardrobe skins.\n- players.skin = persistent equipped skin.\n- Clothing Store opens /skinshop and /wardrobe from service checkpoint.\n- New skin purchases show a confirm dialog before cash is deducted.\n- Owned skins can be re-equipped without paying again.\n- Skin Shop, Wardrobe, and Skin Catalog admin list show explicit Owned column/status.\n- Skin Shop item selection opens Preview / Buy so players can try skin temporarily before paying.\n- Preview closes dialog and freezes movement; players can still rotate POV to inspect the skin.\n- Preview duration is configurable from /skinconfig and saved in server_settings.\n- Preview is automatically restored/cleaned when leaving public interior, disconnecting, or death cleanup happens.\n- Cancel/Back restores original skin and control without DB/cash changes.\n- Skin Shop and Wardrobe support category filter per player session.\n- /skinaudit /skinstatus provide closeout runtime health summary before moving to the next milestone.\n- movement_profile and anim_profile remain DB-backed foundation fields.",
+        "SAIF v0.25A.5.10 Skin System Closeout Audit\n\n- skin_catalog = DB catalog skin shop.\n- player_skins = owned/purchased wardrobe skins.\n- players.skin = persistent equipped skin.\n- Clothing Store opens /skinshop and /wardrobe from service checkpoint.\n- New skin purchases show a confirm dialog before cash is deducted.\n- Owned skins can be re-equipped without paying again.\n- Skin Shop, Wardrobe, and Skin Catalog admin list show explicit Owned column/status.\n- Skin Shop item selection opens Preview / Buy so players can try skin temporarily before paying.\n- Preview closes dialog and freezes movement; players can still rotate POV to inspect the skin.\n- Preview duration is configurable from /skinconfig and saved in server_settings.\n- Preview is automatically restored/cleaned when leaving public interior, disconnecting, or death cleanup happens.\n- Cancel/Back restores original skin and control without DB/cash changes.\n- Skin Shop and Wardrobe support category filter per player session.\n- /skinaudit /skinstatus provide closeout runtime health summary before moving to the next milestone.\n- movement_profile and anim_profile are DB-backed, and runtime CJ-like movement baseline is active via UsePlayerPedAnims.",
         "Back",
         "Close"
     );
@@ -40366,6 +40415,12 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/skinmovementruntime", true) || !strcmp(cmdtext, "/skinmovementaudit", true) || !strcmp(cmdtext, "/skinruntimemovement", true))
+    {
+        ShowSkinMovementRuntimeAudit(playerid);
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/myskin", true))
     {
         new skinIndex = GetSkinCatalogIndexBySkinID(PlayerCurrentSkin[playerid]);
@@ -41149,7 +41204,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25B.10 Vehicle Mission Closeout Audit");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25B.10.1.1 Skin Movement Compile Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -41159,6 +41214,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.25B.10.1.1: Skin Movement Compile Fix; adds missing runtime audit helper, keeps UsePlayerPedAnims CJ-like baseline.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25B.10: Vehicle Mission Closeout Audit; /vehmissioncloseout, /vehiclemissionhealth.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25B.9: Bus Player Passenger Flow; /busrequest, driver ALT board passenger, passenger bonus per stop.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25B.8: Mission Pool Management Editor; list/edit/goto/toggle/delete random pool points lewat dialog.");

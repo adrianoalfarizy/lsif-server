@@ -427,6 +427,12 @@ stock IsClosedBetaEnabled()
 #define VEHICLE_BUS       431
 #define VEHICLE_COACH     437
 
+#define BUS_PASSENGER_SEAT_BASE 1
+#define BUS_MAX_PLAYER_PASSENGERS 7
+#define BUS_PLAYER_BOARD_RADIUS 8.0
+#define BUS_PASSENGER_REWARD_PER_STOP 150
+#define BUS_PASSENGER_XP_PER_STOP 5
+
 #define VEHICLE_POLICE_LS 596
 #define VEHICLE_POLICE_SF 597
 #define VEHICLE_POLICE_LV 598
@@ -1021,6 +1027,11 @@ new PlayerEditingVehicleMissionPoolRow[MAX_PLAYERS];
 new PlayerTruckerStage[MAX_PLAYERS];
 new PlayerTruckerRoute[MAX_PLAYERS];
 new PlayerBusStop[MAX_PLAYERS];
+new PlayerBusRequest[MAX_PLAYERS];
+new PlayerBusAssignedDriver[MAX_PLAYERS];
+new PlayerBusRideActive[MAX_PLAYERS];
+new PlayerBusPassengerCount[MAX_PLAYERS];
+new PlayerBusRideStop[MAX_PLAYERS];
 new PlayerPoliceTarget[MAX_PLAYERS];
 
 new Float:BusStopX[MAX_BUS_STOPS] =
@@ -4369,6 +4380,11 @@ stock IsPlayerInFirefighterVehicle(playerid)
 stock ResetBusWorkData(playerid)
 {
     PlayerBusStop[playerid] = -1;
+    PlayerBusRequest[playerid] = 0;
+    PlayerBusAssignedDriver[playerid] = INVALID_PLAYER_ID;
+    PlayerBusRideActive[playerid] = 0;
+    PlayerBusPassengerCount[playerid] = 0;
+    PlayerBusRideStop[playerid] = -1;
     return 1;
 }
 
@@ -4383,6 +4399,221 @@ stock IsValidTaxiRidePassenger(playerid)
 {
     if (playerid == INVALID_PLAYER_ID) return 0;
     if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid]) return 0;
+    return 1;
+}
+
+stock IsValidBusRidePlayer(playerid)
+{
+    if (playerid == INVALID_PLAYER_ID) return 0;
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid]) return 0;
+    return 1;
+}
+
+stock CountBusRidePassengers(driverid)
+{
+    new count = 0;
+
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!IsValidBusRidePlayer(i)) continue;
+        if (PlayerBusRideActive[i] && PlayerBusAssignedDriver[i] == driverid)
+        {
+            count++;
+        }
+    }
+
+    return count;
+}
+
+stock ClearBusRideLink(playerid, notify)
+{
+    new msg[160];
+
+    // Player is a bus driver: clear all linked passengers/requesters.
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!IsValidBusRidePlayer(i)) continue;
+        if (PlayerBusAssignedDriver[i] == playerid)
+        {
+            PlayerBusRequest[i] = 0;
+            PlayerBusAssignedDriver[i] = INVALID_PLAYER_ID;
+            PlayerBusRideActive[i] = 0;
+            PlayerBusRideStop[i] = -1;
+            DisablePlayerCheckpoint(i);
+
+            if (notify)
+            {
+                SendClientMessage(i, COLOR_YELLOW, "Bus ride dibatalkan oleh driver/sistem.");
+            }
+        }
+    }
+
+    PlayerBusPassengerCount[playerid] = 0;
+
+    // Player is a passenger/requester.
+    new driverid = PlayerBusAssignedDriver[playerid];
+    if (IsValidBusRidePlayer(driverid))
+    {
+        PlayerBusPassengerCount[driverid] = CountBusRidePassengers(driverid);
+
+        if (notify)
+        {
+            format(msg, sizeof(msg), "Bus passenger %d membatalkan ride/request.", playerid);
+            SendClientMessage(driverid, COLOR_YELLOW, msg);
+        }
+    }
+
+    PlayerBusRequest[playerid] = 0;
+    PlayerBusAssignedDriver[playerid] = INVALID_PLAYER_ID;
+    PlayerBusRideActive[playerid] = 0;
+    PlayerBusRideStop[playerid] = -1;
+    DisablePlayerCheckpoint(playerid);
+    return 1;
+}
+
+stock GetNearestBusRequester(playerid, Float:radius)
+{
+    new Float:px, Float:py, Float:pz;
+    new Float:tx, Float:ty, Float:tz;
+    new nearest = INVALID_PLAYER_ID;
+    new Float:nearestDistance = radius + 1.0;
+
+    GetPlayerPos(playerid, px, py, pz);
+
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (i == playerid) continue;
+        if (!IsValidBusRidePlayer(i)) continue;
+        if (!PlayerBusRequest[i]) continue;
+        if (PlayerBusAssignedDriver[i] != INVALID_PLAYER_ID || PlayerBusRideActive[i]) continue;
+        if (GetPlayerInterior(i) != GetPlayerInterior(playerid)) continue;
+        if (GetPlayerVirtualWorld(i) != GetPlayerVirtualWorld(playerid)) continue;
+
+        GetPlayerPos(i, tx, ty, tz);
+        new Float:distance = GetDistanceBetweenPoints3D(px, py, pz, tx, ty, tz);
+        if (distance <= radius && distance < nearestDistance)
+        {
+            nearestDistance = distance;
+            nearest = i;
+        }
+    }
+
+    return nearest;
+}
+
+stock ApplyBusStopCheckpointToPassengers(driverid, stop)
+{
+    if (stop < 0 || stop >= MAX_BUS_STOPS) return 0;
+
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!IsValidBusRidePlayer(i)) continue;
+        if (PlayerBusRideActive[i] && PlayerBusAssignedDriver[i] == driverid)
+        {
+            PlayerBusRideStop[i] = stop;
+            ApplyVehicleMissionCheckpoint(i, "bus", BusStopX[stop], BusStopY[stop], BusStopZ[stop], 7.0);
+        }
+    }
+
+    return 1;
+}
+
+stock RewardBusPassengersAtStop(driverid, stop)
+{
+    new count = CountBusRidePassengers(driverid);
+    if (count <= 0) return 0;
+
+    new bonusMoney = BUS_PASSENGER_REWARD_PER_STOP * count;
+    new bonusXP = BUS_PASSENGER_XP_PER_STOP * count;
+    new msg[160];
+
+    GivePlayerCash(driverid, bonusMoney);
+    GivePlayerXPEx(driverid, bonusXP);
+
+    format(msg, sizeof(msg), "Bonus passenger bus: %d passenger aktif, +$%d dan +%d XP.", count, bonusMoney, bonusXP);
+    SendClientMessage(driverid, COLOR_CYAN, msg);
+
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!IsValidBusRidePlayer(i)) continue;
+        if (PlayerBusRideActive[i] && PlayerBusAssignedDriver[i] == driverid)
+        {
+            format(msg, sizeof(msg), "Bus sampai halte %s. Tetap di bus untuk lanjut route.", BusStopName[stop]);
+            SendClientMessage(i, COLOR_GREEN, msg);
+        }
+    }
+
+    return count;
+}
+
+stock CompleteBusRidePassengerAlt(playerid, targetid)
+{
+    if (targetid == INVALID_PLAYER_ID)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Tidak ada player request bus di radius ALT.");
+        return 0;
+    }
+
+    if (!PlayerWorking[playerid] || PlayerWorkType[playerid] != WORK_BUS)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Bus ALT hanya aktif saat Bus Route duty berjalan.");
+        return 0;
+    }
+
+    if (!IsPlayerInBusVehicle(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus tetap menjadi driver Bus/Coach untuk menerima passenger.");
+        return 0;
+    }
+
+    if (PlayerBusAssignedDriver[targetid] != INVALID_PLAYER_ID || PlayerBusRideActive[targetid])
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Passenger ini sudah punya bus ride aktif.");
+        return 0;
+    }
+
+    new passengerCount = CountBusRidePassengers(playerid);
+    if (passengerCount >= BUS_MAX_PLAYER_PASSENGERS)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Bus passenger player sudah penuh untuk foundation ini.");
+        return 0;
+    }
+
+    new Float:px, Float:py, Float:pz;
+    new Float:tx, Float:ty, Float:tz;
+    GetPlayerPos(playerid, px, py, pz);
+    GetPlayerPos(targetid, tx, ty, tz);
+    if (GetDistanceBetweenPoints3D(px, py, pz, tx, ty, tz) > BUS_PLAYER_BOARD_RADIUS)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Dekati passenger request bus sebelum ALT board.");
+        return 0;
+    }
+
+    new busVehicle = GetPlayerVehicleID(playerid);
+    new seat = BUS_PASSENGER_SEAT_BASE + passengerCount;
+
+    PlayerBusRequest[targetid] = 0;
+    PlayerBusAssignedDriver[targetid] = playerid;
+    PlayerBusRideActive[targetid] = 1;
+    PlayerBusRideStop[targetid] = PlayerBusStop[playerid];
+    PlayerBusPassengerCount[playerid] = passengerCount + 1;
+
+    PutPlayerInVehicle(targetid, busVehicle, seat);
+
+    if (PlayerBusStop[playerid] >= 0 && PlayerBusStop[playerid] < MAX_BUS_STOPS)
+    {
+        ApplyVehicleMissionCheckpoint(targetid, "bus", BusStopX[PlayerBusStop[playerid]], BusStopY[PlayerBusStop[playerid]], BusStopZ[PlayerBusStop[playerid]], 7.0);
+    }
+
+    new driverName[MAX_PLAYER_NAME], passengerName[MAX_PLAYER_NAME], msg[180];
+    GetPlayerName(playerid, driverName, sizeof(driverName));
+    GetPlayerName(targetid, passengerName, sizeof(passengerName));
+
+    format(msg, sizeof(msg), "Bus passenger diterima: %s masuk sebagai passenger seat %d.", passengerName, seat);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    format(msg, sizeof(msg), "Bus driver %s menerima request kamu. Tetap di bus sampai route selesai.", driverName);
+    SendClientMessage(targetid, COLOR_GREEN, msg);
+    SendClientMessage(playerid, COLOR_WHITE, "Reward passenger diberikan per halte selama passenger tetap di bus.");
     return 1;
 }
 
@@ -4462,11 +4693,17 @@ stock ResetPlayerTargetMissionData(playerid)
     }
 
     ClearTaxiRideLink(playerid, 0);
+    ClearBusRideLink(playerid, 0);
     PlayerTaxiRequest[playerid] = 0;
     PlayerTaxiAssignedDriver[playerid] = INVALID_PLAYER_ID;
     PlayerTaxiPassengerTarget[playerid] = INVALID_PLAYER_ID;
     PlayerTaxiRideActive[playerid] = 0;
     PlayerTaxiRideRoute[playerid] = -1;
+    PlayerBusRequest[playerid] = 0;
+    PlayerBusAssignedDriver[playerid] = INVALID_PLAYER_ID;
+    PlayerBusRideActive[playerid] = 0;
+    PlayerBusPassengerCount[playerid] = 0;
+    PlayerBusRideStop[playerid] = -1;
     ResetMedicRequestData(playerid);
     PlayerMissionTarget[playerid] = INVALID_PLAYER_ID;
     PlayerFireMissionVehicle[playerid] = INVALID_VEHICLE_ID;
@@ -4527,6 +4764,7 @@ stock StartBusWork(playerid)
     ApplyVehicleMissionCheckpoint(playerid, "bus", BusStopX[0], BusStopY[0], BusStopZ[0], 7.0);
     GameTextForPlayer(playerid, "~g~Bus Mission Started", 3000, 3);
     SendClientMessage(playerid, COLOR_GREEN, "Bus Mission dimulai. Ikuti checkpoint halte berurutan.");
+    SendClientMessage(playerid, COLOR_WHITE, "Passenger bisa memakai /busrequest. Dekati mereka lalu tekan ALT untuk menaikkan passenger player.");
     SendClientMessage(playerid, COLOR_WHITE, "Tetap gunakan kendaraan bus yang sama. Keluar terlalu lama akan membatalkan mission.");
     return 1;
 }
@@ -4544,6 +4782,7 @@ stock CompleteBusWork(playerid)
     PlayerWorkType[playerid] = WORK_NONE;
     PlayerWorkPoint[playerid] = -1;
     PlayerLastWorkTick[playerid] = GetTickCount();
+    ClearBusRideLink(playerid, 1);
     ResetBusWorkData(playerid);
     GameTextForPlayer(playerid, "~g~Bus Route Complete", 3500, 3);
     SendClientMessage(playerid, COLOR_GREEN, "Bus route selesai. Bonus route diberikan.");
@@ -4571,6 +4810,7 @@ stock HandleBusCheckpoint(playerid)
     new msg[144];
     format(msg, sizeof(msg), "Halte %s selesai. Reward: $%d dan %d XP.", BusStopName[stop], BUS_REWARD_PER_STOP, BUS_XP_PER_STOP);
     SendClientMessage(playerid, COLOR_GREEN, msg);
+    RewardBusPassengersAtStop(playerid, stop);
     stop++;
     if (stop >= MAX_BUS_STOPS)
     {
@@ -4580,6 +4820,7 @@ stock HandleBusCheckpoint(playerid)
     PlayerBusStop[playerid] = stop;
     PlayerWorkPoint[playerid] = stop;
     ApplyVehicleMissionCheckpoint(playerid, "bus", BusStopX[stop], BusStopY[stop], BusStopZ[stop], 7.0);
+    ApplyBusStopCheckpointToPassengers(playerid, stop);
     format(msg, sizeof(msg), "Bus route berikutnya: %s.", BusStopName[stop]);
     SendClientMessage(playerid, COLOR_CYAN, msg);
     return 1;
@@ -6034,6 +6275,11 @@ stock TryHandleVehicleMissionAlt(playerid)
         return CompleteTaxiRequesterAlt(playerid, GetNearestTaxiRequester(playerid, VEHICLE_MISSION_TARGET_RADIUS));
     }
 
+    if (PlayerWorkType[playerid] == WORK_BUS)
+    {
+        return CompleteBusRidePassengerAlt(playerid, GetNearestBusRequester(playerid, BUS_PLAYER_BOARD_RADIUS));
+    }
+
     if (PlayerWorkType[playerid] == WORK_FIREFIGHTER)
     {
         return CompleteFirefighterAlt(playerid);
@@ -6075,7 +6321,7 @@ stock SendVehicleMissionHint(playerid)
     if (IsBusVehicleModel(modelid))
     {
         GameTextForPlayer(playerid, "~y~Tombol 2~w~: Bus Route", 3500, 3);
-        SendClientMessage(playerid, COLOR_CYAN, "Vehicle Mission: tekan tombol 2 untuk mulai Bus Driver route.");
+        SendClientMessage(playerid, COLOR_CYAN, "Vehicle Mission: tekan tombol 2 untuk mulai Bus Driver route. Passenger bisa /busrequest, lalu ALT untuk menaikkan.");
         return 1;
     }
 
@@ -13603,7 +13849,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.25B.8 Mission Pool Management Editor");
+    SetGameModeText("SAIF Dev v0.25B.10 Vehicle Mission Closeout Audit");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -13757,8 +14003,8 @@ public OnGameModeInit()
     print("[SAIF] Police Job Wanted Integrity aktif: police color biru tua dan wanted player diblokir dari police duty.");
     print("[SAIF] Skin Catalog baseline aktif: clothing store skin shop DB-based via skin_catalog.");
     print("[SAIF] Skin Movement Normalization foundation aktif: movement_profile/anim_profile DB-based config.");
-    print("[SAIF] Vehicle Mission v0.25B.8 aktif: Mission Pool Management Editor siap untuk list/edit/goto/toggle/delete pool point.");
-    print("[SAIF] Gamemode v0.25B.8 Mission Pool Management Editor berhasil dijalankan.");
+    print("[SAIF] Vehicle Mission v0.25B.10 aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
+    print("[SAIF] Gamemode v0.25B.10 Vehicle Mission Closeout Audit berhasil dijalankan.");
     return 1;
 }
 
@@ -14554,7 +14800,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /missiontarget, /vehmissionconfig, /missionpointmenu, /missionpool, /vehmissionpool, /jobpointpool, /vmpool, /pointpool, /jobpool, /jobpointmenu, /taxirequest, /taxistatus, /canceltaxi, /medicrequest, /medicstatus, /cancelmedic, /firestatus, /firemission\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /vehmissioncloseout, /vehiclemissionhealth, /missiontarget, /vehmissionconfig, /missionpointmenu, /missionpool, /vehmissionpool, /jobpointpool, /vmpool, /pointpool, /jobpool, /jobpointmenu, /taxirequest, /taxistatus, /canceltaxi, /busrequest, /busstatus, /cancelbus, /medicrequest, /medicstatus, /cancelmedic, /firestatus, /firemission\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
@@ -16583,7 +16829,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             {
                 new body[1200];
                 body[0] = EOS;
-                strcat(body, "Vehicle Mission Point Editor v0.25B.8\n\n", sizeof(body));
+                strcat(body, "Vehicle Mission Point Editor v0.25B.10\n\n", sizeof(body));
                 strcat(body, "vehicle_mission_points = single default/fallback per mission.\n", sizeof(body));
                 strcat(body, "vehicle_mission_point_pool = banyak point aktif per mission dan dipilih random saat runtime.\n", sizeof(body));
                 strcat(body, "Firefighter memakai spawn/checkpoint/fire offset dari row pool yang sama jika tersedia.\n", sizeof(body));
@@ -22801,7 +23047,7 @@ stock ShowFirefighterMissionStatus(playerid)
     new vehicleid = PlayerFireMissionVehicle[playerid];
 
     body[0] = EOS;
-    strcat(body, "SAIF v0.25B.8 Mission Pool Management Editor Status\n\n", sizeof(body));
+    strcat(body, "SAIF v0.25B.10 Vehicle Mission Closeout Status\n\n", sizeof(body));
 
     format(line, sizeof(line), "Working: %s | WorkType: %d | Fire target vehicle: %d\n", PlayerWorking[playerid] ? ("YES") : ("NO"), PlayerWorkType[playerid], vehicleid);
     strcat(body, line, sizeof(body));
@@ -22858,7 +23104,7 @@ stock ShowVehicleMissionBaselineAudit(playerid)
     GetVehicleMissionEligibility(playerid, eligibility, sizeof(eligibility));
 
     body[0] = EOS;
-    strcat(body, "SAIF v0.25B.8 Mission Pool Management Editor\n\n", sizeof(body));
+    strcat(body, "SAIF v0.25B.10 Vehicle Mission Closeout Audit\n\n", sizeof(body));
     strcat(body, "Current Runtime:\n", sizeof(body));
     format(line, sizeof(line), "Vehicle ID: %d | Model: %d | Candidate: %s\n", vehicleId, vehicleModel, missionName);
     strcat(body, line, sizeof(body));
@@ -22875,16 +23121,17 @@ stock ShowVehicleMissionBaselineAudit(playerid)
     strcat(body, "- Taxi / Cabbie: start taxi duty; ALT accepts real /taxirequest player target.\n", sizeof(body));
     strcat(body, "- Courier vans: cargo/world delivery mission.\n", sizeof(body));
     strcat(body, "- Truck/freight vehicles: cargo/world freight mission.\n", sizeof(body));
-    strcat(body, "- Bus / Coach: route mission; passenger-player polish later.\n", sizeof(body));
+    strcat(body, "- Bus / Coach: route mission; ALT accepts real /busrequest passenger target.\n", sizeof(body));
     strcat(body, "- Police vehicles: Police/Vigilante duty; ALT arrests real wanted player target.\n", sizeof(body));
     strcat(body, "- Ambulance: Paramedic duty; ALT heals real injured player target.\n", sizeof(body));
     strcat(body, "- Firetruck: Firefighter mission; spawns burning vehicle with hood fire, completion by water cannon/APAR.\n\n", sizeof(body));
 
     strcat(body, "Player-Target Contract:\n", sizeof(body));
-    strcat(body, "- Police/Taxi/Ambulance target wajib player asli.\n", sizeof(body));
+    strcat(body, "- Police/Taxi/Ambulance/Bus target wajib player asli saat melibatkan passenger/target.\n", sizeof(body));
     strcat(body, "- Firefighter target berupa spawned burning vehicle; completion wajib api padam dari water cannon/APAR, bukan checkpoint/ALT spam.\n", sizeof(body));
-    strcat(body, "- v0.25B.6: /vehmissionconfig mengatur spawn/checkpoint/fire offset DB-based tanpa compile ulang.
-- v0.25B.7: vehicle_mission_point_pool menambah banyak titik random per mission.\n", sizeof(body));
+    strcat(body, "- v0.25B.6: /vehmissionconfig mengatur spawn/checkpoint/fire offset DB-based tanpa compile ulang.\n", sizeof(body));
+    strcat(body, "- v0.25B.7: vehicle_mission_point_pool menambah banyak titik random per mission.\n", sizeof(body));
+    strcat(body, "- v0.25B.9: bus passenger flow memakai /busrequest + ALT boarding player asli.\n", sizeof(body));
     strcat(body, "- Courier/Trucker tetap cargo/world mission.\n\n", sizeof(body));
 
     strcat(body, "Policy:\n", sizeof(body));
@@ -22895,13 +23142,90 @@ stock ShowVehicleMissionBaselineAudit(playerid)
     strcat(body, "- Wanted player tidak bisa start Police/Vigilante.\n", sizeof(body));
     strcat(body, "- v0.25B.3 menambah Taxi ride flow: passenger /taxirequest, driver ALT accept, passenger masuk taxi, lalu driver antar ke checkpoint dropoff.\n", sizeof(body));
     strcat(body, "- v0.25B.4 menambah Paramedic player treatment flow: /medicrequest optional, ALT heal player injured asli, dan request cleanup.\n", sizeof(body));
-    strcat(body, "- v0.25B.6 menambah Vehicle Mission Point Editor: spawn point, checkpoint guide, radius, dan fire offset DB-based via /vehmissionconfig.
-- v0.25B.7 menambah Random Point Pool DB: banyak spawn/checkpoint aktif per mission, dipilih random saat mission berjalan.\n", sizeof(body));
+    strcat(body, "- v0.25B.6 menambah Vehicle Mission Point Editor: spawn point, checkpoint guide, radius, dan fire offset DB-based via /vehmissionconfig.\n", sizeof(body));
+    strcat(body, "- v0.25B.7 menambah Random Point Pool DB: banyak spawn/checkpoint aktif per mission, dipilih random saat mission berjalan.\n", sizeof(body));
     strcat(body, "- v0.25B.5.2 memperbaiki firefighter: completion wajib api kap mobil padam karena disemprot air/APAR, checkpoint hanya guide.\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_VEHICLE_MISSION_INFO, DIALOG_STYLE_MSGBOX, "Vehicle Mission Baseline", body, "Back", "Close");
     return 1;
 }
+
+
+stock ShowVehicleMissionCloseoutAudit(playerid)
+{
+    new body[4096];
+    new line[256];
+    new activeTaxiRequests = 0;
+    new activeTaxiRides = 0;
+    new activeBusRequests = 0;
+    new activeBusRides = 0;
+    new activeMedicRequests = 0;
+    new activeFireMissions = 0;
+    new activePoliceDuty = 0;
+    new activeParamedicDuty = 0;
+    new activeFirefighterDuty = 0;
+
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (!IsPlayerConnected(i)) continue;
+        if (PlayerTaxiRequest[i]) activeTaxiRequests++;
+        if (PlayerTaxiRideActive[i]) activeTaxiRides++;
+        if (PlayerBusRequest[i]) activeBusRequests++;
+        if (PlayerBusRideActive[i]) activeBusRides++;
+        if (PlayerMedicRequest[i]) activeMedicRequests++;
+        if (PlayerWorking[i] && PlayerWorkType[i] == WORK_POLICE) activePoliceDuty++;
+        if (PlayerWorking[i] && PlayerWorkType[i] == WORK_PARAMEDIC) activeParamedicDuty++;
+        if (PlayerWorking[i] && PlayerWorkType[i] == WORK_FIREFIGHTER)
+        {
+            activeFirefighterDuty++;
+            if (PlayerFireMissionVehicle[i] > 0 && PlayerFireMissionVehicle[i] != INVALID_VEHICLE_ID) activeFireMissions++;
+        }
+    }
+
+    body[0] = EOS;
+    strcat(body, "SAIF v0.25B.10 Vehicle Mission Closeout Audit\n\n", sizeof(body));
+
+    strcat(body, "Mission Contract:\n", sizeof(body));
+    strcat(body, "- Tombol 2 = start vehicle duty/mission.\n", sizeof(body));
+    strcat(body, "- ALT = interaksi target saat duty aktif.\n", sizeof(body));
+    strcat(body, "- Police, Taxi, Ambulance, Bus = player-target multiplayer flow.\n", sizeof(body));
+    strcat(body, "- Firefighter = spawned burning vehicle; sukses otomatis setelah api padam oleh Firetruck/APAR.\n", sizeof(body));
+    strcat(body, "- Courier/Trucker = cargo/world mission tetap valid.\n\n", sizeof(body));
+
+    strcat(body, "Runtime Activity:\n", sizeof(body));
+    format(line, sizeof(line), "Taxi requests: %d | Taxi rides: %d\n", activeTaxiRequests, activeTaxiRides);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Bus requests: %d | Bus rides: %d\n", activeBusRequests, activeBusRides);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Medic requests: %d | Police duty: %d | Paramedic duty: %d\n", activeMedicRequests, activePoliceDuty, activeParamedicDuty);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Firefighter duty: %d | Active fire targets: %d\n\n", activeFirefighterDuty, activeFireMissions);
+    strcat(body, line, sizeof(body));
+
+    strcat(body, "Point System:\n", sizeof(body));
+    format(line, sizeof(line), "Single default point configs: %d mission families\n", MAX_VEHICLE_MISSION_POINT_CONFIG);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Loaded random pool rows: %d / %d\n", VehicleMissionPoolCount, MAX_VEHICLE_MISSION_POOL_POINTS);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Pool active: taxi %d | courier %d | trucker %d | bus %d\n", CountVehicleMissionPoolPoints(VEH_MISSION_POINT_TAXI, 0, 1), CountVehicleMissionPoolPoints(VEH_MISSION_POINT_COURIER, 0, 1), CountVehicleMissionPoolPoints(VEH_MISSION_POINT_TRUCKER, 0, 1), CountVehicleMissionPoolPoints(VEH_MISSION_POINT_BUS, 0, 1));
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Pool active: police %d | paramedic %d | firefighter %d\n\n", CountVehicleMissionPoolPoints(VEH_MISSION_POINT_POLICE, 0, 1), CountVehicleMissionPoolPoints(VEH_MISSION_POINT_PARAMEDIC, 0, 1), CountVehicleMissionPoolPoints(VEH_MISSION_POINT_FIREFIGHTER, 1, 1));
+    strcat(body, line, sizeof(body));
+
+    strcat(body, "Closeout Commands:\n", sizeof(body));
+    strcat(body, "/vehmission - player runtime mission audit.\n", sizeof(body));
+    strcat(body, "/missiontarget - player-target contract reference.\n", sizeof(body));
+    strcat(body, "/vehmissionconfig - single default point editor.\n", sizeof(body));
+    strcat(body, "/missionpool - random point pool editor.\n", sizeof(body));
+    strcat(body, "/taxistatus, /busstatus, /medicstatus, /firestatus - family status commands.\n\n", sizeof(body));
+
+    strcat(body, "Regression Focus:\n", sizeof(body));
+    strcat(body, "Police ALT arrest wanted player, Taxi/Bus passenger request, Medic heal injured player, Firefighter real extinguish, Courier/Trucker old flow.\n", sizeof(body));
+
+    ShowPlayerDialog(playerid, DIALOG_VEHICLE_MISSION_INFO, DIALOG_STYLE_MSGBOX, "Vehicle Mission Closeout", body, "Back", "Close");
+    return 1;
+}
+
 
 
 stock ResetDynamicLocationArrays()
@@ -35775,6 +36099,13 @@ public OnPlayerStateChange(playerid, PLAYER_STATE:newstate, PLAYER_STATE:oldstat
         return 1;
     }
 
+    if (PlayerBusRideActive[playerid] && oldstate == PLAYER_STATE_PASSENGER && newstate == PLAYER_STATE_ONFOOT)
+    {
+        ClearBusRideLink(playerid, 1);
+        SendClientMessage(playerid, COLOR_RED, "Bus ride dibatalkan karena kamu turun sebelum route selesai.");
+        return 1;
+    }
+
     if (PlayerRace[playerid] != RACE_NONE)
     {
         if ((oldstate == PLAYER_STATE_DRIVER || oldstate == PLAYER_STATE_PASSENGER) && newstate == PLAYER_STATE_ONFOOT)
@@ -37945,6 +38276,18 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/vehmissioncloseout", true) || !strcmp(cmdtext, "/vehiclemissioncloseout", true) || !strcmp(cmdtext, "/vehiclemissionhealth", true) || !strcmp(cmdtext, "/missioncloseout", true) || !strcmp(cmdtext, "/missionhealth", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_HELPER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+            return 1;
+        }
+
+        ShowVehicleMissionCloseoutAudit(playerid);
+        return 1;
+    }
+
     if (strfind(cmdtext, "/missionpool", true) == 0 || strfind(cmdtext, "/vehmissionpool", true) == 0 || strfind(cmdtext, "/jobpointpool", true) == 0 || strfind(cmdtext, "/vmpool", true) == 0 || strfind(cmdtext, "/pointpool", true) == 0 || strfind(cmdtext, "/jobpool", true) == 0)
     {
         if (!IsAdminLevel(playerid, ADMIN_OWNER))
@@ -38009,6 +38352,49 @@ public OnPlayerCommandText(playerid, cmdtext[])
         if (PlayerTaxiRequest[playerid]) SendClientMessage(playerid, COLOR_GREEN, "Taxi status: request aktif, menunggu driver.");
         else if (PlayerTaxiRideActive[playerid]) SendClientMessage(playerid, COLOR_GREEN, "Taxi status: ride aktif, tunggu sampai dropoff.");
         else SendClientMessage(playerid, COLOR_WHITE, "Taxi status: tidak ada request/ride aktif. Gunakan /taxirequest untuk panggil taxi.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/busrequest", true) || !strcmp(cmdtext, "/callbus", true) || !strcmp(cmdtext, "/needbus", true))
+    {
+        if (PlayerWorking[playerid])
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu tidak bisa request bus saat sedang menjalankan mission/job.");
+            return 1;
+        }
+        if (PlayerBusRideActive[playerid] || PlayerBusAssignedDriver[playerid] != INVALID_PLAYER_ID)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu sudah punya bus ride aktif. Gunakan /cancelbus untuk membatalkan.");
+            return 1;
+        }
+        PlayerBusRequest[playerid] = 1;
+        PlayerBusAssignedDriver[playerid] = INVALID_PLAYER_ID;
+        PlayerBusRideActive[playerid] = 0;
+        PlayerBusRideStop[playerid] = -1;
+        SendClientMessage(playerid, COLOR_GREEN, "Bus request aktif. Bus driver duty bisa mendekat lalu tekan ALT untuk menaikkanmu.");
+        SendClientMessage(playerid, COLOR_WHITE, "Saat diterima, kamu akan masuk passenger seat bus dan ikut route sampai selesai/cancel.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/cancelbus", true) || !strcmp(cmdtext, "/buscancel", true))
+    {
+        ClearBusRideLink(playerid, 1);
+        SendClientMessage(playerid, COLOR_YELLOW, "Bus request/ride dibatalkan.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/busstatus", true) || !strcmp(cmdtext, "/busride", true) || !strcmp(cmdtext, "/ridebus", true))
+    {
+        ShowVehicleMissionBaselineAudit(playerid);
+        if (PlayerBusRequest[playerid]) SendClientMessage(playerid, COLOR_GREEN, "Bus status: request aktif, menunggu bus driver.");
+        else if (PlayerBusRideActive[playerid]) SendClientMessage(playerid, COLOR_GREEN, "Bus status: ride aktif, tetap di bus sampai route selesai.");
+        else if (PlayerWorking[playerid] && PlayerWorkType[playerid] == WORK_BUS)
+        {
+            new msg[144];
+            format(msg, sizeof(msg), "Bus driver status: passenger aktif %d. Dekati /busrequest player lalu ALT.", CountBusRidePassengers(playerid));
+            SendClientMessage(playerid, COLOR_GREEN, msg);
+        }
+        else SendClientMessage(playerid, COLOR_WHITE, "Bus status: tidak ada request/ride aktif. Gunakan /busrequest untuk naik bus umum.");
         return 1;
     }
 
@@ -40763,7 +41149,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25B.8 Mission Pool Management Editor");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25B.10 Vehicle Mission Closeout Audit");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -40773,6 +41159,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.25B.10: Vehicle Mission Closeout Audit; /vehmissioncloseout, /vehiclemissionhealth.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.25B.9: Bus Player Passenger Flow; /busrequest, driver ALT board passenger, passenger bonus per stop.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25B.8: Mission Pool Management Editor; list/edit/goto/toggle/delete random pool points lewat dialog.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25B.7.2: Mission pool command aliases fix; /missionpool membuka Random Point Pool langsung.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25B.7.1: Weapon tag warning fix untuk APAR/fire extinguisher GivePlayerWeapon.");

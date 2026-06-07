@@ -422,6 +422,8 @@ stock IsClosedBetaEnabled()
 #define VEHICLE_MISSION_PARAMEDIC_XP 20
 #define VEHICLE_MISSION_TAXI_ACCEPT_REWARD 150
 #define VEHICLE_MISSION_TAXI_ACCEPT_XP 10
+#define TAXI_RIDE_PASSENGER_SEAT 1
+#define TAXI_RIDE_BOARD_RADIUS 7.0
 #define VEHICLE_MISSION_FIREFIGHTER_REWARD 600
 #define VEHICLE_MISSION_FIREFIGHTER_XP 35
 #define FIRE_MISSION_BURNING_MODEL 401
@@ -910,6 +912,8 @@ new PlayerTaxiRoute[MAX_PLAYERS];
 new PlayerTaxiRequest[MAX_PLAYERS];
 new PlayerTaxiAssignedDriver[MAX_PLAYERS];
 new PlayerTaxiPassengerTarget[MAX_PLAYERS];
+new PlayerTaxiRideActive[MAX_PLAYERS];
+new PlayerTaxiRideRoute[MAX_PLAYERS];
 new PlayerMissionTarget[MAX_PLAYERS];
 new PlayerFireMissionVehicle[MAX_PLAYERS];
 
@@ -3970,7 +3974,7 @@ stock StartTaxiWork(playerid)
 
     GameTextForPlayer(playerid, "~y~Taxi Duty", 3000, 3);
     SendClientMessage(playerid, COLOR_GREEN, "Taxi duty aktif. Cari player yang memakai /taxirequest lalu tekan ALT di dekatnya.");
-    SendClientMessage(playerid, COLOR_WHITE, "v0.25B.2: Taxi target wajib player asli. Route/fare passenger polish akan dibuat bertahap.");
+    SendClientMessage(playerid, COLOR_WHITE, "v0.25B.3: Taxi target wajib player asli. ALT accept akan memasukkan passenger dan membuat dropoff ride.");
 
     return 1;
 }
@@ -4044,6 +4048,17 @@ stock CompleteTaxiWork(playerid)
     GivePlayerCash(playerid, reward);
     GivePlayerXPEx(playerid, xp);
     AddJobProgress(playerid, "taxi", reward, xp);
+
+    new passengerid = PlayerTaxiPassengerTarget[playerid];
+    if (IsValidTaxiRidePassenger(passengerid) && PlayerTaxiAssignedDriver[passengerid] == playerid)
+    {
+        DisablePlayerCheckpoint(passengerid);
+        PlayerTaxiRequest[passengerid] = 0;
+        PlayerTaxiAssignedDriver[passengerid] = INVALID_PLAYER_ID;
+        PlayerTaxiRideActive[passengerid] = 0;
+        PlayerTaxiRideRoute[passengerid] = -1;
+        SendClientMessage(passengerid, COLOR_GREEN, "Taxi ride selesai. Kamu sudah sampai di tujuan.");
+    }
 
     DisablePlayerCheckpoint(playerid);
 
@@ -4306,6 +4321,67 @@ stock ResetPoliceWorkData(playerid)
     return 1;
 }
 
+
+stock IsValidTaxiRidePassenger(playerid)
+{
+    if (playerid == INVALID_PLAYER_ID) return 0;
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid]) return 0;
+    return 1;
+}
+
+stock ClearTaxiRideLink(playerid, notify)
+{
+    new msg[160];
+
+    // Player is the taxi driver.
+    new passengerid = PlayerTaxiPassengerTarget[playerid];
+    if (IsValidTaxiRidePassenger(passengerid))
+    {
+        PlayerTaxiRequest[passengerid] = 0;
+        PlayerTaxiAssignedDriver[passengerid] = INVALID_PLAYER_ID;
+        PlayerTaxiRideActive[passengerid] = 0;
+        PlayerTaxiRideRoute[passengerid] = -1;
+        DisablePlayerCheckpoint(passengerid);
+        if (notify)
+        {
+            SendClientMessage(passengerid, COLOR_YELLOW, "Taxi ride dibatalkan oleh driver/sistem.");
+        }
+    }
+
+    PlayerTaxiPassengerTarget[playerid] = INVALID_PLAYER_ID;
+
+    // Player is the passenger in an active/requested ride.
+    new driverid = PlayerTaxiAssignedDriver[playerid];
+    if (IsValidTaxiRidePassenger(driverid) && PlayerTaxiPassengerTarget[driverid] == playerid)
+    {
+        PlayerTaxiPassengerTarget[driverid] = INVALID_PLAYER_ID;
+        PlayerTaxiStage[driverid] = TAXI_STAGE_PICKUP;
+        PlayerTaxiRoute[driverid] = -1;
+        DisablePlayerCheckpoint(driverid);
+
+        if (PlayerWorking[driverid] && PlayerWorkType[driverid] == WORK_TAXI)
+        {
+            PlayerWorking[driverid] = 0;
+            PlayerWorkType[driverid] = WORK_NONE;
+            PlayerWorkPoint[driverid] = -1;
+            PlayerLastWorkTick[driverid] = GetTickCount();
+        }
+
+        if (notify)
+        {
+            format(msg, sizeof(msg), "Taxi passenger membatalkan ride. Driver duty dibatalkan.");
+            SendClientMessage(driverid, COLOR_YELLOW, msg);
+        }
+    }
+
+    PlayerTaxiRequest[playerid] = 0;
+    PlayerTaxiAssignedDriver[playerid] = INVALID_PLAYER_ID;
+    PlayerTaxiRideActive[playerid] = 0;
+    PlayerTaxiRideRoute[playerid] = -1;
+    DisablePlayerCheckpoint(playerid);
+    return 1;
+}
+
 stock ResetPlayerTargetMissionData(playerid)
 {
     if (PlayerFireMissionVehicle[playerid] > 0 && PlayerFireMissionVehicle[playerid] != INVALID_VEHICLE_ID)
@@ -4313,9 +4389,12 @@ stock ResetPlayerTargetMissionData(playerid)
         DestroyVehicle(PlayerFireMissionVehicle[playerid]);
     }
 
+    ClearTaxiRideLink(playerid, 0);
     PlayerTaxiRequest[playerid] = 0;
     PlayerTaxiAssignedDriver[playerid] = INVALID_PLAYER_ID;
     PlayerTaxiPassengerTarget[playerid] = INVALID_PLAYER_ID;
+    PlayerTaxiRideActive[playerid] = 0;
+    PlayerTaxiRideRoute[playerid] = -1;
     PlayerMissionTarget[playerid] = INVALID_PLAYER_ID;
     PlayerFireMissionVehicle[playerid] = INVALID_VEHICLE_ID;
     return 1;
@@ -4695,23 +4774,80 @@ stock CompleteTaxiRequesterAlt(playerid, targetid)
         return 0;
     }
 
+    if (!IsPlayerInTaxiVehicle(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus tetap menjadi driver Taxi/Cabbie untuk menerima passenger.");
+        return 0;
+    }
+
+    new taxiVehicle = GetPlayerVehicleID(playerid);
+    if (taxiVehicle <= 0 || taxiVehicle == INVALID_VEHICLE_ID)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Taxi vehicle tidak valid.");
+        return 0;
+    }
+
+    if (GetPlayerState(playerid) != PLAYER_STATE_DRIVER)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Kamu harus menjadi driver untuk menerima passenger.");
+        return 0;
+    }
+
+    if (PlayerTaxiAssignedDriver[targetid] != INVALID_PLAYER_ID || PlayerTaxiRideActive[targetid])
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Passenger ini sudah punya ride aktif.");
+        return 0;
+    }
+
+    new Float:px, Float:py, Float:pz;
+    new Float:tx, Float:ty, Float:tz;
+    GetPlayerPos(playerid, px, py, pz);
+    GetPlayerPos(targetid, tx, ty, tz);
+    if (GetDistanceBetweenPoints3D(px, py, pz, tx, ty, tz) > TAXI_RIDE_BOARD_RADIUS)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Dekati passenger request taxi sebelum ALT accept.");
+        return 0;
+    }
+
+    new route = random(MAX_TAXI_ROUTES);
+
     PlayerTaxiRequest[targetid] = 0;
     PlayerTaxiAssignedDriver[targetid] = playerid;
     PlayerTaxiPassengerTarget[playerid] = targetid;
+    PlayerTaxiRideActive[targetid] = 1;
+    PlayerTaxiRideRoute[targetid] = route;
 
-    GivePlayerCash(playerid, VEHICLE_MISSION_TAXI_ACCEPT_REWARD);
-    GivePlayerXPEx(playerid, VEHICLE_MISSION_TAXI_ACCEPT_XP);
-    AddJobProgress(playerid, "taxi", VEHICLE_MISSION_TAXI_ACCEPT_REWARD, VEHICLE_MISSION_TAXI_ACCEPT_XP);
+    PlayerTaxiStage[playerid] = TAXI_STAGE_DROPOFF;
+    PlayerTaxiRoute[playerid] = route;
+    PlayerWorkPoint[playerid] = route;
+
+    PutPlayerInVehicle(targetid, taxiVehicle, TAXI_RIDE_PASSENGER_SEAT);
+
+    SetPlayerCheckpoint(
+        playerid,
+        TaxiDropoffX[route],
+        TaxiDropoffY[route],
+        TaxiDropoffZ[route],
+        4.0
+    );
+
+    SetPlayerCheckpoint(
+        targetid,
+        TaxiDropoffX[route],
+        TaxiDropoffY[route],
+        TaxiDropoffZ[route],
+        4.0
+    );
 
     new driverName[MAX_PLAYER_NAME], passengerName[MAX_PLAYER_NAME], msg[180];
     GetPlayerName(playerid, driverName, sizeof(driverName));
     GetPlayerName(targetid, passengerName, sizeof(passengerName));
 
-    format(msg, sizeof(msg), "Taxi request diterima: %s. Foundation reward: $%d + %d XP.", passengerName, VEHICLE_MISSION_TAXI_ACCEPT_REWARD, VEHICLE_MISSION_TAXI_ACCEPT_XP);
+    format(msg, sizeof(msg), "Taxi ride diterima: %s sudah masuk taxi. Antar ke checkpoint dropoff.", passengerName);
     SendClientMessage(playerid, COLOR_GREEN, msg);
-    format(msg, sizeof(msg), "Taxi driver %s menerima request kamu. Naik sebagai passenger untuk ride/fare polish berikutnya.", driverName);
+    format(msg, sizeof(msg), "Taxi driver %s menerima request kamu. Kamu sudah masuk taxi, tunggu sampai dropoff.", driverName);
     SendClientMessage(targetid, COLOR_GREEN, msg);
-    SavePlayerData(playerid);
+    SendClientMessage(playerid, COLOR_WHITE, "Reward taxi diberikan saat ride selesai, bukan saat accept.");
     return 1;
 }
 
@@ -5749,6 +5885,7 @@ stock ResetTaxiWorkData(playerid)
 {
     PlayerTaxiStage[playerid] = TAXI_STAGE_NONE;
     PlayerTaxiRoute[playerid] = -1;
+    PlayerTaxiPassengerTarget[playerid] = INVALID_PLAYER_ID;
     return 1;
 }
 
@@ -12346,7 +12483,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.25B.2 Player Target Missions");
+    SetGameModeText("SAIF Dev v0.25B.3 Taxi Ride Player Flow");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -12495,7 +12632,7 @@ public OnGameModeInit()
     print("[SAIF] Police Job Wanted Integrity aktif: police color biru tua dan wanted player diblokir dari police duty.");
     print("[SAIF] Skin Catalog baseline aktif: clothing store skin shop DB-based via skin_catalog.");
     print("[SAIF] Skin Movement Normalization foundation aktif: movement_profile/anim_profile DB-based config.");
-    print("[SAIF] Gamemode v0.25B.2 Player-Target Vehicle Mission Contract berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.25B.3 Taxi Ride Player Flow berhasil dijalankan.");
     return 1;
 }
 
@@ -13289,7 +13426,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /missiontarget, /taxirequest, /canceltaxi\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /missiontarget, /taxirequest, /taxistatus, /canceltaxi\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
@@ -21210,7 +21347,7 @@ stock ShowVehicleMissionBaselineAudit(playerid)
     GetVehicleMissionEligibility(playerid, eligibility, sizeof(eligibility));
 
     body[0] = EOS;
-    strcat(body, "SAIF v0.25B.2 Player-Target Vehicle Mission Contract\n\n", sizeof(body));
+    strcat(body, "SAIF v0.25B.3 Taxi Ride Player Flow\n\n", sizeof(body));
     strcat(body, "Current Runtime:\n", sizeof(body));
     format(line, sizeof(line), "Vehicle ID: %d | Model: %d | Candidate: %s\n", vehicleId, vehicleModel, missionName);
     strcat(body, line, sizeof(body));
@@ -21218,7 +21355,7 @@ stock ShowVehicleMissionBaselineAudit(playerid)
     strcat(body, line, sizeof(body));
     format(line, sizeof(line), "Wanted: %d | Gang: %s | Eligibility: %s\n", GetPlayerWantedLevel(playerid), PlayerGangID[playerid] > 0 ? ("YES") : ("NO"), eligibility);
     strcat(body, line, sizeof(body));
-    format(line, sizeof(line), "Taxi request: %s | Taxi assigned driver: %d | Passenger target: %d | Fire target vehicle: %d\n\n", PlayerTaxiRequest[playerid] ? ("YES") : ("NO"), PlayerTaxiAssignedDriver[playerid], PlayerTaxiPassengerTarget[playerid], PlayerFireMissionVehicle[playerid]);
+    format(line, sizeof(line), "Taxi request: %s | Taxi assigned driver: %d | Passenger target: %d | Ride active: %s | Fire target vehicle: %d\n\n", PlayerTaxiRequest[playerid] ? ("YES") : ("NO"), PlayerTaxiAssignedDriver[playerid], PlayerTaxiPassengerTarget[playerid], PlayerTaxiRideActive[playerid] ? ("YES") : ("NO"), PlayerFireMissionVehicle[playerid]);
     strcat(body, line, sizeof(body));
 
     strcat(body, "Active Button 2 Missions:\n", sizeof(body));
@@ -21241,7 +21378,7 @@ stock ShowVehicleMissionBaselineAudit(playerid)
     strcat(body, "- /work tetap fallback/debug, bukan UX utama.\n", sizeof(body));
     strcat(body, "- Gang member tidak bisa start job/vehicle mission.\n", sizeof(body));
     strcat(body, "- Wanted player tidak bisa start Police/Vigilante.\n", sizeof(body));
-    strcat(body, "- v0.25B.2 mengaktifkan contract target: Police/Taxi/Ambulance pakai target player asli + ALT, Firefighter pakai spawned burning vehicle + ALT.\n", sizeof(body));
+    strcat(body, "- v0.25B.3 menambah Taxi ride flow: passenger /taxirequest, driver ALT accept, passenger masuk taxi, lalu driver antar ke checkpoint dropoff.\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_VEHICLE_MISSION_INFO, DIALOG_STYLE_MSGBOX, "Vehicle Mission Baseline", body, "Back", "Close");
     return 1;
@@ -34106,6 +34243,13 @@ public OnPlayerStateChange(playerid, PLAYER_STATE:newstate, PLAYER_STATE:oldstat
         }
     }
 
+    if (PlayerTaxiRideActive[playerid] && oldstate == PLAYER_STATE_PASSENGER && newstate == PLAYER_STATE_ONFOOT)
+    {
+        ClearTaxiRideLink(playerid, 1);
+        SendClientMessage(playerid, COLOR_RED, "Taxi ride dibatalkan karena kamu keluar dari taxi sebelum sampai tujuan.");
+        return 1;
+    }
+
     if (PlayerRace[playerid] != RACE_NONE)
     {
         if ((oldstate == PLAYER_STATE_DRIVER || oldstate == PLAYER_STATE_PASSENGER) && newstate == PLAYER_STATE_ONFOOT)
@@ -36283,17 +36427,24 @@ public OnPlayerCommandText(playerid, cmdtext[])
             SendClientMessage(playerid, COLOR_RED, "Kamu tidak bisa request taxi saat sedang menjalankan mission/job.");
             return 1;
         }
+        if (PlayerTaxiRideActive[playerid] || PlayerTaxiAssignedDriver[playerid] != INVALID_PLAYER_ID)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu sudah punya taxi ride aktif. Gunakan /canceltaxi untuk membatalkan.");
+            return 1;
+        }
         PlayerTaxiRequest[playerid] = 1;
         PlayerTaxiAssignedDriver[playerid] = INVALID_PLAYER_ID;
-        SendClientMessage(playerid, COLOR_GREEN, "Taxi request aktif. Taxi driver yang sedang duty bisa mendekat lalu tekan ALT untuk menerima.");
+        PlayerTaxiRideActive[playerid] = 0;
+        PlayerTaxiRideRoute[playerid] = -1;
+        SendClientMessage(playerid, COLOR_GREEN, "Taxi request aktif. Taxi driver duty bisa mendekat lalu tekan ALT untuk menerima.");
+        SendClientMessage(playerid, COLOR_WHITE, "Saat diterima, kamu akan masuk passenger seat taxi dan diantar ke dropoff.");
         return 1;
     }
 
     if (!strcmp(cmdtext, "/canceltaxi", true) || !strcmp(cmdtext, "/taxicancel", true))
     {
-        PlayerTaxiRequest[playerid] = 0;
-        PlayerTaxiAssignedDriver[playerid] = INVALID_PLAYER_ID;
-        SendClientMessage(playerid, COLOR_YELLOW, "Taxi request dibatalkan.");
+        ClearTaxiRideLink(playerid, 1);
+        SendClientMessage(playerid, COLOR_YELLOW, "Taxi request/ride dibatalkan.");
         return 1;
     }
 
@@ -36301,6 +36452,15 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         ShowVehicleMissionBaselineAudit(playerid);
         SendClientMessage(playerid, COLOR_CYAN, "Target contract: Police/Taxi/Ambulance = player target + ALT; Firefighter = burning vehicle object + ALT.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/taxistatus", true) || !strcmp(cmdtext, "/taxiride", true) || !strcmp(cmdtext, "/ridetaxi", true))
+    {
+        ShowVehicleMissionBaselineAudit(playerid);
+        if (PlayerTaxiRequest[playerid]) SendClientMessage(playerid, COLOR_GREEN, "Taxi status: request aktif, menunggu driver.");
+        else if (PlayerTaxiRideActive[playerid]) SendClientMessage(playerid, COLOR_GREEN, "Taxi status: ride aktif, tunggu sampai dropoff.");
+        else SendClientMessage(playerid, COLOR_WHITE, "Taxi status: tidak ada request/ride aktif. Gunakan /taxirequest untuk panggil taxi.");
         return 1;
     }
 
@@ -38994,7 +39154,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25B.2 Player-Target Vehicle Mission Contract");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25B.3 Taxi Ride Player Flow");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -39004,7 +39164,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.25B.2: Player-target vehicle mission contract; Police/Taxi/Ambulance use real player targets via ALT, Firefighter spawns/extinguishes burning vehicle objects, and courier/trucker remain cargo/world missions.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.25B.3: Taxi ride flow now uses real passenger request + ALT accept + passenger seat + dropoff checkpoint; other player-target vehicle mission contracts remain active.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.5.10: Skin System Closeout Audit; /skinaudit and /skinstatus summarize catalog, wardrobe, preview, profile, and clothing-store runtime health.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.5.9: Skin Preview Safety Cleanup; preview state is safely restored on public interior exit, disconnect, and death cleanup.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.5.8: Skin Preview Duration Config; preview duration is saved in server_settings and editable from /skinconfig.");

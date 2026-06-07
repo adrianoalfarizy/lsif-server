@@ -429,6 +429,9 @@ stock IsClosedBetaEnabled()
 #define VEHICLE_MISSION_FIREFIGHTER_XP 35
 #define FIRE_MISSION_BURNING_MODEL 401
 #define FIRE_MISSION_BURNING_HEALTH 250.0
+#define FIRE_MISSION_EXTINGUISHED_HEALTH 950.0
+#define FIRE_MISSION_EXTINGUISH_REQUIRED_PULSES 3
+#define FIRE_MISSION_EXTINGUISH_COOLDOWN_MS 1500
 #define FIRE_MISSION_TARGET_CHECKPOINT_SIZE 6.0
 
 #define MAX_BUS_STOPS 6
@@ -921,6 +924,8 @@ new PlayerMedicAssignedMedic[MAX_PLAYERS];
 new PlayerMedicLastTreatmentTick[MAX_PLAYERS];
 new PlayerMissionTarget[MAX_PLAYERS];
 new PlayerFireMissionVehicle[MAX_PLAYERS];
+new PlayerFireMissionProgress[MAX_PLAYERS];
+new PlayerFireMissionLastExtinguishTick[MAX_PLAYERS];
 
 new PlayerTruckerStage[MAX_PLAYERS];
 new PlayerTruckerRoute[MAX_PLAYERS];
@@ -3979,7 +3984,7 @@ stock StartTaxiWork(playerid)
 
     GameTextForPlayer(playerid, "~y~Taxi Duty", 3000, 3);
     SendClientMessage(playerid, COLOR_GREEN, "Taxi duty aktif. Cari player yang memakai /taxirequest lalu tekan ALT di dekatnya.");
-    SendClientMessage(playerid, COLOR_WHITE, "v0.25B.5: Taxi/Paramedic target player asli; Firefighter target burning vehicle object + ALT extinguish.");
+    SendClientMessage(playerid, COLOR_WHITE, "v0.25B.5.1: Firefighter completion sekarang wajib proses memadamkan mobil terbakar, bukan sekadar dekat/checkpoint.");
 
     return 1;
 }
@@ -4412,6 +4417,8 @@ stock ResetPlayerTargetMissionData(playerid)
     ResetMedicRequestData(playerid);
     PlayerMissionTarget[playerid] = INVALID_PLAYER_ID;
     PlayerFireMissionVehicle[playerid] = INVALID_VEHICLE_ID;
+    PlayerFireMissionProgress[playerid] = 0;
+    PlayerFireMissionLastExtinguishTick[playerid] = 0;
     return 1;
 }
 
@@ -4653,8 +4660,10 @@ stock StartFirefighterWork(playerid)
 
     SetVehicleHealth(vehicleid, FIRE_MISSION_BURNING_HEALTH);
     PlayerFireMissionVehicle[playerid] = vehicleid;
+    PlayerFireMissionProgress[playerid] = 0;
+    PlayerFireMissionLastExtinguishTick[playerid] = 0;
 
-    // v0.25B.5: checkpoint hanya guide lokasi target. Completion tetap wajib ALT.
+    // v0.25B.5.1: checkpoint hanya guide lokasi target. Completion wajib proses memadamkan mobil terbakar lewat ALT.
     SetPlayerCheckpoint(playerid, spawnX, spawnY, z, FIRE_MISSION_TARGET_CHECKPOINT_SIZE);
 
     PlayerWorking[playerid] = 1;
@@ -4664,8 +4673,8 @@ stock StartFirefighterWork(playerid)
     PlayerWorkExitTick[playerid] = 0;
 
     GameTextForPlayer(playerid, "~r~Firefighter Mission", 3000, 3);
-    SendClientMessage(playerid, COLOR_GREEN, "Firefighter mission aktif. Burning vehicle sudah dibuat dan checkpoint guide ditandai.");
-    SendClientMessage(playerid, COLOR_WHITE, "Ikuti checkpoint target, lalu tekan ALT di dekat burning vehicle untuk memadamkan. /firestatus untuk audit.");
+    SendClientMessage(playerid, COLOR_GREEN, "Firefighter mission aktif. Mobil terbakar sudah dibuat dan checkpoint guide ditandai.");
+    SendClientMessage(playerid, COLOR_WHITE, "Ikuti checkpoint target, lalu tekan ALT beberapa kali di dekat mobil untuk benar-benar memadamkan api. /firestatus untuk audit.");
     return 1;
 }
 
@@ -4961,7 +4970,7 @@ stock CompleteFirefighterAlt(playerid)
     new vehicleid = PlayerFireMissionVehicle[playerid];
     if (vehicleid <= 0 || vehicleid == INVALID_VEHICLE_ID)
     {
-        SendClientMessage(playerid, COLOR_YELLOW, "Tidak ada burning vehicle target aktif.");
+        SendClientMessage(playerid, COLOR_YELLOW, "Tidak ada mobil terbakar target aktif.");
         return 0;
     }
 
@@ -4972,13 +4981,46 @@ stock CompleteFirefighterAlt(playerid)
 
     if (GetDistanceBetweenPoints3D(px, py, pz, vx, vy, vz) > VEHICLE_MISSION_TARGET_RADIUS)
     {
-        SendClientMessage(playerid, COLOR_YELLOW, "Dekati burning vehicle target lalu tekan ALT untuk memadamkan.");
+        SendClientMessage(playerid, COLOR_YELLOW, "Dekati mobil terbakar target lalu tekan ALT untuk memadamkan.");
         return 0;
     }
 
+    new tick = GetTickCount();
+    if (PlayerFireMissionLastExtinguishTick[playerid] != 0 && tick - PlayerFireMissionLastExtinguishTick[playerid] < FIRE_MISSION_EXTINGUISH_COOLDOWN_MS)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Tunggu sebentar sebelum menyemprot/memadamkan lagi.");
+        return 1;
+    }
+    PlayerFireMissionLastExtinguishTick[playerid] = tick;
+
+    PlayerFireMissionProgress[playerid]++;
+    if (PlayerFireMissionProgress[playerid] > FIRE_MISSION_EXTINGUISH_REQUIRED_PULSES)
+    {
+        PlayerFireMissionProgress[playerid] = FIRE_MISSION_EXTINGUISH_REQUIRED_PULSES;
+    }
+
+    new Float:healthStep = (FIRE_MISSION_EXTINGUISHED_HEALTH - FIRE_MISSION_BURNING_HEALTH) / float(FIRE_MISSION_EXTINGUISH_REQUIRED_PULSES);
+    new Float:newHealth = FIRE_MISSION_BURNING_HEALTH + (healthStep * float(PlayerFireMissionProgress[playerid]));
+    if (newHealth > FIRE_MISSION_EXTINGUISHED_HEALTH)
+    {
+        newHealth = FIRE_MISSION_EXTINGUISHED_HEALTH;
+    }
+    SetVehicleHealth(vehicleid, newHealth);
+
+    new percent = (PlayerFireMissionProgress[playerid] * 100) / FIRE_MISSION_EXTINGUISH_REQUIRED_PULSES;
+    new msg[180];
+
+    if (PlayerFireMissionProgress[playerid] < FIRE_MISSION_EXTINGUISH_REQUIRED_PULSES)
+    {
+        format(msg, sizeof(msg), "Memadamkan mobil terbakar... progress %d/%d (%d%%). Tetap dekat target dan tekan ALT lagi.", PlayerFireMissionProgress[playerid], FIRE_MISSION_EXTINGUISH_REQUIRED_PULSES, percent);
+        SendClientMessage(playerid, COLOR_CYAN, msg);
+        GameTextForPlayer(playerid, "~b~Extinguishing...", 1600, 3);
+        return 1;
+    }
+
+    // v0.25B.5.1: completion baru dianggap sah setelah mobil terbakar benar-benar dipadamkan.
+    SetVehicleHealth(vehicleid, FIRE_MISSION_EXTINGUISHED_HEALTH);
     DisablePlayerCheckpoint(playerid);
-    DestroyVehicle(vehicleid);
-    PlayerFireMissionVehicle[playerid] = INVALID_VEHICLE_ID;
 
     GivePlayerCash(playerid, VEHICLE_MISSION_FIREFIGHTER_REWARD);
     GivePlayerXPEx(playerid, VEHICLE_MISSION_FIREFIGHTER_XP);
@@ -4988,11 +5030,13 @@ stock CompleteFirefighterAlt(playerid)
     PlayerWorkType[playerid] = WORK_NONE;
     PlayerWorkPoint[playerid] = -1;
     PlayerLastWorkTick[playerid] = GetTickCount();
+    PlayerFireMissionProgress[playerid] = 0;
+    PlayerFireMissionLastExtinguishTick[playerid] = 0;
 
-    new msg[160];
-    format(msg, sizeof(msg), "Firefighter call selesai. Reward: $%d + %d XP.", VEHICLE_MISSION_FIREFIGHTER_REWARD, VEHICLE_MISSION_FIREFIGHTER_XP);
+    format(msg, sizeof(msg), "Mobil terbakar berhasil dipadamkan. Reward: $%d + %d XP.", VEHICLE_MISSION_FIREFIGHTER_REWARD, VEHICLE_MISSION_FIREFIGHTER_XP);
     GameTextForPlayer(playerid, "~g~Fire Extinguished", 3500, 3);
     SendClientMessage(playerid, COLOR_GREEN, msg);
+    SendClientMessage(playerid, COLOR_WHITE, "Checkpoint hanya guide lokasi; penyelesaian firefighter dihitung setelah mobil benar-benar padam.");
     SavePlayerData(playerid);
     return 1;
 }
@@ -12591,7 +12635,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.25B.5 Firefighter Burning Vehicle Polish");
+    SetGameModeText("SAIF Dev v0.25B.5.1 Firefighter True Extinguish Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -12740,8 +12784,8 @@ public OnGameModeInit()
     print("[SAIF] Police Job Wanted Integrity aktif: police color biru tua dan wanted player diblokir dari police duty.");
     print("[SAIF] Skin Catalog baseline aktif: clothing store skin shop DB-based via skin_catalog.");
     print("[SAIF] Skin Movement Normalization foundation aktif: movement_profile/anim_profile DB-based config.");
-    print("[SAIF] Vehicle Mission v0.25B.5 aktif: Firefighter burning vehicle target memakai checkpoint guide + ALT extinguish polish.");
-    print("[SAIF] Gamemode v0.25B.5 Firefighter Burning Vehicle Polish berhasil dijalankan.");
+    print("[SAIF] Vehicle Mission v0.25B.5.1 aktif: Firefighter true extinguish progress untuk burning vehicle.");
+    print("[SAIF] Gamemode v0.25B.5.1 Firefighter True Extinguish Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -21440,9 +21484,11 @@ stock ShowFirefighterMissionStatus(playerid)
     new vehicleid = PlayerFireMissionVehicle[playerid];
 
     body[0] = EOS;
-    strcat(body, "SAIF v0.25B.5 Firefighter Burning Vehicle Status\n\n", sizeof(body));
+    strcat(body, "SAIF v0.25B.5.1 Firefighter True Extinguish Status\n\n", sizeof(body));
 
     format(line, sizeof(line), "Working: %s | WorkType: %d | Fire target vehicle: %d\n", PlayerWorking[playerid] ? ("YES") : ("NO"), PlayerWorkType[playerid], vehicleid);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Extinguish progress: %d/%d\n", PlayerFireMissionProgress[playerid], FIRE_MISSION_EXTINGUISH_REQUIRED_PULSES);
     strcat(body, line, sizeof(body));
 
     if (PlayerWorking[playerid] && PlayerWorkType[playerid] == WORK_FIREFIGHTER && vehicleid > 0 && vehicleid != INVALID_VEHICLE_ID)
@@ -21495,7 +21541,7 @@ stock ShowVehicleMissionBaselineAudit(playerid)
     GetVehicleMissionEligibility(playerid, eligibility, sizeof(eligibility));
 
     body[0] = EOS;
-    strcat(body, "SAIF v0.25B.5 Firefighter Burning Vehicle Polish\n\n", sizeof(body));
+    strcat(body, "SAIF v0.25B.5.1 Firefighter True Extinguish Fix\n\n", sizeof(body));
     strcat(body, "Current Runtime:\n", sizeof(body));
     format(line, sizeof(line), "Vehicle ID: %d | Model: %d | Candidate: %s\n", vehicleId, vehicleModel, missionName);
     strcat(body, line, sizeof(body));
@@ -21515,11 +21561,11 @@ stock ShowVehicleMissionBaselineAudit(playerid)
     strcat(body, "- Bus / Coach: route mission; passenger-player polish later.\n", sizeof(body));
     strcat(body, "- Police vehicles: Police/Vigilante duty; ALT arrests real wanted player target.\n", sizeof(body));
     strcat(body, "- Ambulance: Paramedic duty; ALT heals real injured player target.\n", sizeof(body));
-    strcat(body, "- Firetruck: Firefighter mission; spawns burning vehicle object and ALT extinguishes it.\n\n", sizeof(body));
+    strcat(body, "- Firetruck: Firefighter mission; spawns burning vehicle and ALT extinguish progress memadamkan mobil.\n\n", sizeof(body));
 
     strcat(body, "Player-Target Contract:\n", sizeof(body));
     strcat(body, "- Police/Taxi/Ambulance target wajib player asli.\n", sizeof(body));
-    strcat(body, "- Firefighter target berupa spawned burning vehicle object.\n", sizeof(body));
+    strcat(body, "- Firefighter target berupa spawned burning vehicle; completion wajib mobil dipadamkan, bukan checkpoint.\n", sizeof(body));
     strcat(body, "- Courier/Trucker tetap cargo/world mission.\n\n", sizeof(body));
 
     strcat(body, "Policy:\n", sizeof(body));
@@ -21530,7 +21576,7 @@ stock ShowVehicleMissionBaselineAudit(playerid)
     strcat(body, "- Wanted player tidak bisa start Police/Vigilante.\n", sizeof(body));
     strcat(body, "- v0.25B.3 menambah Taxi ride flow: passenger /taxirequest, driver ALT accept, passenger masuk taxi, lalu driver antar ke checkpoint dropoff.\n", sizeof(body));
     strcat(body, "- v0.25B.4 menambah Paramedic player treatment flow: /medicrequest optional, ALT heal player injured asli, dan request cleanup.\n", sizeof(body));
-    strcat(body, "- v0.25B.5 menambah Firefighter checkpoint guide, /firestatus audit, dan ALT extinguish cleanup untuk burning vehicle.\n", sizeof(body));
+    strcat(body, "- v0.25B.5.1 memperbaiki firefighter: completion wajib proses memadamkan mobil terbakar beberapa pulse, checkpoint hanya guide.\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_VEHICLE_MISSION_INFO, DIALOG_STYLE_MSGBOX, "Vehicle Mission Baseline", body, "Back", "Close");
     return 1;
@@ -34183,7 +34229,7 @@ public OnPlayerEnterCheckpoint(playerid)
 
     if (PlayerWorking[playerid] && PlayerWorkType[playerid] == WORK_FIREFIGHTER)
     {
-        SendClientMessage(playerid, COLOR_CYAN, "Firefighter target sudah dekat. Turun/dekati burning vehicle lalu tekan ALT untuk memadamkan.");
+        SendClientMessage(playerid, COLOR_CYAN, "Firefighter target sudah dekat. Turun/dekati mobil terbakar lalu tekan ALT beberapa kali sampai benar-benar padam.");
         return 1;
     }
 
@@ -39373,7 +39419,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25B.5 Firefighter Burning Vehicle Polish");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25B.5.1 Firefighter True Extinguish Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -39383,7 +39429,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.25B.5: Firefighter flow adds burning vehicle checkpoint guide, /firestatus audit, and ALT extinguish cleanup.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.25B.5.1: Firefighter completion requires true extinguish progress on burning vehicle; checkpoint is guide only.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25B.3: Taxi ride flow uses real passenger request + ALT accept + passenger seat + dropoff checkpoint.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.5.10: Skin System Closeout Audit; /skinaudit and /skinstatus summarize catalog, wardrobe, preview, profile, and clothing-store runtime health.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.5.9: Skin Preview Safety Cleanup; preview state is safely restored on public interior exit, disconnect, and death cleanup.");

@@ -225,6 +225,7 @@
 #define DIALOG_SKIN_WARDROBE_CATEGORY_FILTER 1263
 #define DIALOG_SKIN_PREVIEW_ACTION 1264
 #define DIALOG_SKIN_PREVIEW_SECONDS_INPUT 1265
+#define DIALOG_VEHICLE_MISSION_INFO 1266
 #define DIALOG_GANG_PRESET_MENU 1192
 #define DIALOG_GANG_PRESET_LIST 1193
 #define DIALOG_GANG_PRESET_SELECT_INPUT 1194
@@ -11988,7 +11989,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.25A.5.10 Skin Closeout");
+    SetGameModeText("SAIF Dev v0.25B.1 Vehicle Missions");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -12137,7 +12138,7 @@ public OnGameModeInit()
     print("[SAIF] Police Job Wanted Integrity aktif: police color biru tua dan wanted player diblokir dari police duty.");
     print("[SAIF] Skin Catalog baseline aktif: clothing store skin shop DB-based via skin_catalog.");
     print("[SAIF] Skin Movement Normalization foundation aktif: movement_profile/anim_profile DB-based config.");
-    print("[SAIF] Gamemode v0.25A.5.10 Skin System Closeout Audit berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.25B.1 Offline-like Vehicle Mission Baseline Audit berhasil dijalankan.");
     return 1;
 }
 
@@ -12905,6 +12906,7 @@ stock ShowAdminToolsMenu(playerid)
     strcat(body, "Business Preset DB Config\t/bizpresetmenu\tOwner\n", sizeof(body));
     strcat(body, "Ammu-Nation Config\t/ammuconfig\tOwner\n", sizeof(body));
     strcat(body, "Public Service Config\t/serviceconfig\tOwner\n", sizeof(body));
+    strcat(body, "Vehicle Mission Baseline\t/vehmission\tPlayer\n", sizeof(body));
     strcat(body, "Skin Catalog Config\t/skinconfig\tOwner\n", sizeof(body));
     strcat(body, "Death / Hospital Config\t/deathconfig\tOwner\n", sizeof(body));
     strcat(body, "Recent Death Logs\t/deathlogs\tOwner\n", sizeof(body));
@@ -12929,7 +12931,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
@@ -14908,16 +14910,28 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 9: ShowBusinessPresetMenu(playerid);
             case 10: ShowAmmuConfigMenu(playerid);
             case 11: ShowPublicServiceConfigMenu(playerid);
-            case 12: ShowSkinCatalogAdminMenu(playerid);
-            case 13: ShowDeathHospitalConfigMenu(playerid);
-            case 14: ShowRecentDeathLogs(playerid);
-            case 15: ShowWantedPoliceArrestReference(playerid);
-            case 16: ShowArrestConfigMenu(playerid);
-            case 17: ShowRecentArrestLogs(playerid);
-            case 18: ShowSourceAuditActionMenu(playerid);
-            case 19: ShowLiveDBAuditMenu(playerid);
-            case 20: ShowMaintenanceReference(playerid);
-            case 21: ShowAdminToolsReference(playerid);
+            case 12: ShowVehicleMissionBaselineAudit(playerid);
+            case 13: ShowSkinCatalogAdminMenu(playerid);
+            case 14: ShowDeathHospitalConfigMenu(playerid);
+            case 15: ShowRecentDeathLogs(playerid);
+            case 16: ShowWantedPoliceArrestReference(playerid);
+            case 17: ShowArrestConfigMenu(playerid);
+            case 18: ShowRecentArrestLogs(playerid);
+            case 19: ShowSourceAuditActionMenu(playerid);
+            case 20: ShowLiveDBAuditMenu(playerid);
+            case 21: ShowMaintenanceReference(playerid);
+            case 22: ShowAdminToolsReference(playerid);
+        }
+        return 1;
+    }
+
+
+
+    if (dialogid == DIALOG_VEHICLE_MISSION_INFO)
+    {
+        if (response && IsAdminLevel(playerid, ADMIN_HELPER))
+        {
+            ShowAdminToolsMenu(playerid);
         }
         return 1;
     }
@@ -20705,6 +20719,162 @@ stock HandleVehicleMissionKey(playerid)
     new msg[144];
     format(msg, sizeof(msg), "Model kendaraan %d belum punya vehicle mission. Tombol 2 khusus start job/mission kendaraan.", GetVehicleModel(GetPlayerVehicleID(playerid)));
     SendClientMessage(playerid, COLOR_YELLOW, msg);
+    return 1;
+}
+
+
+
+stock GetVehicleMissionCandidateNameByModel(modelid, output[], size)
+{
+    if (IsTaxiVehicleModel(modelid))
+    {
+        format(output, size, "Taxi / Cabbie");
+        return 1;
+    }
+    if (IsCourierVehicleModel(modelid))
+    {
+        format(output, size, "Courier Delivery");
+        return 1;
+    }
+    if (IsTruckerVehicleModel(modelid))
+    {
+        format(output, size, "Trucker Freight");
+        return 1;
+    }
+    if (IsBusVehicleModel(modelid))
+    {
+        format(output, size, "Bus Route");
+        return 1;
+    }
+    if (IsPoliceVehicleModel(modelid))
+    {
+        format(output, size, "Police / Vigilante");
+        return 1;
+    }
+
+    // Planned offline-like mission families. These are intentionally audit-only in v0.25B.1.
+    if (modelid == 416)
+    {
+        format(output, size, "Paramedic (planned)");
+        return 1;
+    }
+    if (modelid == 407 || modelid == 544)
+    {
+        format(output, size, "Firefighter (planned)");
+        return 1;
+    }
+
+    format(output, size, "None");
+    return 1;
+}
+
+stock GetVehicleMissionEligibility(playerid, output[], size)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
+    {
+        format(output, size, "Not logged in");
+        return 0;
+    }
+
+    if (PlayerArrestJailed[playerid] && !IsAdminLevel(playerid, ADMIN_ADMIN))
+    {
+        format(output, size, "Blocked: arrest jail hold");
+        return 0;
+    }
+
+    if (PlayerGangID[playerid] > 0)
+    {
+        format(output, size, "Blocked: gang member must /leavegang first");
+        return 0;
+    }
+
+    if (!IsPlayerInAnyVehicle(playerid))
+    {
+        format(output, size, "No vehicle: enter a mission vehicle as driver, then press 2");
+        return 0;
+    }
+
+    if (GetPlayerState(playerid) != PLAYER_STATE_DRIVER)
+    {
+        format(output, size, "Blocked: you must be the driver");
+        return 0;
+    }
+
+    new modelid = GetVehicleModel(GetPlayerVehicleID(playerid));
+    if (IsPoliceVehicleModel(modelid) && GetPlayerWantedLevel(playerid) > 0)
+    {
+        format(output, size, "Blocked: wanted players cannot start police/vigilante mission");
+        return 0;
+    }
+
+    if (IsTaxiVehicleModel(modelid) || IsCourierVehicleModel(modelid) || IsTruckerVehicleModel(modelid) || IsBusVehicleModel(modelid) || IsPoliceVehicleModel(modelid))
+    {
+        format(output, size, "Ready: press 2 to start the matched vehicle mission");
+        return 1;
+    }
+
+    if (modelid == 416 || modelid == 407 || modelid == 544)
+    {
+        format(output, size, "Planned: model recognized, mission not active yet");
+        return 0;
+    }
+
+    format(output, size, "No mission mapped for this vehicle model");
+    return 0;
+}
+
+stock ShowVehicleMissionBaselineAudit(playerid)
+{
+    new body[4096];
+    new line[256];
+    new jobName[32];
+    new workName[32];
+    new missionName[48];
+    new eligibility[128];
+    new vehicleModel = 0;
+    new vehicleId = 0;
+
+    GetJobName(PlayerJob[playerid], jobName, sizeof(jobName));
+    GetWorkName(PlayerWorkType[playerid], workName, sizeof(workName));
+
+    if (IsPlayerInAnyVehicle(playerid))
+    {
+        vehicleId = GetPlayerVehicleID(playerid);
+        vehicleModel = GetVehicleModel(vehicleId);
+    }
+
+    GetVehicleMissionCandidateNameByModel(vehicleModel, missionName, sizeof(missionName));
+    GetVehicleMissionEligibility(playerid, eligibility, sizeof(eligibility));
+
+    body[0] = EOS;
+    strcat(body, "SAIF v0.25B.1 Offline-like Vehicle Mission Baseline Audit\n\n", sizeof(body));
+    strcat(body, "Current Runtime:\n", sizeof(body));
+    format(line, sizeof(line), "Vehicle ID: %d | Model: %d | Candidate: %s\n", vehicleId, vehicleModel, missionName);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Job: %s (%d) | Working: %s | WorkType: %s (%d)\n", jobName, PlayerJob[playerid], PlayerWorking[playerid] ? ("YES") : ("NO"), workName, PlayerWorkType[playerid]);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Wanted: %d | Gang: %s | Eligibility: %s\n\n", GetPlayerWantedLevel(playerid), PlayerGangID[playerid] > 0 ? ("YES") : ("NO"), eligibility);
+    strcat(body, line, sizeof(body));
+
+    strcat(body, "Active Button 2 Missions:\n", sizeof(body));
+    strcat(body, "- Taxi / Cabbie: Taxi Driver mission.\n", sizeof(body));
+    strcat(body, "- Courier vans: Courier delivery mission.\n", sizeof(body));
+    strcat(body, "- Truck/freight vehicles: Trucker mission.\n", sizeof(body));
+    strcat(body, "- Bus / Coach: Bus Driver mission.\n", sizeof(body));
+    strcat(body, "- Police vehicles: Police / Vigilante mission, blocked for wanted players.\n\n", sizeof(body));
+
+    strcat(body, "Planned Offline-like Families:\n", sizeof(body));
+    strcat(body, "- Paramedic / Ambulance: recognized as roadmap, not active yet.\n", sizeof(body));
+    strcat(body, "- Firefighter / Firetruck: recognized as roadmap, not active yet.\n\n", sizeof(body));
+
+    strcat(body, "Policy:\n", sizeof(body));
+    strcat(body, "- Tombol 2 tetap khusus start vehicle mission/job.\n", sizeof(body));
+    strcat(body, "- /work tetap fallback/debug, bukan UX utama.\n", sizeof(body));
+    strcat(body, "- Gang member tidak bisa start job/vehicle mission.\n", sizeof(body));
+    strcat(body, "- Wanted player tidak bisa start Police/Vigilante.\n", sizeof(body));
+    strcat(body, "- v0.25B.1 hanya baseline/audit; tidak mengubah reward atau route mission.\n", sizeof(body));
+
+    ShowPlayerDialog(playerid, DIALOG_VEHICLE_MISSION_INFO, DIALOG_STYLE_MSGBOX, "Vehicle Mission Baseline", body, "Back", "Close");
     return 1;
 }
 
@@ -35714,6 +35884,24 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/vehmission", true) || !strcmp(cmdtext, "/vehiclemission", true) || !strcmp(cmdtext, "/vehiclemissions", true) || !strcmp(cmdtext, "/vmission", true) || !strcmp(cmdtext, "/mission2", true) || !strcmp(cmdtext, "/jobmissions", true))
+    {
+        ShowVehicleMissionBaselineAudit(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/vehmissionaudit", true) || !strcmp(cmdtext, "/vehiclemissionaudit", true) || !strcmp(cmdtext, "/missionaudit", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_HELPER))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Kamu bukan admin.");
+            return 1;
+        }
+
+        ShowVehicleMissionBaselineAudit(playerid);
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/sourceauditmenu", true) || !strcmp(cmdtext, "/sourcemenu", true))
     {
         ShowSourceAuditActionMenu(playerid);
@@ -38404,7 +38592,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25A.5.10 Skin System Closeout Audit");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25B.1 Offline-like Vehicle Mission Baseline Audit");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -38414,6 +38602,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.25B.1: Offline-like Vehicle Mission Baseline Audit; /vehmission and /vehmissionaudit summarize Button 2 taxi/courier/trucker/bus/police flow and planned paramedic/firefighter missions.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.5.10: Skin System Closeout Audit; /skinaudit and /skinstatus summarize catalog, wardrobe, preview, profile, and clothing-store runtime health.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.5.9: Skin Preview Safety Cleanup; preview state is safely restored on public interior exit, disconnect, and death cleanup.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.5.8: Skin Preview Duration Config; preview duration is saved in server_settings and editable from /skinconfig.");
@@ -38469,7 +38658,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== CLOSED BETA GUIDE ==========");
         SendClientMessage(playerid, COLOR_WHITE, "1. Klaim modal awal: /starterpack");
-        SendClientMessage(playerid, COLOR_WHITE, "2. Mulai kerja: naik kendaraan job lalu tekan tombol 2. Command /work tetap fallback");
+        SendClientMessage(playerid, COLOR_WHITE, "2. Mulai kerja: naik kendaraan job lalu tekan tombol 2. Command /work tetap fallback. Cek /vehmission.");
         SendClientMessage(playerid, COLOR_WHITE, "3. Beli kendaraan: /finddealer, /vehicleshop, /buyvehicle [id]");
         SendClientMessage(playerid, COLOR_WHITE, "4. Simpan uang: /findbank lalu /deposit [amount/all]");
         SendClientMessage(playerid, COLOR_WHITE, "5. Aktivitas lanjutan: /houses, /businesses, /orgs, /races");
@@ -39213,7 +39402,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_WHITE, "trucker - Truck + tombol 2.");
         SendClientMessage(playerid, COLOR_WHITE, "bus - Bus/Coach route + tombol 2.");
         SendClientMessage(playerid, COLOR_WHITE, "police - Police/Vigilante basic call + tombol 2. Wanted level 0 wajib.");
-        SendClientMessage(playerid, COLOR_CYAN, "Cara utama: naik kendaraan job lalu tekan tombol 2. /joinjob dan /work tetap fallback.");
+        SendClientMessage(playerid, COLOR_CYAN, "Cara utama: naik kendaraan job lalu tekan tombol 2. /joinjob dan /work tetap fallback. Cek /vehmission.");
         SendClientMessage(playerid, COLOR_WHITE, "Identity rule: anggota gang tidak bisa punya job; player ber-job tidak bisa join gang.");
         return 1;
     }

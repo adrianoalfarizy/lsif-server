@@ -234,6 +234,10 @@
 #define DIALOG_VEHICLE_MISSION_FIRE_OFFSET_Y_INPUT 1272
 #define DIALOG_VEHICLE_MISSION_FIRE_OFFSET_Z_INPUT 1273
 #define DIALOG_VEHICLE_MISSION_POINT_INFO 1274
+#define DIALOG_VEHICLE_MISSION_POOL_LIST 1275
+#define DIALOG_VEHICLE_MISSION_POOL_ACTION 1276
+#define DIALOG_VEHICLE_MISSION_POOL_INFO 1277
+
 #define DIALOG_GANG_PRESET_MENU 1192
 #define DIALOG_GANG_PRESET_LIST 1193
 #define DIALOG_GANG_PRESET_SELECT_INPUT 1194
@@ -447,7 +451,9 @@ stock IsClosedBetaEnabled()
 #define FIRE_MISSION_TARGET_CHECKPOINT_SIZE 6.0
 
 #define MAX_VEHICLE_MISSION_POINT_CONFIG 7
+#define MAX_VEHICLE_MISSION_POOL_POINTS 256
 #define VEH_MISSION_POINT_NONE -1
+#define VEH_MISSION_POOL_NONE -1
 #define VEH_MISSION_POINT_COURIER 0
 #define VEH_MISSION_POINT_TAXI 1
 #define VEH_MISSION_POINT_TRUCKER 2
@@ -984,6 +990,24 @@ new Float:VehicleMissionCheckpointRadius[MAX_VEHICLE_MISSION_POINT_CONFIG];
 new Float:VehicleMissionFireOffsetX[MAX_VEHICLE_MISSION_POINT_CONFIG];
 new Float:VehicleMissionFireOffsetY[MAX_VEHICLE_MISSION_POINT_CONFIG];
 new Float:VehicleMissionFireOffsetZ[MAX_VEHICLE_MISSION_POINT_CONFIG];
+
+new VehicleMissionPoolCount;
+new VehicleMissionPoolDBID[MAX_VEHICLE_MISSION_POOL_POINTS];
+new VehicleMissionPoolMissionIndex[MAX_VEHICLE_MISSION_POOL_POINTS];
+new VehicleMissionPoolEnabled[MAX_VEHICLE_MISSION_POOL_POINTS];
+new VehicleMissionPoolName[MAX_VEHICLE_MISSION_POOL_POINTS][40];
+new Float:VehicleMissionPoolSpawnX[MAX_VEHICLE_MISSION_POOL_POINTS];
+new Float:VehicleMissionPoolSpawnY[MAX_VEHICLE_MISSION_POOL_POINTS];
+new Float:VehicleMissionPoolSpawnZ[MAX_VEHICLE_MISSION_POOL_POINTS];
+new Float:VehicleMissionPoolSpawnA[MAX_VEHICLE_MISSION_POOL_POINTS];
+new Float:VehicleMissionPoolCheckpointX[MAX_VEHICLE_MISSION_POOL_POINTS];
+new Float:VehicleMissionPoolCheckpointY[MAX_VEHICLE_MISSION_POOL_POINTS];
+new Float:VehicleMissionPoolCheckpointZ[MAX_VEHICLE_MISSION_POOL_POINTS];
+new Float:VehicleMissionPoolCheckpointRadius[MAX_VEHICLE_MISSION_POOL_POINTS];
+new Float:VehicleMissionPoolFireOffsetX[MAX_VEHICLE_MISSION_POOL_POINTS];
+new Float:VehicleMissionPoolFireOffsetY[MAX_VEHICLE_MISSION_POOL_POINTS];
+new Float:VehicleMissionPoolFireOffsetZ[MAX_VEHICLE_MISSION_POOL_POINTS];
+new PlayerEditingVehicleMissionPoolMission[MAX_PLAYERS];
 
 new PlayerTruckerStage[MAX_PLAYERS];
 new PlayerTruckerRoute[MAX_PLAYERS];
@@ -2625,6 +2649,8 @@ forward ShowSkinPreviewFollowup(playerid, skinIndex, token);
 forward FirefighterMissionTick();
 forward OnVehicleMissionPointsLoaded();
 forward OnVehicleMissionPointSaved(playerid);
+forward OnVehicleMissionPointPoolLoaded();
+forward OnVehicleMissionPoolPointSaved(playerid);
 
 forward OnDynamicLocationsLoaded();
 forward OnDynamicLocationCreated(playerid);
@@ -4648,6 +4674,86 @@ stock GetVehicleMissionPointIndex(const code[])
     return VEH_MISSION_POINT_NONE;
 }
 
+
+stock InitVehicleMissionPointPoolDefaults()
+{
+    VehicleMissionPoolCount = 0;
+    for (new i = 0; i < MAX_VEHICLE_MISSION_POOL_POINTS; i++)
+    {
+        VehicleMissionPoolDBID[i] = 0;
+        VehicleMissionPoolMissionIndex[i] = VEH_MISSION_POINT_NONE;
+        VehicleMissionPoolEnabled[i] = 0;
+        VehicleMissionPoolName[i][0] = EOS;
+        VehicleMissionPoolSpawnX[i] = 0.0;
+        VehicleMissionPoolSpawnY[i] = 0.0;
+        VehicleMissionPoolSpawnZ[i] = 0.0;
+        VehicleMissionPoolSpawnA[i] = 0.0;
+        VehicleMissionPoolCheckpointX[i] = 0.0;
+        VehicleMissionPoolCheckpointY[i] = 0.0;
+        VehicleMissionPoolCheckpointZ[i] = 0.0;
+        VehicleMissionPoolCheckpointRadius[i] = VEH_MISSION_POINT_DEFAULT_RADIUS;
+        VehicleMissionPoolFireOffsetX[i] = 0.0;
+        VehicleMissionPoolFireOffsetY[i] = 2.1;
+        VehicleMissionPoolFireOffsetZ[i] = 0.55;
+    }
+    return 1;
+}
+
+stock IsVehicleMissionPoolPointValid(poolIndex)
+{
+    if (poolIndex < 0 || poolIndex >= VehicleMissionPoolCount) return 0;
+    if (!VehicleMissionPoolEnabled[poolIndex]) return 0;
+    if (VehicleMissionPoolMissionIndex[poolIndex] < 0 || VehicleMissionPoolMissionIndex[poolIndex] >= MAX_VEHICLE_MISSION_POINT_CONFIG) return 0;
+    return 1;
+}
+
+stock IsVehicleMissionPoolSpawnConfigured(poolIndex)
+{
+    if (!IsVehicleMissionPoolPointValid(poolIndex)) return 0;
+    if (VehicleMissionPoolSpawnX[poolIndex] != 0.0 || VehicleMissionPoolSpawnY[poolIndex] != 0.0 || VehicleMissionPoolSpawnZ[poolIndex] != 0.0) return 1;
+    return 0;
+}
+
+stock IsVehicleMissionPoolCheckpointConfigured(poolIndex)
+{
+    if (!IsVehicleMissionPoolPointValid(poolIndex)) return 0;
+    if (VehicleMissionPoolCheckpointX[poolIndex] != 0.0 || VehicleMissionPoolCheckpointY[poolIndex] != 0.0 || VehicleMissionPoolCheckpointZ[poolIndex] != 0.0) return 1;
+    return 0;
+}
+
+stock CountVehicleMissionPoolPoints(missionIndex, requireSpawn, requireCheckpoint)
+{
+    new count = 0;
+    for (new i = 0; i < VehicleMissionPoolCount; i++)
+    {
+        if (!IsVehicleMissionPoolPointValid(i)) continue;
+        if (VehicleMissionPoolMissionIndex[i] != missionIndex) continue;
+        if (requireSpawn && !IsVehicleMissionPoolSpawnConfigured(i)) continue;
+        if (requireCheckpoint && !IsVehicleMissionPoolCheckpointConfigured(i)) continue;
+        count++;
+    }
+    return count;
+}
+
+stock GetRandomVehicleMissionPoolPoint(missionIndex, requireSpawn, requireCheckpoint)
+{
+    new total = CountVehicleMissionPoolPoints(missionIndex, requireSpawn, requireCheckpoint);
+    if (total <= 0) return VEH_MISSION_POOL_NONE;
+
+    new pick = random(total);
+    for (new i = 0; i < VehicleMissionPoolCount; i++)
+    {
+        if (!IsVehicleMissionPoolPointValid(i)) continue;
+        if (VehicleMissionPoolMissionIndex[i] != missionIndex) continue;
+        if (requireSpawn && !IsVehicleMissionPoolSpawnConfigured(i)) continue;
+        if (requireCheckpoint && !IsVehicleMissionPoolCheckpointConfigured(i)) continue;
+
+        if (pick == 0) return i;
+        pick--;
+    }
+    return VEH_MISSION_POOL_NONE;
+}
+
 stock IsVehicleMissionPointConfigured(index)
 {
     if (index < 0 || index >= MAX_VEHICLE_MISSION_POINT_CONFIG) return 0;
@@ -4681,6 +4787,13 @@ stock Float:GetMissionCheckpointRadius(index, Float:fallback)
 stock ApplyVehicleMissionCheckpoint(playerid, const code[], Float:fallbackX, Float:fallbackY, Float:fallbackZ, Float:fallbackRadius)
 {
     new index = GetVehicleMissionPointIndex(code);
+    new poolIndex = GetRandomVehicleMissionPoolPoint(index, 0, 1);
+    if (poolIndex != VEH_MISSION_POOL_NONE)
+    {
+        SetPlayerCheckpoint(playerid, VehicleMissionPoolCheckpointX[poolIndex], VehicleMissionPoolCheckpointY[poolIndex], VehicleMissionPoolCheckpointZ[poolIndex], VehicleMissionPoolCheckpointRadius[poolIndex]);
+        return 1;
+    }
+
     if (IsVehicleMissionCheckpointConfigured(index))
     {
         SetPlayerCheckpoint(playerid, VehicleMissionCheckpointX[index], VehicleMissionCheckpointY[index], VehicleMissionCheckpointZ[index], VehicleMissionCheckpointRadius[index]);
@@ -4718,6 +4831,13 @@ stock Float:GetVehicleMissionSpawnA(index, Float:fallback)
 stock LoadVehicleMissionPointsFromDB()
 {
     mysql_tquery(g_SQL, "SELECT mission_code, enabled, spawn_x, spawn_y, spawn_z, spawn_a, checkpoint_x, checkpoint_y, checkpoint_z, checkpoint_radius, fire_offset_x, fire_offset_y, fire_offset_z FROM vehicle_mission_points ORDER BY id ASC", "OnVehicleMissionPointsLoaded");
+    LoadVehicleMissionPointPoolFromDB();
+    return 1;
+}
+
+stock LoadVehicleMissionPointPoolFromDB()
+{
+    mysql_tquery(g_SQL, "SELECT id, mission_code, point_name, enabled, spawn_x, spawn_y, spawn_z, spawn_a, checkpoint_x, checkpoint_y, checkpoint_z, checkpoint_radius, fire_offset_x, fire_offset_y, fire_offset_z FROM vehicle_mission_point_pool WHERE enabled=1 ORDER BY mission_code ASC, id ASC", "OnVehicleMissionPointPoolLoaded");
     return 1;
 }
 
@@ -4753,6 +4873,96 @@ public OnVehicleMissionPointsLoaded()
     return 1;
 }
 
+
+public OnVehicleMissionPointPoolLoaded()
+{
+    InitVehicleMissionPointPoolDefaults();
+
+    new rows = cache_num_rows();
+    new code[24], index;
+    for (new i = 0; i < rows && VehicleMissionPoolCount < MAX_VEHICLE_MISSION_POOL_POINTS; i++)
+    {
+        cache_get_value_name(i, "mission_code", code, sizeof(code));
+        index = GetVehicleMissionPointIndex(code);
+        if (index == VEH_MISSION_POINT_NONE) continue;
+
+        new slot = VehicleMissionPoolCount++;
+        VehicleMissionPoolMissionIndex[slot] = index;
+        cache_get_value_name_int(i, "id", VehicleMissionPoolDBID[slot]);
+        cache_get_value_name(i, "point_name", VehicleMissionPoolName[slot], 40);
+        cache_get_value_name_int(i, "enabled", VehicleMissionPoolEnabled[slot]);
+        cache_get_value_name_float(i, "spawn_x", VehicleMissionPoolSpawnX[slot]);
+        cache_get_value_name_float(i, "spawn_y", VehicleMissionPoolSpawnY[slot]);
+        cache_get_value_name_float(i, "spawn_z", VehicleMissionPoolSpawnZ[slot]);
+        cache_get_value_name_float(i, "spawn_a", VehicleMissionPoolSpawnA[slot]);
+        cache_get_value_name_float(i, "checkpoint_x", VehicleMissionPoolCheckpointX[slot]);
+        cache_get_value_name_float(i, "checkpoint_y", VehicleMissionPoolCheckpointY[slot]);
+        cache_get_value_name_float(i, "checkpoint_z", VehicleMissionPoolCheckpointZ[slot]);
+        cache_get_value_name_float(i, "checkpoint_radius", VehicleMissionPoolCheckpointRadius[slot]);
+        cache_get_value_name_float(i, "fire_offset_x", VehicleMissionPoolFireOffsetX[slot]);
+        cache_get_value_name_float(i, "fire_offset_y", VehicleMissionPoolFireOffsetY[slot]);
+        cache_get_value_name_float(i, "fire_offset_z", VehicleMissionPoolFireOffsetZ[slot]);
+
+        if (VehicleMissionPoolCheckpointRadius[slot] <= 0.0) VehicleMissionPoolCheckpointRadius[slot] = VEH_MISSION_POINT_DEFAULT_RADIUS;
+        if (VehicleMissionPoolFireOffsetY[slot] == 0.0 && VehicleMissionPoolFireOffsetZ[slot] == 0.0)
+        {
+            VehicleMissionPoolFireOffsetY[slot] = 2.1;
+            VehicleMissionPoolFireOffsetZ[slot] = 0.55;
+        }
+    }
+
+    printf("[SAIF] Vehicle mission random point pool loaded: %d active row(s), runtime cap %d.", VehicleMissionPoolCount, MAX_VEHICLE_MISSION_POOL_POINTS);
+    return 1;
+}
+
+stock AddVehicleMissionPoolPointHere(playerid, missionIndex, mode)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER)) return 0;
+    if (missionIndex < 0 || missionIndex >= MAX_VEHICLE_MISSION_POINT_CONFIG) return 0;
+
+    new Float:x, Float:y, Float:z, Float:a;
+    GetPlayerPos(playerid, x, y, z);
+    GetPlayerFacingAngle(playerid, a);
+
+    new query[1024], pointName[40];
+    format(pointName, sizeof(pointName), "%s Point", VehicleMissionPointLabel[missionIndex]);
+
+    new Float:spawnX = 0.0, Float:spawnY = 0.0, Float:spawnZ = 0.0, Float:spawnA = 0.0;
+    new Float:cpX = 0.0, Float:cpY = 0.0, Float:cpZ = 0.0, Float:cpRadius = VehicleMissionCheckpointRadius[missionIndex];
+    if (cpRadius <= 0.0) cpRadius = VEH_MISSION_POINT_DEFAULT_RADIUS;
+
+    if (mode == 0 || mode == 2)
+    {
+        spawnX = x;
+        spawnY = y;
+        spawnZ = z;
+        spawnA = a;
+    }
+    if (mode == 1 || mode == 2)
+    {
+        cpX = x;
+        cpY = y;
+        cpZ = z;
+    }
+
+    mysql_format(g_SQL, query, sizeof(query),
+        "INSERT INTO vehicle_mission_point_pool (mission_code, point_name, enabled, spawn_x, spawn_y, spawn_z, spawn_a, checkpoint_x, checkpoint_y, checkpoint_z, checkpoint_radius, fire_offset_x, fire_offset_y, fire_offset_z) VALUES ('%e', '%e', 1, %.4f, %.4f, %.4f, %.4f, %.4f, %.4f, %.4f, %.2f, %.4f, %.4f, %.4f)",
+        VehicleMissionPointCode[missionIndex], pointName, spawnX, spawnY, spawnZ, spawnA, cpX, cpY, cpZ, cpRadius, VehicleMissionFireOffsetX[missionIndex], VehicleMissionFireOffsetY[missionIndex], VehicleMissionFireOffsetZ[missionIndex]);
+    mysql_tquery(g_SQL, query, "OnVehicleMissionPoolPointSaved", "i", playerid);
+    return 1;
+}
+
+public OnVehicleMissionPoolPointSaved(playerid)
+{
+    LoadVehicleMissionPointPoolFromDB();
+    if (IsPlayerConnected(playerid))
+    {
+        SendClientMessage(playerid, COLOR_GREEN, "Random mission point pool tersimpan ke DB dan reload diminta.");
+        ShowVehicleMissionPoolActionMenu(playerid, PlayerEditingVehicleMissionPoolMission[playerid]);
+    }
+    return 1;
+}
+
 stock SaveVehicleMissionPointToDB(index, playerid = INVALID_PLAYER_ID)
 {
     if (index < 0 || index >= MAX_VEHICLE_MISSION_POINT_CONFIG) return 0;
@@ -4780,18 +4990,19 @@ stock ShowVehicleMissionPointEditorMenu(playerid)
 {
     if (!IsAdminLevel(playerid, ADMIN_OWNER))
     {
-        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka Vehicle Mission Point Editor.");
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka Vehicle Mission Point Pool.");
         return 0;
     }
 
-    new body[768];
+    new body[896];
     body[0] = EOS;
-    strcat(body, "List / Edit Mission Points\n", sizeof(body));
+    strcat(body, "Single Default Points\n", sizeof(body));
+    strcat(body, "Random Point Pool / Add Points\n", sizeof(body));
     strcat(body, "Reload From DB\n", sizeof(body));
     strcat(body, "Runtime Summary / Audit\n", sizeof(body));
     strcat(body, "Info\n", sizeof(body));
     strcat(body, "Back to Admin Menus", sizeof(body));
-    ShowPlayerDialog(playerid, DIALOG_VEHICLE_MISSION_POINT_MENU, DIALOG_STYLE_LIST, "Vehicle Mission Point Editor", body, "Select", "Close");
+    ShowPlayerDialog(playerid, DIALOG_VEHICLE_MISSION_POINT_MENU, DIALOG_STYLE_LIST, "Vehicle Mission Point Pool", body, "Select", "Close");
     return 1;
 }
 
@@ -4866,6 +5077,86 @@ stock ShowVehicleMissionPointInfo(playerid, index)
     strcat(body, "- Firefighter fire offset menggeser visual api di kendaraan target.\n", sizeof(body));
     strcat(body, "- Checkpoint untuk job lain menjadi override single checkpoint/guide jika enabled.\n", sizeof(body));
     ShowPlayerDialog(playerid, DIALOG_VEHICLE_MISSION_POINT_INFO, DIALOG_STYLE_MSGBOX, "Vehicle Mission Point Info", body, "Back", "Close");
+    return 1;
+}
+
+
+stock ShowVehicleMissionPoolMissionList(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER)) return 0;
+
+    new body[2048], line[192];
+    body[0] = EOS;
+    strcat(body, "Mission\tActive Pool Points\tSingle Fallback\n", sizeof(body));
+    for (new i = 0; i < MAX_VEHICLE_MISSION_POINT_CONFIG; i++)
+    {
+        format(line, sizeof(line), "%s\t%d\t%s\n", VehicleMissionPointLabel[i], CountVehicleMissionPoolPoints(i, 0, 0), VehicleMissionPointEnabled[i] ? ("ON") : ("OFF"));
+        strcat(body, line, sizeof(body));
+    }
+    ShowPlayerDialog(playerid, DIALOG_VEHICLE_MISSION_POOL_LIST, DIALOG_STYLE_TABLIST_HEADERS, "Random Vehicle Mission Point Pool", body, "Select", "Back");
+    return 1;
+}
+
+stock ShowVehicleMissionPoolActionMenu(playerid, missionIndex)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER)) return 0;
+    if (missionIndex < 0 || missionIndex >= MAX_VEHICLE_MISSION_POINT_CONFIG)
+    {
+        ShowVehicleMissionPoolMissionList(playerid);
+        return 0;
+    }
+
+    PlayerEditingVehicleMissionPoolMission[playerid] = missionIndex;
+    new title[96], body[1024];
+    format(title, sizeof(title), "Random Pool: %s", VehicleMissionPointLabel[missionIndex]);
+    body[0] = EOS;
+    strcat(body, "Add Spawn + Checkpoint Here\n", sizeof(body));
+    strcat(body, "Add Spawn Only Here\n", sizeof(body));
+    strcat(body, "Add Checkpoint Only Here\n", sizeof(body));
+    strcat(body, "Show Pool Audit\n", sizeof(body));
+    strcat(body, "Reload Pool From DB\n", sizeof(body));
+    strcat(body, "Back to Mission List", sizeof(body));
+    ShowPlayerDialog(playerid, DIALOG_VEHICLE_MISSION_POOL_ACTION, DIALOG_STYLE_LIST, title, body, "Select", "Back");
+    return 1;
+}
+
+stock ShowVehicleMissionPoolAudit(playerid, missionIndex)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER)) return 0;
+    if (missionIndex < 0 || missionIndex >= MAX_VEHICLE_MISSION_POINT_CONFIG) return ShowVehicleMissionPoolMissionList(playerid);
+
+    new body[4096], line[256];
+    body[0] = EOS;
+    format(line, sizeof(line), "Random Point Pool: %s (%s)\n", VehicleMissionPointLabel[missionIndex], VehicleMissionPointCode[missionIndex]);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Active runtime points: %d\n\n", CountVehicleMissionPoolPoints(missionIndex, 0, 0));
+    strcat(body, line, sizeof(body));
+    strcat(body, "ID\tName\tSpawn\tCheckpoint\tRadius\n", sizeof(body));
+
+    new shown = 0;
+    for (new i = 0; i < VehicleMissionPoolCount; i++)
+    {
+        if (!IsVehicleMissionPoolPointValid(i)) continue;
+        if (VehicleMissionPoolMissionIndex[i] != missionIndex) continue;
+        format(line, sizeof(line), "%d\t%s\t%.1f %.1f %.1f\t%.1f %.1f %.1f\t%.1f\n",
+            VehicleMissionPoolDBID[i], VehicleMissionPoolName[i],
+            VehicleMissionPoolSpawnX[i], VehicleMissionPoolSpawnY[i], VehicleMissionPoolSpawnZ[i],
+            VehicleMissionPoolCheckpointX[i], VehicleMissionPoolCheckpointY[i], VehicleMissionPoolCheckpointZ[i], VehicleMissionPoolCheckpointRadius[i]);
+        strcat(body, line, sizeof(body));
+        shown++;
+        if (shown >= 20)
+        {
+            strcat(body, "...runtime list dipotong 20 row. Gunakan SQL untuk audit lengkap.\n", sizeof(body));
+            break;
+        }
+    }
+    if (!shown) strcat(body, "Belum ada active pool point untuk mission ini. Tambahkan dari menu Add.\n", sizeof(body));
+
+    strcat(body, "\nCatatan:\n", sizeof(body));
+    strcat(body, "- Runtime memilih random row active dari vehicle_mission_point_pool.\n", sizeof(body));
+    strcat(body, "- Jika pool kosong, sistem fallback ke single default vehicle_mission_points.\n", sizeof(body));
+    strcat(body, "- Firefighter memakai spawn/checkpoint/fire offset dari row pool yang sama.\n", sizeof(body));
+    ShowPlayerDialog(playerid, DIALOG_VEHICLE_MISSION_POOL_INFO, DIALOG_STYLE_TABLIST_HEADERS, "Vehicle Mission Point Pool Audit", body, "Back", "Close");
     return 1;
 }
 
@@ -5032,14 +5323,25 @@ stock StartFirefighterWork(playerid)
     GetPlayerFacingAngle(playerid, a);
 
     new missionIndex = GetVehicleMissionPointIndex("firefighter");
+    new poolIndex = GetRandomVehicleMissionPoolPoint(missionIndex, 1, 0);
     new Float:spawnX = x + (floatsin(-a, degrees) * 22.0);
     new Float:spawnY = y + (floatcos(-a, degrees) * 22.0);
     new Float:spawnZ = z + 1.0;
     new Float:spawnA = a + 180.0;
-    spawnX = GetVehicleMissionSpawnX(missionIndex, spawnX);
-    spawnY = GetVehicleMissionSpawnY(missionIndex, spawnY);
-    spawnZ = GetVehicleMissionSpawnZ(missionIndex, spawnZ);
-    spawnA = GetVehicleMissionSpawnA(missionIndex, spawnA);
+    if (poolIndex != VEH_MISSION_POOL_NONE)
+    {
+        spawnX = VehicleMissionPoolSpawnX[poolIndex];
+        spawnY = VehicleMissionPoolSpawnY[poolIndex];
+        spawnZ = VehicleMissionPoolSpawnZ[poolIndex];
+        spawnA = VehicleMissionPoolSpawnA[poolIndex];
+    }
+    else
+    {
+        spawnX = GetVehicleMissionSpawnX(missionIndex, spawnX);
+        spawnY = GetVehicleMissionSpawnY(missionIndex, spawnY);
+        spawnZ = GetVehicleMissionSpawnZ(missionIndex, spawnZ);
+        spawnA = GetVehicleMissionSpawnA(missionIndex, spawnA);
+    }
     new vehicleid = CreateVehicle(FIRE_MISSION_BURNING_MODEL, spawnX, spawnY, spawnZ, spawnA, 1, 1, -1);
     if (vehicleid <= 0 || vehicleid == INVALID_VEHICLE_ID)
     {
@@ -5053,7 +5355,14 @@ stock StartFirefighterWork(playerid)
     if (fireObject > 0)
     {
         // v0.25B.5.2: visual api ditempel di area kap/front kendaraan target.
-        AttachObjectToVehicle(fireObject, vehicleid, VehicleMissionFireOffsetX[missionIndex], VehicleMissionFireOffsetY[missionIndex], VehicleMissionFireOffsetZ[missionIndex], 0.0, 0.0, 0.0);
+        if (poolIndex != VEH_MISSION_POOL_NONE)
+        {
+            AttachObjectToVehicle(fireObject, vehicleid, VehicleMissionPoolFireOffsetX[poolIndex], VehicleMissionPoolFireOffsetY[poolIndex], VehicleMissionPoolFireOffsetZ[poolIndex], 0.0, 0.0, 0.0);
+        }
+        else
+        {
+            AttachObjectToVehicle(fireObject, vehicleid, VehicleMissionFireOffsetX[missionIndex], VehicleMissionFireOffsetY[missionIndex], VehicleMissionFireOffsetZ[missionIndex], 0.0, 0.0, 0.0);
+        }
     }
 
     PlayerFireMissionVehicle[playerid] = vehicleid;
@@ -5062,7 +5371,14 @@ stock StartFirefighterWork(playerid)
     PlayerFireMissionLastExtinguishTick[playerid] = 0;
 
     // v0.25B.5.2: checkpoint hanya guide lokasi target. Completion wajib api padam oleh semprotan air/APAR.
-    ApplyVehicleMissionCheckpoint(playerid, "firefighter", spawnX, spawnY, spawnZ, FIRE_MISSION_TARGET_CHECKPOINT_SIZE);
+    if (poolIndex != VEH_MISSION_POOL_NONE && IsVehicleMissionPoolCheckpointConfigured(poolIndex))
+    {
+        SetPlayerCheckpoint(playerid, VehicleMissionPoolCheckpointX[poolIndex], VehicleMissionPoolCheckpointY[poolIndex], VehicleMissionPoolCheckpointZ[poolIndex], VehicleMissionPoolCheckpointRadius[poolIndex]);
+    }
+    else
+    {
+        ApplyVehicleMissionCheckpoint(playerid, "firefighter", spawnX, spawnY, spawnZ, FIRE_MISSION_TARGET_CHECKPOINT_SIZE);
+    }
 
     PlayerWorking[playerid] = 1;
     PlayerWorkType[playerid] = WORK_FIREFIGHTER;
@@ -13100,7 +13416,7 @@ public OnGameModeInit()
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
-    SetGameModeText("SAIF Dev v0.25B.6 Vehicle Mission Point Editor");
+    SetGameModeText("SAIF Dev v0.25B.7.1 Weapon Tag Warning Fix");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -13254,8 +13570,8 @@ public OnGameModeInit()
     print("[SAIF] Police Job Wanted Integrity aktif: police color biru tua dan wanted player diblokir dari police duty.");
     print("[SAIF] Skin Catalog baseline aktif: clothing store skin shop DB-based via skin_catalog.");
     print("[SAIF] Skin Movement Normalization foundation aktif: movement_profile/anim_profile DB-based config.");
-    print("[SAIF] Vehicle Mission v0.25B.6 aktif: mission point editor DB-based untuk spawn/checkpoint/fire offset.");
-    print("[SAIF] Gamemode v0.25B.6 Vehicle Mission Point Editor berhasil dijalankan.");
+    print("[SAIF] Vehicle Mission v0.25B.7.1 aktif: mission point pool DB-based random untuk spawn/checkpoint/fire offset.");
+    print("[SAIF] Gamemode v0.25B.7.1 Weapon Tag Warning Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -14051,7 +14367,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
     strcat(body, "Offline/Exact Source Tools:\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
-    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /missiontarget, /vehmissionconfig, /missionpointmenu, /jobpointmenu, /taxirequest, /taxistatus, /canceltaxi, /medicrequest, /medicstatus, /cancelmedic, /firestatus, /firemission\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
+    strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /missiontarget, /vehmissionconfig, /missionpointmenu, /missionpool, /jobpointpool, /jobpointmenu, /taxirequest, /taxistatus, /canceltaxi, /medicrequest, /medicstatus, /cancelmedic, /firestatus, /firemission\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
 
@@ -16068,24 +16384,26 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         switch (listitem)
         {
             case 0: ShowVehicleMissionPointList(playerid);
-            case 1:
+            case 1: ShowVehicleMissionPoolMissionList(playerid);
+            case 2:
             {
                 LoadVehicleMissionPointsFromDB();
-                SendClientMessage(playerid, COLOR_GREEN, "Vehicle mission point config reload diminta dari DB.");
+                SendClientMessage(playerid, COLOR_GREEN, "Vehicle mission point config + random pool reload diminta dari DB.");
                 ShowVehicleMissionPointEditorMenu(playerid);
             }
-            case 2: ShowVehicleMissionPointAudit(playerid);
-            case 3:
+            case 3: ShowVehicleMissionPointAudit(playerid);
+            case 4:
             {
-                new body[1024];
+                new body[1200];
                 body[0] = EOS;
-                strcat(body, "Vehicle Mission Point Editor v0.25B.6\n\n", sizeof(body));
-                strcat(body, "Editor ini menyimpan spawn point, checkpoint guide, radius, dan fire offset ke table vehicle_mission_points.\n", sizeof(body));
-                strcat(body, "Firefighter memakai spawn untuk mobil terbakar dan fire offset untuk posisi api di kap/front.\n", sizeof(body));
-                strcat(body, "Police/Taxi/Ambulance tetap player-target + ALT; checkpoint hanya guide/fallback bila dipakai.\n", sizeof(body));
+                strcat(body, "Vehicle Mission Point Editor v0.25B.7.1\n\n", sizeof(body));
+                strcat(body, "vehicle_mission_points = single default/fallback per mission.\n", sizeof(body));
+                strcat(body, "vehicle_mission_point_pool = banyak point aktif per mission dan dipilih random saat runtime.\n", sizeof(body));
+                strcat(body, "Firefighter memakai spawn/checkpoint/fire offset dari row pool yang sama jika tersedia.\n", sizeof(body));
+                strcat(body, "Police/Taxi/Ambulance tetap player-target + ALT; checkpoint pool hanya guide/fallback bila dipakai.\n", sizeof(body));
                 ShowPlayerDialog(playerid, DIALOG_VEHICLE_MISSION_POINT_INFO, DIALOG_STYLE_MSGBOX, "Vehicle Mission Point Editor Info", body, "Back", "Close");
             }
-            case 4: ShowAdminToolsMenu(playerid);
+            case 5: ShowAdminToolsMenu(playerid);
         }
         return 1;
     }
@@ -16180,6 +16498,50 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         VehicleMissionPointEnabled[index] = 1;
         SaveVehicleMissionPointToDB(index, playerid);
         ShowVehicleMissionPointActionMenu(playerid, index);
+        return 1;
+    }
+
+
+    if (dialogid == DIALOG_VEHICLE_MISSION_POOL_LIST)
+    {
+        if (!response)
+        {
+            ShowVehicleMissionPointEditorMenu(playerid);
+            return 1;
+        }
+        ShowVehicleMissionPoolActionMenu(playerid, listitem);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_VEHICLE_MISSION_POOL_ACTION)
+    {
+        new missionIndex = PlayerEditingVehicleMissionPoolMission[playerid];
+        if (!response)
+        {
+            ShowVehicleMissionPoolMissionList(playerid);
+            return 1;
+        }
+
+        switch (listitem)
+        {
+            case 0: AddVehicleMissionPoolPointHere(playerid, missionIndex, 2);
+            case 1: AddVehicleMissionPoolPointHere(playerid, missionIndex, 0);
+            case 2: AddVehicleMissionPoolPointHere(playerid, missionIndex, 1);
+            case 3: ShowVehicleMissionPoolAudit(playerid, missionIndex);
+            case 4:
+            {
+                LoadVehicleMissionPointPoolFromDB();
+                SendClientMessage(playerid, COLOR_GREEN, "Random mission point pool reload diminta dari DB.");
+                ShowVehicleMissionPoolActionMenu(playerid, missionIndex);
+            }
+            case 5: ShowVehicleMissionPoolMissionList(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_VEHICLE_MISSION_POOL_INFO)
+    {
+        if (response) ShowVehicleMissionPoolActionMenu(playerid, PlayerEditingVehicleMissionPoolMission[playerid]);
         return 1;
     }
 
@@ -22093,7 +22455,7 @@ stock ShowFirefighterMissionStatus(playerid)
     new vehicleid = PlayerFireMissionVehicle[playerid];
 
     body[0] = EOS;
-    strcat(body, "SAIF v0.25B.6 Vehicle Mission Point Editor Status\n\n", sizeof(body));
+    strcat(body, "SAIF v0.25B.7.1 Weapon Tag Warning Fix Status\n\n", sizeof(body));
 
     format(line, sizeof(line), "Working: %s | WorkType: %d | Fire target vehicle: %d\n", PlayerWorking[playerid] ? ("YES") : ("NO"), PlayerWorkType[playerid], vehicleid);
     strcat(body, line, sizeof(body));
@@ -22150,7 +22512,7 @@ stock ShowVehicleMissionBaselineAudit(playerid)
     GetVehicleMissionEligibility(playerid, eligibility, sizeof(eligibility));
 
     body[0] = EOS;
-    strcat(body, "SAIF v0.25B.6 Vehicle Mission Point Editor\n\n", sizeof(body));
+    strcat(body, "SAIF v0.25B.7.1 Weapon Tag Warning Fix\n\n", sizeof(body));
     strcat(body, "Current Runtime:\n", sizeof(body));
     format(line, sizeof(line), "Vehicle ID: %d | Model: %d | Candidate: %s\n", vehicleId, vehicleModel, missionName);
     strcat(body, line, sizeof(body));
@@ -22175,7 +22537,8 @@ stock ShowVehicleMissionBaselineAudit(playerid)
     strcat(body, "Player-Target Contract:\n", sizeof(body));
     strcat(body, "- Police/Taxi/Ambulance target wajib player asli.\n", sizeof(body));
     strcat(body, "- Firefighter target berupa spawned burning vehicle; completion wajib api padam dari water cannon/APAR, bukan checkpoint/ALT spam.\n", sizeof(body));
-    strcat(body, "- v0.25B.6: /vehmissionconfig mengatur spawn/checkpoint/fire offset DB-based tanpa compile ulang.\n", sizeof(body));
+    strcat(body, "- v0.25B.6: /vehmissionconfig mengatur spawn/checkpoint/fire offset DB-based tanpa compile ulang.
+- v0.25B.7: vehicle_mission_point_pool menambah banyak titik random per mission.\n", sizeof(body));
     strcat(body, "- Courier/Trucker tetap cargo/world mission.\n\n", sizeof(body));
 
     strcat(body, "Policy:\n", sizeof(body));
@@ -22186,7 +22549,8 @@ stock ShowVehicleMissionBaselineAudit(playerid)
     strcat(body, "- Wanted player tidak bisa start Police/Vigilante.\n", sizeof(body));
     strcat(body, "- v0.25B.3 menambah Taxi ride flow: passenger /taxirequest, driver ALT accept, passenger masuk taxi, lalu driver antar ke checkpoint dropoff.\n", sizeof(body));
     strcat(body, "- v0.25B.4 menambah Paramedic player treatment flow: /medicrequest optional, ALT heal player injured asli, dan request cleanup.\n", sizeof(body));
-    strcat(body, "- v0.25B.6 menambah Vehicle Mission Point Editor: spawn point, checkpoint guide, radius, dan fire offset DB-based via /vehmissionconfig.\n", sizeof(body));
+    strcat(body, "- v0.25B.6 menambah Vehicle Mission Point Editor: spawn point, checkpoint guide, radius, dan fire offset DB-based via /vehmissionconfig.
+- v0.25B.7 menambah Random Point Pool DB: banyak spawn/checkpoint aktif per mission, dipilih random saat mission berjalan.\n", sizeof(body));
     strcat(body, "- v0.25B.5.2 memperbaiki firefighter: completion wajib api kap mobil padam karena disemprot air/APAR, checkpoint hanya guide.\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_VEHICLE_MISSION_INFO, DIALOG_STYLE_MSGBOX, "Vehicle Mission Baseline", body, "Back", "Close");
@@ -37235,7 +37599,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
-    if (!strcmp(cmdtext, "/vehmissionconfig", true) || !strcmp(cmdtext, "/missionpointmenu", true) || !strcmp(cmdtext, "/jobpointmenu", true) || !strcmp(cmdtext, "/missionpoints", true))
+    if (!strcmp(cmdtext, "/vehmissionconfig", true) || !strcmp(cmdtext, "/missionpointmenu", true) || !strcmp(cmdtext, "/jobpointmenu", true) || !strcmp(cmdtext, "/missionpoints", true) || !strcmp(cmdtext, "/missionpool", true) || !strcmp(cmdtext, "/jobpointpool", true) || !strcmp(cmdtext, "/vehmissionpool", true))
     {
         ShowVehicleMissionPointEditorMenu(playerid);
         return 1;
@@ -40042,7 +40406,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25B.6 Vehicle Mission Point Editor");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.25B.7.1 Weapon Tag Warning Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -40052,7 +40416,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.25B.6: Vehicle Mission Point Editor DB-based untuk spawn/checkpoint/fire offset semua mission family.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.25B.7.1: Weapon tag warning fix untuk APAR/fire extinguisher GivePlayerWeapon.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.25B.7: Vehicle Mission Point Pool DB-based untuk banyak spawn/checkpoint random per mission.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25B.3: Taxi ride flow uses real passenger request + ALT accept + passenger seat + dropoff checkpoint.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.5.10: Skin System Closeout Audit; /skinaudit and /skinstatus summarize catalog, wardrobe, preview, profile, and clothing-store runtime health.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25A.5.9: Skin Preview Safety Cleanup; preview state is safely restored on public interior exit, disconnect, and death cleanup.");

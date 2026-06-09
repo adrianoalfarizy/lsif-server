@@ -1,0 +1,22 @@
+{
+  "name": "SAIF open.mp offline-like resource manifest",
+  "version": "v0.26A.1.4",
+  "notes": "This manifest lists official open.mp resource pages to import into DB as a staging library. Importing does not spawn anything in game.",
+  "sources": [
+    {"source_key":"vehicleid","resource_group":"vehicles","title":"Vehicle IDs","url":"https://open.mp/docs/scripting/resources/vehicleid","offline_like":true},
+    {"source_key":"skins","resource_group":"skins","title":"Skins","url":"https://open.mp/docs/scripting/resources/skins","offline_like":true},
+    {"source_key":"weaponids","resource_group":"weapons","title":"Weapon IDs","url":"https://open.mp/docs/scripting/resources/weaponids","offline_like":true},
+    {"source_key":"pickupids","resource_group":"pickups","title":"Pickup IDs","url":"https://open.mp/docs/scripting/resources/pickupids","offline_like":true},
+    {"source_key":"animations","resource_group":"animations","title":"Animations","url":"https://open.mp/docs/scripting/resources/animations","offline_like":true},
+    {"source_key":"sound_ids","resource_group":"sounds","title":"Sound IDs","url":"https://open.mp/docs/scripting/resources/sound-ids","offline_like":true},
+    {"source_key":"shopnames","resource_group":"shopnames","title":"Shop Names","url":"https://open.mp/docs/scripting/resources/shopnames","offline_like":true},
+    {"source_key":"samp_objects","resource_group":"objects","title":"SA-MP Objects","url":"https://open.mp/docs/scripting/resources/samp_objects","offline_like":true},
+    {"source_key":"textdrawsprites","resource_group":"ui_sprites","title":"TextDraw Sprites","url":"https://open.mp/docs/scripting/resources/textdrawsprites","offline_like":true},
+    {"source_key":"vehiclecolorid","resource_group":"vehicle_colors","title":"Vehicle Color IDs","url":"https://open.mp/docs/scripting/resources/vehiclecolorid","offline_like":true},
+    {"source_key":"paintjobs","resource_group":"paintjobs","title":"Paintjobs","url":"https://open.mp/docs/scripting/resources/paintjobs","offline_like":true},
+    {"source_key":"vehicleinformationtypes","resource_group":"vehicle_info_types","title":"Vehicle Information Types","url":"https://open.mp/docs/scripting/resources/vehicleinformationtypes","offline_like":true},
+    {"source_key":"keys","resource_group":"controls","title":"Keys","url":"https://open.mp/docs/scripting/resources/keys","offline_like":true},
+    {"source_key":"playerstates","resource_group":"player_states","title":"Player States","url":"https://open.mp/docs/scripting/resources/playerstates","offline_like":true},
+    {"source_key":"bullethittypes","resource_group":"weapon_hooks","title":"Bullet Hit Types","url":"https://open.mp/docs/scripting/resources/bullethittypes","offline_like":true}
+  ]
+}

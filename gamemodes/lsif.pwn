@@ -911,6 +911,8 @@ new PlayerDeathVirtualWorld[MAX_PLAYERS];
 new PlayerDeathWantedLevel[MAX_PLAYERS];
 new PlayerPersistentWantedLevel[MAX_PLAYERS];
 new PlayerCurrentSkin[MAX_PLAYERS];
+new Float:PlayerPersistentHealth[MAX_PLAYERS];
+new Float:PlayerPersistentArmour[MAX_PLAYERS];
 new PlayerOwnedSkin[MAX_PLAYERS][MAX_SKIN_CATALOG_ITEMS];
 new PlayerOwnedSkinCount[MAX_PLAYERS];
 new PlayerArrestJailed[MAX_PLAYERS];
@@ -2737,6 +2739,7 @@ forward OnExactPublicInteriorImportClearedOnly(playerid);
 forward OnExactPublicInteriorImportInfoLoaded(playerid);
 forward OnWeaponShopConfigLoaded();
 forward ReloadPublicInteriorsDelayed(playerid);
+forward ReapplyPublicInteriorServiceCheckpointDelayed(playerid);
 forward ApplyPublicInteriorFacingDelayed(playerid, Float:angle);
 forward ApplyPublicInteriorFacingDelayed2(playerid, Float:angle);
 forward RespawnWorldPickupByDBID(dbid);
@@ -3284,6 +3287,8 @@ stock ResetPlayerAccountData(playerid)
     PlayerDeathWantedLevel[playerid] = 0;
     PlayerPersistentWantedLevel[playerid] = 0;
     PlayerCurrentSkin[playerid] = DEFAULT_SKIN;
+    PlayerPersistentHealth[playerid] = 100.0;
+    PlayerPersistentArmour[playerid] = 0.0;
     PlayerEditingSkinCatalogIndex[playerid] = -1;
     PlayerPendingSkinShopIndex[playerid] = -1;
     PlayerSkinPreviewActive[playerid] = 0;
@@ -3303,6 +3308,8 @@ stock ResetPlayerAccountData(playerid)
     PlayerTurfHudVisible[playerid] = 0;
     PlayerWeaponLicense[playerid] = DEFAULT_WEAPON_LICENSE;
     PlayerPersistentWantedLevel[playerid] = 0;
+    PlayerPersistentHealth[playerid] = 100.0;
+    PlayerPersistentArmour[playerid] = 0.0;
     ResetPlayerSkinOwnership(playerid);
     MarkPlayerSkinOwnedRuntime(playerid, PlayerCurrentSkin[playerid]);
     GrantPlayerSkinOwnership(playerid, PlayerCurrentSkin[playerid], "register_default");
@@ -3401,17 +3408,19 @@ stock SavePlayerData(playerid, notify = 0)
     }
 
     new Float:x, Float:y, Float:z, Float:a;
+    new Float:health, Float:armour;
     new interior;
     new virtualWorld;
-    new query[1024];
+    new query[1280];
 
     GetSafePlayerSavePosition(playerid, x, y, z, a, interior, virtualWorld);
+    GetSafePlayerVitalsForSave(playerid, health, armour);
 
     mysql_format(
         g_SQL,
         query,
         sizeof(query),
-        "UPDATE players SET money=%d, bank_money=%d, xp=%d, level=%d, admin_level=%d, skin=%d, current_job=%d, spawn_house=%d, starter_pack_claimed=%d, weapon_license=%d, wanted_level=%d, pos_x=%f, pos_y=%f, pos_z=%f, pos_a=%f, pos_interior=%d, pos_virtual_world=%d WHERE id=%d LIMIT 1",
+        "UPDATE players SET money=%d, bank_money=%d, xp=%d, level=%d, admin_level=%d, skin=%d, current_job=%d, spawn_house=%d, starter_pack_claimed=%d, weapon_license=%d, wanted_level=%d, health=%f, armour=%f, pos_x=%f, pos_y=%f, pos_z=%f, pos_a=%f, pos_interior=%d, pos_virtual_world=%d WHERE id=%d LIMIT 1",
         PlayerMoney[playerid],
         PlayerBankMoney[playerid],
         PlayerXP[playerid],
@@ -3423,6 +3432,8 @@ stock SavePlayerData(playerid, notify = 0)
         PlayerStarterPackClaimed[playerid],
         PlayerWeaponLicense[playerid],
         ClampWantedLevelValue(GetPlayerWantedLevel(playerid)),
+        health,
+        armour,
         x,
         y,
         z,
@@ -3456,6 +3467,66 @@ stock GetSafePlayerSavePosition(playerid, &Float:x, &Float:y, &Float:z, &Float:a
         virtualWorld = 0;
     }
 
+    return 1;
+}
+
+
+stock Float:ClampPlayerVitalValue(Float:value, Float:defaultValue)
+{
+    if (value < 0.0 || value > 100.0)
+    {
+        return defaultValue;
+    }
+    return value;
+}
+
+stock GetSafePlayerVitalsForSave(playerid, &Float:health, &Float:armour)
+{
+    health = PlayerPersistentHealth[playerid];
+    armour = PlayerPersistentArmour[playerid];
+
+    if (IsPlayerConnected(playerid) && PlayerLoggedIn[playerid])
+    {
+        GetPlayerHealth(playerid, health);
+        GetPlayerArmour(playerid, armour);
+    }
+
+    health = ClampPlayerVitalValue(health, 100.0);
+    armour = ClampPlayerVitalValue(armour, 0.0);
+
+    // Jangan simpan health 0 sebagai state login normal; death flow sendiri respawn ke hospital.
+    if (health < 1.0 && !PlayerDeathRespawnPending[playerid])
+    {
+        health = 100.0;
+    }
+
+    PlayerPersistentHealth[playerid] = health;
+    PlayerPersistentArmour[playerid] = armour;
+    return 1;
+}
+
+stock ApplyPersistentPlayerVitals(playerid)
+{
+    if (!IsPlayerConnected(playerid)) return 0;
+
+    PlayerPersistentHealth[playerid] = ClampPlayerVitalValue(PlayerPersistentHealth[playerid], 100.0);
+    PlayerPersistentArmour[playerid] = ClampPlayerVitalValue(PlayerPersistentArmour[playerid], 0.0);
+
+    SetPlayerHealth(playerid, PlayerPersistentHealth[playerid]);
+    SetPlayerArmour(playerid, PlayerPersistentArmour[playerid]);
+    return 1;
+}
+
+stock SavePlayerVitalsOnly(playerid)
+{
+    if (!PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0) return 0;
+
+    new Float:health, Float:armour;
+    new query[192];
+    GetSafePlayerVitalsForSave(playerid, health, armour);
+
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE players SET health=%f, armour=%f WHERE id=%d LIMIT 1", health, armour, PlayerDBID[playerid]);
+    mysql_tquery(g_SQL, query);
     return 1;
 }
 
@@ -13863,7 +13934,7 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.2 Ammu-Nation Offline Catalog UX");
+    SetGameModeText("SAIF Dev v0.26A.1.3 Vitals Persistence & Service Checkpoint Restore");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -14018,8 +14089,8 @@ public OnGameModeInit()
     print("[SAIF] Skin Catalog baseline aktif: clothing store skin shop DB-based via skin_catalog.");
     print("[SAIF] Skin movement baseline aktif: CJ-like via UsePlayerPedAnims; profile palsu tetap dihapus.");
     print("[SAIF] Vehicle Mission v0.25B.10 tetap aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
-    print("[SAIF] Ammu-Nation Offline Catalog UX aktif: category counter + Body Armor + DB config.");
-    print("[SAIF] Gamemode v0.26A.1.2 Ammu-Nation Offline Catalog UX berhasil dijalankan.");
+    print("[SAIF] Vitals Persistence aktif: health/armor DB + Ammu Body Armor persistence.");
+    print("[SAIF] Gamemode v0.26A.1.3 Vitals Persistence & Service Checkpoint Restore berhasil dijalankan.");
     return 1;
 }
 
@@ -14386,8 +14457,10 @@ public OnPlayerSpawn(playerid)
         SetPlayerPos(playerid, PlayerLastX[playerid], PlayerLastY[playerid], PlayerLastZ[playerid]);
         SetPlayerFacingAngle(playerid, PlayerLastA[playerid]);
         RestorePlayerInteriorRuntimeState(playerid);
+        SetTimerEx("ReapplyPublicInteriorServiceCheckpointDelayed", 750, false, "i", playerid);
     }
 
+    ApplyPersistentPlayerVitals(playerid);
     ResetPlayerWeapons(playerid);
     ApplyPlayerSavedSkin(playerid);
     SetTimerEx("ApplySavedWeaponLoadout", 1000, false, "i", playerid);
@@ -22603,7 +22676,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             g_SQL,
             query,
             sizeof(query),
-            "INSERT INTO players (username, password_hash, money, bank_money, xp, level, admin_level, skin, current_job, starter_pack_claimed, weapon_license, pos_x, pos_y, pos_z, pos_a, pos_interior, pos_virtual_world, last_ip, last_login) VALUES ('%e', SHA2('%e', 256), 500, 0, 0, 1, 0, %d, 0, 0, %d, %f, %f, %f, %f, 0, 0, '%e', NOW())",
+            "INSERT INTO players (username, password_hash, money, bank_money, xp, level, admin_level, skin, current_job, starter_pack_claimed, weapon_license, health, armour, pos_x, pos_y, pos_z, pos_a, pos_interior, pos_virtual_world, last_ip, last_login) VALUES ('%e', SHA2('%e', 256), 500, 0, 0, 1, 0, %d, 0, 0, %d, 100.0, 0.0, %f, %f, %f, %f, 0, 0, '%e', NOW())",
             username,
             inputtext,
             DEFAULT_SKIN,
@@ -22644,7 +22717,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             g_SQL,
             query,
             sizeof(query),
-            "SELECT id, money, bank_money, xp, level, admin_level, skin, current_job, spawn_house, starter_pack_claimed, weapon_license, wanted_level, pos_x, pos_y, pos_z, pos_a, pos_interior, pos_virtual_world FROM players WHERE username='%e' AND password_hash=SHA2('%e', 256) LIMIT 1",
+            "SELECT id, money, bank_money, xp, level, admin_level, skin, current_job, spawn_house, starter_pack_claimed, weapon_license, wanted_level, health, armour, pos_x, pos_y, pos_z, pos_a, pos_interior, pos_virtual_world FROM players WHERE username='%e' AND password_hash=SHA2('%e', 256) LIMIT 1",
             username,
             inputtext
         );
@@ -22697,6 +22770,8 @@ public OnAccountRegister(playerid)
     PlayerStarterPackClaimed[playerid] = 0;
     PlayerWeaponLicense[playerid] = DEFAULT_WEAPON_LICENSE;
     PlayerPersistentWantedLevel[playerid] = 0;
+    PlayerPersistentHealth[playerid] = 100.0;
+    PlayerPersistentArmour[playerid] = 0.0;
     ResetPlayerSkinOwnership(playerid);
     MarkPlayerSkinOwnedRuntime(playerid, PlayerCurrentSkin[playerid]);
     GrantPlayerSkinOwnership(playerid, PlayerCurrentSkin[playerid], "register_default");
@@ -22753,6 +22828,10 @@ public OnAccountLogin(playerid)
     cache_get_value_name_int(0, "weapon_license", PlayerWeaponLicense[playerid]);
     cache_get_value_name_int(0, "wanted_level", PlayerPersistentWantedLevel[playerid]);
     PlayerPersistentWantedLevel[playerid] = ClampWantedLevelValue(PlayerPersistentWantedLevel[playerid]);
+    cache_get_value_name_float(0, "health", PlayerPersistentHealth[playerid]);
+    cache_get_value_name_float(0, "armour", PlayerPersistentArmour[playerid]);
+    PlayerPersistentHealth[playerid] = ClampPlayerVitalValue(PlayerPersistentHealth[playerid], 100.0);
+    PlayerPersistentArmour[playerid] = ClampPlayerVitalValue(PlayerPersistentArmour[playerid], 0.0);
 
     cache_get_value_name_float(0, "pos_x", PlayerLastX[playerid]);
     cache_get_value_name_float(0, "pos_y", PlayerLastY[playerid]);
@@ -25090,6 +25169,25 @@ stock HidePublicInteriorServiceCheckpoint(playerid)
     return 1;
 }
 
+
+stock EnsurePublicInteriorServiceCheckpointForPlayer(playerid)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid]) return 0;
+
+    new idx = GetPlayerPublicInteriorIndex(playerid);
+    if (idx == -1) return 0;
+
+    PlayerInsidePublicInteriorID[playerid] = PublicInteriorDBID[idx];
+    ShowPublicInteriorServiceCheckpoint(playerid, idx);
+    return 1;
+}
+
+public ReapplyPublicInteriorServiceCheckpointDelayed(playerid)
+{
+    EnsurePublicInteriorServiceCheckpointForPlayer(playerid);
+    return 1;
+}
+
 stock IsPlayerNearPublicInteriorServicePoint(playerid, idx)
 {
     if (idx < 0 || idx >= PublicInteriorCount)
@@ -25335,6 +25433,14 @@ public OnPublicInteriorsLoaded()
 
     CreatePublicInteriorRuntimeAll();
     RefreshAllPlayerMapIcons();
+
+    for (new playerid = 0; playerid < MAX_PLAYERS; playerid++)
+    {
+        if (IsPlayerConnected(playerid) && PlayerLoggedIn[playerid])
+        {
+            SetTimerEx("ReapplyPublicInteriorServiceCheckpointDelayed", 500, false, "i", playerid);
+        }
+    }
 
     new msg[144];
     format(msg, sizeof(msg), "[LSIF] Public interiors loaded: %d.", PublicInteriorCount);
@@ -26391,6 +26497,7 @@ stock AddPublicInteriorHealth(playerid, Float:addAmount)
     health += addAmount;
     if (health > 100.0) health = 100.0;
     SetPlayerHealth(playerid, health);
+    PlayerPersistentHealth[playerid] = health;
     return 1;
 }
 
@@ -26401,6 +26508,7 @@ stock AddPublicInteriorArmour(playerid, Float:addAmount)
     armor += addAmount;
     if (armor > 100.0) armor = 100.0;
     SetPlayerArmour(playerid, armor);
+    PlayerPersistentArmour[playerid] = armor;
     return 1;
 }
 
@@ -28339,6 +28447,7 @@ stock HandleWorldPickupPickup(playerid, pickupid)
             health += float(amount);
             if (health > 100.0) health = 100.0;
             SetPlayerHealth(playerid, health);
+            PlayerPersistentHealth[playerid] = health;
             format(msg, sizeof(msg), "Health pickup diambil. Health +%d.", amount);
             SendClientMessage(playerid, COLOR_GREEN, msg);
         }
@@ -28349,6 +28458,7 @@ stock HandleWorldPickupPickup(playerid, pickupid)
             armor += float(amount);
             if (armor > 100.0) armor = 100.0;
             SetPlayerArmour(playerid, armor);
+            PlayerPersistentArmour[playerid] = armor;
             format(msg, sizeof(msg), "Armor pickup diambil. Armor +%d.", amount);
             SendClientMessage(playerid, COLOR_GREEN, msg);
         }
@@ -28385,6 +28495,7 @@ stock HandleWorldPickupPickup(playerid, pickupid)
 
     if (consume)
     {
+        SavePlayerData(playerid);
         new dbid = WorldPickupDBID[index];
         new cooldown = WorldPickupCooldown[index];
         DestroyWorldPickupRuntime(index);
@@ -34702,6 +34813,8 @@ stock ApplyHospitalDeathRespawn(playerid)
     SetCameraBehindPlayer(playerid);
     SetPlayerHealth(playerid, 100.0);
     SetPlayerArmour(playerid, 0.0);
+    PlayerPersistentHealth[playerid] = 100.0;
+    PlayerPersistentArmour[playerid] = 0.0;
     ApplyDeathWantedPersistence(playerid);
     ApplyHospitalDeathFee(playerid);
     PlayerLastX[playerid] = x;
@@ -35301,7 +35414,7 @@ stock ShowWeaponPurchaseMenuDialog(playerid, weaponIndex)
     {
         format(title, sizeof(title), "Buy %s | Cash $%d", WeaponShopName[weaponIndex], PlayerMoney[playerid]);
         format(dialogText, sizeof(dialogText), "Buy / Wear Body Armor - Armor %d - $%d\nBack to Category", WeaponShopAmmo[weaponIndex], WeaponShopPrice[weaponIndex]);
-        SendClientMessage(playerid, COLOR_YELLOW, "Ammu-Nation: Body Armor tidak masuk saved weapon loadout.");
+        SendClientMessage(playerid, COLOR_YELLOW, "Ammu-Nation: Body Armor tersimpan ke players.armour, bukan saved weapon loadout.");
         ShowPlayerDialog(playerid, DIALOG_WEAPON_PURCHASE_MENU, DIALOG_STYLE_LIST, title, dialogText, "Pilih", "Back");
         return 1;
     }
@@ -35386,12 +35499,13 @@ stock ProcessWeaponPurchaseAmount(playerid, weaponIndex, packs)
 
         TakePlayerCash(playerid, price);
         SetPlayerArmour(playerid, float(WeaponShopAmmo[weaponIndex]));
+        PlayerPersistentArmour[playerid] = float(WeaponShopAmmo[weaponIndex]);
         SavePlayerData(playerid);
 
         new armorMsg[144];
         format(armorMsg, sizeof(armorMsg), "Ammu-Nation: Body Armor dipakai. Armor %d, harga $%d.", WeaponShopAmmo[weaponIndex], price);
         SendClientMessage(playerid, COLOR_GREEN, armorMsg);
-        SendClientMessage(playerid, COLOR_WHITE, "Body Armor tidak masuk saved weapon loadout.");
+        SendClientMessage(playerid, COLOR_WHITE, "Body Armor tersimpan ke DB players.armour dan akan kembali saat relog.");
         ShowWeaponCategoryDialog(playerid, PlayerAmmuCategory[playerid]);
         return 1;
     }
@@ -38461,7 +38575,7 @@ stock ShowOrgEconomyBaselineAudit(playerid)
     new line[192];
     body[0] = EOS;
 
-    strcat(body, "SAIF v0.26A.1.2 Ammu-Nation Offline Catalog UX\n\n", sizeof(body));
+    strcat(body, "SAIF v0.26A.1.3 Vitals Persistence & Service Checkpoint Restore\n\n", sizeof(body));
     strcat(body, "Contract:\n", sizeof(body));
     strcat(body, "- Organization = player-made legal/economic group.\n", sizeof(body));
     strcat(body, "- Gang = preset/offline-like turf group, not org.\n", sizeof(body));
@@ -41442,7 +41556,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.2 Ammu-Nation Offline Catalog UX");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.3 Vitals Persistence & Service Checkpoint Restore");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -41452,7 +41566,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.2: Ammu-Nation Offline Catalog UX; kategori offline-style, Body Armor, SAIF counter UI.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.3: Health/armor persistent DB; Body Armor tersimpan; service checkpoint direstore saat relog di public interior.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1: Org Economy Baseline Audit; /orgeconomy, /orgstatus, /orgeconomyhealth.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25B.10.3: Skin Profile Removal Cleanup; removes ineffective movement_profile/anim_profile from active skin system and DB.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25B.10: Vehicle Mission Closeout Audit; /vehmissioncloseout, /vehiclemissionhealth.");

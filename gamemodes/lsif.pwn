@@ -913,7 +913,6 @@ new PlayerPersistentWantedLevel[MAX_PLAYERS];
 new PlayerCurrentSkin[MAX_PLAYERS];
 new Float:PlayerPersistentHealth[MAX_PLAYERS];
 new Float:PlayerPersistentArmour[MAX_PLAYERS];
-new g_PlayerVitalsDBReady = 0;
 new PlayerOwnedSkin[MAX_PLAYERS][MAX_SKIN_CATALOG_ITEMS];
 new PlayerOwnedSkinCount[MAX_PLAYERS];
 new PlayerArrestJailed[MAX_PLAYERS];
@@ -2741,8 +2740,6 @@ forward OnExactPublicInteriorImportInfoLoaded(playerid);
 forward OnWeaponShopConfigLoaded();
 forward ReloadPublicInteriorsDelayed(playerid);
 forward ReapplyPublicInteriorServiceCheckpointDelayed(playerid);
-forward OnPlayerVitalsSchemaChecked();
-forward OnPlayerVitalsLoaded(playerid);
 forward ApplyPublicInteriorFacingDelayed(playerid, Float:angle);
 forward ApplyPublicInteriorFacingDelayed2(playerid, Float:angle);
 forward RespawnWorldPickupByDBID(dbid);
@@ -3419,62 +3416,32 @@ stock SavePlayerData(playerid, notify = 0)
     GetSafePlayerSavePosition(playerid, x, y, z, a, interior, virtualWorld);
     GetSafePlayerVitalsForSave(playerid, health, armour);
 
-    if (g_PlayerVitalsDBReady)
-    {
-        mysql_format(
-            g_SQL,
-            query,
-            sizeof(query),
-            "UPDATE players SET money=%d, bank_money=%d, xp=%d, level=%d, admin_level=%d, skin=%d, current_job=%d, spawn_house=%d, starter_pack_claimed=%d, weapon_license=%d, wanted_level=%d, health=%f, armour=%f, pos_x=%f, pos_y=%f, pos_z=%f, pos_a=%f, pos_interior=%d, pos_virtual_world=%d WHERE id=%d LIMIT 1",
-            PlayerMoney[playerid],
-            PlayerBankMoney[playerid],
-            PlayerXP[playerid],
-            PlayerLevel[playerid],
-            PlayerAdmin[playerid],
-            NormalizePlayerSkinValue(PlayerCurrentSkin[playerid]),
-            PlayerJob[playerid],
-            PlayerSpawnHouse[playerid],
-            PlayerStarterPackClaimed[playerid],
-            PlayerWeaponLicense[playerid],
-            ClampWantedLevelValue(GetPlayerWantedLevel(playerid)),
-            health,
-            armour,
-            x,
-            y,
-            z,
-            a,
-            interior,
-            virtualWorld,
-            PlayerDBID[playerid]
-        );
-    }
-    else
-    {
-        mysql_format(
-            g_SQL,
-            query,
-            sizeof(query),
-            "UPDATE players SET money=%d, bank_money=%d, xp=%d, level=%d, admin_level=%d, skin=%d, current_job=%d, spawn_house=%d, starter_pack_claimed=%d, weapon_license=%d, wanted_level=%d, pos_x=%f, pos_y=%f, pos_z=%f, pos_a=%f, pos_interior=%d, pos_virtual_world=%d WHERE id=%d LIMIT 1",
-            PlayerMoney[playerid],
-            PlayerBankMoney[playerid],
-            PlayerXP[playerid],
-            PlayerLevel[playerid],
-            PlayerAdmin[playerid],
-            NormalizePlayerSkinValue(PlayerCurrentSkin[playerid]),
-            PlayerJob[playerid],
-            PlayerSpawnHouse[playerid],
-            PlayerStarterPackClaimed[playerid],
-            PlayerWeaponLicense[playerid],
-            ClampWantedLevelValue(GetPlayerWantedLevel(playerid)),
-            x,
-            y,
-            z,
-            a,
-            interior,
-            virtualWorld,
-            PlayerDBID[playerid]
-        );
-    }
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "UPDATE players SET money=%d, bank_money=%d, xp=%d, level=%d, admin_level=%d, skin=%d, current_job=%d, spawn_house=%d, starter_pack_claimed=%d, weapon_license=%d, wanted_level=%d, health=%f, armour=%f, pos_x=%f, pos_y=%f, pos_z=%f, pos_a=%f, pos_interior=%d, pos_virtual_world=%d WHERE id=%d LIMIT 1",
+        PlayerMoney[playerid],
+        PlayerBankMoney[playerid],
+        PlayerXP[playerid],
+        PlayerLevel[playerid],
+        PlayerAdmin[playerid],
+        NormalizePlayerSkinValue(PlayerCurrentSkin[playerid]),
+        PlayerJob[playerid],
+        PlayerSpawnHouse[playerid],
+        PlayerStarterPackClaimed[playerid],
+        PlayerWeaponLicense[playerid],
+        ClampWantedLevelValue(GetPlayerWantedLevel(playerid)),
+        health,
+        armour,
+        x,
+        y,
+        z,
+        a,
+        interior,
+        virtualWorld,
+        PlayerDBID[playerid]
+    );
 
     mysql_tquery(g_SQL, query, "OnPlayerDataSaved", "ii", playerid, notify);
     return 1;
@@ -3552,7 +3519,6 @@ stock ApplyPersistentPlayerVitals(playerid)
 
 stock SavePlayerVitalsOnly(playerid)
 {
-    if (!g_PlayerVitalsDBReady) return 0;
     if (!PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0) return 0;
 
     new Float:health, Float:armour;
@@ -3564,69 +3530,6 @@ stock SavePlayerVitalsOnly(playerid)
     return 1;
 }
 
-
-stock CheckPlayerVitalsSchema()
-{
-    g_PlayerVitalsDBReady = 0;
-
-    mysql_tquery(
-        g_SQL,
-        "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='players' AND COLUMN_NAME IN ('health','armour')",
-        "OnPlayerVitalsSchemaChecked"
-    );
-    return 1;
-}
-
-public OnPlayerVitalsSchemaChecked()
-{
-    new count = 0;
-
-    if (cache_num_rows() > 0)
-    {
-        cache_get_value_name_int(0, "cnt", count);
-    }
-
-    g_PlayerVitalsDBReady = (count >= 2) ? 1 : 0;
-
-    if (g_PlayerVitalsDBReady)
-    {
-        print("[SAIF] Player vitals DB columns ready: players.health + players.armour.");
-    }
-    else
-    {
-        print("[SAIF WARNING] Player vitals DB columns missing. Login fallback aktif; jalankan SQL v0.26A.1.3 untuk health/armour persistence.");
-    }
-    return 1;
-}
-
-stock LoadPlayerVitalsFromDB(playerid)
-{
-    if (!g_PlayerVitalsDBReady) return 0;
-    if (!PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0) return 0;
-
-    new query[128];
-    mysql_format(g_SQL, query, sizeof(query), "SELECT health, armour FROM players WHERE id=%d LIMIT 1", PlayerDBID[playerid]);
-    mysql_tquery(g_SQL, query, "OnPlayerVitalsLoaded", "i", playerid);
-    return 1;
-}
-
-public OnPlayerVitalsLoaded(playerid)
-{
-    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid]) return 1;
-
-    if (cache_num_rows() == 0)
-    {
-        return 1;
-    }
-
-    cache_get_value_name_float(0, "health", PlayerPersistentHealth[playerid]);
-    cache_get_value_name_float(0, "armour", PlayerPersistentArmour[playerid]);
-    PlayerPersistentHealth[playerid] = ClampPlayerVitalValue(PlayerPersistentHealth[playerid], 100.0);
-    PlayerPersistentArmour[playerid] = ClampPlayerVitalValue(PlayerPersistentArmour[playerid], 0.0);
-
-    ApplyPersistentPlayerVitals(playerid);
-    return 1;
-}
 
 stock SanitizeLoadedSpawnPosition(playerid)
 {
@@ -14031,7 +13934,7 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.3.1 Auth Login Vitals Guard");
+    SetGameModeText("SAIF Dev v0.26A.1.3 Vitals Persistence & Service Checkpoint Restore");
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
@@ -14047,7 +13950,6 @@ public OnGameModeInit()
     else
     {
         print("[MYSQL] Berhasil connect ke database lsif_db.");
-        CheckPlayerVitalsSchema();
     }
     LoadTurfConfigFromDB();
     LoadDeathConfigFromDB();
@@ -14188,8 +14090,7 @@ public OnGameModeInit()
     print("[SAIF] Skin movement baseline aktif: CJ-like via UsePlayerPedAnims; profile palsu tetap dihapus.");
     print("[SAIF] Vehicle Mission v0.25B.10 tetap aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
     print("[SAIF] Vitals Persistence aktif: health/armor DB + Ammu Body Armor persistence.");
-    print("[SAIF] Auth login guard aktif: login tidak bergantung langsung pada kolom vitals.");
-    print("[SAIF] Gamemode v0.26A.1.3.1 Auth Login Vitals Guard berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.26A.1.3 Vitals Persistence & Service Checkpoint Restore berhasil dijalankan.");
     return 1;
 }
 
@@ -22771,42 +22672,21 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         GetPlayerAccountName(playerid, username, sizeof(username));
         GetPlayerIp(playerid, ip, sizeof(ip));
 
-        if (g_PlayerVitalsDBReady)
-        {
-            mysql_format(
-                g_SQL,
-                query,
-                sizeof(query),
-                "INSERT INTO players (username, password_hash, money, bank_money, xp, level, admin_level, skin, current_job, starter_pack_claimed, weapon_license, health, armour, pos_x, pos_y, pos_z, pos_a, pos_interior, pos_virtual_world, last_ip, last_login) VALUES ('%e', SHA2('%e', 256), 500, 0, 0, 1, 0, %d, 0, 0, %d, 100.0, 0.0, %f, %f, %f, %f, 0, 0, '%e', NOW())",
-                username,
-                inputtext,
-                DEFAULT_SKIN,
-                DEFAULT_WEAPON_LICENSE,
-                SPAWN_X,
-                SPAWN_Y,
-                SPAWN_Z,
-                SPAWN_A,
-                ip
-            );
-        }
-        else
-        {
-            mysql_format(
-                g_SQL,
-                query,
-                sizeof(query),
-                "INSERT INTO players (username, password_hash, money, bank_money, xp, level, admin_level, skin, current_job, starter_pack_claimed, weapon_license, pos_x, pos_y, pos_z, pos_a, pos_interior, pos_virtual_world, last_ip, last_login) VALUES ('%e', SHA2('%e', 256), 500, 0, 0, 1, 0, %d, 0, 0, %d, %f, %f, %f, %f, 0, 0, '%e', NOW())",
-                username,
-                inputtext,
-                DEFAULT_SKIN,
-                DEFAULT_WEAPON_LICENSE,
-                SPAWN_X,
-                SPAWN_Y,
-                SPAWN_Z,
-                SPAWN_A,
-                ip
-            );
-        }
+        mysql_format(
+            g_SQL,
+            query,
+            sizeof(query),
+            "INSERT INTO players (username, password_hash, money, bank_money, xp, level, admin_level, skin, current_job, starter_pack_claimed, weapon_license, health, armour, pos_x, pos_y, pos_z, pos_a, pos_interior, pos_virtual_world, last_ip, last_login) VALUES ('%e', SHA2('%e', 256), 500, 0, 0, 1, 0, %d, 0, 0, %d, 100.0, 0.0, %f, %f, %f, %f, 0, 0, '%e', NOW())",
+            username,
+            inputtext,
+            DEFAULT_SKIN,
+            DEFAULT_WEAPON_LICENSE,
+            SPAWN_X,
+            SPAWN_Y,
+            SPAWN_Z,
+            SPAWN_A,
+            ip
+        );
 
         mysql_tquery(g_SQL, query, "OnAccountRegister", "i", playerid);
         return 1;
@@ -22837,7 +22717,7 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             g_SQL,
             query,
             sizeof(query),
-            "SELECT id, money, bank_money, xp, level, admin_level, skin, current_job, spawn_house, starter_pack_claimed, weapon_license, wanted_level, pos_x, pos_y, pos_z, pos_a, pos_interior, pos_virtual_world FROM players WHERE username='%e' AND password_hash=SHA2('%e', 256) LIMIT 1",
+            "SELECT id, money, bank_money, xp, level, admin_level, skin, current_job, spawn_house, starter_pack_claimed, weapon_license, wanted_level, health, armour, pos_x, pos_y, pos_z, pos_a, pos_interior, pos_virtual_world FROM players WHERE username='%e' AND password_hash=SHA2('%e', 256) LIMIT 1",
             username,
             inputtext
         );
@@ -22948,8 +22828,10 @@ public OnAccountLogin(playerid)
     cache_get_value_name_int(0, "weapon_license", PlayerWeaponLicense[playerid]);
     cache_get_value_name_int(0, "wanted_level", PlayerPersistentWantedLevel[playerid]);
     PlayerPersistentWantedLevel[playerid] = ClampWantedLevelValue(PlayerPersistentWantedLevel[playerid]);
-    PlayerPersistentHealth[playerid] = 100.0;
-    PlayerPersistentArmour[playerid] = 0.0;
+    cache_get_value_name_float(0, "health", PlayerPersistentHealth[playerid]);
+    cache_get_value_name_float(0, "armour", PlayerPersistentArmour[playerid]);
+    PlayerPersistentHealth[playerid] = ClampPlayerVitalValue(PlayerPersistentHealth[playerid], 100.0);
+    PlayerPersistentArmour[playerid] = ClampPlayerVitalValue(PlayerPersistentArmour[playerid], 0.0);
 
     cache_get_value_name_float(0, "pos_x", PlayerLastX[playerid]);
     cache_get_value_name_float(0, "pos_y", PlayerLastY[playerid]);
@@ -22974,11 +22856,6 @@ public OnAccountLogin(playerid)
     LoadPlayerSkinOwnership(playerid);
 
     ApplyLoadedPlayerData(playerid);
-    LoadPlayerVitalsFromDB(playerid);
-    if (!g_PlayerVitalsDBReady)
-    {
-        SendClientMessage(playerid, COLOR_YELLOW, "Warning: kolom health/armour belum siap di DB. Jalankan SQL v0.26A.1.3 agar vitals persistent aktif.");
-    }
     LoadPersistentArrestJailHold(playerid);
     LoadPlayerGarage(playerid);
     LoadPlayerHouse(playerid);
@@ -38698,7 +38575,7 @@ stock ShowOrgEconomyBaselineAudit(playerid)
     new line[192];
     body[0] = EOS;
 
-    strcat(body, "SAIF v0.26A.1.3.1 Auth Login Vitals Guard\n\n", sizeof(body));
+    strcat(body, "SAIF v0.26A.1.3 Vitals Persistence & Service Checkpoint Restore\n\n", sizeof(body));
     strcat(body, "Contract:\n", sizeof(body));
     strcat(body, "- Organization = player-made legal/economic group.\n", sizeof(body));
     strcat(body, "- Gang = preset/offline-like turf group, not org.\n", sizeof(body));
@@ -41679,7 +41556,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.3.1 Auth Login Vitals Guard");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.3 Vitals Persistence & Service Checkpoint Restore");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -41689,7 +41566,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.3.1: Login fallback guard untuk health/armour DB; auth tidak silent jika SQL vitals belum siap.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.3: Health/armor persistent DB; Body Armor tersimpan; service checkpoint direstore saat relog di public interior.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1: Org Economy Baseline Audit; /orgeconomy, /orgstatus, /orgeconomyhealth.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25B.10.3: Skin Profile Removal Cleanup; removes ineffective movement_profile/anim_profile from active skin system and DB.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25B.10: Vehicle Mission Closeout Audit; /vehmissioncloseout, /vehiclemissionhealth.");

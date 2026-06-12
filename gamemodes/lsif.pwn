@@ -798,7 +798,8 @@ stock IsLegacyStaticRaceMarkerEnabled() { return 0; }
 #define FUEL_TIMER_INTERVAL 60000 // 60 detik
 #define FUEL_CONSUME_AMOUNT 1
 
-new MySQL:g_SQL;
+new MySQL:g_SQL = MYSQL_INVALID_HANDLE;
+new bool:g_DatabaseReady = false;
 new g_AutosaveTimer;
 
 new g_AntiCheatTimer;
@@ -13934,23 +13935,30 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.3 Vitals Persistence & Service Checkpoint Restore");
+    SetGameModeText("SAIF Dev v0.26A.1.3.1 Cold Boot Database Readiness Fix");
+
+    new MySQLOpt:mysqlOptions = mysql_init_options();
+    mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
 
     g_SQL = mysql_connect(
                 MYSQL_HOST,
                 MYSQL_USER,
                 MYSQL_PASSWORD,
-                MYSQL_DATABASE
+                MYSQL_DATABASE,
+                mysqlOptions
             );
 
-    if (mysql_errno(g_SQL) != 0)
+    if (g_SQL == MYSQL_INVALID_HANDLE || mysql_errno(g_SQL) != 0)
     {
-        print("[MYSQL] Gagal connect ke database.");
+        g_DatabaseReady = false;
+        print("[MYSQL] FATAL: database belum siap saat cold boot.");
+        print("[MYSQL] open.mp dihentikan agar systemd me-restart setelah MariaDB siap.");
+        SendRconCommand("exit");
+        return 1;
     }
-    else
-    {
-        print("[MYSQL] Berhasil connect ke database lsif_db.");
-    }
+
+    g_DatabaseReady = true;
+    print("[MYSQL] Berhasil connect ke database lsif_db. Auth dan runtime DB boleh dimulai.");
     LoadTurfConfigFromDB();
     LoadDeathConfigFromDB();
     LoadWeaponShopConfigFromDB();
@@ -14090,7 +14098,7 @@ public OnGameModeInit()
     print("[SAIF] Skin movement baseline aktif: CJ-like via UsePlayerPedAnims; profile palsu tetap dihapus.");
     print("[SAIF] Vehicle Mission v0.25B.10 tetap aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
     print("[SAIF] Vitals Persistence aktif: health/armor DB + Ammu Body Armor persistence.");
-    print("[SAIF] Gamemode v0.26A.1.3 Vitals Persistence & Service Checkpoint Restore berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.26A.1.3.1 Cold Boot Database Readiness Fix berhasil dijalankan.");
     return 1;
 }
 
@@ -14140,15 +14148,26 @@ public OnGameModeExit()
         }
     }
 
-    mysql_close(g_SQL);
-
-    print("[MYSQL] Koneksi database ditutup.");
+    if (g_DatabaseReady && g_SQL != MYSQL_INVALID_HANDLE)
+    {
+        mysql_close(g_SQL);
+        g_SQL = MYSQL_INVALID_HANDLE;
+        g_DatabaseReady = false;
+        print("[MYSQL] Koneksi database ditutup.");
+    }
     print("[LSIF] Gamemode dimatikan.");
     return 1;
 }
 
 public OnPlayerConnect(playerid)
 {
+    if (!g_DatabaseReady || g_SQL == MYSQL_INVALID_HANDLE)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Database server belum siap. Silakan reconnect beberapa detik lagi.");
+        SetTimerEx("DelayedKick", 1000, false, "i", playerid);
+        return 1;
+    }
+
     // First gameplay call on connect: hide native class selector before reset/HUD/messages.
     // This keeps auth/register dialog-driven while preserving natural death animation.
     HideClassSelectionForAuth(playerid);
@@ -36462,6 +36481,12 @@ public EnsureAuthDialog(playerid)
         return 1;
     }
 
+    if (!g_DatabaseReady || g_SQL == MYSQL_INVALID_HANDLE)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Auth ditunda karena database belum siap.");
+        return 1;
+    }
+
     if (PlayerAuthDialogShown[playerid])
     {
         return 1;
@@ -38575,7 +38600,7 @@ stock ShowOrgEconomyBaselineAudit(playerid)
     new line[192];
     body[0] = EOS;
 
-    strcat(body, "SAIF v0.26A.1.3 Vitals Persistence & Service Checkpoint Restore\n\n", sizeof(body));
+    strcat(body, "SAIF v0.26A.1.3.1 Cold Boot Database Readiness Fix\n\n", sizeof(body));
     strcat(body, "Contract:\n", sizeof(body));
     strcat(body, "- Organization = player-made legal/economic group.\n", sizeof(body));
     strcat(body, "- Gang = preset/offline-like turf group, not org.\n", sizeof(body));
@@ -41556,7 +41581,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.3 Vitals Persistence & Service Checkpoint Restore");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.3.1 Cold Boot Database Readiness Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -41566,6 +41591,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.3.1: Cold boot DB readiness; server tidak lagi berjalan dengan handle DB gagal dan auth fallback kosong.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.3: Health/armor persistent DB; Body Armor tersimpan; service checkpoint direstore saat relog di public interior.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1: Org Economy Baseline Audit; /orgeconomy, /orgstatus, /orgeconomyhealth.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.25B.10.3: Skin Profile Removal Cleanup; removes ineffective movement_profile/anim_profile from active skin system and DB.");

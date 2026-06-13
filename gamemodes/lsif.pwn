@@ -258,6 +258,10 @@
 #define DIALOG_OFFLINE_PAIR_PLAN_LIST 1298
 #define DIALOG_OFFLINE_PAIR_PLAN_DETAIL 1299
 #define DIALOG_OFFLINE_PAIR_PLAN_ACTION 1300
+#define DIALOG_OFFLINE_SERVICE_SUMMARY 1301
+#define DIALOG_OFFLINE_SERVICE_LIST 1302
+#define DIALOG_OFFLINE_SERVICE_DETAIL 1303
+#define DIALOG_OFFLINE_SERVICE_ACTION 1304
 
 #define DIALOG_GANG_PRESET_MENU 1192
 #define DIALOG_GANG_PRESET_LIST 1193
@@ -2607,6 +2611,17 @@ new PlayerOfflinePairPlanPage[MAX_PLAYERS];
 new PlayerOfflinePairSelectedPlanID[MAX_PLAYERS];
 new PlayerOfflinePairExteriorQueueID[MAX_PLAYERS];
 new PlayerOfflinePairInteriorQueueID[MAX_PLAYERS];
+new PlayerOfflineServicePointCount[MAX_PLAYERS];
+new PlayerOfflineServicePointDBID[MAX_PLAYERS][MAX_OFFLINE_PAIR_DIALOG_ROWS];
+new PlayerOfflineServicePointPage[MAX_PLAYERS];
+new PlayerOfflineServiceSelectedID[MAX_PLAYERS];
+new PlayerOfflineServiceSelectedPlanID[MAX_PLAYERS];
+new PlayerOfflineServiceSelectedInteriorID[MAX_PLAYERS];
+new Float:PlayerOfflineServiceSelectedX[MAX_PLAYERS];
+new Float:PlayerOfflineServiceSelectedY[MAX_PLAYERS];
+new Float:PlayerOfflineServiceSelectedZ[MAX_PLAYERS];
+new Float:PlayerOfflineServiceSelectedA[MAX_PLAYERS];
+new Float:PlayerOfflineServiceSelectedRadius[MAX_PLAYERS];
 
 forward OnAccountCheck(playerid);
 forward OnAccountRegister(playerid);
@@ -2728,6 +2743,9 @@ forward OnOfflinePairSummaryLoaded(playerid);
 forward OnOfflinePairBatchListLoaded(playerid);
 forward OnOfflinePairPlanListLoaded(playerid, batchid, page);
 forward OnOfflinePairPlanDetailLoaded(playerid, planid);
+forward OnOfflineServiceSummaryLoaded(playerid);
+forward OnOfflineServiceListLoaded(playerid, page);
+forward OnOfflineServiceDetailLoaded(playerid, serviceid);
 forward OnLiveDBTableAuditLoaded(playerid);
 forward OnLiveDBCleanupCandidatesLoaded(playerid);
 forward OnLiveDBIntegrityLoaded(playerid);
@@ -14104,7 +14122,7 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.7.1 Float Tag Warning Fix");
+    SetGameModeText("SAIF Dev v0.26A.1.8 Exact Interior Service Point Resolver");
 
     new MySQLOpt:mysqlOptions = mysql_init_options();
     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
@@ -14278,7 +14296,7 @@ public OnGameModeInit()
     print("[SAIF] Skin movement baseline aktif: CJ-like via UsePlayerPedAnims; profile palsu tetap dihapus.");
     print("[SAIF] Vehicle Mission v0.25B.10 tetap aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
     print("[SAIF] Vitals Persistence aktif: health/armor DB + Ammu Body Armor persistence.");
-    print("[SAIF] Gamemode v0.26A.1.7.1 Float Tag Warning Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.26A.1.8 Exact Interior Service Point Resolver berhasil dijalankan.");
     print("[SAIF] GTA Offline Import Audit aktif: registry + ENEX context/evidence/pair planner read-only; runtime tidak disentuh.");
     print("[SAIF] ENEX side-aware preview aktif: Point A/B, isolated interior VW, dan return position.");
     return 1;
@@ -15102,7 +15120,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "SAIF Admin Menus Hub (/amenus)\n\n", sizeof(body));
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
-    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlinecontext\n/offlinepairs | /offlinepairbatches | /offlineplan [id] | /offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
+    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlinecontext\n/offlinepairs | /offlinepairbatches | /offlineplan [id]\n/offlineservicepoints | /offlineservicelist | /offlinepoint [id]\n/offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
     strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/orgeconomy, /orgeconomyaudit, /orgstatus, /orgeconomyhealth, /orgbiz, /orgbusiness, /orgfinance\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /vehmissioncloseout, /vehiclemissionhealth, /missiontarget, /vehmissionconfig, /missionpointmenu, /missionpool, /vehmissionpool, /jobpointpool, /vmpool, /pointpool, /jobpool, /jobpointmenu, /taxirequest, /taxistatus, /canceltaxi, /busrequest, /busstatus, /cancelbus, /medicrequest, /medicstatus, /cancelmedic, /firestatus, /firemission\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /cjmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
@@ -15759,11 +15777,111 @@ stock ShowOfflineImportAuditMenu(playerid)
     strcat(body, "Safety Policy\tAudit-first contract\tNo apply\n", sizeof(body));
     strcat(body, "ENEX Context Resolver Summary\tContext + evidence\tRead-only\n", sizeof(body));
     strcat(body, "ENEX Pair / Apply Planner\tPair + dry-run gates\tRead-only\n", sizeof(body));
+    strcat(body, "Exact Interior Service Points\tNative + overlay anchors\tRead-only\n", sizeof(body));
     strcat(body, "Back to Admin Menus\t/amenus\tRead-only\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_OFFLINE_IMPORT_MENU, DIALOG_STYLE_TABLIST_HEADERS,
                      "SAIF GTA Offline Import Audit", body, "Open", "Close");
     return 1;
+}
+
+
+stock QueryOfflineServicePointSummary(playerid)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+    new query[1600];
+    mysql_format(g_SQL, query, sizeof(query),
+        "SELECT COUNT(*) total_rows,SUM(resolution_method='scm_exact') exact_rows,SUM(resolution_method='saif_overlay_translated') overlay_rows,SUM(review_status='approved_exact') approved_rows,SUM(review_status='preview_required') preview_rows,SUM(enabled=1) enabled_rows,SUM(apply_status<>'draft') nondraft_rows,COUNT(DISTINCT context_type) family_rows,(SELECT COUNT(*) FROM offline_interior_apply_plan p WHERE p.session_id=(SELECT id FROM offline_import_sessions ORDER BY id DESC LIMIT 1) AND p.plan_version='saif_enex_pair_planner_v0.26A.1.7' AND p.apply_readiness='blocked_duplicate') blocked_rows FROM offline_interior_service_points WHERE session_id=(SELECT id FROM offline_import_sessions ORDER BY id DESC LIMIT 1) AND resolver_version='saif_service_point_resolver_v0.26A.1.8'");
+    mysql_tquery(g_SQL, query, "OnOfflineServiceSummaryLoaded", "i", playerid);
+    return 1;
+}
+
+stock QueryOfflineServicePointList(playerid, page = 0)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+    if (page < 0) page = 0;
+    PlayerOfflineServicePointCount[playerid] = 0;
+    PlayerOfflineServicePointPage[playerid] = page;
+    new query[1800];
+    mysql_format(g_SQL, query, sizeof(query),
+        "SELECT sp.id,sp.display_name,sp.pair_group_key,sp.context_type,sp.interior_id,sp.resolution_method,sp.confidence,sp.review_status FROM offline_interior_service_points sp WHERE sp.session_id=(SELECT id FROM offline_import_sessions ORDER BY id DESC LIMIT 1) AND sp.resolver_version='saif_service_point_resolver_v0.26A.1.8' ORDER BY FIELD(sp.review_status,'preview_required','approved_exact'),sp.context_type,sp.pair_group_key,sp.id LIMIT %d,%d",
+        page * OFFLINE_PAIR_PAGE_SIZE, OFFLINE_PAIR_PAGE_SIZE + 1);
+    mysql_tquery(g_SQL, query, "OnOfflineServiceListLoaded", "ii", playerid, page);
+    return 1;
+}
+
+stock QueryOfflineServicePointDetail(playerid, serviceid)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+    if (serviceid <= 0) { SendClientMessage(playerid, COLOR_RED, "Service point ID tidak valid."); return 0; }
+    new query[2400];
+    mysql_format(g_SQL, query, sizeof(query),
+        "SELECT sp.id,sp.plan_id,sp.display_name,sp.context_type,sp.runtime_type,sp.pair_group_key,sp.interior_id,sp.service_x,sp.service_y,sp.service_z,sp.service_a,sp.service_radius,sp.source_radius_xy,sp.source_radius_z,sp.interaction_semantics,sp.resolution_method,sp.confidence,sp.review_status,sp.source_script,sp.source_line_start,sp.source_line_end,sp.evidence_summary,sp.resolver_reason,sp.enabled,sp.apply_status,p.apply_readiness,p.area_code,p.region_key FROM offline_interior_service_points sp JOIN offline_interior_apply_plan p ON p.id=sp.plan_id WHERE sp.id=%d AND sp.resolver_version='saif_service_point_resolver_v0.26A.1.8' LIMIT 1", serviceid);
+    mysql_tquery(g_SQL, query, "OnOfflineServiceDetailLoaded", "ii", playerid, serviceid);
+    return 1;
+}
+
+stock ShowOfflineServicePointActionMenu(playerid)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+    if (PlayerOfflineServiceSelectedID[playerid] <= 0) return QueryOfflineServicePointList(playerid, PlayerOfflineServicePointPage[playerid]);
+    new body[700];
+    format(body, sizeof(body), "Action\tEffect\nPreview Service Point\tAudit VW / no runtime apply\nOpen Pair Plan\tRead-only pair detail\nReturn to Previous Position\tRestore transform\nBack to Service List\tPage %d", PlayerOfflineServicePointPage[playerid] + 1);
+    ShowPlayerDialog(playerid, DIALOG_OFFLINE_SERVICE_ACTION, DIALOG_STYLE_TABLIST_HEADERS, "Offline Service Point Actions", body, "Open", "Back");
+    return 1;
+}
+
+stock PreviewOfflineServicePoint(playerid)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+    if (PlayerOfflineServiceSelectedID[playerid] <= 0) { SendClientMessage(playerid, COLOR_RED, "Pilih service point terlebih dahulu."); return 0; }
+    if (IsPlayerInAnyVehicle(playerid)) { SendClientMessage(playerid, COLOR_RED, "Turun dari kendaraan sebelum preview service point."); return 0; }
+    new Float:x=PlayerOfflineServiceSelectedX[playerid], Float:y=PlayerOfflineServiceSelectedY[playerid], Float:z=PlayerOfflineServiceSelectedZ[playerid];
+    if (floatabs(x)>4000.0 || floatabs(y)>4000.0 || z < -1000.0 || z > 2000.0 || PlayerOfflineServiceSelectedInteriorID[playerid] <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Service point di luar range/interior audit aman. Preview dibatalkan."); return 0;
+    }
+    SaveOfflineInteriorPreviewReturn(playerid);
+    new previewVW=OFFLINE_AUDIT_PREVIEW_VW_BASE+playerid;
+    SetPlayerInterior(playerid, PlayerOfflineServiceSelectedInteriorID[playerid]);
+    SetPlayerVirtualWorld(playerid, previewVW);
+    SetPlayerPos(playerid, x, y, z + 0.2);
+    SetPlayerFacingAngle(playerid, PlayerOfflineServiceSelectedA[playerid]);
+    SetCameraBehindPlayer(playerid);
+    new msg[220]; format(msg,sizeof(msg),"Service point #%d preview: Interior %d / Audit VW %d / radius %.2f. /offlineintreturn untuk kembali.",PlayerOfflineServiceSelectedID[playerid],PlayerOfflineServiceSelectedInteriorID[playerid],previewVW,PlayerOfflineServiceSelectedRadius[playerid]);
+    SendClientMessage(playerid,COLOR_GREEN,msg); return 1;
+}
+
+public OnOfflineServiceSummaryLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid) || !IsAdminLevel(playerid, ADMIN_OWNER)) return 1;
+    new rows; cache_get_row_count(rows); if(rows<=0){SendClientMessage(playerid,COLOR_YELLOW,"Service point resolver belum diimport.");return ShowOfflineImportAuditMenu(playerid);}
+    new total,exact,overlay,approved,preview,enabled,nondraft,families,blocked;
+    cache_get_value_name_int(0,"total_rows",total);cache_get_value_name_int(0,"exact_rows",exact);cache_get_value_name_int(0,"overlay_rows",overlay);cache_get_value_name_int(0,"approved_rows",approved);cache_get_value_name_int(0,"preview_rows",preview);cache_get_value_name_int(0,"enabled_rows",enabled);cache_get_value_name_int(0,"nondraft_rows",nondraft);cache_get_value_name_int(0,"family_rows",families);cache_get_value_name_int(0,"blocked_rows",blocked);
+    new body[1900]; format(body,sizeof(body),"Exact Interior Service Point Resolver\n\nService rows: %d\nFamilies: %d\nNative SCM exact: %d\nSAIF overlay translated: %d\nApproved exact: %d\nOwner preview required: %d\nDuplicate pair plans blocked: %d\n\nSafety\nEnabled rows: %d (must be 0)\nNon-draft rows: %d (must be 0)\nRuntime public_interiors mutation: none\n\nExact families: Ammu-Nation, restaurants, barber, tattoo, clothing.\nOverlay review: 24/7, gym, police because GTA SA has no single equivalent SAIF service menu.",total,families,exact,overlay,approved,preview,blocked,enabled,nondraft);
+    ShowPlayerDialog(playerid,DIALOG_OFFLINE_SERVICE_SUMMARY,DIALOG_STYLE_MSGBOX,"Offline Service Point Resolver",body,"Browse","Back");return 1;
+}
+
+public OnOfflineServiceListLoaded(playerid, page)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+    new rows;cache_get_row_count(rows);PlayerOfflineServicePointCount[playerid]=0;PlayerOfflineServicePointPage[playerid]=page;
+    new body[3900];body[0]=EOS;strcat(body,"Service\tGroup / Interior\tMethod / Review\n",sizeof(body));
+    if(page>0){PlayerOfflineServicePointDBID[playerid][PlayerOfflineServicePointCount[playerid]++]=-1;strcat(body,"<< Previous Page\t\tNavigation\n",sizeof(body));}
+    new dataRows=rows;if(dataRows>OFFLINE_PAIR_PAGE_SIZE)dataRows=OFFLINE_PAIR_PAGE_SIZE;
+    for(new i=0;i<dataRows;i++){new id,intid,conf;new name[150],group[96],method[48],review[32],line[300];cache_get_value_name_int(i,"id",id);cache_get_value_name_int(i,"interior_id",intid);cache_get_value_name_int(i,"confidence",conf);cache_get_value_name(i,"display_name",name,sizeof(name));cache_get_value_name(i,"pair_group_key",group,sizeof(group));cache_get_value_name(i,"resolution_method",method,sizeof(method));cache_get_value_name(i,"review_status",review,sizeof(review));PlayerOfflineServicePointDBID[playerid][PlayerOfflineServicePointCount[playerid]++]=id;format(line,sizeof(line),"%s\t%s / Int %d\t%s / %s (%d%%)\n",name,group,intid,method,review,conf);strcat(body,line,sizeof(body));}
+    if(rows>OFFLINE_PAIR_PAGE_SIZE && PlayerOfflineServicePointCount[playerid]<MAX_OFFLINE_PAIR_DIALOG_ROWS){PlayerOfflineServicePointDBID[playerid][PlayerOfflineServicePointCount[playerid]++]=-2;strcat(body,">> Next Page\t\tNavigation\n",sizeof(body));}
+    ShowPlayerDialog(playerid,DIALOG_OFFLINE_SERVICE_LIST,DIALOG_STYLE_TABLIST_HEADERS,"Offline Interior Service Points",body,"Detail","Back");return 1;
+}
+
+public OnOfflineServiceDetailLoaded(playerid, serviceid)
+{
+    if (!IsPlayerConnected(playerid)) return 1;new rows;cache_get_row_count(rows);if(rows<=0){SendClientMessage(playerid,COLOR_RED,"Service point row tidak ditemukan.");return QueryOfflineServicePointList(playerid,PlayerOfflineServicePointPage[playerid]);}
+    new id,planid,intid,conf,sourceStart,sourceEnd,enabled;new name[160],ctx[64],rtype[32],group[96],semantics[64],method[48],review[32],source[180],evidence[700],reason[900],apply[24],readiness[40],area[32],region[32];new Float:x,Float:y,Float:z,Float:a,Float:radius,Float:sourceXY,Float:sourceZ;
+    cache_get_value_name_int(0,"id",id);cache_get_value_name_int(0,"plan_id",planid);cache_get_value_name_int(0,"interior_id",intid);cache_get_value_name_int(0,"confidence",conf);cache_get_value_name_int(0,"source_line_start",sourceStart);cache_get_value_name_int(0,"source_line_end",sourceEnd);cache_get_value_name_int(0,"enabled",enabled);cache_get_value_name(0,"display_name",name,sizeof(name));cache_get_value_name(0,"context_type",ctx,sizeof(ctx));cache_get_value_name(0,"runtime_type",rtype,sizeof(rtype));cache_get_value_name(0,"pair_group_key",group,sizeof(group));cache_get_value_name(0,"interaction_semantics",semantics,sizeof(semantics));cache_get_value_name(0,"resolution_method",method,sizeof(method));cache_get_value_name(0,"review_status",review,sizeof(review));cache_get_value_name(0,"source_script",source,sizeof(source));cache_get_value_name(0,"evidence_summary",evidence,sizeof(evidence));cache_get_value_name(0,"resolver_reason",reason,sizeof(reason));cache_get_value_name(0,"apply_status",apply,sizeof(apply));cache_get_value_name(0,"apply_readiness",readiness,sizeof(readiness));cache_get_value_name(0,"area_code",area,sizeof(area));cache_get_value_name(0,"region_key",region,sizeof(region));cache_get_value_name_float(0,"service_x",x);cache_get_value_name_float(0,"service_y",y);cache_get_value_name_float(0,"service_z",z);cache_get_value_name_float(0,"service_a",a);cache_get_value_name_float(0,"service_radius",radius);cache_get_value_name_float(0,"source_radius_xy",sourceXY);cache_get_value_name_float(0,"source_radius_z",sourceZ);
+    PlayerOfflineServiceSelectedID[playerid]=id;PlayerOfflineServiceSelectedPlanID[playerid]=planid;PlayerOfflineServiceSelectedInteriorID[playerid]=intid;PlayerOfflineServiceSelectedX[playerid]=x;PlayerOfflineServiceSelectedY[playerid]=y;PlayerOfflineServiceSelectedZ[playerid]=z;PlayerOfflineServiceSelectedA[playerid]=a;PlayerOfflineServiceSelectedRadius[playerid]=radius;
+    new body[4000];format(body,sizeof(body),"Service Point ID: %d\nPair Plan ID: %d\nName: %s\nContext/runtime: %s / %s\nPair group: %s\nRegion/area: %s / %s\nInterior ID: %d\n\nInteraction\nSemantics: %s\nCoordinate: %.4f, %.4f, %.4f\nFacing: %.2f\nRuntime radius recommendation: %.2f\nSCM source radius XY/Z: %.2f / %.2f\n\nResolution\nMethod: %s\nConfidence: %d%%\nReview: %s\nApply readiness: %s\nEnabled: %d (must be 0)\nApply status: %s (must be draft)\n\nEvidence\n%s\nLines: %d-%d\n%s\n\nReason\n%s\n\nRuntime tables touched: none",id,planid,name,ctx,rtype,group,region,area,intid,semantics,x,y,z,a,radius,sourceXY,sourceZ,method,conf,review,readiness,enabled,apply,source,sourceStart,sourceEnd,evidence,reason);
+    ShowPlayerDialog(playerid,DIALOG_OFFLINE_SERVICE_DETAIL,DIALOG_STYLE_MSGBOX,"Offline Service Point Detail",body,"Actions","Back");return 1;
 }
 
 stock QueryOfflineImportSummary(playerid)
@@ -15885,7 +16003,7 @@ stock ShowOfflineImportSafetyPolicy(playerid)
 
     new body[1800];
     body[0] = EOS;
-    strcat(body, "SAIF v0.26A.1.7.1 Float Tag Warning Fix Safety Contract\n\n", sizeof(body));
+    strcat(body, "SAIF v0.26A.1.8 Exact Interior Service Point Resolver Safety Contract\n\n", sizeof(body));
     strcat(body, "Current stage:\n", sizeof(body));
     strcat(body, "- Register GTA SA source files and hashes.\n", sizeof(body));
     strcat(body, "- Store IPL ENEX records in offline_interior_queue.\n", sizeof(body));
@@ -17773,7 +17891,8 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 3: ShowOfflineImportSafetyPolicy(playerid);
             case 4: QueryOfflineInteriorContextSummary(playerid);
             case 5: QueryOfflinePairSummary(playerid);
-            case 6: ShowAdminToolsMenu(playerid);
+            case 6: QueryOfflineServicePointSummary(playerid);
+            case 7: ShowAdminToolsMenu(playerid);
         }
         return 1;
     }
@@ -17818,6 +17937,38 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 1: QueryOfflineInteriorDetail(playerid,PlayerOfflinePairInteriorQueueID[playerid]);
             case 2: QueryOfflinePairPlanDetail(playerid,PlayerOfflinePairSelectedPlanID[playerid]);
             case 3: QueryOfflinePairPlanList(playerid,PlayerOfflinePairSelectedBatchID[playerid],PlayerOfflinePairPlanPage[playerid]);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OFFLINE_SERVICE_SUMMARY)
+    {
+        if(response) QueryOfflineServicePointList(playerid,0); else ShowOfflineImportAuditMenu(playerid);
+        return 1;
+    }
+    if (dialogid == DIALOG_OFFLINE_SERVICE_LIST)
+    {
+        if(!response) return QueryOfflineServicePointSummary(playerid);
+        if(listitem<0 || listitem>=PlayerOfflineServicePointCount[playerid]) return QueryOfflineServicePointList(playerid,PlayerOfflineServicePointPage[playerid]);
+        new serviceid=PlayerOfflineServicePointDBID[playerid][listitem];
+        if(serviceid==-1)return QueryOfflineServicePointList(playerid,PlayerOfflineServicePointPage[playerid]-1);
+        if(serviceid==-2)return QueryOfflineServicePointList(playerid,PlayerOfflineServicePointPage[playerid]+1);
+        QueryOfflineServicePointDetail(playerid,serviceid);return 1;
+    }
+    if (dialogid == DIALOG_OFFLINE_SERVICE_DETAIL)
+    {
+        if(response) ShowOfflineServicePointActionMenu(playerid); else QueryOfflineServicePointList(playerid,PlayerOfflineServicePointPage[playerid]);
+        return 1;
+    }
+    if (dialogid == DIALOG_OFFLINE_SERVICE_ACTION)
+    {
+        if(!response)return QueryOfflineServicePointDetail(playerid,PlayerOfflineServiceSelectedID[playerid]);
+        switch(listitem)
+        {
+            case 0: PreviewOfflineServicePoint(playerid);
+            case 1: QueryOfflinePairPlanDetail(playerid,PlayerOfflineServiceSelectedPlanID[playerid]);
+            case 2: ReturnFromOfflineInteriorPreview(playerid);
+            case 3: QueryOfflineServicePointList(playerid,PlayerOfflineServicePointPage[playerid]);
         }
         return 1;
     }
@@ -39591,7 +39742,7 @@ stock ShowOrgEconomyBaselineAudit(playerid)
     new line[192];
     body[0] = EOS;
 
-    strcat(body, "SAIF v0.26A.1.7.1 Float Tag Warning Fix\n\n", sizeof(body));
+    strcat(body, "SAIF v0.26A.1.8 Exact Interior Service Point Resolver\n\n", sizeof(body));
     strcat(body, "Contract:\n", sizeof(body));
     strcat(body, "- Organization = player-made legal/economic group.\n", sizeof(body));
     strcat(body, "- Gang = preset/offline-like turf group, not org.\n", sizeof(body));
@@ -39705,6 +39856,36 @@ public OnPlayerCommandText(playerid, cmdtext[])
             return 1;
         }
         QueryOfflinePairPlanDetail(playerid, strval(idStr));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/offlineservicepoints", true) || !strcmp(cmdtext, "/offlineservices", true) || !strcmp(cmdtext, "/offlineserviceaudit", true))
+    {
+        QueryOfflineServicePointSummary(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/offlineservicelist", true) || !strcmp(cmdtext, "/offlinepoints", true))
+    {
+        QueryOfflineServicePointList(playerid, 0);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/offlinepoint", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Usage: /offlinepoint [service_point_id]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/offlinepoint ", true) == 0)
+    {
+        new idStr[16];
+        if (!GetOneParam(cmdtext[14], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Usage: /offlinepoint [service_point_id]");
+            return 1;
+        }
+        QueryOfflineServicePointDetail(playerid, strval(idStr));
         return 1;
     }
 
@@ -42674,7 +42855,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.7.1 Float Tag Warning Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.8 Exact Interior Service Point Resolver");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -42684,6 +42865,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.8: Exact Interior Service Point Resolver; 71 native SCM exact + 20 overlay preview anchors, audit-only.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.7.1: memperbaiki 11 Float tag mismatch pada detail ENEX pair plan; tanpa SQL/runtime change.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.5.1: ENEX Point A/B side-aware preview + isolated interior VW + return position safety.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.5: GTA offline source registry + 376 ENEX staging queue + Owner read-only audit; no runtime apply.");

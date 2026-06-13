@@ -1,0 +1,46 @@
+{
+  "source": "/mnt/data/tmp_gtasa_full/SAIF-OFFLINE-SOURCE/01_DECOMPILED/main_decompiled.txt",
+  "checks": {
+    "AMUNAT": {
+      "markers": [
+        "$keep_offX = 296.506",
+        "is_var_text_label_equal_to_text_label s$shop_name == 'AMMUN5'"
+      ],
+      "missing": [],
+      "ok": true
+    },
+    "TATTO": {
+      "markers": [
+        "$keep_offX = -203.318",
+        "is_var_text_label_equal_to_text_label s$shop_name == 'TATTO3'"
+      ],
+      "missing": [],
+      "ok": true
+    },
+    "BARB": {
+      "markers": [
+        "$keep_offX = 414.3",
+        "is_var_text_label_equal_to_text_label s$shop_name == 'BARBER3'"
+      ],
+      "missing": [],
+      "ok": true
+    },
+    "CLOTH": {
+      "markers": [
+        "$clothes_locateX = 214.622",
+        "is_var_text_label_equal_to_text_label s$shop_name == 'CSEXL'"
+      ],
+      "missing": [],
+      "ok": true
+    },
+    "JFUD": {
+      "markers": [
+        "$junkfudX = 374.0",
+        "$keep_off_dirY = 2.5"
+      ],
+      "missing": [],
+      "ok": true
+    }
+  },
+  "ok": true
+}

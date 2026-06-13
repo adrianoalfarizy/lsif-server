@@ -285,6 +285,7 @@
 #define DIALOG_OFFLINE_PICKUP_PLAN_LIST 1325
 #define DIALOG_OFFLINE_PICKUP_PLAN_DETAIL 1326
 #define DIALOG_OFFLINE_PICKUP_PLAN_ACTION 1327
+#define DIALOG_OFFLINE_PICKUP_RUNTIME_DRYRUN_SUMMARY 1328
 
 #define DIALOG_GANG_PRESET_MENU 1192
 #define DIALOG_GANG_PRESET_LIST 1193
@@ -2836,6 +2837,7 @@ forward OnOfflinePickupPreviewLoaded(playerid, queueid);
 forward OnOfflinePickupPlanSummaryLoaded(playerid);
 forward OnOfflinePickupPlanListLoaded(playerid, page);
 forward OnOfflinePickupPlanDetailLoaded(playerid, planid);
+forward OnOfflinePickupRuntimeDryRunSummaryLoaded(playerid);
 forward OnOfflineVehicleSummaryLoaded(playerid);
 forward OnOfflineVehicleListLoaded(playerid, page);
 forward OnOfflineVehicleDetailLoaded(playerid, queueid);
@@ -14206,7 +14208,7 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.18 Pickup Canonical Resolver");
+    SetGameModeText("SAIF Dev v0.26A.1.19 Pickup Archive Dry-Run");
 
     new MySQLOpt:mysqlOptions = mysql_init_options();
     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
@@ -14396,9 +14398,9 @@ public OnGameModeInit()
     print("[SAIF] Skin movement baseline aktif: CJ-like via UsePlayerPedAnims; profile palsu tetap dihapus.");
     print("[SAIF] Vehicle Mission v0.25B.10 tetap aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
     print("[SAIF] Vitals Persistence aktif: health/armor DB + Ammu Body Armor persistence.");
-    print("[SAIF] Gamemode v0.26A.1.18 Pickup Canonical Resolver berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.26A.1.19 Pickup Archive Dry-Run berhasil dijalankan.");
     print("[SAIF] GTA Offline Import Audit aktif: registry + ENEX context/evidence/pair planner read-only; runtime tidak disentuh.");
-    print("[SAIF] v0.26A.1.18: 782 pickup queue rows resolved into canonical staging; 89 baseline-ready; world_pickups unchanged.");
+    print("[SAIF] v0.26A.1.19: world_pickups archive and Baseline-89 replacement dry-run ready; no runtime mutation.");
     print("[SAIF] Runtime lift: parked vehicle GTA offline +0.50 Z; pickup panah model 1318 +1.00 Z; spawn player public interior +0.50 Z. DB tetap original.");
     print("[SAIF] ENEX side-aware preview aktif: Point A/B, isolated interior VW, dan return position.");
     return 1;
@@ -15881,6 +15883,7 @@ stock ShowOfflineImportAuditMenu(playerid)
     strcat(body, "Offline-like Map Icon Audit\tpublic_interiors + radar\tRead-only / refresh\n", sizeof(body));
     strcat(body, "GTA SA Offline Pickup Queue\toffline_pickup_queue (782 rows)\tRead-only\n", sizeof(body));
     strcat(body, "GTA SA Pickup Canonical Resolver\t89 baseline-ready / 693 deferred-blocked\tRead-only\n", sizeof(body));
+    strcat(body, "World Pickup Runtime Archive / Baseline-89 Dry-Run\tworld_pickups\tRead-only\n", sizeof(body));
     strcat(body, "Back to Admin Menus\t/amenus\tRead-only\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_OFFLINE_IMPORT_MENU, DIALOG_STYLE_TABLIST_HEADERS,
@@ -16213,6 +16216,66 @@ stock ShowOfflinePickupPlanActions(playerid)
     strcat(body, "Back to Plan Detail\tRead-only\n", sizeof(body));
     strcat(body, "Back to Plan List\tRead-only", sizeof(body));
     ShowPlayerDialog(playerid, DIALOG_OFFLINE_PICKUP_PLAN_ACTION, DIALOG_STYLE_TABLIST_HEADERS, "Offline Pickup Plan Actions", body, "Open", "Back");
+    return 1;
+}
+
+stock QueryOfflinePickupRuntimeDryRunSummary(playerid)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+
+    new query[6200];
+    query[0] = EOS;
+    strcat(query, "SELECT ", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM offline_pickup_canonical_plan WHERE resolver_version='saif-pickup-resolver-v0.26A.1.18') total_plans,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM offline_pickup_canonical_plan WHERE resolver_version='saif-pickup-resolver-v0.26A.1.18' AND decision_code='baseline_ready') baseline_rows,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM offline_pickup_canonical_plan WHERE resolver_version='saif-pickup-resolver-v0.26A.1.18' AND decision_code='baseline_ready' AND canonical_category='bribe') bribe_rows,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM offline_pickup_canonical_plan WHERE resolver_version='saif-pickup-resolver-v0.26A.1.18' AND decision_code='baseline_ready' AND canonical_category='armor') armor_rows,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM world_pickups) runtime_total,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM world_pickups WHERE enabled=1) runtime_active,", sizeof(query));
+    strcat(query, "COALESCE((SELECT id FROM offline_runtime_archive_sessions WHERE archive_scope='world_pickups' ORDER BY id DESC LIMIT 1),0) archive_id,", sizeof(query));
+    strcat(query, "COALESCE((SELECT archive_status FROM offline_runtime_archive_sessions WHERE archive_scope='world_pickups' ORDER BY id DESC LIMIT 1),'missing') archive_status,", sizeof(query));
+    strcat(query, "COALESCE((SELECT runtime_rows_total FROM offline_runtime_archive_sessions WHERE archive_scope='world_pickups' ORDER BY id DESC LIMIT 1),0) archive_runtime_rows,", sizeof(query));
+    strcat(query, "COALESCE((SELECT active_rows_total FROM offline_runtime_archive_sessions WHERE archive_scope='world_pickups' ORDER BY id DESC LIMIT 1),0) archive_active_rows,", sizeof(query));
+    strcat(query, "COALESCE((SELECT archived_rows FROM offline_runtime_archive_sessions WHERE archive_scope='world_pickups' ORDER BY id DESC LIMIT 1),0) archived_rows,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM offline_world_pickups_archive a JOIN world_pickups w ON w.id=a.original_id WHERE a.archive_session_id=COALESCE((SELECT id FROM offline_runtime_archive_sessions WHERE archive_scope='world_pickups' ORDER BY id DESC LIMIT 1),0) AND BINARY a.row_checksum<>BINARY SHA2(CONCAT_WS('|',w.id,COALESCE(w.pickup_type,''),COALESCE(w.display_name,''),COALESCE(w.model_id,0),COALESCE(w.pos_x,0),COALESCE(w.pos_y,0),COALESCE(w.pos_z,0),COALESCE(w.interior,0),COALESCE(w.virtual_world,0),COALESCE(w.amount,0),COALESCE(w.cooldown_seconds,60),COALESCE(w.source_tag,''),COALESCE(w.enabled,0)),256)) checksum_mismatch,", sizeof(query));
+    strcat(query, "(SELECT COUNT(DISTINCT p.id) FROM offline_pickup_canonical_plan p JOIN offline_pickup_queue q ON q.id=p.queue_id JOIN world_pickups w ON w.enabled=1 AND w.interior=p.recommended_interior AND w.virtual_world=p.recommended_virtual_world AND ABS(w.pos_x-q.pos_x)<=0.10 AND ABS(w.pos_y-q.pos_y)<=0.10 AND ABS(w.pos_z-(q.pos_z+p.runtime_z_lift))<=0.35 WHERE p.resolver_version='saif-pickup-resolver-v0.26A.1.18' AND p.decision_code='baseline_ready') exact_overlap_rows,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM offline_pickup_canonical_plan p1 JOIN offline_pickup_queue q1 ON q1.id=p1.queue_id JOIN offline_pickup_canonical_plan p2 ON p2.id>p1.id AND p2.resolver_version=p1.resolver_version AND p2.decision_code='baseline_ready' JOIN offline_pickup_queue q2 ON q2.id=p2.queue_id WHERE p1.resolver_version='saif-pickup-resolver-v0.26A.1.18' AND p1.decision_code='baseline_ready' AND POW(q1.pos_x-q2.pos_x,2)+POW(q1.pos_y-q2.pos_y,2)+POW((q1.pos_z+p1.runtime_z_lift)-(q2.pos_z+p2.runtime_z_lift),2)<=0.25) internal_duplicate_pairs", sizeof(query));
+    mysql_tquery(g_SQL, query, "OnOfflinePickupRuntimeDryRunSummaryLoaded", "i", playerid);
+    return 1;
+}
+
+public OnOfflinePickupRuntimeDryRunSummaryLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid) || !IsAdminLevel(playerid, ADMIN_OWNER)) return 1;
+    if (cache_num_rows() <= 0)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Pickup archive/dry-run tables belum tersedia. Jalankan migration v0.26A.1.19.");
+        return ShowOfflineImportAuditMenu(playerid);
+    }
+
+    new totalPlans, baselineRows, bribeRows, armorRows;
+    new runtimeTotal, runtimeActive, archiveId, archiveRuntimeRows, archiveActiveRows, archivedRows;
+    new checksumMismatch, exactOverlapRows, internalDuplicatePairs;
+    new archiveStatus[32];
+    cache_get_value_name_int(0, "total_plans", totalPlans);
+    cache_get_value_name_int(0, "baseline_rows", baselineRows);
+    cache_get_value_name_int(0, "bribe_rows", bribeRows);
+    cache_get_value_name_int(0, "armor_rows", armorRows);
+    cache_get_value_name_int(0, "runtime_total", runtimeTotal);
+    cache_get_value_name_int(0, "runtime_active", runtimeActive);
+    cache_get_value_name_int(0, "archive_id", archiveId);
+    cache_get_value_name_int(0, "archive_runtime_rows", archiveRuntimeRows);
+    cache_get_value_name_int(0, "archive_active_rows", archiveActiveRows);
+    cache_get_value_name_int(0, "archived_rows", archivedRows);
+    cache_get_value_name_int(0, "checksum_mismatch", checksumMismatch);
+    cache_get_value_name_int(0, "exact_overlap_rows", exactOverlapRows);
+    cache_get_value_name_int(0, "internal_duplicate_pairs", internalDuplicatePairs);
+    cache_get_value_name(0, "archive_status", archiveStatus, sizeof(archiveStatus));
+
+    new body[3300];
+    format(body, sizeof(body), "World Pickup Runtime Archive / Baseline-89 Dry-Run\n\nLatest archive\nSession ID: %d\nStatus: %s\nRuntime rows captured: %d\nActive rows captured: %d\nArchive rows: %d\nChecksum mismatch now: %d\n\nCanonical plan\nTotal plans: %d / 782\nBaseline selected: %d / 89\n- Police bribe: %d / 49\n- Body armour: %d / 40\n\nCurrent runtime\nworld_pickups total: %d\nworld_pickups active: %d\nRows that future replacement would disable: %d\nRows that future apply would insert/enable: 89\nProjected active after replacement: 89\nMemory capacity: 700\nLoader SQL limit: 300\nRemaining loader headroom: 211\n\nCollision audit\nSelected points overlapping active runtime: %d\nInternal selected proximity pairs <= 0.5m: %d\nExact overlap is informational because future replacement disables active old rows first. Internal duplicate pairs must be 0.\n\nSafety contract\nThis menu is read-only. Archive capture is SQL-only. No INSERT/UPDATE/DELETE is executed against world_pickups by v0.26A.1.19. Run the SQL dry-run before any future apply.", archiveId, archiveStatus, archiveRuntimeRows, archiveActiveRows, archivedRows, checksumMismatch, totalPlans, baselineRows, bribeRows, armorRows, runtimeTotal, runtimeActive, runtimeActive, exactOverlapRows, internalDuplicatePairs);
+    ShowPlayerDialog(playerid, DIALOG_OFFLINE_PICKUP_RUNTIME_DRYRUN_SUMMARY, DIALOG_STYLE_MSGBOX,
+                     "World Pickup Archive / Baseline-89 Dry-Run", body, "Open Plan", "Back");
     return 1;
 }
 
@@ -19011,7 +19074,8 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 13: ShowOfflineMapIconAudit(playerid);
             case 14: QueryOfflinePickupSummary(playerid);
             case 15: QueryOfflinePickupPlanSummary(playerid);
-            case 16: ShowAdminToolsMenu(playerid);
+            case 16: QueryOfflinePickupRuntimeDryRunSummary(playerid);
+            case 17: ShowAdminToolsMenu(playerid);
         }
         return 1;
     }
@@ -19074,6 +19138,13 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 2: QueryOfflinePickupPlanDetail(playerid, PlayerOfflinePickupPlanSelectedID[playerid]);
             case 3: QueryOfflinePickupPlanList(playerid, PlayerOfflinePickupPlanPage[playerid]);
         }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OFFLINE_PICKUP_RUNTIME_DRYRUN_SUMMARY)
+    {
+        if (response) QueryOfflinePickupPlanSummary(playerid);
+        else ShowOfflineImportAuditMenu(playerid);
         return 1;
     }
 
@@ -41180,6 +41251,15 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/offlinepickupdryrun", true) ||
+        !strcmp(cmdtext, "/offlinepickuparchive", true) ||
+        !strcmp(cmdtext, "/offlinepickupcapacity", true) ||
+        !strcmp(cmdtext, "/offlinepickupruntimestatus", true))
+    {
+        QueryOfflinePickupRuntimeDryRunSummary(playerid);
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/offlinevehicles", true) || !strcmp(cmdtext, "/offlinecars", true) || !strcmp(cmdtext, "/offlinecargens", true))
     {
         QueryOfflineVehicleSummary(playerid);
@@ -44242,7 +44322,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.18 Pickup Canonical Resolver");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.19 Pickup Archive Dry-Run");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -44252,7 +44332,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.18: canonical resolver complete; 89 baseline-ready (49 bribe + 40 armour); no runtime apply.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.19: world_pickups archive + Baseline-89 dry-run ready; no runtime apply.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.10: Controlled 91-row public interior apply (71 SCM exact + 20 reviewed overlay) + tracked rollback.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.8: Exact Interior Service Point Resolver; 71 native SCM exact + 20 overlay preview anchors, audit-only.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.7.1: memperbaiki 11 Float tag mismatch pada detail ENEX pair plan; tanpa SQL/runtime change.");

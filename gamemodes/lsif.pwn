@@ -295,6 +295,7 @@
 #define DIALOG_OFFLINE_HOUSE_PLAN_LIST 1335
 #define DIALOG_OFFLINE_HOUSE_PLAN_DETAIL 1336
 #define DIALOG_OFFLINE_HOUSE_PLAN_ACTION 1337
+#define DIALOG_HOUSE_CATALOG_AUDIT 1338
 
 #define DIALOG_GANG_PRESET_MENU 1192
 #define DIALOG_GANG_PRESET_LIST 1193
@@ -597,7 +598,8 @@ stock IsClosedBetaEnabled()
 #define MAX_BANK_POINTS 5
 #define BANK_ACCESS_RADIUS 7.0
 
-#define MAX_HOUSES 5
+#define MAX_HOUSES 64
+#define LEGACY_HOUSE_COUNT 5
 #define HOUSE_ACCESS_RADIUS 5.0
 #define HOUSE_SELL_PERCENT 70
 
@@ -1423,6 +1425,7 @@ new BankPointName[MAX_BANK_POINTS][32] =
 };
 
 new PlayerHouseDBID[MAX_PLAYERS];
+new PlayerHouseCatalogID[MAX_PLAYERS];
 new PlayerHouseIndex[MAX_PLAYERS];
 new PlayerHouseLocked[MAX_PLAYERS];
 new PlayerSpawnHouse[MAX_PLAYERS];
@@ -1435,50 +1438,35 @@ new HouseExteriorPickup[MAX_HOUSES];
 new PlayerHouseExitPickup[MAX_PLAYERS];
 new PlayerLastHousePickupTick[MAX_PLAYERS];
 
-new Float:HouseX[MAX_HOUSES] =
-{
-    2243.9121,
-    2362.7712,
-    1412.1656,
-    1095.4482,
-    827.9244
-};
-
-new Float:HouseY[MAX_HOUSES] =
-{
-    -1638.2314,
-        -1643.1138,
-        -920.2480,
-        -647.5122,
-        -858.1049
-    };
-
-new Float:HouseZ[MAX_HOUSES] =
-{
-    15.9074,
-    13.5234,
-    35.0781,
-    113.6484,
-    70.3308
-};
-
-new HousePrice[MAX_HOUSES] =
-{
-    50000,
-    75000,
-    120000,
-    180000,
-    250000
-};
-
-new HouseName[MAX_HOUSES][64] =
-{
-    "Ganton Starter House",
-    "Idlewood Family House",
-    "Market Hill House",
-    "Mulholland View House",
-    "Richman Small Villa"
-};
+new HouseCount;
+new bool:HouseCatalogReady;
+new HouseCatalogID[MAX_HOUSES];
+new HouseLegacyIndex[MAX_HOUSES];
+new HouseCanonicalSlot[MAX_HOUSES];
+new HouseEnabled[MAX_HOUSES];
+new HouseMapIconType[MAX_HOUSES];
+new HousePickupModel[MAX_HOUSES];
+new HousePickupType[MAX_HOUSES];
+new HousePrivateVWRequired[MAX_HOUSES];
+new Float:HouseX[MAX_HOUSES];
+new Float:HouseY[MAX_HOUSES];
+new Float:HouseZ[MAX_HOUSES];
+new Float:HouseA[MAX_HOUSES];
+new Float:HouseExteriorSpawnX[MAX_HOUSES];
+new Float:HouseExteriorSpawnY[MAX_HOUSES];
+new Float:HouseExteriorSpawnZ[MAX_HOUSES];
+new Float:HouseExteriorSpawnA[MAX_HOUSES];
+new HouseInteriorID[MAX_HOUSES];
+new Float:HouseInteriorExitX[MAX_HOUSES];
+new Float:HouseInteriorExitY[MAX_HOUSES];
+new Float:HouseInteriorExitZ[MAX_HOUSES];
+new Float:HouseInteriorSpawnX[MAX_HOUSES];
+new Float:HouseInteriorSpawnY[MAX_HOUSES];
+new Float:HouseInteriorSpawnZ[MAX_HOUSES];
+new Float:HouseInteriorSpawnA[MAX_HOUSES];
+new HousePrice[MAX_HOUSES];
+new HouseName[MAX_HOUSES][64];
+new HouseSourceTag[MAX_HOUSES][64];
 
 new PlayerOrgID[MAX_PLAYERS];
 new PlayerOrgRank[MAX_PLAYERS];
@@ -2756,6 +2744,8 @@ forward OnJobProgressSaved(playerid);
 forward AntiCheatCheck();
 forward FuelSystemTick();
 forward OnDatabasePing(playerid);
+forward OnHouseCatalogLoaded();
+forward OnHouseCatalogAuditLoaded(playerid);
 forward OnPlayerHouseLoaded(playerid);
 forward OnPlayerHouseBought(playerid, houseIndex, price);
 forward OnPlayerHouseSold(playerid, sellPrice);
@@ -3785,7 +3775,10 @@ stock RestorePlayerInteriorRuntimeState(playerid)
         return 1;
     }
 
-    if (PlayerLastInterior[playerid] == HOUSE_INTERIOR_ID && PlayerLastVirtualWorld[playerid] == GetPlayerHouseVirtualWorld(playerid))
+    if (PlayerHouseIndex[playerid] != -1 &&
+        IsValidHouseIndex(PlayerHouseIndex[playerid]) &&
+        PlayerLastInterior[playerid] == HouseInteriorID[PlayerHouseIndex[playerid]] &&
+        PlayerLastVirtualWorld[playerid] == GetPlayerHouseVirtualWorld(playerid))
     {
         PlayerInsideHouse[playerid] = 1;
         PlayerInsideHouseOwner[playerid] = playerid;
@@ -7821,6 +7814,7 @@ stock GetNearestBankDistance(playerid)
 stock ResetPlayerHouseData(playerid)
 {
     PlayerHouseDBID[playerid] = 0;
+    PlayerHouseCatalogID[playerid] = 0;
     PlayerHouseIndex[playerid] = -1;
     PlayerHouseLocked[playerid] = 1;
     PlayerSpawnHouse[playerid] = 0;
@@ -7863,16 +7857,285 @@ stock SetPlayerHousePickupCooldown(playerid)
     return 1;
 }
 
+stock ResetHouseCatalogArrays()
+{
+    HouseCount = 0;
+    HouseCatalogReady = false;
+
+    for (new i = 0; i < MAX_HOUSES; i++)
+    {
+        HouseCatalogID[i] = 0;
+        HouseLegacyIndex[i] = -1;
+        HouseCanonicalSlot[i] = -1;
+        HouseEnabled[i] = 0;
+        HouseMapIconType[i] = MAPICON_TYPE_PROPERTY_FOR_SALE;
+        HousePickupModel[i] = HOUSE_PICKUP_MODEL;
+        HousePickupType[i] = HOUSE_PICKUP_TYPE;
+        HousePrivateVWRequired[i] = 1;
+        HouseX[i] = 0.0;
+        HouseY[i] = 0.0;
+        HouseZ[i] = 0.0;
+        HouseA[i] = 0.0;
+        HouseExteriorSpawnX[i] = 0.0;
+        HouseExteriorSpawnY[i] = 0.0;
+        HouseExteriorSpawnZ[i] = 0.0;
+        HouseExteriorSpawnA[i] = 0.0;
+        HouseInteriorID[i] = HOUSE_INTERIOR_ID;
+        HouseInteriorExitX[i] = HOUSE_INT_X;
+        HouseInteriorExitY[i] = HOUSE_INT_Y + HOUSE_EXIT_PICKUP_Y_OFFSET;
+        HouseInteriorExitZ[i] = HOUSE_INT_Z;
+        HouseInteriorSpawnX[i] = HOUSE_INT_X;
+        HouseInteriorSpawnY[i] = HOUSE_INT_Y;
+        HouseInteriorSpawnZ[i] = HOUSE_INT_Z;
+        HouseInteriorSpawnA[i] = HOUSE_INT_A;
+        HousePrice[i] = 0;
+        HouseName[i][0] = EOS;
+        HouseSourceTag[i][0] = EOS;
+        HouseExteriorPickup[i] = -1;
+        HouseExteriorLabel[i] = Text3D:INVALID_3DTEXT_ID;
+    }
+
+    return 1;
+}
+
+stock SetLegacyHouseCatalogFallbackRow(index, const name[], price, Float:x, Float:y, Float:z)
+{
+    if (index < 0 || index >= MAX_HOUSES) return 0;
+
+    HouseCatalogID[index] = 0;
+    HouseLegacyIndex[index] = index;
+    HouseCanonicalSlot[index] = -1;
+    HouseEnabled[index] = 1;
+    HouseMapIconType[index] = MAPICON_TYPE_PROPERTY_FOR_SALE;
+    HousePickupModel[index] = HOUSE_PICKUP_MODEL;
+    HousePickupType[index] = HOUSE_PICKUP_TYPE;
+    HousePrivateVWRequired[index] = 1;
+    HouseX[index] = x;
+    HouseY[index] = y;
+    HouseZ[index] = z;
+    HouseA[index] = 0.0;
+    HouseExteriorSpawnX[index] = x;
+    HouseExteriorSpawnY[index] = y;
+    HouseExteriorSpawnZ[index] = z;
+    HouseExteriorSpawnA[index] = 0.0;
+    HouseInteriorID[index] = HOUSE_INTERIOR_ID;
+    HouseInteriorExitX[index] = HOUSE_INT_X;
+    HouseInteriorExitY[index] = HOUSE_INT_Y + HOUSE_EXIT_PICKUP_Y_OFFSET;
+    HouseInteriorExitZ[index] = HOUSE_INT_Z;
+    HouseInteriorSpawnX[index] = HOUSE_INT_X;
+    HouseInteriorSpawnY[index] = HOUSE_INT_Y;
+    HouseInteriorSpawnZ[index] = HOUSE_INT_Z;
+    HouseInteriorSpawnA[index] = HOUSE_INT_A;
+    HousePrice[index] = price;
+    format(HouseName[index], 64, "%s", name);
+    format(HouseSourceTag[index], 64, "legacy_fallback_v0.26A.1.23");
+    return 1;
+}
+
+stock SeedLegacyHouseCatalogFallback()
+{
+    ResetHouseCatalogArrays();
+    SetLegacyHouseCatalogFallbackRow(0, "Ganton Starter House", 50000, 2243.9121, -1638.2314, 15.9074);
+    SetLegacyHouseCatalogFallbackRow(1, "Idlewood Family House", 75000, 2362.7712, -1643.1138, 13.5234);
+    SetLegacyHouseCatalogFallbackRow(2, "Market Hill House", 120000, 1412.1656, -920.2480, 35.0781);
+    SetLegacyHouseCatalogFallbackRow(3, "Mulholland View House", 180000, 1095.4482, -647.5122, 113.6484);
+    SetLegacyHouseCatalogFallbackRow(4, "Richman Small Villa", 250000, 827.9244, -858.1049, 70.3308);
+    HouseCount = LEGACY_HOUSE_COUNT;
+    return 1;
+}
+
+stock DestroyHouseCatalogWorldRuntime()
+{
+    for (new i = 0; i < MAX_HOUSES; i++)
+    {
+        if (HouseExteriorPickup[i] != -1)
+        {
+            DestroyPickup(HouseExteriorPickup[i]);
+            HouseExteriorPickup[i] = -1;
+        }
+
+        if (HouseExteriorLabel[i] != Text3D:INVALID_3DTEXT_ID)
+        {
+            Delete3DTextLabel(HouseExteriorLabel[i]);
+            HouseExteriorLabel[i] = Text3D:INVALID_3DTEXT_ID;
+        }
+    }
+    return 1;
+}
+
+stock CreateHouseCatalogWorldRuntime()
+{
+    DestroyHouseCatalogWorldRuntime();
+
+    new labelText[160];
+    for (new i = 0; i < HouseCount; i++)
+    {
+        if (!HouseEnabled[i]) continue;
+        if (HouseX[i] == 0.0 && HouseY[i] == 0.0 && HouseZ[i] == 0.0) continue;
+
+        HouseExteriorPickup[i] = CreatePickup(
+                                     HousePickupModel[i],
+                                     HousePickupType[i],
+                                     HouseX[i],
+                                     HouseY[i],
+                                     HouseZ[i],
+                                     0
+                                 );
+
+        format(labelText, sizeof(labelText), "[ALT] House Menu\n%s\nPanah = Enter/Exit", HouseName[i]);
+        HouseExteriorLabel[i] = Create3DTextLabel(
+                                    labelText,
+                                    COLOR_WHITE,
+                                    HouseX[i],
+                                    HouseY[i],
+                                    HouseZ[i] + 0.8,
+                                    WORLD_LABEL_DRAW_DISTANCE,
+                                    0,
+                                    true
+                                );
+    }
+    return 1;
+}
+
+stock LoadHouseCatalog()
+{
+    if (!g_DatabaseReady || g_SQL == MYSQL_INVALID_HANDLE) return 0;
+
+    mysql_tquery(
+        g_SQL,
+        "SELECT id, COALESCE(legacy_house_index,-1) legacy_house_index, COALESCE(canonical_slot,-1) canonical_slot, display_name, price, exterior_pickup_x, exterior_pickup_y, exterior_pickup_z, exterior_facing, exterior_spawn_x, exterior_spawn_y, exterior_spawn_z, exterior_spawn_a, interior_id, interior_exit_x, interior_exit_y, interior_exit_z, interior_spawn_x, interior_spawn_y, interior_spawn_z, interior_spawn_a, map_icon_type, pickup_model, pickup_type, private_vw_required, enabled, source_tag FROM house_catalog WHERE enabled=1 ORDER BY sort_order ASC, id ASC LIMIT 64",
+        "OnHouseCatalogLoaded"
+    );
+    return 1;
+}
+
+stock GetHouseRuntimeIndexByCatalogID(catalogId)
+{
+    if (catalogId <= 0) return -1;
+    for (new i = 0; i < HouseCount; i++)
+    {
+        if (HouseCatalogID[i] == catalogId) return i;
+    }
+    return -1;
+}
+
+stock GetHouseRuntimeIndexByLegacyIndex(legacyIndex)
+{
+    if (legacyIndex < 0) return -1;
+    for (new i = 0; i < HouseCount; i++)
+    {
+        if (HouseLegacyIndex[i] == legacyIndex) return i;
+    }
+    return -1;
+}
+
+stock GetHousePersistenceIndex(houseIndex)
+{
+    if (!IsValidHouseIndex(houseIndex)) return -1;
+    if (HouseCanonicalSlot[houseIndex] >= 0) return HouseCanonicalSlot[houseIndex];
+    if (HouseLegacyIndex[houseIndex] >= 0) return HouseLegacyIndex[houseIndex];
+    return houseIndex;
+}
+
+stock RemapOnlinePlayerHouseCatalogIndices()
+{
+    for (new playerid = 0; playerid < MAX_PLAYERS; playerid++)
+    {
+        if (!IsPlayerConnected(playerid)) continue;
+        if (PlayerHouseDBID[playerid] <= 0) continue;
+
+        new runtimeIndex = GetHouseRuntimeIndexByCatalogID(PlayerHouseCatalogID[playerid]);
+        if (runtimeIndex == -1 && PlayerHouseIndex[playerid] >= 0)
+        {
+            runtimeIndex = GetHouseRuntimeIndexByLegacyIndex(PlayerHouseIndex[playerid]);
+        }
+
+        if (runtimeIndex != -1)
+        {
+            PlayerHouseIndex[playerid] = runtimeIndex;
+        }
+        else
+        {
+            SendClientMessage(playerid, COLOR_RED, "House catalog direload, tetapi definisi rumah milikmu tidak aktif. Hubungi Owner.");
+        }
+    }
+    return 1;
+}
+
+public OnHouseCatalogLoaded()
+{
+    new rows = cache_num_rows();
+
+    DestroyHouseCatalogWorldRuntime();
+    ResetHouseCatalogArrays();
+
+    if (rows <= 0)
+    {
+        SeedLegacyHouseCatalogFallback();
+        CreateHouseCatalogWorldRuntime();
+        RefreshAllPlayerMapIcons();
+        print("[SAIF][HOUSE] house_catalog kosong/tidak termuat; 5 legacy fallback dipakai sementara.");
+        return 1;
+    }
+
+    if (rows > MAX_HOUSES) rows = MAX_HOUSES;
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name_int(i, "id", HouseCatalogID[i]);
+        cache_get_value_name_int(i, "legacy_house_index", HouseLegacyIndex[i]);
+        cache_get_value_name_int(i, "canonical_slot", HouseCanonicalSlot[i]);
+        cache_get_value_name(i, "display_name", HouseName[i], 64);
+        cache_get_value_name_int(i, "price", HousePrice[i]);
+        cache_get_value_name_float(i, "exterior_pickup_x", HouseX[i]);
+        cache_get_value_name_float(i, "exterior_pickup_y", HouseY[i]);
+        cache_get_value_name_float(i, "exterior_pickup_z", HouseZ[i]);
+        cache_get_value_name_float(i, "exterior_facing", HouseA[i]);
+        cache_get_value_name_float(i, "exterior_spawn_x", HouseExteriorSpawnX[i]);
+        cache_get_value_name_float(i, "exterior_spawn_y", HouseExteriorSpawnY[i]);
+        cache_get_value_name_float(i, "exterior_spawn_z", HouseExteriorSpawnZ[i]);
+        cache_get_value_name_float(i, "exterior_spawn_a", HouseExteriorSpawnA[i]);
+        cache_get_value_name_int(i, "interior_id", HouseInteriorID[i]);
+        cache_get_value_name_float(i, "interior_exit_x", HouseInteriorExitX[i]);
+        cache_get_value_name_float(i, "interior_exit_y", HouseInteriorExitY[i]);
+        cache_get_value_name_float(i, "interior_exit_z", HouseInteriorExitZ[i]);
+        cache_get_value_name_float(i, "interior_spawn_x", HouseInteriorSpawnX[i]);
+        cache_get_value_name_float(i, "interior_spawn_y", HouseInteriorSpawnY[i]);
+        cache_get_value_name_float(i, "interior_spawn_z", HouseInteriorSpawnZ[i]);
+        cache_get_value_name_float(i, "interior_spawn_a", HouseInteriorSpawnA[i]);
+        cache_get_value_name_int(i, "map_icon_type", HouseMapIconType[i]);
+        cache_get_value_name_int(i, "pickup_model", HousePickupModel[i]);
+        cache_get_value_name_int(i, "pickup_type", HousePickupType[i]);
+        cache_get_value_name_int(i, "private_vw_required", HousePrivateVWRequired[i]);
+        cache_get_value_name_int(i, "enabled", HouseEnabled[i]);
+        cache_get_value_name(i, "source_tag", HouseSourceTag[i], 64);
+    }
+
+    HouseCount = rows;
+    HouseCatalogReady = true;
+    RemapOnlinePlayerHouseCatalogIndices();
+    CreateHouseCatalogWorldRuntime();
+    RefreshAllPlayerMapIcons();
+
+    new logText[144];
+    format(logText, sizeof(logText), "[SAIF][HOUSE] Dynamic house_catalog loaded: %d/%d enabled rows.", HouseCount, MAX_HOUSES);
+    print(logText);
+    return 1;
+}
+
 stock CreatePlayerHouseExitPickup(playerid, ownerid)
 {
     DestroyPlayerHouseExitPickup(playerid);
 
+    new houseIndex = PlayerHouseIndex[ownerid];
+    if (!IsValidHouseIndex(houseIndex)) return 0;
+
     PlayerHouseExitPickup[playerid] = CreatePickup(
-                                          HOUSE_PICKUP_MODEL,
-                                          HOUSE_PICKUP_TYPE,
-                                          HOUSE_INT_X,
-                                          HOUSE_INT_Y + HOUSE_EXIT_PICKUP_Y_OFFSET,
-                                          HOUSE_INT_Z,
+                                          HousePickupModel[houseIndex],
+                                          HousePickupType[houseIndex],
+                                          HouseInteriorExitX[houseIndex],
+                                          HouseInteriorExitY[houseIndex],
+                                          HouseInteriorExitZ[houseIndex],
                                           GetPlayerHouseVirtualWorld(ownerid)
                                       );
 
@@ -7881,28 +8144,17 @@ stock CreatePlayerHouseExitPickup(playerid, ownerid)
 
 stock CreateHouseExteriorPickups()
 {
-    for (new i = 0; i < MAX_HOUSES; i++)
-    {
-        HouseExteriorPickup[i] = CreatePickup(
-                                     HOUSE_PICKUP_MODEL,
-                                     HOUSE_PICKUP_TYPE,
-                                     HouseX[i],
-                                     HouseY[i],
-                                     HouseZ[i],
-                                     0
-                                 );
-    }
-
-    return 1;
+    return CreateHouseCatalogWorldRuntime();
 }
 
 stock IsValidHouseIndex(houseIndex)
 {
-    if (houseIndex < 0 || houseIndex >= MAX_HOUSES)
+    if (houseIndex < 0 || houseIndex >= HouseCount)
     {
         return 0;
     }
 
+    if (!HouseEnabled[houseIndex]) return 0;
     return 1;
 }
 
@@ -7928,13 +8180,13 @@ stock LoadPlayerHouse(playerid)
         return 0;
     }
 
-    new query[256];
+    new query[768];
 
     mysql_format(
         g_SQL,
         query,
         sizeof(query),
-        "SELECT id, house_index, locked FROM player_houses WHERE owner_id=%d LIMIT 1",
+        "SELECT ph.id, ph.house_index, ph.house_catalog_id, ph.locked, COALESCE(ph.house_catalog_id, hc.id, 0) resolved_catalog_id, COALESCE(hc.legacy_house_index, ph.house_index, -1) resolved_legacy_index FROM player_houses ph LEFT JOIN house_catalog hc ON (hc.id=ph.house_catalog_id) OR (ph.house_catalog_id IS NULL AND hc.legacy_house_index=ph.house_index) WHERE ph.owner_id=%d LIMIT 1",
         PlayerDBID[playerid]
     );
 
@@ -7947,8 +8199,9 @@ stock GetNearestHouse(playerid)
     new nearest = -1;
     new Float:nearestDistance = 999999.0;
 
-    for (new i = 0; i < MAX_HOUSES; i++)
+    for (new i = 0; i < HouseCount; i++)
     {
+        if (!HouseEnabled[i]) continue;
         new Float:distance = GetPlayerDistanceFromPoint(playerid, HouseX[i], HouseY[i], HouseZ[i]);
 
         if (distance < nearestDistance)
@@ -8079,10 +8332,10 @@ stock EnterHouseAsVisitor(playerid, ownerid)
     PlayerInsideHouseOwner[playerid] = ownerid;
     SetPlayerHousePickupCooldown(playerid);
 
-    SetPlayerInterior(playerid, HOUSE_INTERIOR_ID);
+    SetPlayerInterior(playerid, HouseInteriorID[houseIndex]);
     SetPlayerVirtualWorld(playerid, GetPlayerHouseVirtualWorld(ownerid));
-    SetPlayerPos(playerid, HOUSE_INT_X, HOUSE_INT_Y, HOUSE_INT_Z);
-    SetPlayerFacingAngle(playerid, HOUSE_INT_A);
+    SetPlayerPos(playerid, HouseInteriorSpawnX[houseIndex], HouseInteriorSpawnY[houseIndex], HouseInteriorSpawnZ[houseIndex]);
+    SetPlayerFacingAngle(playerid, HouseInteriorSpawnA[houseIndex]);
     CreatePlayerHouseExitPickup(playerid, ownerid);
 
     if (playerid != ownerid && PlayerHouseInvite[playerid] == ownerid)
@@ -8143,8 +8396,8 @@ stock KickPlayerFromHouse(playerid)
 
     SetPlayerInterior(playerid, 0);
     SetPlayerVirtualWorld(playerid, 0);
-    SetPlayerPos(playerid, HouseX[houseIndex], HouseY[houseIndex], HouseZ[houseIndex]);
-    SetPlayerFacingAngle(playerid, 0.0);
+    SetPlayerPos(playerid, HouseExteriorSpawnX[houseIndex], HouseExteriorSpawnY[houseIndex], HouseExteriorSpawnZ[houseIndex]);
+    SetPlayerFacingAngle(playerid, HouseExteriorSpawnA[houseIndex]);
 
     return 1;
 }
@@ -14241,7 +14494,7 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.22 House Property Canonical Resolver");
+    SetGameModeText("SAIF Dev v0.26A.1.23 Dynamic House Catalog Foundation");
 
     new MySQLOpt:mysqlOptions = mysql_init_options();
     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
@@ -14288,7 +14541,8 @@ public OnGameModeInit()
     );
 
     ResetGangTerritoryData();
-    CreateHouseExteriorPickups();
+    SeedLegacyHouseCatalogFallback();
+    LoadHouseCatalog();
     CreateWorldInteractionMarkers();
     LoadGangTerritories();
     LoadGangWeaponStash();
@@ -14431,9 +14685,9 @@ public OnGameModeInit()
     print("[SAIF] Skin movement baseline aktif: CJ-like via UsePlayerPedAnims; profile palsu tetap dihapus.");
     print("[SAIF] Vehicle Mission v0.25B.10 tetap aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
     print("[SAIF] Vitals Persistence aktif: health/armor DB + Ammu Body Armor persistence.");
-    print("[SAIF] Gamemode v0.26A.1.22 House Property Canonical Resolver berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.26A.1.23 Dynamic House Catalog Foundation berhasil dijalankan.");
     print("[SAIF] GTA Offline Import Audit aktif: registry + ENEX context/evidence/pair planner read-only; runtime tidak disentuh.");
-    print("[SAIF] v0.26A.1.22: 32 property slots resolved; 29 savehouses source-ready, 3 assets deferred; runtime untouched.");
+    print("[SAIF] v0.26A.1.23: house_catalog dinamis aktif; 5 legacy houses dijembatani tanpa mengubah ownership.");
     print("[SAIF] Runtime lift: parked vehicle GTA offline +0.50 Z; pickup panah model 1318 +1.00 Z; spawn player public interior +0.50 Z. DB tetap original.");
     print("[SAIF] ENEX side-aware preview aktif: Point A/B, isolated interior VW, dan return position.");
     return 1;
@@ -14476,14 +14730,7 @@ public OnGameModeExit()
     DestroyDynamicWorldObjects();
     DestroyWorldInteractionMarkers();
 
-    for (new i = 0; i < MAX_HOUSES; i++)
-    {
-        if (HouseExteriorPickup[i] != -1)
-        {
-            DestroyPickup(HouseExteriorPickup[i]);
-            HouseExteriorPickup[i] = -1;
-        }
-    }
+    DestroyHouseCatalogWorldRuntime();
 
     if (g_DatabaseReady && g_SQL != MYSQL_INVALID_HANDLE)
     {
@@ -14831,8 +15078,8 @@ public OnPlayerSpawn(playerid)
         new houseIndex = PlayerHouseIndex[playerid];
         SetPlayerInterior(playerid, 0);
         SetPlayerVirtualWorld(playerid, 0);
-        SetPlayerPos(playerid, HouseX[houseIndex], HouseY[houseIndex], HouseZ[houseIndex]);
-        SetPlayerFacingAngle(playerid, 0.0);
+        SetPlayerPos(playerid, HouseExteriorSpawnX[houseIndex], HouseExteriorSpawnY[houseIndex], HouseExteriorSpawnZ[houseIndex]);
+        SetPlayerFacingAngle(playerid, HouseExteriorSpawnA[houseIndex]);
     }
     else
     {
@@ -15249,7 +15496,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "SAIF Admin Menus Hub (/amenus)\n\n", sizeof(body));
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
-    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlinecontext\n/offlinepairs | /offlinepairbatches | /offlineplan [id]\n/offlineservicepoints | /offlineservicelist | /offlinepoint [id]\n/offlineruntimedryrun | /offlinearchivestatus | /offlinecapacity\n/offlinefullapply | /offlineapplystatus | /offlineoverlaystatus | /offlineexactreload\n/offlinevehicles | /offlinevehiclelist | /offlinevehicle [queue_id]\n/offlinevehicleplans | /offlinevehiclebatches | /offlinevehicleplan [plan_id]\n/offlinevehicledryrun | /offlinevehiclearchive | /offlinevehiclecapacity\n/offlinevehicleapplystatus | /offlinevehiclereload\n/offlinepickups | /offlinepickuplist | /offlinepickup [queue_id]\n/offlineproperties | /offlinepropertylist | /offlineproperty [evidence_id]\n/offlinehouseplans | /offlinehouseplanlist | /offlinehouseplan [plan_id]\n/offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
+    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlinecontext\n/offlinepairs | /offlinepairbatches | /offlineplan [id]\n/offlineservicepoints | /offlineservicelist | /offlinepoint [id]\n/offlineruntimedryrun | /offlinearchivestatus | /offlinecapacity\n/offlinefullapply | /offlineapplystatus | /offlineoverlaystatus | /offlineexactreload\n/offlinevehicles | /offlinevehiclelist | /offlinevehicle [queue_id]\n/offlinevehicleplans | /offlinevehiclebatches | /offlinevehicleplan [plan_id]\n/offlinevehicledryrun | /offlinevehiclearchive | /offlinevehiclecapacity\n/offlinevehicleapplystatus | /offlinevehiclereload\n/offlinepickups | /offlinepickuplist | /offlinepickup [queue_id]\n/offlineproperties | /offlinepropertylist | /offlineproperty [evidence_id]\n/offlinehouseplans | /offlinehouseplanlist | /offlinehouseplan [plan_id]\n/housecatalog | /housecatalogstatus | /housecatalogreload\n/offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
     strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/orgeconomy, /orgeconomyaudit, /orgstatus, /orgeconomyhealth, /orgbiz, /orgbusiness, /orgfinance\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /vehmissioncloseout, /vehiclemissionhealth, /missiontarget, /vehmissionconfig, /missionpointmenu, /missionpool, /vehmissionpool, /jobpointpool, /vmpool, /pointpool, /jobpool, /jobpointmenu, /taxirequest, /taxistatus, /canceltaxi, /busrequest, /busstatus, /cancelbus, /medicrequest, /medicstatus, /cancelmedic, /firestatus, /firemission\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /cjmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
@@ -15920,6 +16167,7 @@ stock ShowOfflineImportAuditMenu(playerid)
     strcat(body, "Full Baseline-89 World Pickup Apply Status\tworld_pickups\tControlled SQL\n", sizeof(body));
     strcat(body, "GTA SA House / Savehouse / Property Source Queue\t255 evidence rows\tRead-only\n", sizeof(body));
     strcat(body, "House / Property Canonical Resolver\t32 plans / 29 source-ready\tRead-only\n", sizeof(body));
+    strcat(body, "Dynamic House Catalog Backend\thouse_catalog + ownership bridge\tReload / audit\n", sizeof(body));
     strcat(body, "Back to Admin Menus\t/amenus\tRead-only\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_OFFLINE_IMPORT_MENU, DIALOG_STYLE_TABLIST_HEADERS,
@@ -15949,8 +16197,9 @@ stock IsHospitalMapIconCovered(Float:x, Float:y, Float:z)
 stock CountActiveHouseMapIconCandidates()
 {
     new count = 0;
-    for (new i = 0; i < MAX_HOUSES; i++)
+    for (new i = 0; i < HouseCount; i++)
     {
+        if (!HouseEnabled[i]) continue;
         if (HouseX[i] == 0.0 && HouseY[i] == 0.0 && HouseZ[i] == 0.0) continue;
         count++;
     }
@@ -17255,6 +17504,70 @@ stock QueryOfflineInteriorPreview(playerid, queueid, pointSide)
 
 
 
+stock QueryHouseCatalogAudit(playerid)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+
+    new query[1200];
+    mysql_format(
+        g_SQL,
+        query,
+        sizeof(query),
+        "SELECT COUNT(*) total_rows, SUM(enabled=1) enabled_rows, SUM(legacy_house_index BETWEEN 0 AND 4) legacy_rows, SUM(canonical_slot IS NOT NULL) canonical_rows, SUM(source_tag='legacy_house_catalog_v0.26A.1.23') seed_rows, SUM(exterior_pickup_x=0 AND exterior_pickup_y=0 AND exterior_pickup_z=0) zero_exterior_rows, SUM(interior_id<=0) invalid_interior_rows, (SELECT COUNT(*) FROM player_houses) ownership_rows, (SELECT COUNT(*) FROM player_houses WHERE house_catalog_id IS NOT NULL) mapped_rows, (SELECT COUNT(*) FROM player_houses ph LEFT JOIN house_catalog hc ON hc.id=ph.house_catalog_id WHERE ph.house_catalog_id IS NOT NULL AND hc.id IS NULL) orphan_rows, (SELECT COUNT(*) FROM offline_property_canonical_plan WHERE resolver_version='saif-house-property-resolver-v0.26A.1.22' AND decision_code='baseline_ready') offline_ready_rows FROM house_catalog"
+    );
+    mysql_tquery(g_SQL, query, "OnHouseCatalogAuditLoaded", "i", playerid);
+    return 1;
+}
+
+public OnHouseCatalogAuditLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+    if (cache_num_rows() <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "house_catalog audit tidak dapat dibaca. Jalankan migration v0.26A.1.23.");
+        return 1;
+    }
+
+    new totalRows, enabledRows, legacyRows, canonicalRows, seedRows;
+    new zeroExteriorRows, invalidInteriorRows, ownershipRows, mappedRows, orphanRows, offlineReadyRows;
+    cache_get_value_name_int(0, "total_rows", totalRows);
+    cache_get_value_name_int(0, "enabled_rows", enabledRows);
+    cache_get_value_name_int(0, "legacy_rows", legacyRows);
+    cache_get_value_name_int(0, "canonical_rows", canonicalRows);
+    cache_get_value_name_int(0, "seed_rows", seedRows);
+    cache_get_value_name_int(0, "zero_exterior_rows", zeroExteriorRows);
+    cache_get_value_name_int(0, "invalid_interior_rows", invalidInteriorRows);
+    cache_get_value_name_int(0, "ownership_rows", ownershipRows);
+    cache_get_value_name_int(0, "mapped_rows", mappedRows);
+    cache_get_value_name_int(0, "orphan_rows", orphanRows);
+    cache_get_value_name_int(0, "offline_ready_rows", offlineReadyRows);
+
+    new body[1400];
+    format(
+        body,
+        sizeof(body),
+        "Dynamic House Catalog v0.26A.1.23\n\nRuntime\nLoaded rows: %d / %d capacity\nCatalog ready: %s\nFallback active: %s\n\nDatabase\nTotal catalog rows: %d\nEnabled rows: %d\nLegacy seed rows: %d / 5\nCanonical imported rows: %d (expected 0 at this stage)\nSeed source-tag rows: %d / 5\n\nOwnership bridge\nplayer_houses rows: %d\nMapped catalog IDs: %d\nOrphan catalog IDs: %d (must be 0)\n\nSafety\nZero exterior rows: %d (must be 0)\nInvalid interior rows: %d (must be 0)\nOffline source-ready plans: %d / 29\n\nThe five legacy world definitions now come from house_catalog. Ownership remains in player_houses. The 29 GTA SA houses are not applied yet.\n\nPress Reload to rebuild house pickups, labels, and map icons from DB.",
+        HouseCount,
+        MAX_HOUSES,
+        HouseCatalogReady ? ("Yes") : ("No"),
+        HouseCatalogReady ? ("No") : ("Yes"),
+        totalRows,
+        enabledRows,
+        legacyRows,
+        canonicalRows,
+        seedRows,
+        ownershipRows,
+        mappedRows,
+        orphanRows,
+        zeroExteriorRows,
+        invalidInteriorRows,
+        offlineReadyRows
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_HOUSE_CATALOG_AUDIT, DIALOG_STYLE_MSGBOX, "Dynamic House Catalog Backend", body, "Reload", "Back");
+    return 1;
+}
+
 stock QueryOfflineHousePlanSummary(playerid)
 {
     if (!CanUseOfflineImportAudit(playerid)) return 0;
@@ -17301,7 +17614,7 @@ public OnOfflineHousePlanSummaryLoaded(playerid)
     format(
         body,
         sizeof(body),
-        "House / Property Canonical Resolver v0.26A.1.22\n\nCanonical property slots: %d / 32\nPurchasable savehouse source-ready: %d / 29\nBusiness assets deferred: %d / 2\nStory assets deferred: %d / 1\n\nPair evidence\nExact ENEX pairs: %d / 30\nUnpaired business assets: %d / 2\nSavepoint templates linked: %d / 30\nNearby garage candidates: %d total / %d baseline\nPrivate VW required: %d / 29\n\nBackend readiness\nCompiled hardcoded house slots: 5\nCanonical source-ready houses: 29\nDynamic house_catalog gap: 24\nCurrent owned rows: %d\n\nSafety\nEnabled plan rows: %d (must be 0)\nNon-draft rows: %d (must be 0)\nplayer_houses mutation: none\n\nThe source plan is ready, but runtime apply is blocked until the five hardcoded house arrays are replaced by a dynamic house_catalog bridge.",
+        "House / Property Canonical Resolver v0.26A.1.22\n\nCanonical property slots: %d / 32\nPurchasable savehouse source-ready: %d / 29\nBusiness assets deferred: %d / 2\nStory assets deferred: %d / 1\n\nPair evidence\nExact ENEX pairs: %d / 30\nUnpaired business assets: %d / 2\nSavepoint templates linked: %d / 30\nNearby garage candidates: %d total / %d baseline\nPrivate VW required: %d / 29\n\nBackend readiness\nDynamic house_catalog capacity: 64\nCurrent legacy catalog rows: 5\nCanonical source-ready houses: 29\nGTA SA rows applied: 0\nCurrent owned rows: %d\n\nSafety\nEnabled plan rows: %d (must be 0)\nNon-draft rows: %d (must be 0)\nplayer_houses mutation: none\n\nThe source plan is ready and the dynamic house_catalog bridge now exists. Runtime replacement remains blocked until catalog archive and 29-house dry-run are complete.",
         totalRows,
         baselineRows,
         businessRows,
@@ -19738,7 +20051,8 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 17: QueryOfflinePickupFullApplyStatus(playerid);
             case 18: QueryOfflinePropertySummary(playerid);
             case 19: QueryOfflineHousePlanSummary(playerid);
-            case 20: ShowAdminToolsMenu(playerid);
+            case 20: QueryHouseCatalogAudit(playerid);
+            case 21: ShowAdminToolsMenu(playerid);
         }
         return 1;
     }
@@ -19832,6 +20146,20 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             }
             case 5: ReturnFromOfflineInteriorPreview(playerid);
             case 6: QueryOfflineHousePlanDetail(playerid, PlayerOfflineHousePlanSelectedID[playerid]);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_HOUSE_CATALOG_AUDIT)
+    {
+        if (response)
+        {
+            LoadHouseCatalog();
+            SendClientMessage(playerid, COLOR_GREEN, "Reload dynamic house_catalog dijalankan dari database.");
+        }
+        else
+        {
+            ShowOfflineImportAuditMenu(playerid);
         }
         return 1;
     }
@@ -34956,11 +35284,7 @@ stock CreateWorldInteractionMarkers()
         BusinessLabel[i] = Create3DTextLabel(labelText, COLOR_YELLOW, BusinessX[i], BusinessY[i], BusinessZ[i] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
     }
 
-    for (new i = 0; i < MAX_HOUSES; i++)
-    {
-        format(labelText, sizeof(labelText), "[ALT] House Menu\n%s\nPanah = Enter/Exit", HouseName[i]);
-        HouseExteriorLabel[i] = Create3DTextLabel(labelText, COLOR_WHITE, HouseX[i], HouseY[i], HouseZ[i] + 0.8, WORLD_LABEL_DRAW_DISTANCE, 0, true);
-    }
+    CreateHouseCatalogWorldRuntime();
 
     if (SAIF_ENABLE_LEGACY_STATIC_RACE_MARKER)
     {
@@ -35268,14 +35592,14 @@ stock ApplyOfflineLikeWorldMapIcons(playerid)
     }
 
     // Priority 4: property-for-sale icons only use leftover native slots.
-    for (new i = 0; i < MAX_HOUSES && slot < OFFLINE_WORLD_MAPICON_SLOTS; i++)
+    for (new i = 0; i < HouseCount && slot < OFFLINE_WORLD_MAPICON_SLOTS; i++)
     {
         if (HouseX[i] == 0.0 && HouseY[i] == 0.0 && HouseZ[i] == 0.0) continue;
         SetPlayerMapIcon(
             playerid,
             OFFLINE_WORLD_MAPICON_BASE + slot,
             HouseX[i], HouseY[i], HouseZ[i],
-            MAPICON_TYPE_PROPERTY_FOR_SALE,
+            HouseMapIconType[i] > 0 ? HouseMapIconType[i] : MAPICON_TYPE_PROPERTY_FOR_SALE,
             0,
             MAPICON_LOCAL
         );
@@ -36359,6 +36683,12 @@ stock ProcessDialogHouseBuy(playerid, houseIndex)
         return 0;
     }
 
+    if (!HouseCatalogReady || HouseCatalogID[houseIndex] <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic house_catalog belum siap. Tunggu beberapa detik lalu coba lagi.");
+        return 0;
+    }
+
     new price = HousePrice[houseIndex];
 
     if (PlayerMoney[playerid] < price)
@@ -36375,9 +36705,10 @@ stock ProcessDialogHouseBuy(playerid, houseIndex)
         g_SQL,
         query,
         sizeof(query),
-        "INSERT INTO player_houses (owner_id, house_index, house_name, price, locked, pos_x, pos_y, pos_z) VALUES (%d, %d, '%e', %d, 1, %f, %f, %f)",
+        "INSERT INTO player_houses (owner_id, house_catalog_id, house_index, house_name, price, locked, pos_x, pos_y, pos_z) VALUES (%d, %d, %d, '%e', %d, 1, %f, %f, %f)",
         PlayerDBID[playerid],
-        houseIndex,
+        HouseCatalogID[houseIndex],
+        GetHousePersistenceIndex(houseIndex),
         HouseName[houseIndex],
         price,
         HouseX[houseIndex],
@@ -39227,7 +39558,7 @@ public OnPlayerPickUpPickup(playerid, pickupid)
         return 1;
     }
 
-    for (new i = 0; i < MAX_HOUSES; i++)
+    for (new i = 0; i < HouseCount; i++)
     {
         if (pickupid == HouseExteriorPickup[i])
         {
@@ -40222,15 +40553,39 @@ public OnPlayerHouseLoaded(playerid)
     if (rows == 0)
     {
         PlayerHouseDBID[playerid] = 0;
+        PlayerHouseCatalogID[playerid] = 0;
         PlayerHouseIndex[playerid] = -1;
         return 1;
     }
 
+    new persistedHouseIndex;
+    new resolvedCatalogId;
+    new resolvedLegacyIndex;
+
     cache_get_value_name_int(0, "id", PlayerHouseDBID[playerid]);
-    cache_get_value_name_int(0, "house_index", PlayerHouseIndex[playerid]);
+    cache_get_value_name_int(0, "house_index", persistedHouseIndex);
+    cache_get_value_name_int(0, "resolved_catalog_id", resolvedCatalogId);
+    cache_get_value_name_int(0, "resolved_legacy_index", resolvedLegacyIndex);
     cache_get_value_name_int(0, "locked", PlayerHouseLocked[playerid]);
 
-    SendClientMessage(playerid, COLOR_GREEN, "Data rumah berhasil dimuat. Gunakan /myhouse.");
+    PlayerHouseCatalogID[playerid] = resolvedCatalogId;
+    PlayerHouseIndex[playerid] = GetHouseRuntimeIndexByCatalogID(resolvedCatalogId);
+    if (PlayerHouseIndex[playerid] == -1)
+    {
+        PlayerHouseIndex[playerid] = GetHouseRuntimeIndexByLegacyIndex(resolvedLegacyIndex);
+    }
+    if (PlayerHouseIndex[playerid] == -1)
+    {
+        PlayerHouseIndex[playerid] = GetHouseRuntimeIndexByLegacyIndex(persistedHouseIndex);
+    }
+
+    if (PlayerHouseIndex[playerid] == -1)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Ownership rumah ditemukan, tetapi definisi house_catalog belum termuat. Hubungi Owner.");
+        return 1;
+    }
+
+    SendClientMessage(playerid, COLOR_GREEN, "Data rumah berhasil dimuat dari dynamic house_catalog. Gunakan /myhouse.");
     return 1;
 }
 
@@ -40252,6 +40607,7 @@ public OnPlayerHouseBought(playerid, houseIndex, price)
     TakePlayerCash(playerid, price);
 
     PlayerHouseDBID[playerid] = insertId;
+    PlayerHouseCatalogID[playerid] = HouseCatalogID[houseIndex];
     PlayerHouseIndex[playerid] = houseIndex;
     PlayerHouseLocked[playerid] = 1;
 
@@ -40277,6 +40633,7 @@ public OnPlayerHouseSold(playerid, sellPrice)
     GivePlayerCash(playerid, sellPrice);
 
     PlayerHouseDBID[playerid] = 0;
+    PlayerHouseCatalogID[playerid] = 0;
     PlayerHouseIndex[playerid] = -1;
     PlayerHouseLocked[playerid] = 1;
     PlayerInsideHouse[playerid] = 0;
@@ -42116,6 +42473,22 @@ public OnPlayerCommandText(playerid, cmdtext[])
         }
 
         QueryOfflineHousePlanDetail(playerid, planid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/housecatalog", true) ||
+        !strcmp(cmdtext, "/housecatalogstatus", true) ||
+        !strcmp(cmdtext, "/dynamichouses", true))
+    {
+        QueryHouseCatalogAudit(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/housecatalogreload", true))
+    {
+        if (!CanUseOfflineImportAudit(playerid)) return 1;
+        LoadHouseCatalog();
+        SendClientMessage(playerid, COLOR_GREEN, "Reload dynamic house_catalog dijalankan dari database.");
         return 1;
     }
 
@@ -45181,7 +45554,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.22 House Property Canonical Resolver");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.23 Dynamic House Catalog Foundation");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -45191,7 +45564,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.22: 32 canonical property plans; 29 source-ready houses; dynamic house_catalog bridge required before apply.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.23: dynamic house_catalog backend aktif; 5 legacy definitions migrated; GTA SA 29-house apply masih deferred.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.10: Controlled 91-row public interior apply (71 SCM exact + 20 reviewed overlay) + tracked rollback.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.8: Exact Interior Service Point Resolver; 71 native SCM exact + 20 overlay preview anchors, audit-only.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.7.1: memperbaiki 11 Float tag mismatch pada detail ENEX pair plan; tanpa SQL/runtime change.");
@@ -48071,8 +48444,9 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         SendClientMessage(playerid, COLOR_YELLOW, "========== AVAILABLE HOUSES ==========");
 
-        for (new i = 0; i < MAX_HOUSES; i++)
+        for (new i = 0; i < HouseCount; i++)
         {
+            if (!HouseEnabled[i]) continue;
             format(msg, sizeof(msg), "%d. %s | Price: $%d", i + 1, HouseName[i], HousePrice[i]);
             SendClientMessage(playerid, COLOR_WHITE, msg);
         }
@@ -48183,6 +48557,12 @@ public OnPlayerCommandText(playerid, cmdtext[])
             return 1;
         }
 
+        if (!HouseCatalogReady || HouseCatalogID[houseIndex] <= 0)
+        {
+            SendClientMessage(playerid, COLOR_RED, "Dynamic house_catalog belum siap. Tunggu beberapa detik lalu coba lagi.");
+            return 1;
+        }
+
         new price = HousePrice[houseIndex];
 
         if (PlayerMoney[playerid] < price)
@@ -48199,9 +48579,10 @@ public OnPlayerCommandText(playerid, cmdtext[])
             g_SQL,
             query,
             sizeof(query),
-            "INSERT INTO player_houses (owner_id, house_index, house_name, price, locked, pos_x, pos_y, pos_z) VALUES (%d, %d, '%e', %d, 1, %f, %f, %f)",
+            "INSERT INTO player_houses (owner_id, house_catalog_id, house_index, house_name, price, locked, pos_x, pos_y, pos_z) VALUES (%d, %d, %d, '%e', %d, 1, %f, %f, %f)",
             PlayerDBID[playerid],
-            houseIndex,
+            HouseCatalogID[houseIndex],
+            GetHousePersistenceIndex(houseIndex),
             HouseName[houseIndex],
             price,
             HouseX[houseIndex],
@@ -48229,7 +48610,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         format(msg, sizeof(msg), "House: %s", HouseName[houseIndex]);
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
-        format(msg, sizeof(msg), "DBID: %d | Price: $%d", PlayerHouseDBID[playerid], HousePrice[houseIndex]);
+        format(msg, sizeof(msg), "DBID: %d | Catalog ID: %d | Price: $%d", PlayerHouseDBID[playerid], HouseCatalogID[houseIndex], HousePrice[houseIndex]);
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         format(msg, sizeof(msg), "Spawn at house: %s", PlayerSpawnHouse[playerid] ? ("Yes") : ("No"));
@@ -48266,8 +48647,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
         SetPlayerInterior(playerid, 0);
         SetPlayerVirtualWorld(playerid, 0);
-        SetPlayerPos(playerid, HouseX[houseIndex], HouseY[houseIndex], HouseZ[houseIndex]);
-        SetPlayerFacingAngle(playerid, 0.0);
+        SetPlayerPos(playerid, HouseExteriorSpawnX[houseIndex], HouseExteriorSpawnY[houseIndex], HouseExteriorSpawnZ[houseIndex]);
+        SetPlayerFacingAngle(playerid, HouseExteriorSpawnA[houseIndex]);
 
         SendClientMessage(playerid, COLOR_GREEN, "Kamu teleport ke rumah.");
         return 1;
@@ -48407,7 +48788,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         format(msg, sizeof(msg), "House: %s", HouseName[houseIndex]);
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
-        format(msg, sizeof(msg), "DBID: %d | Index: %d", PlayerHouseDBID[playerid], houseIndex + 1);
+        format(msg, sizeof(msg), "DBID: %d | Catalog ID: %d | Runtime Index: %d", PlayerHouseDBID[playerid], HouseCatalogID[houseIndex], houseIndex + 1);
         SendClientMessage(playerid, COLOR_WHITE, msg);
 
         format(msg, sizeof(msg), "Locked: %s", PlayerHouseLocked[playerid] ? ("Yes") : ("No"));

@@ -253,6 +253,11 @@
 #define DIALOG_OFFLINE_IMPORT_POLICY 1293
 #define DIALOG_OFFLINE_INTERIOR_PREVIEW_MENU 1294
 #define DIALOG_OFFLINE_CONTEXT_SUMMARY 1295
+#define DIALOG_OFFLINE_PAIR_SUMMARY 1296
+#define DIALOG_OFFLINE_PAIR_BATCH_LIST 1297
+#define DIALOG_OFFLINE_PAIR_PLAN_LIST 1298
+#define DIALOG_OFFLINE_PAIR_PLAN_DETAIL 1299
+#define DIALOG_OFFLINE_PAIR_PLAN_ACTION 1300
 
 #define DIALOG_GANG_PRESET_MENU 1192
 #define DIALOG_GANG_PRESET_LIST 1193
@@ -2580,6 +2585,8 @@ stock GetTruckerDynamicXP(route)
 #define OFFLINE_INTERIOR_PREVIEW_POINT_A 0
 #define OFFLINE_INTERIOR_PREVIEW_POINT_B 1
 #define OFFLINE_AUDIT_PREVIEW_VW_BASE 60000
+#define MAX_OFFLINE_PAIR_DIALOG_ROWS 30
+#define OFFLINE_PAIR_PAGE_SIZE 28
 new PlayerOfflineInteriorListCount[MAX_PLAYERS];
 new PlayerOfflineInteriorListDBID[MAX_PLAYERS][MAX_OFFLINE_INTERIOR_DIALOG_ROWS];
 new PlayerOfflineInteriorSelectedID[MAX_PLAYERS];
@@ -2591,6 +2598,15 @@ new Float:PlayerOfflinePreviewReturnZ[MAX_PLAYERS];
 new Float:PlayerOfflinePreviewReturnA[MAX_PLAYERS];
 new PlayerOfflinePreviewReturnInterior[MAX_PLAYERS];
 new PlayerOfflinePreviewReturnVirtualWorld[MAX_PLAYERS];
+new PlayerOfflinePairBatchCount[MAX_PLAYERS];
+new PlayerOfflinePairBatchDBID[MAX_PLAYERS][MAX_OFFLINE_PAIR_DIALOG_ROWS];
+new PlayerOfflinePairSelectedBatchID[MAX_PLAYERS];
+new PlayerOfflinePairPlanCount[MAX_PLAYERS];
+new PlayerOfflinePairPlanDBID[MAX_PLAYERS][MAX_OFFLINE_PAIR_DIALOG_ROWS];
+new PlayerOfflinePairPlanPage[MAX_PLAYERS];
+new PlayerOfflinePairSelectedPlanID[MAX_PLAYERS];
+new PlayerOfflinePairExteriorQueueID[MAX_PLAYERS];
+new PlayerOfflinePairInteriorQueueID[MAX_PLAYERS];
 
 forward OnAccountCheck(playerid);
 forward OnAccountRegister(playerid);
@@ -2708,6 +2724,10 @@ forward OnOfflineInteriorQueueLoaded(playerid, page);
 forward OnOfflineInteriorDetailLoaded(playerid, queueid);
 forward OnOfflineInteriorPreviewLoaded(playerid, queueid, pointSide);
 forward OnOfflineContextSummaryLoaded(playerid);
+forward OnOfflinePairSummaryLoaded(playerid);
+forward OnOfflinePairBatchListLoaded(playerid);
+forward OnOfflinePairPlanListLoaded(playerid, batchid, page);
+forward OnOfflinePairPlanDetailLoaded(playerid, planid);
 forward OnLiveDBTableAuditLoaded(playerid);
 forward OnLiveDBCleanupCandidatesLoaded(playerid);
 forward OnLiveDBIntegrityLoaded(playerid);
@@ -14084,7 +14104,7 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.6 ENEX Context Resolver");
+    SetGameModeText("SAIF Dev v0.26A.1.7.1 Float Tag Warning Fix");
 
     new MySQLOpt:mysqlOptions = mysql_init_options();
     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
@@ -14201,6 +14221,13 @@ public OnGameModeInit()
         PlayerOfflineInteriorListCount[i] = 0;
         PlayerOfflineInteriorSelectedID[i] = 0;
         PlayerOfflineInteriorPage[i] = 0;
+        PlayerOfflinePairBatchCount[i] = 0;
+        PlayerOfflinePairSelectedBatchID[i] = 0;
+        PlayerOfflinePairPlanCount[i] = 0;
+        PlayerOfflinePairPlanPage[i] = 0;
+        PlayerOfflinePairSelectedPlanID[i] = 0;
+        PlayerOfflinePairExteriorQueueID[i] = 0;
+        PlayerOfflinePairInteriorQueueID[i] = 0;
         ResetOfflineInteriorPreviewReturn(i);
         PlayerPendingSkinShopIndex[i] = -1;
         PlayerSkinPreviewActive[i] = 0;
@@ -14251,8 +14278,8 @@ public OnGameModeInit()
     print("[SAIF] Skin movement baseline aktif: CJ-like via UsePlayerPedAnims; profile palsu tetap dihapus.");
     print("[SAIF] Vehicle Mission v0.25B.10 tetap aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
     print("[SAIF] Vitals Persistence aktif: health/armor DB + Ammu Body Armor persistence.");
-    print("[SAIF] Gamemode v0.26A.1.6 ENEX Context Resolver berhasil dijalankan.");
-    print("[SAIF] GTA Offline Import Audit aktif: registry + ENEX context/evidence read-only; runtime tidak disentuh.");
+    print("[SAIF] Gamemode v0.26A.1.7.1 Float Tag Warning Fix berhasil dijalankan.");
+    print("[SAIF] GTA Offline Import Audit aktif: registry + ENEX context/evidence/pair planner read-only; runtime tidak disentuh.");
     print("[SAIF] ENEX side-aware preview aktif: Point A/B, isolated interior VW, dan return position.");
     return 1;
 }
@@ -14335,6 +14362,13 @@ public OnPlayerConnect(playerid)
     PlayerOfflineInteriorListCount[playerid] = 0;
     PlayerOfflineInteriorSelectedID[playerid] = 0;
     PlayerOfflineInteriorPage[playerid] = 0;
+    PlayerOfflinePairBatchCount[playerid] = 0;
+    PlayerOfflinePairSelectedBatchID[playerid] = 0;
+    PlayerOfflinePairPlanCount[playerid] = 0;
+    PlayerOfflinePairPlanPage[playerid] = 0;
+    PlayerOfflinePairSelectedPlanID[playerid] = 0;
+    PlayerOfflinePairExteriorQueueID[playerid] = 0;
+    PlayerOfflinePairInteriorQueueID[playerid] = 0;
     ResetOfflineInteriorPreviewReturn(playerid);
     PlayerInsidePublicInteriorID[playerid] = 0;
     PlayerPublicInteriorServiceCheckpoint[playerid] = 0;
@@ -15068,7 +15102,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "SAIF Admin Menus Hub (/amenus)\n\n", sizeof(body));
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
-    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlinecontext | /offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
+    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlinecontext\n/offlinepairs | /offlinepairbatches | /offlineplan [id] | /offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
     strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/orgeconomy, /orgeconomyaudit, /orgstatus, /orgeconomyhealth, /orgbiz, /orgbusiness, /orgfinance\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /vehmissioncloseout, /vehiclemissionhealth, /missiontarget, /vehmissionconfig, /missionpointmenu, /missionpool, /vehmissionpool, /jobpointpool, /vmpool, /pointpool, /jobpool, /jobpointmenu, /taxirequest, /taxistatus, /canceltaxi, /busrequest, /busstatus, /cancelbus, /medicrequest, /medicstatus, /cancelmedic, /firestatus, /firemission\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /cjmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
@@ -15724,6 +15758,7 @@ stock ShowOfflineImportAuditMenu(playerid)
     strcat(body, "Interior / ENEX Queue\toffline_interior_queue\tRead-only\n", sizeof(body));
     strcat(body, "Safety Policy\tAudit-first contract\tNo apply\n", sizeof(body));
     strcat(body, "ENEX Context Resolver Summary\tContext + evidence\tRead-only\n", sizeof(body));
+    strcat(body, "ENEX Pair / Apply Planner\tPair + dry-run gates\tRead-only\n", sizeof(body));
     strcat(body, "Back to Admin Menus\t/amenus\tRead-only\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_OFFLINE_IMPORT_MENU, DIALOG_STYLE_TABLIST_HEADERS,
@@ -15850,7 +15885,7 @@ stock ShowOfflineImportSafetyPolicy(playerid)
 
     new body[1800];
     body[0] = EOS;
-    strcat(body, "SAIF v0.26A.1.6 ENEX Context Resolver Safety Contract\n\n", sizeof(body));
+    strcat(body, "SAIF v0.26A.1.7.1 Float Tag Warning Fix Safety Contract\n\n", sizeof(body));
     strcat(body, "Current stage:\n", sizeof(body));
     strcat(body, "- Register GTA SA source files and hashes.\n", sizeof(body));
     strcat(body, "- Store IPL ENEX records in offline_interior_queue.\n", sizeof(body));
@@ -15914,6 +15949,110 @@ public OnOfflineContextSummaryLoaded(playerid)
     ShowPlayerDialog(playerid, DIALOG_OFFLINE_CONTEXT_SUMMARY, DIALOG_STYLE_MSGBOX,
                      "GTA Offline ENEX Context Resolver", body, "Back", "Close");
     return 1;
+}
+
+stock QueryOfflinePairSummary(playerid)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+    new query[1800];
+    format(query, sizeof(query),
+        "SELECT COUNT(*) total_plans, SUM(apply_readiness='dry_run_ready') dry_ready, SUM(apply_readiness='service_point_pending') service_pending, SUM(apply_readiness='blocked_duplicate') blocked_rows, SUM(plan_status='pair_ready') pair_ready, SUM(enabled=1) enabled_rows, SUM(apply_status<>'draft') nondraft_rows, COUNT(DISTINCT batch_id) batch_rows, (SELECT COUNT(*) FROM public_interiors WHERE enabled=1) active_runtime, %d runtime_capacity FROM offline_interior_apply_plan WHERE session_id=(SELECT id FROM offline_import_sessions ORDER BY id DESC LIMIT 1) AND plan_version='saif_enex_pair_planner_v0.26A.1.7'",
+        MAX_PUBLIC_INTERIORS);
+    mysql_tquery(g_SQL, query, "OnOfflinePairSummaryLoaded", "i", playerid);
+    return 1;
+}
+
+stock QueryOfflinePairBatchList(playerid)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+    PlayerOfflinePairBatchCount[playerid] = 0;
+    new query[900];
+    format(query, sizeof(query), "SELECT id,batch_label,candidate_count,dry_run_ready_count,service_pending_count,blocked_count,status FROM offline_interior_apply_batches WHERE session_id=(SELECT id FROM offline_import_sessions ORDER BY id DESC LIMIT 1) AND plan_version='saif_enex_pair_planner_v0.26A.1.7' ORDER BY sort_order,id");
+    mysql_tquery(g_SQL, query, "OnOfflinePairBatchListLoaded", "i", playerid);
+    return 1;
+}
+
+stock QueryOfflinePairPlanList(playerid, batchid, page = 0)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+    if (batchid <= 0) return QueryOfflinePairBatchList(playerid);
+    if (page < 0) page = 0;
+    PlayerOfflinePairSelectedBatchID[playerid] = batchid;
+    PlayerOfflinePairPlanPage[playerid] = page;
+    PlayerOfflinePairPlanCount[playerid] = 0;
+    new query[1200];
+    mysql_format(g_SQL, query, sizeof(query), "SELECT id,display_name,pair_group_key,area_code,apply_readiness,interior_id,confidence FROM offline_interior_apply_plan WHERE batch_id=%d AND plan_version='saif_enex_pair_planner_v0.26A.1.7' ORDER BY FIELD(apply_readiness,'blocked_duplicate','service_point_pending','dry_run_ready'),area_code,id LIMIT %d,%d", batchid, page*OFFLINE_PAIR_PAGE_SIZE, OFFLINE_PAIR_PAGE_SIZE+1);
+    mysql_tquery(g_SQL, query, "OnOfflinePairPlanListLoaded", "iii", playerid, batchid, page);
+    return 1;
+}
+
+stock QueryOfflinePairPlanDetail(playerid, planid)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+    if (planid <= 0) return 0;
+    new query[1700];
+    mysql_format(g_SQL, query, sizeof(query), "SELECT p.id,p.display_name,p.context_type,p.runtime_type,p.pair_group_key,p.region_key,p.city_code,p.area_code,p.exterior_queue_id,p.interior_queue_id,p.plan_status,p.service_point_status,p.apply_readiness,p.confidence,p.exterior_x,p.exterior_y,p.exterior_z,p.exterior_spawn_x,p.exterior_spawn_y,p.exterior_spawn_z,p.interior_id,p.interior_x,p.interior_y,p.interior_z,p.exit_x,p.exit_y,p.exit_z,p.duplicate_of_hash,p.planner_reason,p.enabled,p.apply_status,b.batch_label FROM offline_interior_apply_plan p JOIN offline_interior_apply_batches b ON b.id=p.batch_id WHERE p.id=%d LIMIT 1", planid);
+    mysql_tquery(g_SQL, query, "OnOfflinePairPlanDetailLoaded", "ii", playerid, planid);
+    return 1;
+}
+
+stock ShowOfflinePairPlanActionMenu(playerid)
+{
+    if (PlayerOfflinePairSelectedPlanID[playerid] <= 0) return QueryOfflinePairBatchList(playerid);
+    new body[512];
+    format(body, sizeof(body), "Action\tQueue\tMutation\nOpen Exterior ENEX Detail\t%d\tRead-only\nOpen Interior Template Detail\t%d\tRead-only\nBack to Plan Detail\t%d\tRead-only\nBack to Batch Plans\t%d\tRead-only", PlayerOfflinePairExteriorQueueID[playerid], PlayerOfflinePairInteriorQueueID[playerid], PlayerOfflinePairSelectedPlanID[playerid], PlayerOfflinePairSelectedBatchID[playerid]);
+    ShowPlayerDialog(playerid, DIALOG_OFFLINE_PAIR_PLAN_ACTION, DIALOG_STYLE_TABLIST_HEADERS, "ENEX Pair Plan Actions", body, "Open", "Back");
+    return 1;
+}
+
+public OnOfflinePairSummaryLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+    new rows; cache_get_row_count(rows);
+    if (rows <= 0) { SendClientMessage(playerid, COLOR_RED, "Pair planner belum diimport. Jalankan SQL v0.26A.1.7."); return ShowOfflineImportAuditMenu(playerid); }
+    new total,dryReady,servicePending,blocked,pairReady,enabled,nondraft,batches,activeRuntime,capacity;
+    cache_get_value_name_int(0,"total_plans",total); cache_get_value_name_int(0,"dry_ready",dryReady); cache_get_value_name_int(0,"service_pending",servicePending); cache_get_value_name_int(0,"blocked_rows",blocked); cache_get_value_name_int(0,"pair_ready",pairReady); cache_get_value_name_int(0,"enabled_rows",enabled); cache_get_value_name_int(0,"nondraft_rows",nondraft); cache_get_value_name_int(0,"batch_rows",batches); cache_get_value_name_int(0,"active_runtime",activeRuntime); cache_get_value_name_int(0,"runtime_capacity",capacity);
+    if (total <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Pair planner belum diimport. Jalankan migration dan import SQL v0.26A.1.7.");
+        return ShowOfflineImportAuditMenu(playerid);
+    }
+    new body[1900];
+    format(body,sizeof(body),"ENEX Pair / Apply Planner v0.26A.1.7\n\nFamily batches: %d\nCandidate exterior plans: %d\nUnique pair-ready: %d\nDry-run ready now: %d\nExact service point pending: %d\nBlocked duplicate: %d\n\nRuntime capacity audit\nCurrent active public interiors: %d\nCompiled MAX_PUBLIC_INTERIORS: %d\nUnique planned after replacement: 91\nMinimum shortfall for full world: %d\n\nSafety\nPlanner enabled rows: %d (must be 0)\nNon-draft apply rows: %d (must be 0)\nRuntime mutation: none\n\nImportant gates:\n1. Raise MAX_PUBLIC_INTERIORS to at least 128 before full apply.\n2. Resolve exact cashier/service points for 47 variant interiors.\n3. Keep two duplicate FDPIZA exteriors blocked.\n4. Archive/replace/rollback SQL has not been created yet.", batches,total,pairReady,dryReady,servicePending,blocked,activeRuntime,capacity,91-capacity,enabled,nondraft);
+    ShowPlayerDialog(playerid,DIALOG_OFFLINE_PAIR_SUMMARY,DIALOG_STYLE_MSGBOX,"SAIF ENEX Pair Planner",body,"Batches","Back");
+    return 1;
+}
+
+public OnOfflinePairBatchListLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+    new rows; cache_get_row_count(rows); PlayerOfflinePairBatchCount[playerid]=0;
+    if (rows<=0) { SendClientMessage(playerid,COLOR_RED,"Pair planner batch belum tersedia."); return QueryOfflinePairSummary(playerid); }
+    new body[1800]; body[0]=EOS; strcat(body,"Family\tCandidate\tReady / Pending / Blocked\n",sizeof(body));
+    for(new i=0;i<rows && i<MAX_OFFLINE_PAIR_DIALOG_ROWS;i++) { new id,cand,ready,pending,blocked; new label[128],line[220]; cache_get_value_name_int(i,"id",id);cache_get_value_name(i,"batch_label",label,sizeof(label));cache_get_value_name_int(i,"candidate_count",cand);cache_get_value_name_int(i,"dry_run_ready_count",ready);cache_get_value_name_int(i,"service_pending_count",pending);cache_get_value_name_int(i,"blocked_count",blocked); PlayerOfflinePairBatchDBID[playerid][PlayerOfflinePairBatchCount[playerid]++]=id; format(line,sizeof(line),"%s\t%d\t%d / %d / %d\n",label,cand,ready,pending,blocked);strcat(body,line,sizeof(body)); }
+    ShowPlayerDialog(playerid,DIALOG_OFFLINE_PAIR_BATCH_LIST,DIALOG_STYLE_TABLIST_HEADERS,"ENEX Pair Planner Batches",body,"Open","Back"); return 1;
+}
+
+public OnOfflinePairPlanListLoaded(playerid, batchid, page)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+    new rows;cache_get_row_count(rows);PlayerOfflinePairPlanCount[playerid]=0;PlayerOfflinePairSelectedBatchID[playerid]=batchid;PlayerOfflinePairPlanPage[playerid]=page;
+    new body[3500];body[0]=EOS;strcat(body,"Plan\tGroup / Area\tGate\n",sizeof(body));
+    if(page>0){PlayerOfflinePairPlanDBID[playerid][PlayerOfflinePairPlanCount[playerid]++]=-1;strcat(body,"<< Previous Page\t\tNavigation\n",sizeof(body));}
+    new dataRows=rows;if(dataRows>OFFLINE_PAIR_PAGE_SIZE)dataRows=OFFLINE_PAIR_PAGE_SIZE;
+    for(new i=0;i<dataRows;i++){new id,intid,confidence;new name[128],group[96],area[32],gate[40],line[260];cache_get_value_name_int(i,"id",id);cache_get_value_name_int(i,"interior_id",intid);cache_get_value_name_int(i,"confidence",confidence);cache_get_value_name(i,"display_name",name,sizeof(name));cache_get_value_name(i,"pair_group_key",group,sizeof(group));cache_get_value_name(i,"area_code",area,sizeof(area));cache_get_value_name(i,"apply_readiness",gate,sizeof(gate));PlayerOfflinePairPlanDBID[playerid][PlayerOfflinePairPlanCount[playerid]++]=id;format(line,sizeof(line),"%s\t%s / %s / Int %d\t%s (%d%%)\n",name,group,area,intid,gate,confidence);strcat(body,line,sizeof(body));}
+    if(rows>OFFLINE_PAIR_PAGE_SIZE && PlayerOfflinePairPlanCount[playerid]<MAX_OFFLINE_PAIR_DIALOG_ROWS){PlayerOfflinePairPlanDBID[playerid][PlayerOfflinePairPlanCount[playerid]++]=-2;strcat(body,">> Next Page\t\tNavigation\n",sizeof(body));}
+    ShowPlayerDialog(playerid,DIALOG_OFFLINE_PAIR_PLAN_LIST,DIALOG_STYLE_TABLIST_HEADERS,"ENEX Pair Plans",body,"Detail","Batches");return 1;
+}
+
+public OnOfflinePairPlanDetailLoaded(playerid, planid)
+{
+    if (!IsPlayerConnected(playerid)) return 1;new rows;cache_get_row_count(rows);if(rows<=0){SendClientMessage(playerid,COLOR_RED,"Plan row tidak ditemukan.");return QueryOfflinePairPlanList(playerid,PlayerOfflinePairSelectedBatchID[playerid],PlayerOfflinePairPlanPage[playerid]);}
+    new id,extid,intqid,intid,confidence,enabled;new name[128],batch[128],ctx[64],rtype[32],group[96],region[32],city[32],area[32],pstatus[32],sstatus[40],readiness[40],apply[24],dup[65],reason[768];new Float:ex, Float:ey, Float:ez, Float:esx, Float:esy, Float:esz, Float:ix, Float:iy, Float:iz, Float:xx, Float:xy, Float:xz;
+    cache_get_value_name_int(0,"id",id);cache_get_value_name_int(0,"exterior_queue_id",extid);cache_get_value_name_int(0,"interior_queue_id",intqid);cache_get_value_name_int(0,"interior_id",intid);cache_get_value_name_int(0,"confidence",confidence);cache_get_value_name_int(0,"enabled",enabled);cache_get_value_name(0,"display_name",name,sizeof(name));cache_get_value_name(0,"batch_label",batch,sizeof(batch));cache_get_value_name(0,"context_type",ctx,sizeof(ctx));cache_get_value_name(0,"runtime_type",rtype,sizeof(rtype));cache_get_value_name(0,"pair_group_key",group,sizeof(group));cache_get_value_name(0,"region_key",region,sizeof(region));cache_get_value_name(0,"city_code",city,sizeof(city));cache_get_value_name(0,"area_code",area,sizeof(area));cache_get_value_name(0,"plan_status",pstatus,sizeof(pstatus));cache_get_value_name(0,"service_point_status",sstatus,sizeof(sstatus));cache_get_value_name(0,"apply_readiness",readiness,sizeof(readiness));cache_get_value_name(0,"apply_status",apply,sizeof(apply));cache_get_value_name(0,"duplicate_of_hash",dup,sizeof(dup));cache_get_value_name(0,"planner_reason",reason,sizeof(reason));cache_get_value_name_float(0,"exterior_x",ex);cache_get_value_name_float(0,"exterior_y",ey);cache_get_value_name_float(0,"exterior_z",ez);cache_get_value_name_float(0,"exterior_spawn_x",esx);cache_get_value_name_float(0,"exterior_spawn_y",esy);cache_get_value_name_float(0,"exterior_spawn_z",esz);cache_get_value_name_float(0,"interior_x",ix);cache_get_value_name_float(0,"interior_y",iy);cache_get_value_name_float(0,"interior_z",iz);cache_get_value_name_float(0,"exit_x",xx);cache_get_value_name_float(0,"exit_y",xy);cache_get_value_name_float(0,"exit_z",xz);
+    PlayerOfflinePairSelectedPlanID[playerid]=id;PlayerOfflinePairExteriorQueueID[playerid]=extid;PlayerOfflinePairInteriorQueueID[playerid]=intqid;
+    new body[3900];format(body,sizeof(body),"Plan ID: %d\nBatch: %s\nName: %s\nContext/runtime: %s / %s\nPair group: %s\nRegion/city/area: %s / %s / %s\nConfidence: %d%%\n\nPair queues\nExterior queue: %d\nInterior template queue: %d\nInterior ID: %d\n\nCoordinate mapping\nExterior marker A: %.3f, %.3f, %.3f\nExterior return B: %.3f, %.3f, %.3f\nInterior arrival B: %.3f, %.3f, %.3f\nInterior exit A: %.3f, %.3f, %.3f\n\nGates\nPlan status: %s\nService point: %s\nApply readiness: %s\nEnabled: %d (must be 0)\nApply status: %s (must be draft)\nDuplicate of: %s\n\nReason\n%s\n\nRuntime tables touched: none",id,batch,name,ctx,rtype,group,region,city,area,confidence,extid,intqid,intid,ex,ey,ez,esx,esy,esz,ix,iy,iz,xx,xy,xz,pstatus,sstatus,readiness,enabled,apply,dup,reason);
+    ShowPlayerDialog(playerid,DIALOG_OFFLINE_PAIR_PLAN_DETAIL,DIALOG_STYLE_MSGBOX,"ENEX Pair Plan Detail",body,"Actions","Back");return 1;
 }
 
 public OnOfflineImportSummaryLoaded(playerid)
@@ -17633,7 +17772,8 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 2: QueryOfflineInteriorQueue(playerid);
             case 3: ShowOfflineImportSafetyPolicy(playerid);
             case 4: QueryOfflineInteriorContextSummary(playerid);
-            case 5: ShowAdminToolsMenu(playerid);
+            case 5: QueryOfflinePairSummary(playerid);
+            case 6: ShowAdminToolsMenu(playerid);
         }
         return 1;
     }
@@ -17641,6 +17781,44 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
     if (dialogid == DIALOG_OFFLINE_CONTEXT_SUMMARY)
     {
         if (response) ShowOfflineImportAuditMenu(playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OFFLINE_PAIR_SUMMARY)
+    {
+        if (response) QueryOfflinePairBatchList(playerid); else ShowOfflineImportAuditMenu(playerid);
+        return 1;
+    }
+    if (dialogid == DIALOG_OFFLINE_PAIR_BATCH_LIST)
+    {
+        if (!response) return QueryOfflinePairSummary(playerid);
+        if (listitem<0 || listitem>=PlayerOfflinePairBatchCount[playerid]) return QueryOfflinePairBatchList(playerid);
+        QueryOfflinePairPlanList(playerid,PlayerOfflinePairBatchDBID[playerid][listitem],0); return 1;
+    }
+    if (dialogid == DIALOG_OFFLINE_PAIR_PLAN_LIST)
+    {
+        if (!response) return QueryOfflinePairBatchList(playerid);
+        if (listitem<0 || listitem>=PlayerOfflinePairPlanCount[playerid]) return QueryOfflinePairPlanList(playerid,PlayerOfflinePairSelectedBatchID[playerid],PlayerOfflinePairPlanPage[playerid]);
+        new planid=PlayerOfflinePairPlanDBID[playerid][listitem];
+        if(planid==-1)return QueryOfflinePairPlanList(playerid,PlayerOfflinePairSelectedBatchID[playerid],PlayerOfflinePairPlanPage[playerid]-1);
+        if(planid==-2)return QueryOfflinePairPlanList(playerid,PlayerOfflinePairSelectedBatchID[playerid],PlayerOfflinePairPlanPage[playerid]+1);
+        QueryOfflinePairPlanDetail(playerid,planid);return 1;
+    }
+    if (dialogid == DIALOG_OFFLINE_PAIR_PLAN_DETAIL)
+    {
+        if(response) ShowOfflinePairPlanActionMenu(playerid); else QueryOfflinePairPlanList(playerid,PlayerOfflinePairSelectedBatchID[playerid],PlayerOfflinePairPlanPage[playerid]);
+        return 1;
+    }
+    if (dialogid == DIALOG_OFFLINE_PAIR_PLAN_ACTION)
+    {
+        if(!response)return QueryOfflinePairPlanDetail(playerid,PlayerOfflinePairSelectedPlanID[playerid]);
+        switch(listitem)
+        {
+            case 0: QueryOfflineInteriorDetail(playerid,PlayerOfflinePairExteriorQueueID[playerid]);
+            case 1: QueryOfflineInteriorDetail(playerid,PlayerOfflinePairInteriorQueueID[playerid]);
+            case 2: QueryOfflinePairPlanDetail(playerid,PlayerOfflinePairSelectedPlanID[playerid]);
+            case 3: QueryOfflinePairPlanList(playerid,PlayerOfflinePairSelectedBatchID[playerid],PlayerOfflinePairPlanPage[playerid]);
+        }
         return 1;
     }
 
@@ -39413,7 +39591,7 @@ stock ShowOrgEconomyBaselineAudit(playerid)
     new line[192];
     body[0] = EOS;
 
-    strcat(body, "SAIF v0.26A.1.6 ENEX Context Resolver\n\n", sizeof(body));
+    strcat(body, "SAIF v0.26A.1.7.1 Float Tag Warning Fix\n\n", sizeof(body));
     strcat(body, "Contract:\n", sizeof(body));
     strcat(body, "- Organization = player-made legal/economic group.\n", sizeof(body));
     strcat(body, "- Gang = preset/offline-like turf group, not org.\n", sizeof(body));
@@ -39497,6 +39675,36 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/offlinecontext", true) || !strcmp(cmdtext, "/enexcontext", true) || !strcmp(cmdtext, "/offlinecontextaudit", true))
     {
         QueryOfflineInteriorContextSummary(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/offlinepairs", true) || !strcmp(cmdtext, "/offlinepairaudit", true) || !strcmp(cmdtext, "/offlineplans", true))
+    {
+        QueryOfflinePairSummary(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/offlinepairbatches", true))
+    {
+        QueryOfflinePairBatchList(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/offlineplan", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Usage: /offlineplan [plan_id]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/offlineplan ", true) == 0)
+    {
+        new idStr[16];
+        if (!GetOneParam(cmdtext[13], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Usage: /offlineplan [plan_id]");
+            return 1;
+        }
+        QueryOfflinePairPlanDetail(playerid, strval(idStr));
         return 1;
     }
 
@@ -42466,7 +42674,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.6 ENEX Context Resolver");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.7.1 Float Tag Warning Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -42476,7 +42684,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.6: ENEX context resolver + SCM/shop evidence + access scope + runtime target audit; no runtime apply.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.7.1: memperbaiki 11 Float tag mismatch pada detail ENEX pair plan; tanpa SQL/runtime change.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.5.1: ENEX Point A/B side-aware preview + isolated interior VW + return position safety.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.5: GTA offline source registry + 376 ENEX staging queue + Owner read-only audit; no runtime apply.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.3.1: Cold boot DB readiness; server tidak lagi berjalan dengan handle DB gagal dan auth fallback kosong.");

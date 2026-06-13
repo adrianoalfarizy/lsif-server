@@ -274,6 +274,7 @@
 #define DIALOG_OFFLINE_VEHICLE_PLAN_LIST 1314
 #define DIALOG_OFFLINE_VEHICLE_PLAN_DETAIL 1315
 #define DIALOG_OFFLINE_VEHICLE_PLAN_ACTION 1316
+#define DIALOG_OFFLINE_VEHICLE_RUNTIME_DRYRUN_SUMMARY 1317
 
 #define DIALOG_GANG_PRESET_MENU 1192
 #define DIALOG_GANG_PRESET_LIST 1193
@@ -757,7 +758,7 @@ stock IsLegacyStaticRaceMarkerEnabled() { return 0; }
 
 #define MAX_DYNAMIC_LOCATIONS 80
 #define MAX_DYNAMIC_OBJECTS 300
-#define MAX_PARKED_VEHICLES 200
+#define MAX_PARKED_VEHICLES 256
 #define PARKED_VEHICLE_DEFAULT_RESPAWN 300
 #define PARKED_VEHICLE_DEFAULT_COLOR1 1
 #define PARKED_VEHICLE_DEFAULT_COLOR2 1
@@ -2784,6 +2785,7 @@ forward OnOfflineVehiclePlanSummaryLoaded(playerid);
 forward OnOfflineVehiclePlanBatchListLoaded(playerid);
 forward OnOfflineVehiclePlanListLoaded(playerid, batchid, page);
 forward OnOfflineVehiclePlanDetailLoaded(playerid, planid);
+forward OnOfflineVehicleRuntimeDryRunSummaryLoaded(playerid);
 forward OnLiveDBTableAuditLoaded(playerid);
 forward OnLiveDBCleanupCandidatesLoaded(playerid);
 forward OnLiveDBIntegrityLoaded(playerid);
@@ -14160,7 +14162,7 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.12.1 Parked Vehicle Planner Indentation Fix");
+    SetGameModeText("SAIF Dev v0.26A.1.13.1 Parked Vehicle Runtime Archive Dry-Run");
 
     new MySQLOpt:mysqlOptions = mysql_init_options();
     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
@@ -14343,8 +14345,9 @@ public OnGameModeInit()
     print("[SAIF] Skin movement baseline aktif: CJ-like via UsePlayerPedAnims; profile palsu tetap dihapus.");
     print("[SAIF] Vehicle Mission v0.25B.10 tetap aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
     print("[SAIF] Vitals Persistence aktif: health/armor DB + Ammu Body Armor persistence.");
-    print("[SAIF] Gamemode v0.26A.1.12.1 Parked Vehicle Planner Indentation Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.26A.1.13.1 Parked Vehicle Runtime Archive Dry-Run berhasil dijalankan.");
     print("[SAIF] GTA Offline Import Audit aktif: registry + ENEX context/evidence/pair planner read-only; runtime tidak disentuh.");
+    print("[SAIF] Parked vehicle archive/dry-run v0.26A.1.13.1 aktif: capacity 256, planned replacement 130, no runtime mutation.");
     print("[SAIF] ENEX side-aware preview aktif: Point A/B, isolated interior VW, dan return position.");
     return 1;
 }
@@ -15176,7 +15179,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "SAIF Admin Menus Hub (/amenus)\n\n", sizeof(body));
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
-    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlinecontext\n/offlinepairs | /offlinepairbatches | /offlineplan [id]\n/offlineservicepoints | /offlineservicelist | /offlinepoint [id]\n/offlineruntimedryrun | /offlinearchivestatus | /offlinecapacity\n/offlinefullapply | /offlineapplystatus | /offlineoverlaystatus | /offlineexactreload\n/offlinevehicles | /offlinevehiclelist | /offlinevehicle [queue_id]\n/offlinevehicleplans | /offlinevehiclebatches | /offlinevehicleplan [plan_id]\n/offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
+    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlinecontext\n/offlinepairs | /offlinepairbatches | /offlineplan [id]\n/offlineservicepoints | /offlineservicelist | /offlinepoint [id]\n/offlineruntimedryrun | /offlinearchivestatus | /offlinecapacity\n/offlinefullapply | /offlineapplystatus | /offlineoverlaystatus | /offlineexactreload\n/offlinevehicles | /offlinevehiclelist | /offlinevehicle [queue_id]\n/offlinevehicleplans | /offlinevehiclebatches | /offlinevehicleplan [plan_id]\n/offlinevehicledryrun | /offlinevehiclearchive | /offlinevehiclecapacity\n/offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
     strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/orgeconomy, /orgeconomyaudit, /orgstatus, /orgeconomyhealth, /orgbiz, /orgbusiness, /orgfinance\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /vehmissioncloseout, /vehiclemissionhealth, /missiontarget, /vehmissionconfig, /missionpointmenu, /missionpool, /vehmissionpool, /jobpointpool, /vmpool, /pointpool, /jobpool, /jobpointmenu, /taxirequest, /taxistatus, /canceltaxi, /busrequest, /busstatus, /cancelbus, /medicrequest, /medicstatus, /cancelmedic, /firestatus, /firemission\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /cjmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
@@ -15838,6 +15841,7 @@ stock ShowOfflineImportAuditMenu(playerid)
     strcat(body, "Full Public Interior Apply Status\t91 unique + rollback\tControlled SQL\n", sizeof(body));
     strcat(body, "Parked Vehicle / SCM Car Generator Queue\toffline_vehicle_queue\tRead-only\n", sizeof(body));
     strcat(body, "Parked Vehicle Canonical / Apply Planner\t211 queue rows\tRead-only\n", sizeof(body));
+    strcat(body, "Parked Vehicle Runtime Archive / Full 130 Dry-Run\tparked_vehicles\tRead-only\n", sizeof(body));
     strcat(body, "Back to Admin Menus\t/amenus\tRead-only\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_OFFLINE_IMPORT_MENU, DIALOG_STYLE_TABLIST_HEADERS,
@@ -16383,7 +16387,7 @@ public OnOfflineVehiclePlanSummaryLoaded(playerid)
     cache_get_value_name_int(0,"placeholder_rows",placeholder); cache_get_value_name_int(0,"switch_rows",switchRows); cache_get_value_name_int(0,"recommended_rows",recommended);
     cache_get_value_name_int(0,"enabled_rows",enabled); cache_get_value_name_int(0,"nondraft_rows",nondraft); cache_get_value_name_int(0,"batch_rows",batches); cache_get_value_name_int(0,"runtime_active",runtimeActive);
     new body[1500];
-    format(body,sizeof(body),"GTA SA Parked Vehicle Canonical Planner\n\nTotal queue plans: %d\nBaseline startup ready: %d\nProgression optional: %d\nStateful deferred: %d\nDuplicate blocked: %d\nRandom model review: %d\nPlaceholder blocked: %d\nSwitch-state review: %d\n\nRecommended first apply: %d\nPlanner batches: %d\nRuntime active now: %d / 200\n\nSafety\nPlanner enabled: %d (must be 0)\nNon-draft plans: %d (must be 0)\nparked_vehicles mutation: none\n\nBaseline first apply keeps original SCM startup-ON vehicles. Progression/stateful rows remain explicit instead of being silently spawned.",total,baseline,progression,stateful,duplicates,randomRows,placeholder,switchRows,recommended,batches,runtimeActive,enabled,nondraft);
+    format(body,sizeof(body),"GTA SA Parked Vehicle Canonical Planner\n\nTotal queue plans: %d\nBaseline startup ready: %d\nProgression optional: %d\nStateful deferred: %d\nDuplicate blocked: %d\nRandom model review: %d\nPlaceholder blocked: %d\nSwitch-state review: %d\n\nRecommended first apply: %d\nPlanner batches: %d\nRuntime active now: %d / 256\n\nSafety\nPlanner enabled: %d (must be 0)\nNon-draft plans: %d (must be 0)\nparked_vehicles mutation: none\n\nBaseline first apply keeps original SCM startup-ON vehicles. Progression/stateful rows remain explicit instead of being silently spawned.",total,baseline,progression,stateful,duplicates,randomRows,placeholder,switchRows,recommended,batches,runtimeActive,enabled,nondraft);
     ShowPlayerDialog(playerid,DIALOG_OFFLINE_VEHICLE_PLAN_SUMMARY,DIALOG_STYLE_MSGBOX,"Parked Vehicle Canonical Planner",body,"Browse","Back");
     return 1;
 }
@@ -16471,6 +16475,76 @@ public OnOfflineVehiclePlanDetailLoaded(playerid,planid)
 stock ShowOfflineVehiclePlanActions(playerid)
 {
     ShowPlayerDialog(playerid,DIALOG_OFFLINE_VEHICLE_PLAN_ACTION,DIALOG_STYLE_TABLIST_HEADERS,"Parked Vehicle Plan Actions","Action\tEffect\nOpen Source Queue Detail\tRead original SCM evidence\nPreview Source Position\tTeleport only; no vehicle spawn\nBack to Plan Detail\tRead-only\nBack to Plan List\tRead-only","Open","Back");return 1;
+}
+
+
+stock QueryOfflineVehicleRuntimeDryRunSummary(playerid)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+
+    new query[2600];
+    query[0] = EOS;
+    strcat(query, "SELECT ", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM offline_vehicle_apply_plan WHERE planner_version='saif-vehicle-canonical-planner-v0.26A.1.12') AS total_plans,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM offline_vehicle_apply_plan WHERE planner_version='saif-vehicle-canonical-planner-v0.26A.1.12' AND decision_code='baseline_ready') AS baseline_rows,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM offline_vehicle_apply_plan WHERE planner_version='saif-vehicle-canonical-planner-v0.26A.1.12' AND decision_code='progression_optional') AS progression_rows,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM offline_vehicle_apply_plan WHERE planner_version='saif-vehicle-canonical-planner-v0.26A.1.12' AND decision_code='stateful_deferred') AS stateful_rows,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM offline_vehicle_apply_plan WHERE planner_version='saif-vehicle-canonical-planner-v0.26A.1.12' AND decision_code='duplicate_blocked') AS duplicate_rows,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM offline_vehicle_apply_plan WHERE planner_version='saif-vehicle-canonical-planner-v0.26A.1.12' AND decision_code='random_model_review') AS random_rows,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM offline_vehicle_apply_plan WHERE planner_version='saif-vehicle-canonical-planner-v0.26A.1.12' AND decision_code='placeholder_blocked') AS placeholder_rows,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM offline_vehicle_apply_plan WHERE planner_version='saif-vehicle-canonical-planner-v0.26A.1.12' AND decision_code='switch_unknown_review') AS unknown_rows,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM parked_vehicles) AS runtime_total,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM parked_vehicles WHERE enabled=1) AS runtime_active,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM offline_runtime_archive_sessions WHERE archive_scope='parked_vehicles') AS archive_sessions,", sizeof(query));
+    strcat(query, "COALESCE((SELECT archive_status FROM offline_runtime_archive_sessions WHERE archive_scope='parked_vehicles' ORDER BY id DESC LIMIT 1),'none') AS latest_archive_status,", sizeof(query));
+    strcat(query, "COALESCE((SELECT archived_rows FROM offline_runtime_archive_sessions WHERE archive_scope='parked_vehicles' ORDER BY id DESC LIMIT 1),0) AS latest_archived_rows,", sizeof(query));
+    strcat(query, "COALESCE((SELECT runtime_rows_total FROM offline_runtime_archive_sessions WHERE archive_scope='parked_vehicles' ORDER BY id DESC LIMIT 1),0) AS latest_runtime_rows;", sizeof(query));
+    mysql_tquery(g_SQL, query, "OnOfflineVehicleRuntimeDryRunSummaryLoaded", "i", playerid);
+    return 1;
+}
+
+public OnOfflineVehicleRuntimeDryRunSummaryLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid) || !IsAdminLevel(playerid, ADMIN_OWNER)) return 1;
+
+    new rows;
+    cache_get_row_count(rows);
+    if (rows <= 0)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Runtime archive foundation belum tersedia. Jalankan migration v0.26A.1.13.");
+        return ShowOfflineImportAuditMenu(playerid);
+    }
+
+    new totalPlans, baselineRows, progressionRows, statefulRows, duplicateRows;
+    new randomRows, placeholderRows, unknownRows, runtimeTotal, runtimeActive;
+    new archiveSessions, latestArchivedRows, latestRuntimeRows;
+    new latestArchiveStatus[32];
+
+    cache_get_value_name_int(0, "total_plans", totalPlans);
+    cache_get_value_name_int(0, "baseline_rows", baselineRows);
+    cache_get_value_name_int(0, "progression_rows", progressionRows);
+    cache_get_value_name_int(0, "stateful_rows", statefulRows);
+    cache_get_value_name_int(0, "duplicate_rows", duplicateRows);
+    cache_get_value_name_int(0, "random_rows", randomRows);
+    cache_get_value_name_int(0, "placeholder_rows", placeholderRows);
+    cache_get_value_name_int(0, "unknown_rows", unknownRows);
+    cache_get_value_name_int(0, "runtime_total", runtimeTotal);
+    cache_get_value_name_int(0, "runtime_active", runtimeActive);
+    cache_get_value_name_int(0, "archive_sessions", archiveSessions);
+    cache_get_value_name_int(0, "latest_archived_rows", latestArchivedRows);
+    cache_get_value_name_int(0, "latest_runtime_rows", latestRuntimeRows);
+    cache_get_value_name(0, "latest_archive_status", latestArchiveStatus, sizeof(latestArchiveStatus));
+
+    new selectedRows = baselineRows + progressionRows;
+    new deferredRows = statefulRows + duplicateRows + randomRows + placeholderRows + unknownRows;
+    new capacityRemaining = MAX_PARKED_VEHICLES - selectedRows;
+    if (capacityRemaining < 0) capacityRemaining = 0;
+
+    new body[2200];
+    format(body, sizeof(body), "GTA SA Parked Vehicle Runtime Archive / Full Canonical Dry-Run\n\nRuntime capacity: %d\nRuntime rows now: %d total / %d active\n\nCanonical replacement selection\nBaseline world ON: %d\nProgression optional: %d\nSelected for future apply: %d\nCapacity remaining after replacement: %d\n\nExplicitly deferred\nStateful subsystems: %d\nDuplicate shadows: %d\nRandom model references: %d\nZero-coordinate placeholders: %d\nUnknown switch state: %d\nDeferred total: %d\n\nArchive status\nArchive sessions: %d\nLatest status: %s\nLatest archived/runtime rows: %d / %d\n\nReplacement contract\n- Archive every existing parked_vehicles row.\n- Future apply disables existing active rows; it does not DELETE them.\n- Insert 68 baseline + 62 progression = 130 exact locations.\n- Stateful/random/placeholder/duplicate/unknown rows remain staging-only.\n- This screen and v0.26A.1.13 SQL do not mutate parked_vehicles.\n\nPlanner total: %d rows.", MAX_PARKED_VEHICLES, runtimeTotal, runtimeActive, baselineRows, progressionRows, selectedRows, capacityRemaining, statefulRows, duplicateRows, randomRows, placeholderRows, unknownRows, deferredRows, archiveSessions, latestArchiveStatus, latestArchivedRows, latestRuntimeRows, totalPlans);
+
+    ShowPlayerDialog(playerid, DIALOG_OFFLINE_VEHICLE_RUNTIME_DRYRUN_SUMMARY, DIALOG_STYLE_MSGBOX, "Parked Vehicle Runtime Archive / Dry-Run", body, "Planner", "Back");
+    return 1;
 }
 
 stock QueryOfflineInteriorContextSummary(playerid)
@@ -18397,8 +18471,16 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 8: QueryOfflineExactApplyStatus(playerid);
             case 9: QueryOfflineVehicleSummary(playerid);
             case 10: QueryOfflineVehiclePlanSummary(playerid);
-            case 11: ShowAdminToolsMenu(playerid);
+            case 11: QueryOfflineVehicleRuntimeDryRunSummary(playerid);
+            case 12: ShowAdminToolsMenu(playerid);
         }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OFFLINE_VEHICLE_RUNTIME_DRYRUN_SUMMARY)
+    {
+        if (response) QueryOfflineVehiclePlanSummary(playerid);
+        else ShowOfflineImportAuditMenu(playerid);
         return 1;
     }
 
@@ -31099,7 +31181,7 @@ stock LoadParkedVehicles()
 {
     DestroyAllParkedVehicleRuntime();
     ResetParkedVehicleArrays();
-    mysql_tquery(g_SQL, "SELECT id, modelid, color1, color2, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, respawn_delay, locked, enabled FROM parked_vehicles WHERE enabled=1 ORDER BY id ASC LIMIT 200", "OnParkedVehiclesLoaded");
+    mysql_tquery(g_SQL, "SELECT id, modelid, color1, color2, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, respawn_delay, locked, enabled FROM parked_vehicles WHERE enabled=1 ORDER BY id ASC LIMIT 256", "OnParkedVehiclesLoaded");
     return 1;
 }
 
@@ -40353,7 +40435,7 @@ stock ShowOrgEconomyBaselineAudit(playerid)
     new line[192];
     body[0] = EOS;
 
-    strcat(body, "SAIF v0.26A.1.12.1 Parked Vehicle Planner Indentation Fix\n\n", sizeof(body));
+    strcat(body, "SAIF v0.26A.1.13.1 Parked Vehicle Runtime Archive Dry-Run\n\n", sizeof(body));
     strcat(body, "Contract:\n", sizeof(body));
     strcat(body, "- Organization = player-made legal/economic group.\n", sizeof(body));
     strcat(body, "- Gang = preset/offline-like turf group, not org.\n", sizeof(body));
@@ -40552,6 +40634,16 @@ public OnPlayerCommandText(playerid, cmdtext[])
             SendClientMessage(playerid,COLOR_YELLOW,"Usage: /offlinecar [queue_id]"); return 1;
         }
         QueryOfflineVehicleDetail(playerid,strval(idStr)); return 1;
+    }
+
+    if (!strcmp(cmdtext, "/offlinevehicledryrun", true) ||
+        !strcmp(cmdtext, "/offlinecardryrun", true) ||
+        !strcmp(cmdtext, "/offlinevehiclearchive", true) ||
+        !strcmp(cmdtext, "/offlinecararchive", true) ||
+        !strcmp(cmdtext, "/offlinevehiclecapacity", true))
+    {
+        QueryOfflineVehicleRuntimeDryRunSummary(playerid);
+        return 1;
     }
 
     if (!strcmp(cmdtext, "/offlinevehicleplans", true) || !strcmp(cmdtext, "/offlinecarplans", true) || !strcmp(cmdtext, "/offlinevehicleplanner", true))
@@ -43555,7 +43647,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.12.1 Parked Vehicle Planner Indentation Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.13.1 Parked Vehicle Runtime Archive Dry-Run");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -43565,6 +43657,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.13.1: add missing forward for parked vehicle runtime dry-run callback.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.10: Controlled 91-row public interior apply (71 SCM exact + 20 reviewed overlay) + tracked rollback.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.8: Exact Interior Service Point Resolver; 71 native SCM exact + 20 overlay preview anchors, audit-only.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.7.1: memperbaiki 11 Float tag mismatch pada detail ENEX pair plan; tanpa SQL/runtime change.");

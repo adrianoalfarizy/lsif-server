@@ -269,6 +269,11 @@
 #define DIALOG_OFFLINE_VEHICLE_LIST 1309
 #define DIALOG_OFFLINE_VEHICLE_DETAIL 1310
 #define DIALOG_OFFLINE_VEHICLE_ACTION 1311
+#define DIALOG_OFFLINE_VEHICLE_PLAN_SUMMARY 1312
+#define DIALOG_OFFLINE_VEHICLE_PLAN_BATCH_LIST 1313
+#define DIALOG_OFFLINE_VEHICLE_PLAN_LIST 1314
+#define DIALOG_OFFLINE_VEHICLE_PLAN_DETAIL 1315
+#define DIALOG_OFFLINE_VEHICLE_PLAN_ACTION 1316
 
 #define DIALOG_GANG_PRESET_MENU 1192
 #define DIALOG_GANG_PRESET_LIST 1193
@@ -2635,6 +2640,16 @@ new PlayerOfflineVehicleListCount[MAX_PLAYERS];
 new PlayerOfflineVehicleListDBID[MAX_PLAYERS][MAX_OFFLINE_VEHICLE_DIALOG_ROWS];
 new PlayerOfflineVehiclePage[MAX_PLAYERS];
 new PlayerOfflineVehicleSelectedID[MAX_PLAYERS];
+#define MAX_OFFLINE_VEHICLE_PLAN_DIALOG_ROWS 30
+#define OFFLINE_VEHICLE_PLAN_PAGE_SIZE 28
+new PlayerOfflineVehiclePlanBatchCount[MAX_PLAYERS];
+new PlayerOfflineVehiclePlanBatchDBID[MAX_PLAYERS][MAX_OFFLINE_VEHICLE_PLAN_DIALOG_ROWS];
+new PlayerOfflineVehiclePlanSelectedBatchID[MAX_PLAYERS];
+new PlayerOfflineVehiclePlanCount[MAX_PLAYERS];
+new PlayerOfflineVehiclePlanDBID[MAX_PLAYERS][MAX_OFFLINE_VEHICLE_PLAN_DIALOG_ROWS];
+new PlayerOfflineVehiclePlanPage[MAX_PLAYERS];
+new PlayerOfflineVehiclePlanSelectedID[MAX_PLAYERS];
+new PlayerOfflineVehiclePlanSelectedQueueID[MAX_PLAYERS];
 
 forward OnAccountCheck(playerid);
 forward OnAccountRegister(playerid);
@@ -2765,6 +2780,10 @@ forward OnOfflineVehicleSummaryLoaded(playerid);
 forward OnOfflineVehicleListLoaded(playerid, page);
 forward OnOfflineVehicleDetailLoaded(playerid, queueid);
 forward OnOfflineVehiclePreviewLoaded(playerid, queueid);
+forward OnOfflineVehiclePlanSummaryLoaded(playerid);
+forward OnOfflineVehiclePlanBatchListLoaded(playerid);
+forward OnOfflineVehiclePlanListLoaded(playerid, batchid, page);
+forward OnOfflineVehiclePlanDetailLoaded(playerid, planid);
 forward OnLiveDBTableAuditLoaded(playerid);
 forward OnLiveDBCleanupCandidatesLoaded(playerid);
 forward OnLiveDBIntegrityLoaded(playerid);
@@ -14141,7 +14160,7 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.11 Offline Parked Vehicle Queue Foundation");
+    SetGameModeText("SAIF Dev v0.26A.1.12.1 Parked Vehicle Planner Indentation Fix");
 
     new MySQLOpt:mysqlOptions = mysql_init_options();
     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
@@ -14268,6 +14287,12 @@ public OnGameModeInit()
         PlayerOfflineVehicleListCount[i] = 0;
         PlayerOfflineVehiclePage[i] = 0;
         PlayerOfflineVehicleSelectedID[i] = 0;
+        PlayerOfflineVehiclePlanBatchCount[i] = 0;
+        PlayerOfflineVehiclePlanSelectedBatchID[i] = 0;
+        PlayerOfflineVehiclePlanCount[i] = 0;
+        PlayerOfflineVehiclePlanPage[i] = 0;
+        PlayerOfflineVehiclePlanSelectedID[i] = 0;
+        PlayerOfflineVehiclePlanSelectedQueueID[i] = 0;
         ResetOfflineInteriorPreviewReturn(i);
         PlayerPendingSkinShopIndex[i] = -1;
         PlayerSkinPreviewActive[i] = 0;
@@ -14318,7 +14343,7 @@ public OnGameModeInit()
     print("[SAIF] Skin movement baseline aktif: CJ-like via UsePlayerPedAnims; profile palsu tetap dihapus.");
     print("[SAIF] Vehicle Mission v0.25B.10 tetap aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
     print("[SAIF] Vitals Persistence aktif: health/armor DB + Ammu Body Armor persistence.");
-    print("[SAIF] Gamemode v0.26A.1.11 Offline Parked Vehicle Queue Foundation berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.26A.1.12.1 Parked Vehicle Planner Indentation Fix berhasil dijalankan.");
     print("[SAIF] GTA Offline Import Audit aktif: registry + ENEX context/evidence/pair planner read-only; runtime tidak disentuh.");
     print("[SAIF] ENEX side-aware preview aktif: Point A/B, isolated interior VW, dan return position.");
     return 1;
@@ -14412,6 +14437,12 @@ public OnPlayerConnect(playerid)
     PlayerOfflineVehicleListCount[playerid] = 0;
     PlayerOfflineVehiclePage[playerid] = 0;
     PlayerOfflineVehicleSelectedID[playerid] = 0;
+    PlayerOfflineVehiclePlanBatchCount[playerid] = 0;
+    PlayerOfflineVehiclePlanSelectedBatchID[playerid] = 0;
+    PlayerOfflineVehiclePlanCount[playerid] = 0;
+    PlayerOfflineVehiclePlanPage[playerid] = 0;
+    PlayerOfflineVehiclePlanSelectedID[playerid] = 0;
+    PlayerOfflineVehiclePlanSelectedQueueID[playerid] = 0;
     ResetOfflineInteriorPreviewReturn(playerid);
     PlayerInsidePublicInteriorID[playerid] = 0;
     PlayerPublicInteriorServiceCheckpoint[playerid] = 0;
@@ -15145,7 +15176,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "SAIF Admin Menus Hub (/amenus)\n\n", sizeof(body));
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
-    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlinecontext\n/offlinepairs | /offlinepairbatches | /offlineplan [id]\n/offlineservicepoints | /offlineservicelist | /offlinepoint [id]\n/offlineruntimedryrun | /offlinearchivestatus | /offlinecapacity\n/offlinefullapply | /offlineapplystatus | /offlineoverlaystatus | /offlineexactreload\n/offlinevehicles | /offlinevehiclelist | /offlinevehicle [queue_id]\n/offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
+    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlinecontext\n/offlinepairs | /offlinepairbatches | /offlineplan [id]\n/offlineservicepoints | /offlineservicelist | /offlinepoint [id]\n/offlineruntimedryrun | /offlinearchivestatus | /offlinecapacity\n/offlinefullapply | /offlineapplystatus | /offlineoverlaystatus | /offlineexactreload\n/offlinevehicles | /offlinevehiclelist | /offlinevehicle [queue_id]\n/offlinevehicleplans | /offlinevehiclebatches | /offlinevehicleplan [plan_id]\n/offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
     strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/orgeconomy, /orgeconomyaudit, /orgstatus, /orgeconomyhealth, /orgbiz, /orgbusiness, /orgfinance\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /vehmissioncloseout, /vehiclemissionhealth, /missiontarget, /vehmissionconfig, /missionpointmenu, /missionpool, /vehmissionpool, /jobpointpool, /vmpool, /pointpool, /jobpool, /jobpointmenu, /taxirequest, /taxistatus, /canceltaxi, /busrequest, /busstatus, /cancelbus, /medicrequest, /medicstatus, /cancelmedic, /firestatus, /firemission\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /cjmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
@@ -15806,6 +15837,7 @@ stock ShowOfflineImportAuditMenu(playerid)
     strcat(body, "Runtime Capacity / Archive Dry-Run\tpublic_interiors\tRead-only\n", sizeof(body));
     strcat(body, "Full Public Interior Apply Status\t91 unique + rollback\tControlled SQL\n", sizeof(body));
     strcat(body, "Parked Vehicle / SCM Car Generator Queue\toffline_vehicle_queue\tRead-only\n", sizeof(body));
+    strcat(body, "Parked Vehicle Canonical / Apply Planner\t211 queue rows\tRead-only\n", sizeof(body));
     strcat(body, "Back to Admin Menus\t/amenus\tRead-only\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_OFFLINE_IMPORT_MENU, DIALOG_STYLE_TABLIST_HEADERS,
@@ -16329,6 +16361,116 @@ stock QueryOfflineInteriorPreview(playerid, queueid, pointSide)
         queueid);
     mysql_tquery(g_SQL, query, "OnOfflineInteriorPreviewLoaded", "iii", playerid, queueid, pointSide);
     return 1;
+}
+
+
+stock QueryOfflineVehiclePlanSummary(playerid)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+    new query[1800];
+    mysql_format(g_SQL, query, sizeof(query), "SELECT COUNT(*) total_rows,SUM(decision_code='baseline_ready') baseline_rows,SUM(decision_code='progression_optional') progression_rows,SUM(decision_code='stateful_deferred') stateful_rows,SUM(decision_code='duplicate_blocked') duplicate_rows,SUM(decision_code='random_model_review') random_rows,SUM(decision_code='placeholder_blocked') placeholder_rows,SUM(decision_code='switch_unknown_review') switch_rows,SUM(recommended_enabled=1) recommended_rows,SUM(enabled=1) enabled_rows,SUM(apply_status<>'draft') nondraft_rows,(SELECT COUNT(*) FROM offline_vehicle_apply_batches WHERE planner_version='saif-vehicle-canonical-planner-v0.26A.1.12') batch_rows,(SELECT COUNT(*) FROM parked_vehicles WHERE enabled=1) runtime_active FROM offline_vehicle_apply_plan WHERE planner_version='saif-vehicle-canonical-planner-v0.26A.1.12'");
+    mysql_tquery(g_SQL,query,"OnOfflineVehiclePlanSummaryLoaded","i",playerid);
+    return 1;
+}
+
+public OnOfflineVehiclePlanSummaryLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+    if (cache_num_rows()<=0) { SendClientMessage(playerid,COLOR_YELLOW,"Canonical vehicle planner belum tersedia. Jalankan migration + import v0.26A.1.12."); return ShowOfflineImportAuditMenu(playerid); }
+    new total,baseline,progression,stateful,duplicates,randomRows,placeholder,switchRows,recommended,enabled,nondraft,batches,runtimeActive;
+    cache_get_value_name_int(0,"total_rows",total); cache_get_value_name_int(0,"baseline_rows",baseline); cache_get_value_name_int(0,"progression_rows",progression);
+    cache_get_value_name_int(0,"stateful_rows",stateful); cache_get_value_name_int(0,"duplicate_rows",duplicates); cache_get_value_name_int(0,"random_rows",randomRows);
+    cache_get_value_name_int(0,"placeholder_rows",placeholder); cache_get_value_name_int(0,"switch_rows",switchRows); cache_get_value_name_int(0,"recommended_rows",recommended);
+    cache_get_value_name_int(0,"enabled_rows",enabled); cache_get_value_name_int(0,"nondraft_rows",nondraft); cache_get_value_name_int(0,"batch_rows",batches); cache_get_value_name_int(0,"runtime_active",runtimeActive);
+    new body[1500];
+    format(body,sizeof(body),"GTA SA Parked Vehicle Canonical Planner\n\nTotal queue plans: %d\nBaseline startup ready: %d\nProgression optional: %d\nStateful deferred: %d\nDuplicate blocked: %d\nRandom model review: %d\nPlaceholder blocked: %d\nSwitch-state review: %d\n\nRecommended first apply: %d\nPlanner batches: %d\nRuntime active now: %d / 200\n\nSafety\nPlanner enabled: %d (must be 0)\nNon-draft plans: %d (must be 0)\nparked_vehicles mutation: none\n\nBaseline first apply keeps original SCM startup-ON vehicles. Progression/stateful rows remain explicit instead of being silently spawned.",total,baseline,progression,stateful,duplicates,randomRows,placeholder,switchRows,recommended,batches,runtimeActive,enabled,nondraft);
+    ShowPlayerDialog(playerid,DIALOG_OFFLINE_VEHICLE_PLAN_SUMMARY,DIALOG_STYLE_MSGBOX,"Parked Vehicle Canonical Planner",body,"Browse","Back");
+    return 1;
+}
+
+stock QueryOfflineVehiclePlanBatchList(playerid)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+    mysql_tquery(g_SQL,"SELECT id,display_name,total_rows,recommended_enabled_rows,optional_rows,blocked_rows FROM offline_vehicle_apply_batches WHERE planner_version='saif-vehicle-canonical-planner-v0.26A.1.12' ORDER BY sort_order,id","OnOfflineVehiclePlanBatchListLoaded","i",playerid);
+    return 1;
+}
+
+public OnOfflineVehiclePlanBatchListLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+    new rows=cache_num_rows(),body[1800]; body[0]=EOS;
+    strcat(body,"Batch\tRows\tRecommended / Optional / Blocked\n",sizeof(body));
+    PlayerOfflineVehiclePlanBatchCount[playerid]=0;
+    for(new i=0;i<rows && i<MAX_OFFLINE_VEHICLE_PLAN_DIALOG_ROWS;i++)
+    {
+        new id,total,recommended,optional,blocked,name[96],line[180];
+        cache_get_value_name_int(i,"id",id); cache_get_value_name(i,"display_name",name,sizeof(name)); cache_get_value_name_int(i,"total_rows",total);
+        cache_get_value_name_int(i,"recommended_enabled_rows",recommended); cache_get_value_name_int(i,"optional_rows",optional); cache_get_value_name_int(i,"blocked_rows",blocked);
+        format(line,sizeof(line),"%s\t%d\t%d / %d / %d\n",name,total,recommended,optional,blocked); strcat(body,line,sizeof(body));
+        PlayerOfflineVehiclePlanBatchDBID[playerid][PlayerOfflineVehiclePlanBatchCount[playerid]++]=id;
+    }
+    if(rows==0)strcat(body,"No planner batches\tRun v0.26A.1.12 SQL\t0 / 0 / 0\n",sizeof(body));
+    ShowPlayerDialog(playerid,DIALOG_OFFLINE_VEHICLE_PLAN_BATCH_LIST,DIALOG_STYLE_TABLIST_HEADERS,"Parked Vehicle Planner Batches",body,"Open","Back");
+    return 1;
+}
+
+stock QueryOfflineVehiclePlanList(playerid,batchid,page)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+    if(page<0)page=0; PlayerOfflineVehiclePlanSelectedBatchID[playerid]=batchid; PlayerOfflineVehiclePlanPage[playerid]=page;
+    new query[1600],offset=page*OFFLINE_VEHICLE_PLAN_PAGE_SIZE;
+    mysql_format(g_SQL,query,sizeof(query),"SELECT p.id,p.queue_id,p.decision_code,p.apply_readiness,p.recommended_enabled,q.generator_name,q.modelid,q.vehicle_model_name,q.area_code FROM offline_vehicle_apply_plan p JOIN offline_vehicle_queue q ON q.id=p.queue_id WHERE p.batch_id=%d AND p.planner_version='saif-vehicle-canonical-planner-v0.26A.1.12' ORDER BY p.id LIMIT %d,%d",batchid,offset,OFFLINE_VEHICLE_PLAN_PAGE_SIZE+1);
+    mysql_tquery(g_SQL,query,"OnOfflineVehiclePlanListLoaded","iii",playerid,batchid,page); return 1;
+}
+
+public OnOfflineVehiclePlanListLoaded(playerid,batchid,page)
+{
+    if(!IsPlayerConnected(playerid))return 1;
+    PlayerOfflineVehiclePlanSelectedBatchID[playerid]=batchid;
+    new rows=cache_num_rows(),dataRows=rows,body[3000]; body[0]=EOS; strcat(body,"Plan\tVehicle / Area\tDecision\n",sizeof(body));
+    PlayerOfflineVehiclePlanCount[playerid]=0;
+    if(page>0){strcat(body,"Previous Page\t-\tNavigation\n",sizeof(body));PlayerOfflineVehiclePlanDBID[playerid][PlayerOfflineVehiclePlanCount[playerid]++]=-1;}
+    if(dataRows>OFFLINE_VEHICLE_PLAN_PAGE_SIZE)dataRows=OFFLINE_VEHICLE_PLAN_PAGE_SIZE;
+    for(new i=0;i<dataRows;i++)
+    {
+        new id,queueid,modelid,recommended,gen[128],model[64],area[32],decision[48],readiness[48],line[280];
+        cache_get_value_name_int(i,"id",id);cache_get_value_name_int(i,"queue_id",queueid);cache_get_value_name_int(i,"modelid",modelid);cache_get_value_name_int(i,"recommended_enabled",recommended);
+        cache_get_value_name(i,"generator_name",gen,sizeof(gen));cache_get_value_name(i,"vehicle_model_name",model,sizeof(model));cache_get_value_name(i,"area_code",area,sizeof(area));cache_get_value_name(i,"decision_code",decision,sizeof(decision));cache_get_value_name(i,"apply_readiness",readiness,sizeof(readiness));
+        format(line,sizeof(line),"#%d / Q%d\t%d %s (%s) / %s\t%s / %s%s\n",id,queueid,modelid,model,gen,area,decision,readiness,recommended?" [ON]":"");strcat(body,line,sizeof(body));
+        PlayerOfflineVehiclePlanDBID[playerid][PlayerOfflineVehiclePlanCount[playerid]++]=id;
+    }
+    if(rows>OFFLINE_VEHICLE_PLAN_PAGE_SIZE && PlayerOfflineVehiclePlanCount[playerid]<MAX_OFFLINE_VEHICLE_PLAN_DIALOG_ROWS){strcat(body,"Next Page\t-\tNavigation\n",sizeof(body));PlayerOfflineVehiclePlanDBID[playerid][PlayerOfflineVehiclePlanCount[playerid]++]=-2;}
+    if(dataRows==0 && page==0)strcat(body,"No rows\t-\tEmpty batch\n",sizeof(body));
+    ShowPlayerDialog(playerid,DIALOG_OFFLINE_VEHICLE_PLAN_LIST,DIALOG_STYLE_TABLIST_HEADERS,"Parked Vehicle Canonical Plans",body,"Detail","Back");return 1;
+}
+
+stock QueryOfflineVehiclePlanDetail(playerid,planid)
+{
+    if(!CanUseOfflineImportAudit(playerid))return 0;
+    new query[2200];
+    mysql_format(g_SQL,query,sizeof(query),"SELECT p.*,q.generator_name,q.modelid,q.vehicle_model_name,q.vehicle_type,q.pos_x,q.pos_y,q.pos_z,q.pos_a,q.city_region,q.area_code,q.initial_switch_amount,q.context_category,q.source_line,dq.generator_name duplicate_generator FROM offline_vehicle_apply_plan p JOIN offline_vehicle_queue q ON q.id=p.queue_id LEFT JOIN offline_vehicle_queue dq ON dq.id=p.duplicate_of_queue_id WHERE p.id=%d AND p.planner_version='saif-vehicle-canonical-planner-v0.26A.1.12' LIMIT 1",planid);
+    mysql_tquery(g_SQL,query,"OnOfflineVehiclePlanDetailLoaded","ii",playerid,planid);return 1;
+}
+
+public OnOfflineVehiclePlanDetailLoaded(playerid,planid)
+{
+    if(!IsPlayerConnected(playerid))return 1;if(cache_num_rows()<=0)return QueryOfflineVehiclePlanList(playerid,PlayerOfflineVehiclePlanSelectedBatchID[playerid],PlayerOfflineVehiclePlanPage[playerid]);
+    PlayerOfflineVehiclePlanSelectedID[playerid]=planid;
+    new queueid,modelid,recommended,progression,modelReq,stateReq,locked,respawn,sourceLine;
+    new gen[128],model[64],vtype[32],region[32],area[32],context[48],decision[48],readiness[48],canonical[48],initialState[16],reason[512],dupgen[128],runtimeTag[64];
+    new Float:x,Float:y,Float:z,Float:a;
+    cache_get_value_name_int(0,"queue_id",queueid);cache_get_value_name_int(0,"modelid",modelid);cache_get_value_name_int(0,"recommended_enabled",recommended);cache_get_value_name_int(0,"requires_progression",progression);cache_get_value_name_int(0,"requires_model_resolution",modelReq);cache_get_value_name_int(0,"requires_state_bridge",stateReq);cache_get_value_name_int(0,"runtime_locked",locked);cache_get_value_name_int(0,"runtime_respawn_delay",respawn);cache_get_value_name_int(0,"source_line",sourceLine);
+    cache_get_value_name(0,"generator_name",gen,sizeof(gen));cache_get_value_name(0,"vehicle_model_name",model,sizeof(model));cache_get_value_name(0,"vehicle_type",vtype,sizeof(vtype));cache_get_value_name(0,"city_region",region,sizeof(region));cache_get_value_name(0,"area_code",area,sizeof(area));cache_get_value_name(0,"context_category",context,sizeof(context));cache_get_value_name(0,"decision_code",decision,sizeof(decision));cache_get_value_name(0,"apply_readiness",readiness,sizeof(readiness));cache_get_value_name(0,"canonical_status",canonical,sizeof(canonical));cache_get_value_name(0,"initial_state",initialState,sizeof(initialState));cache_get_value_name(0,"planner_reason",reason,sizeof(reason));cache_get_value_name(0,"duplicate_generator",dupgen,sizeof(dupgen));cache_get_value_name(0,"runtime_source_tag",runtimeTag,sizeof(runtimeTag));
+    cache_get_value_name_float(0,"pos_x",x);cache_get_value_name_float(0,"pos_y",y);cache_get_value_name_float(0,"pos_z",z);cache_get_value_name_float(0,"pos_a",a);
+    PlayerOfflineVehiclePlanSelectedQueueID[playerid]=queueid;
+    new body[2600];
+    format(body,sizeof(body),"Plan ID: %d\nQueue ID: %d\nGenerator: %s\nVehicle: %d %s (%s)\nPosition: %.4f, %.4f, %.4f / %.2f\nRegion / Area: %s / %s\nSCM context: %s\nSCM initial state: %s\nSource line: %d\n\nDecision: %s\nReadiness: %s\nCanonical status: %s\nRecommended enabled: %d\nRuntime locked: %d\nRuntime respawn: %d sec\nRuntime source tag: %s\n\nRequires progression: %d\nRequires model resolution: %d\nRequires state bridge: %d\nDuplicate of: %s\n\nReason:\n%s\n\nSafety: planner only; parked_vehicles unchanged.",planid,queueid,gen,modelid,model,vtype,x,y,z,a,region,area,context,initialState,sourceLine,decision,readiness,canonical,recommended,locked,respawn,runtimeTag,progression,modelReq,stateReq,dupgen[0]?dupgen:"-",reason);
+    ShowPlayerDialog(playerid,DIALOG_OFFLINE_VEHICLE_PLAN_DETAIL,DIALOG_STYLE_MSGBOX,"Parked Vehicle Canonical Plan",body,"Actions","Back");return 1;
+}
+
+stock ShowOfflineVehiclePlanActions(playerid)
+{
+    ShowPlayerDialog(playerid,DIALOG_OFFLINE_VEHICLE_PLAN_ACTION,DIALOG_STYLE_TABLIST_HEADERS,"Parked Vehicle Plan Actions","Action\tEffect\nOpen Source Queue Detail\tRead original SCM evidence\nPreview Source Position\tTeleport only; no vehicle spawn\nBack to Plan Detail\tRead-only\nBack to Plan List\tRead-only","Open","Back");return 1;
 }
 
 stock QueryOfflineInteriorContextSummary(playerid)
@@ -18254,7 +18396,8 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 7: QueryOfflineRuntimeDryRunSummary(playerid);
             case 8: QueryOfflineExactApplyStatus(playerid);
             case 9: QueryOfflineVehicleSummary(playerid);
-            case 10: ShowAdminToolsMenu(playerid);
+            case 10: QueryOfflineVehiclePlanSummary(playerid);
+            case 11: ShowAdminToolsMenu(playerid);
         }
         return 1;
     }
@@ -18287,6 +18430,42 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 1: ReturnFromOfflineInteriorPreview(playerid);
             case 2: QueryOfflineVehicleDetail(playerid,PlayerOfflineVehicleSelectedID[playerid]);
             case 3: QueryOfflineVehicleList(playerid,PlayerOfflineVehiclePage[playerid]);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OFFLINE_VEHICLE_PLAN_SUMMARY)
+    {
+        if(response)QueryOfflineVehiclePlanBatchList(playerid);else ShowOfflineImportAuditMenu(playerid);return 1;
+    }
+    if (dialogid == DIALOG_OFFLINE_VEHICLE_PLAN_BATCH_LIST)
+    {
+        if(!response)return QueryOfflineVehiclePlanSummary(playerid);
+        if(listitem<0 || listitem>=PlayerOfflineVehiclePlanBatchCount[playerid])return QueryOfflineVehiclePlanBatchList(playerid);
+        return QueryOfflineVehiclePlanList(playerid,PlayerOfflineVehiclePlanBatchDBID[playerid][listitem],0);
+    }
+    if (dialogid == DIALOG_OFFLINE_VEHICLE_PLAN_LIST)
+    {
+        if(!response)return QueryOfflineVehiclePlanBatchList(playerid);
+        if(listitem<0 || listitem>=PlayerOfflineVehiclePlanCount[playerid])return QueryOfflineVehiclePlanList(playerid,PlayerOfflineVehiclePlanSelectedBatchID[playerid],PlayerOfflineVehiclePlanPage[playerid]);
+        new planid=PlayerOfflineVehiclePlanDBID[playerid][listitem];
+        if(planid==-1)return QueryOfflineVehiclePlanList(playerid,PlayerOfflineVehiclePlanSelectedBatchID[playerid],PlayerOfflineVehiclePlanPage[playerid]-1);
+        if(planid==-2)return QueryOfflineVehiclePlanList(playerid,PlayerOfflineVehiclePlanSelectedBatchID[playerid],PlayerOfflineVehiclePlanPage[playerid]+1);
+        return QueryOfflineVehiclePlanDetail(playerid,planid);
+    }
+    if (dialogid == DIALOG_OFFLINE_VEHICLE_PLAN_DETAIL)
+    {
+        if(response)ShowOfflineVehiclePlanActions(playerid);else QueryOfflineVehiclePlanList(playerid,PlayerOfflineVehiclePlanSelectedBatchID[playerid],PlayerOfflineVehiclePlanPage[playerid]);return 1;
+    }
+    if (dialogid == DIALOG_OFFLINE_VEHICLE_PLAN_ACTION)
+    {
+        if(!response)return QueryOfflineVehiclePlanDetail(playerid,PlayerOfflineVehiclePlanSelectedID[playerid]);
+        switch(listitem)
+        {
+            case 0: QueryOfflineVehicleDetail(playerid,PlayerOfflineVehiclePlanSelectedQueueID[playerid]);
+            case 1: QueryOfflineVehiclePreview(playerid,PlayerOfflineVehiclePlanSelectedQueueID[playerid]);
+            case 2: QueryOfflineVehiclePlanDetail(playerid,PlayerOfflineVehiclePlanSelectedID[playerid]);
+            case 3: QueryOfflineVehiclePlanList(playerid,PlayerOfflineVehiclePlanSelectedBatchID[playerid],PlayerOfflineVehiclePlanPage[playerid]);
         }
         return 1;
     }
@@ -40174,7 +40353,7 @@ stock ShowOrgEconomyBaselineAudit(playerid)
     new line[192];
     body[0] = EOS;
 
-    strcat(body, "SAIF v0.26A.1.11 Offline Parked Vehicle Queue Foundation\n\n", sizeof(body));
+    strcat(body, "SAIF v0.26A.1.12.1 Parked Vehicle Planner Indentation Fix\n\n", sizeof(body));
     strcat(body, "Contract:\n", sizeof(body));
     strcat(body, "- Organization = player-made legal/economic group.\n", sizeof(body));
     strcat(body, "- Gang = preset/offline-like turf group, not org.\n", sizeof(body));
@@ -40373,6 +40552,41 @@ public OnPlayerCommandText(playerid, cmdtext[])
             SendClientMessage(playerid,COLOR_YELLOW,"Usage: /offlinecar [queue_id]"); return 1;
         }
         QueryOfflineVehicleDetail(playerid,strval(idStr)); return 1;
+    }
+
+    if (!strcmp(cmdtext, "/offlinevehicleplans", true) || !strcmp(cmdtext, "/offlinecarplans", true) || !strcmp(cmdtext, "/offlinevehicleplanner", true))
+    {
+        QueryOfflineVehiclePlanSummary(playerid); return 1;
+    }
+    if (!strcmp(cmdtext, "/offlinevehiclebatches", true) || !strcmp(cmdtext, "/offlinecarbatches", true))
+    {
+        QueryOfflineVehiclePlanBatchList(playerid); return 1;
+    }
+    if (!strcmp(cmdtext, "/offlinevehicleplan", true) || !strcmp(cmdtext, "/offlinecarplan", true))
+    {
+        SendClientMessage(playerid,COLOR_YELLOW,"Usage: /offlinevehicleplan [plan_id]"); return 1;
+    }
+    if (strfind(cmdtext, "/offlinevehicleplan ", true) == 0)
+    {
+        new idStr[16];
+        if (!GetOneParam(cmdtext[20], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Usage: /offlinevehicleplan [plan_id]");
+            return 1;
+        }
+        QueryOfflineVehiclePlanDetail(playerid, strval(idStr));
+        return 1;
+    }
+    if (strfind(cmdtext, "/offlinecarplan ", true) == 0)
+    {
+        new idStr[16];
+        if (!GetOneParam(cmdtext[16], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Usage: /offlinecarplan [plan_id]");
+            return 1;
+        }
+        QueryOfflineVehiclePlanDetail(playerid, strval(idStr));
+        return 1;
     }
 
     if (!strcmp(cmdtext, "/offlinesources", true))
@@ -43341,7 +43555,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.11 Offline Parked Vehicle Queue Foundation");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.12.1 Parked Vehicle Planner Indentation Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");

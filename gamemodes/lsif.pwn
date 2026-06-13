@@ -14127,7 +14127,7 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.10.1 Full 91 Apply Dialog String Fix");
+    SetGameModeText("SAIF Dev v0.26A.1.10.3 Restaurant Map Icon Brand Fix");
 
     new MySQLOpt:mysqlOptions = mysql_init_options();
     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
@@ -14301,7 +14301,7 @@ public OnGameModeInit()
     print("[SAIF] Skin movement baseline aktif: CJ-like via UsePlayerPedAnims; profile palsu tetap dihapus.");
     print("[SAIF] Vehicle Mission v0.25B.10 tetap aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
     print("[SAIF] Vitals Persistence aktif: health/armor DB + Ammu Body Armor persistence.");
-    print("[SAIF] Gamemode v0.26A.1.10.1 Full 91 Apply Dialog String Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.26A.1.10.3 Restaurant Map Icon Brand Fix berhasil dijalankan.");
     print("[SAIF] GTA Offline Import Audit aktif: registry + ENEX context/evidence/pair planner read-only; runtime tidak disentuh.");
     print("[SAIF] ENEX side-aware preview aktif: Point A/B, isolated interior VW, dan return position.");
     return 1;
@@ -26253,8 +26253,8 @@ stock GetPublicInteriorDefaultMapIcon(const type[])
     if (!strcmp(type, "ammunation", true)) return MAPICON_TYPE_AMMUNATION;
     if (!strcmp(type, "247", true)) return MAPICON_TYPE_BUSINESS;
     if (!strcmp(type, "burgershot", true)) return 10;
-    if (!strcmp(type, "cluckinbell", true)) return 10;
-    if (!strcmp(type, "pizzastack", true)) return 10;
+    if (!strcmp(type, "cluckinbell", true)) return 14;
+    if (!strcmp(type, "pizzastack", true)) return 29;
     if (!strcmp(type, "gym", true)) return MAPICON_TYPE_JOB;
     if (!strcmp(type, "barber", true)) return 7;
     if (!strcmp(type, "tattoo", true)) return 39;
@@ -39942,7 +39942,7 @@ stock ShowOrgEconomyBaselineAudit(playerid)
     new line[192];
     body[0] = EOS;
 
-    strcat(body, "SAIF v0.26A.1.10.1 Full 91 Apply Dialog String Fix\n\n", sizeof(body));
+    strcat(body, "SAIF v0.26A.1.10.3 Restaurant Map Icon Brand Fix\n\n", sizeof(body));
     strcat(body, "Contract:\n", sizeof(body));
     strcat(body, "- Organization = player-made legal/economic group.\n", sizeof(body));
     strcat(body, "- Gang = preset/offline-like turf group, not org.\n", sizeof(body));
@@ -43075,7 +43075,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.10.1 Full 91 Apply Dialog String Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.10.3 Restaurant Map Icon Brand Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");

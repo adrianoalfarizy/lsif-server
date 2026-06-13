@@ -251,6 +251,7 @@
 #define DIALOG_OFFLINE_INTERIOR_LIST 1291
 #define DIALOG_OFFLINE_INTERIOR_DETAIL 1292
 #define DIALOG_OFFLINE_IMPORT_POLICY 1293
+#define DIALOG_OFFLINE_INTERIOR_PREVIEW_MENU 1294
 
 #define DIALOG_GANG_PRESET_MENU 1192
 #define DIALOG_GANG_PRESET_LIST 1193
@@ -2575,10 +2576,20 @@ stock GetTruckerDynamicXP(route)
 
 #define MAX_OFFLINE_INTERIOR_DIALOG_ROWS 30
 #define OFFLINE_INTERIOR_PAGE_SIZE 28
+#define OFFLINE_INTERIOR_PREVIEW_POINT_A 0
+#define OFFLINE_INTERIOR_PREVIEW_POINT_B 1
+#define OFFLINE_AUDIT_PREVIEW_VW_BASE 60000
 new PlayerOfflineInteriorListCount[MAX_PLAYERS];
 new PlayerOfflineInteriorListDBID[MAX_PLAYERS][MAX_OFFLINE_INTERIOR_DIALOG_ROWS];
 new PlayerOfflineInteriorSelectedID[MAX_PLAYERS];
 new PlayerOfflineInteriorPage[MAX_PLAYERS];
+new PlayerOfflinePreviewReturnValid[MAX_PLAYERS];
+new Float:PlayerOfflinePreviewReturnX[MAX_PLAYERS];
+new Float:PlayerOfflinePreviewReturnY[MAX_PLAYERS];
+new Float:PlayerOfflinePreviewReturnZ[MAX_PLAYERS];
+new Float:PlayerOfflinePreviewReturnA[MAX_PLAYERS];
+new PlayerOfflinePreviewReturnInterior[MAX_PLAYERS];
+new PlayerOfflinePreviewReturnVirtualWorld[MAX_PLAYERS];
 
 forward OnAccountCheck(playerid);
 forward OnAccountRegister(playerid);
@@ -2694,7 +2705,7 @@ forward OnOfflineImportSummaryLoaded(playerid);
 forward OnOfflineSourceFilesLoaded(playerid);
 forward OnOfflineInteriorQueueLoaded(playerid, page);
 forward OnOfflineInteriorDetailLoaded(playerid, queueid);
-forward OnOfflineInteriorGotoLoaded(playerid, queueid);
+forward OnOfflineInteriorPreviewLoaded(playerid, queueid, pointSide);
 forward OnLiveDBTableAuditLoaded(playerid);
 forward OnLiveDBCleanupCandidatesLoaded(playerid);
 forward OnLiveDBIntegrityLoaded(playerid);
@@ -13947,13 +13958,131 @@ public OnRecentLogsDialogLoaded(playerid)
     return 1;
 }
 
+stock ResetOfflineInteriorPreviewReturn(playerid)
+{
+    PlayerOfflinePreviewReturnValid[playerid] = 0;
+    PlayerOfflinePreviewReturnX[playerid] = 0.0;
+    PlayerOfflinePreviewReturnY[playerid] = 0.0;
+    PlayerOfflinePreviewReturnZ[playerid] = 0.0;
+    PlayerOfflinePreviewReturnA[playerid] = 0.0;
+    PlayerOfflinePreviewReturnInterior[playerid] = 0;
+    PlayerOfflinePreviewReturnVirtualWorld[playerid] = 0;
+    return 1;
+}
+
+stock SaveOfflineInteriorPreviewReturn(playerid)
+{
+    if (PlayerOfflinePreviewReturnValid[playerid]) return 1;
+
+    GetPlayerPos(
+        playerid,
+        PlayerOfflinePreviewReturnX[playerid],
+        PlayerOfflinePreviewReturnY[playerid],
+        PlayerOfflinePreviewReturnZ[playerid]
+    );
+    GetPlayerFacingAngle(playerid, PlayerOfflinePreviewReturnA[playerid]);
+    PlayerOfflinePreviewReturnInterior[playerid] = GetPlayerInterior(playerid);
+    PlayerOfflinePreviewReturnVirtualWorld[playerid] = GetPlayerVirtualWorld(playerid);
+    PlayerOfflinePreviewReturnValid[playerid] = 1;
+    return 1;
+}
+
+stock ReturnFromOfflineInteriorPreview(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa menggunakan preview ENEX.");
+        return 0;
+    }
+    if (!g_DatabaseReady || g_SQL == MYSQL_INVALID_HANDLE)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Database belum siap. Preview ENEX tidak dapat digunakan.");
+        return 0;
+    }
+
+    if (!PlayerOfflinePreviewReturnValid[playerid])
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Belum ada posisi sebelum preview yang tersimpan.");
+        return 0;
+    }
+
+    if (IsPlayerInAnyVehicle(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Turun dari kendaraan sebelum kembali dari preview ENEX.");
+        return 0;
+    }
+
+    SetPlayerInterior(playerid, PlayerOfflinePreviewReturnInterior[playerid]);
+    SetPlayerVirtualWorld(playerid, PlayerOfflinePreviewReturnVirtualWorld[playerid]);
+    SetPlayerPos(
+        playerid,
+        PlayerOfflinePreviewReturnX[playerid],
+        PlayerOfflinePreviewReturnY[playerid],
+        PlayerOfflinePreviewReturnZ[playerid]
+    );
+    SetPlayerFacingAngle(playerid, PlayerOfflinePreviewReturnA[playerid]);
+    SetCameraBehindPlayer(playerid);
+    ResetOfflineInteriorPreviewReturn(playerid);
+    SendClientMessage(playerid, COLOR_GREEN, "Kembali ke posisi sebelum preview ENEX berhasil.");
+    return 1;
+}
+
+stock IsOfflineInteriorSourceFile(const sourceFile[])
+{
+    if (strfind(sourceFile, "maps/interior/", true) != -1) return 1;
+    if (strfind(sourceFile, "maps\\interior\\", true) != -1) return 1;
+    return 0;
+}
+
+stock GetOfflineInteriorPreviewInterior(pointSide, interiorId, const sourceFile[], Float:z)
+{
+    if (interiorId <= 0) return 0;
+
+    if (pointSide == OFFLINE_INTERIOR_PREVIEW_POINT_B) return interiorId;
+
+    if (IsOfflineInteriorSourceFile(sourceFile) || z > 500.0) return interiorId;
+    return 0;
+}
+
+stock ShowOfflineInteriorPreviewMenu(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Hanya Owner yang bisa membuka preview ENEX.");
+        return 0;
+    }
+    if (!g_DatabaseReady || g_SQL == MYSQL_INVALID_HANDLE)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Database belum siap. Preview ENEX tidak dapat dibuka.");
+        return 0;
+    }
+    if (PlayerOfflineInteriorSelectedID[playerid] <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Pilih ENEX queue terlebih dahulu.");
+        return 0;
+    }
+
+    new body[1100];
+    body[0] = EOS;
+    strcat(body, "Action\tCoordinate\tSpace\n", sizeof(body));
+    strcat(body, "Preview Point A\tentry_x/y/z\tAuto-detect World 0 / Interior\n", sizeof(body));
+    strcat(body, "Preview Point B\texit_x/y/z\tDeclared ENEX Interior\n", sizeof(body));
+    strcat(body, "Return to Previous Position\tSaved before first preview\tRestore interior + VW\n", sizeof(body));
+    strcat(body, "Back to ENEX Detail\tRead-only\tNo teleport\n", sizeof(body));
+
+    ShowPlayerDialog(playerid, DIALOG_OFFLINE_INTERIOR_PREVIEW_MENU, DIALOG_STYLE_TABLIST_HEADERS,
+                     "GTA Offline ENEX Side-Aware Preview", body, "Select", "Back");
+    return 1;
+}
+
+
 public OnGameModeInit()
 {
     g_ServerStartTick = GetTickCount();
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.5 Offline World Audit Foundation");
+    SetGameModeText("SAIF Dev v0.26A.1.5.1 ENEX Side-Aware Preview");
 
     new MySQLOpt:mysqlOptions = mysql_init_options();
     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
@@ -14070,6 +14199,7 @@ public OnGameModeInit()
         PlayerOfflineInteriorListCount[i] = 0;
         PlayerOfflineInteriorSelectedID[i] = 0;
         PlayerOfflineInteriorPage[i] = 0;
+        ResetOfflineInteriorPreviewReturn(i);
         PlayerPendingSkinShopIndex[i] = -1;
         PlayerSkinPreviewActive[i] = 0;
         PlayerSkinPreviewOriginalSkin[i] = DEFAULT_SKIN;
@@ -14119,8 +14249,9 @@ public OnGameModeInit()
     print("[SAIF] Skin movement baseline aktif: CJ-like via UsePlayerPedAnims; profile palsu tetap dihapus.");
     print("[SAIF] Vehicle Mission v0.25B.10 tetap aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
     print("[SAIF] Vitals Persistence aktif: health/armor DB + Ammu Body Armor persistence.");
-    print("[SAIF] Gamemode v0.26A.1.5 Offline World Audit Foundation berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.26A.1.5.1 ENEX Side-Aware Preview berhasil dijalankan.");
     print("[SAIF] GTA Offline Import Audit aktif: registry + ENEX queue read-only; runtime tidak disentuh.");
+    print("[SAIF] ENEX side-aware preview aktif: Point A/B, isolated interior VW, dan return position.");
     return 1;
 }
 
@@ -14202,6 +14333,7 @@ public OnPlayerConnect(playerid)
     PlayerOfflineInteriorListCount[playerid] = 0;
     PlayerOfflineInteriorSelectedID[playerid] = 0;
     PlayerOfflineInteriorPage[playerid] = 0;
+    ResetOfflineInteriorPreviewReturn(playerid);
     PlayerInsidePublicInteriorID[playerid] = 0;
     PlayerPublicInteriorServiceCheckpoint[playerid] = 0;
     PlayerLastPublicInteriorPickupTick[playerid] = 0;
@@ -14267,6 +14399,7 @@ public OnPlayerDisconnect(playerid, reason)
     PlayerInsidePublicInteriorID[playerid] = 0;
     PlayerPublicInteriorServiceCheckpoint[playerid] = 0;
     PlayerEditingGangPresetID[playerid] = 0;
+    ResetOfflineInteriorPreviewReturn(playerid);
     if (PlayerInsideGangHQ[playerid])
     {
         PlayerInsideGangHQ[playerid] = 0;
@@ -14933,7 +15066,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "SAIF Admin Menus Hub (/amenus)\n\n", sizeof(body));
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
-    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlineintgoto [queue_id]\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
+    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
     strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/orgeconomy, /orgeconomyaudit, /orgstatus, /orgeconomyhealth, /orgbiz, /orgbusiness, /orgfinance\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /vehmissioncloseout, /vehiclemissionhealth, /missiontarget, /vehmissionconfig, /missionpointmenu, /missionpool, /vehmissionpool, /jobpointpool, /vmpool, /pointpool, /jobpool, /jobpointmenu, /taxirequest, /taxistatus, /canceltaxi, /busrequest, /busstatus, /cancelbus, /medicrequest, /medicstatus, /cancelmedic, /firestatus, /firemission\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /cjmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
@@ -15662,7 +15795,7 @@ stock QueryOfflineInteriorDetail(playerid, queueid)
     return 1;
 }
 
-stock QueryOfflineInteriorGoto(playerid, queueid)
+stock QueryOfflineInteriorPreview(playerid, queueid, pointSide)
 {
     if (!CanUseOfflineImportAudit(playerid)) return 0;
     if (queueid <= 0)
@@ -15670,12 +15803,17 @@ stock QueryOfflineInteriorGoto(playerid, queueid)
         SendClientMessage(playerid, COLOR_RED, "Queue ID tidak valid.");
         return 0;
     }
+    if (pointSide != OFFLINE_INTERIOR_PREVIEW_POINT_A && pointSide != OFFLINE_INTERIOR_PREVIEW_POINT_B)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Sisi preview ENEX tidak valid.");
+        return 0;
+    }
 
-    new query[384];
+    new query[768];
     mysql_format(g_SQL, query, sizeof(query),
-        "SELECT entry_x, entry_y, entry_z, entry_a, display_name, raw_name FROM offline_interior_queue WHERE id=%d LIMIT 1",
+        "SELECT id, entry_x, entry_y, entry_z, entry_a, exit_x, exit_y, exit_z, exit_a, interior_id, source_file, display_name, raw_name FROM offline_interior_queue WHERE id=%d LIMIT 1",
         queueid);
-    mysql_tquery(g_SQL, query, "OnOfflineInteriorGotoLoaded", "ii", playerid, queueid);
+    mysql_tquery(g_SQL, query, "OnOfflineInteriorPreviewLoaded", "iii", playerid, queueid, pointSide);
     return 1;
 }
 
@@ -15685,11 +15823,12 @@ stock ShowOfflineImportSafetyPolicy(playerid)
 
     new body[1800];
     body[0] = EOS;
-    strcat(body, "SAIF v0.26A.1.5 Offline World Audit Safety Contract\n\n", sizeof(body));
+    strcat(body, "SAIF v0.26A.1.5.1 ENEX Side-Aware Preview Safety Contract\n\n", sizeof(body));
     strcat(body, "Current stage:\n", sizeof(body));
     strcat(body, "- Register GTA SA source files and hashes.\n", sizeof(body));
     strcat(body, "- Store IPL ENEX records in offline_interior_queue.\n", sizeof(body));
-    strcat(body, "- Review list, detail, source line, category, confidence, and goto entry point.\n\n", sizeof(body));
+    strcat(body, "- Review list, detail, source line, category, and confidence.\n", sizeof(body));
+    strcat(body, "- Preview Point A/Point B with detected interior space and return-position safety.\n\n", sizeof(body));
     strcat(body, "Explicitly NOT performed:\n", sizeof(body));
     strcat(body, "- No CreatePickup/CreateObject/CreateVehicle.\n", sizeof(body));
     strcat(body, "- No public_interiors/world_pickups/parked_vehicles mutation.\n", sizeof(body));
@@ -15903,18 +16042,18 @@ public OnOfflineInteriorDetailLoaded(playerid, queueid)
 
     new body[3800];
     format(body, sizeof(body),
-        "Queue ID: %d\nRaw name: %s\nDisplay: %s\nCategory: %s\nContext: %s\nConfidence: %d%%\nCity/Area: %s / %s\n\nEntry: %.4f, %.4f, %.4f | A %.4f\nEntry box: %.2f x %.2f x %.2f\nExit: %.4f, %.4f, %.4f | A %.4f\nInterior ID: %d | Flags: %d | Sky: %d | Peds: %d\nTime: %d - %d\n\nQueue state: enabled=%d | review=%s | apply=%s\nSource tag: %s\nSource: %s:%d\nNotes: %s\n\nGoto previews exterior entry in world/interior 0. It does not apply/spawn this ENEX.",
+        "Queue ID: %d\nRaw name: %s\nDisplay: %s\nCategory: %s\nContext: %s\nConfidence: %d%%\nCity/Area: %s / %s\n\nEntry: %.4f, %.4f, %.4f | A %.4f\nEntry box: %.2f x %.2f x %.2f\nExit: %.4f, %.4f, %.4f | A %.4f\nInterior ID: %d | Flags: %d | Sky: %d | Peds: %d\nTime: %d - %d\n\nQueue state: enabled=%d | review=%s | apply=%s\nSource tag: %s\nSource: %s:%d\nNotes: %s\n\nPreview opens a side-aware Point A / Point B menu. Space is detected from source IPL, coordinate, and interior ID. No runtime row is applied/spawned.",
         id, rawName, displayName, category, contextType, confidence, cityCode, areaCode,
         entryX, entryY, entryZ, entryA, sizeX, sizeY, sizeZ,
         exitX, exitY, exitZ, exitA, interiorId, flags, skyColor, numPeds, timeOn, timeOff,
         enabled, reviewStatus, applyStatus, sourceTag, sourceFile, sourceLine, notes);
 
     ShowPlayerDialog(playerid, DIALOG_OFFLINE_INTERIOR_DETAIL, DIALOG_STYLE_MSGBOX,
-                     "GTA Offline ENEX Detail", body, "Goto", "Back");
+                     "GTA Offline ENEX Detail", body, "Preview", "Back");
     return 1;
 }
 
-public OnOfflineInteriorGotoLoaded(playerid, queueid)
+public OnOfflineInteriorPreviewLoaded(playerid, queueid, pointSide)
 {
     if (!IsPlayerConnected(playerid) || !IsAdminLevel(playerid, ADMIN_OWNER)) return 1;
     if (cache_num_rows() == 0)
@@ -15923,28 +16062,89 @@ public OnOfflineInteriorGotoLoaded(playerid, queueid)
         return 1;
     }
 
-    new Float:x, Float:y, Float:z, Float:a;
-    new displayName[128], rawName[64], msg[192];
-    cache_get_value_name_float(0, "entry_x", x);
-    cache_get_value_name_float(0, "entry_y", y);
-    cache_get_value_name_float(0, "entry_z", z);
-    cache_get_value_name_float(0, "entry_a", a);
-    cache_get_value_name(0, "display_name", displayName, sizeof(displayName));
-    cache_get_value_name(0, "raw_name", rawName, sizeof(rawName));
-
-    if (floatabs(x) > 4000.0 || floatabs(y) > 4000.0 || z < -1000.0 || z > 2000.0)
+    if (IsPlayerInAnyVehicle(playerid))
     {
-        SendClientMessage(playerid, COLOR_RED, "Koordinat ENEX di luar range audit aman. Goto dibatalkan.");
+        SendClientMessage(playerid, COLOR_RED, "Turun dari kendaraan sebelum preview ENEX.");
         return 1;
     }
 
-    SetPlayerInterior(playerid, 0);
-    SetPlayerVirtualWorld(playerid, 0);
+    new id, interiorId;
+    new Float:entryX, Float:entryY, Float:entryZ, Float:entryA;
+    new Float:exitX, Float:exitY, Float:exitZ, Float:exitA;
+    new Float:x, Float:y, Float:z, Float:a;
+    new sourceFile[180], displayName[128], rawName[64], msg[256], sideName[16], spaceName[48];
+
+    cache_get_value_name_int(0, "id", id);
+    cache_get_value_name_int(0, "interior_id", interiorId);
+    cache_get_value_name_float(0, "entry_x", entryX);
+    cache_get_value_name_float(0, "entry_y", entryY);
+    cache_get_value_name_float(0, "entry_z", entryZ);
+    cache_get_value_name_float(0, "entry_a", entryA);
+    cache_get_value_name_float(0, "exit_x", exitX);
+    cache_get_value_name_float(0, "exit_y", exitY);
+    cache_get_value_name_float(0, "exit_z", exitZ);
+    cache_get_value_name_float(0, "exit_a", exitA);
+    cache_get_value_name(0, "source_file", sourceFile, sizeof(sourceFile));
+    cache_get_value_name(0, "display_name", displayName, sizeof(displayName));
+    cache_get_value_name(0, "raw_name", rawName, sizeof(rawName));
+
+    if (id != queueid)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Queue callback mismatch. Preview dibatalkan untuk keamanan.");
+        return 1;
+    }
+
+    if (pointSide == OFFLINE_INTERIOR_PREVIEW_POINT_B)
+    {
+        x = exitX;
+        y = exitY;
+        z = exitZ;
+        a = exitA;
+        format(sideName, sizeof(sideName), "Point B");
+    }
+    else
+    {
+        x = entryX;
+        y = entryY;
+        z = entryZ;
+        a = entryA;
+        format(sideName, sizeof(sideName), "Point A");
+    }
+
+    if (floatabs(x) > 4000.0 || floatabs(y) > 4000.0 || z < -1000.0 || z > 2000.0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Koordinat ENEX di luar range audit aman. Preview dibatalkan.");
+        return 1;
+    }
+
+    new previewInterior = GetOfflineInteriorPreviewInterior(pointSide, interiorId, sourceFile, z);
+    if (previewInterior == 0 && z > 500.0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Koordinat high-Z tidak memiliki interior valid. Preview dibatalkan agar tidak free fall.");
+        return 1;
+    }
+
+    SaveOfflineInteriorPreviewReturn(playerid);
+
+    new previewVW = 0;
+    if (previewInterior > 0)
+    {
+        previewVW = OFFLINE_AUDIT_PREVIEW_VW_BASE + playerid;
+        format(spaceName, sizeof(spaceName), "Interior %d / Audit VW %d", previewInterior, previewVW);
+    }
+    else
+    {
+        format(spaceName, sizeof(spaceName), "World 0 / Interior 0");
+    }
+
+    SetPlayerInterior(playerid, previewInterior);
+    SetPlayerVirtualWorld(playerid, previewVW);
     SetPlayerPos(playerid, x, y, z + 0.5);
     SetPlayerFacingAngle(playerid, a);
     SetCameraBehindPlayer(playerid);
 
-    format(msg, sizeof(msg), "Preview ENEX queue #%d: %s (%s). Tidak ada runtime row yang dibuat.", queueid, displayName, rawName);
+    format(msg, sizeof(msg), "ENEX #%d %s: %s (%s) | %s. /offlineintreturn untuk kembali.",
+           queueid, sideName, displayName, rawName, spaceName);
     SendClientMessage(playerid, COLOR_GREEN, msg);
     return 1;
 }
@@ -17377,8 +17577,30 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 
     if (dialogid == DIALOG_OFFLINE_INTERIOR_DETAIL)
     {
-        if (response) QueryOfflineInteriorGoto(playerid, PlayerOfflineInteriorSelectedID[playerid]);
+        if (response) ShowOfflineInteriorPreviewMenu(playerid);
         else QueryOfflineInteriorQueue(playerid, PlayerOfflineInteriorPage[playerid]);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OFFLINE_INTERIOR_PREVIEW_MENU)
+    {
+        if (!response)
+        {
+            QueryOfflineInteriorDetail(playerid, PlayerOfflineInteriorSelectedID[playerid]);
+            return 1;
+        }
+
+        switch (listitem)
+        {
+            case 0: QueryOfflineInteriorPreview(playerid, PlayerOfflineInteriorSelectedID[playerid], OFFLINE_INTERIOR_PREVIEW_POINT_A);
+            case 1: QueryOfflineInteriorPreview(playerid, PlayerOfflineInteriorSelectedID[playerid], OFFLINE_INTERIOR_PREVIEW_POINT_B);
+            case 2:
+            {
+                ReturnFromOfflineInteriorPreview(playerid);
+                ShowOfflineInteriorPreviewMenu(playerid);
+            }
+            case 3: QueryOfflineInteriorDetail(playerid, PlayerOfflineInteriorSelectedID[playerid]);
+        }
         return 1;
     }
 
@@ -39082,7 +39304,7 @@ stock ShowOrgEconomyBaselineAudit(playerid)
     new line[192];
     body[0] = EOS;
 
-    strcat(body, "SAIF v0.26A.1.5 Offline World Audit Foundation\n\n", sizeof(body));
+    strcat(body, "SAIF v0.26A.1.5.1 ENEX Side-Aware Preview\n\n", sizeof(body));
     strcat(body, "Contract:\n", sizeof(body));
     strcat(body, "- Organization = player-made legal/economic group.\n", sizeof(body));
     strcat(body, "- Gang = preset/offline-like turf group, not org.\n", sizeof(body));
@@ -39177,19 +39399,48 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
     if (!strcmp(cmdtext, "/offlineintgoto", true))
     {
-        SendClientMessage(playerid, COLOR_YELLOW, "Usage: /offlineintgoto [queue_id]");
+        SendClientMessage(playerid, COLOR_YELLOW, "Usage: /offlineintgoto [queue_id] [a/b]");
+        SendClientMessage(playerid, COLOR_WHITE, "Tanpa parameter sisi, default Preview Point A.");
         return 1;
     }
 
     if (strfind(cmdtext, "/offlineintgoto ", true) == 0)
     {
-        new idStr[16];
-        if (!GetOneParam(cmdtext[16], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        new idStr[16], sideStr[16];
+        new pointSide = OFFLINE_INTERIOR_PREVIEW_POINT_A;
+
+        if (GetTwoParams(cmdtext[16], idStr, sizeof(idStr), sideStr, sizeof(sideStr)))
         {
-            SendClientMessage(playerid, COLOR_YELLOW, "Usage: /offlineintgoto [queue_id]");
+            if (!IsNumericString(idStr))
+            {
+                SendClientMessage(playerid, COLOR_YELLOW, "Usage: /offlineintgoto [queue_id] [a/b]");
+                return 1;
+            }
+
+            if (!strcmp(sideStr, "b", true) || !strcmp(sideStr, "2", true) || !strcmp(sideStr, "exit", true))
+            {
+                pointSide = OFFLINE_INTERIOR_PREVIEW_POINT_B;
+            }
+            else if (strcmp(sideStr, "a", true) && strcmp(sideStr, "1", true) && strcmp(sideStr, "entry", true))
+            {
+                SendClientMessage(playerid, COLOR_YELLOW, "Sisi harus a/entry atau b/exit.");
+                return 1;
+            }
+        }
+        else if (!GetOneParam(cmdtext[16], idStr, sizeof(idStr)) || !IsNumericString(idStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Usage: /offlineintgoto [queue_id] [a/b]");
             return 1;
         }
-        QueryOfflineInteriorGoto(playerid, strval(idStr));
+
+        PlayerOfflineInteriorSelectedID[playerid] = strval(idStr);
+        QueryOfflineInteriorPreview(playerid, strval(idStr), pointSide);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/offlineintreturn", true) || !strcmp(cmdtext, "/offlinepreviewreturn", true))
+    {
+        ReturnFromOfflineInteriorPreview(playerid);
         return 1;
     }
 
@@ -42100,7 +42351,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.5 Offline World Audit Foundation");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.5.1 ENEX Side-Aware Preview");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -42110,6 +42361,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.5.1: ENEX Point A/B side-aware preview + isolated interior VW + return position safety.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.5: GTA offline source registry + 376 ENEX staging queue + Owner read-only audit; no runtime apply.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.3.1: Cold boot DB readiness; server tidak lagi berjalan dengan handle DB gagal dan auth fallback kosong.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.3: Health/armor persistent DB; Body Armor tersimpan; service checkpoint direstore saat relog di public interior.");

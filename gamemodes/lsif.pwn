@@ -263,6 +263,8 @@
 #define DIALOG_OFFLINE_SERVICE_DETAIL 1303
 #define DIALOG_OFFLINE_SERVICE_ACTION 1304
 #define DIALOG_OFFLINE_RUNTIME_DRYRUN_SUMMARY 1305
+#define DIALOG_OFFLINE_EXACT_APPLY_SUMMARY 1306
+#define DIALOG_OFFLINE_EXACT_APPLY_ACTION 1307
 
 #define DIALOG_GANG_PRESET_MENU 1192
 #define DIALOG_GANG_PRESET_LIST 1193
@@ -2748,6 +2750,7 @@ forward OnOfflineServiceSummaryLoaded(playerid);
 forward OnOfflineServiceListLoaded(playerid, page);
 forward OnOfflineServiceDetailLoaded(playerid, serviceid);
 forward OnOfflineRuntimeDryRunSummaryLoaded(playerid);
+forward OnOfflineExactApplyStatusLoaded(playerid);
 forward OnLiveDBTableAuditLoaded(playerid);
 forward OnLiveDBCleanupCandidatesLoaded(playerid);
 forward OnLiveDBIntegrityLoaded(playerid);
@@ -14124,7 +14127,7 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.9 Runtime Archive Dry-Run Foundation");
+    SetGameModeText("SAIF Dev v0.26A.1.10.1 Full 91 Apply Dialog String Fix");
 
     new MySQLOpt:mysqlOptions = mysql_init_options();
     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
@@ -14298,7 +14301,7 @@ public OnGameModeInit()
     print("[SAIF] Skin movement baseline aktif: CJ-like via UsePlayerPedAnims; profile palsu tetap dihapus.");
     print("[SAIF] Vehicle Mission v0.25B.10 tetap aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
     print("[SAIF] Vitals Persistence aktif: health/armor DB + Ammu Body Armor persistence.");
-    print("[SAIF] Gamemode v0.26A.1.9 Runtime Archive Dry-Run Foundation berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.26A.1.10.1 Full 91 Apply Dialog String Fix berhasil dijalankan.");
     print("[SAIF] GTA Offline Import Audit aktif: registry + ENEX context/evidence/pair planner read-only; runtime tidak disentuh.");
     print("[SAIF] ENEX side-aware preview aktif: Point A/B, isolated interior VW, dan return position.");
     return 1;
@@ -15122,7 +15125,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "SAIF Admin Menus Hub (/amenus)\n\n", sizeof(body));
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
-    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlinecontext\n/offlinepairs | /offlinepairbatches | /offlineplan [id]\n/offlineservicepoints | /offlineservicelist | /offlinepoint [id]\n/offlineruntimedryrun | /offlinearchivestatus | /offlinecapacity\n/offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
+    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlinecontext\n/offlinepairs | /offlinepairbatches | /offlineplan [id]\n/offlineservicepoints | /offlineservicelist | /offlinepoint [id]\n/offlineruntimedryrun | /offlinearchivestatus | /offlinecapacity\n/offlinefullapply | /offlineapplystatus | /offlineoverlaystatus | /offlineexactreload\n/offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
     strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/orgeconomy, /orgeconomyaudit, /orgstatus, /orgeconomyhealth, /orgbiz, /orgbusiness, /orgfinance\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /vehmissioncloseout, /vehiclemissionhealth, /missiontarget, /vehmissionconfig, /missionpointmenu, /missionpool, /vehmissionpool, /jobpointpool, /vmpool, /pointpool, /jobpool, /jobpointmenu, /taxirequest, /taxistatus, /canceltaxi, /busrequest, /busstatus, /cancelbus, /medicrequest, /medicstatus, /cancelmedic, /firestatus, /firemission\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /cjmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
@@ -15781,6 +15784,7 @@ stock ShowOfflineImportAuditMenu(playerid)
     strcat(body, "ENEX Pair / Apply Planner\tPair + dry-run gates\tRead-only\n", sizeof(body));
     strcat(body, "Exact Interior Service Points\tNative + overlay anchors\tRead-only\n", sizeof(body));
     strcat(body, "Runtime Capacity / Archive Dry-Run\tpublic_interiors\tRead-only\n", sizeof(body));
+    strcat(body, "Full Public Interior Apply Status\t91 unique + rollback\tControlled SQL\n", sizeof(body));
     strcat(body, "Back to Admin Menus\t/amenus\tRead-only\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_OFFLINE_IMPORT_MENU, DIALOG_STYLE_TABLIST_HEADERS,
@@ -15841,10 +15845,103 @@ public OnOfflineRuntimeDryRunSummaryLoaded(playerid)
     new headroomFull = MAX_PUBLIC_INTERIORS - projectedFull;
 
     new body[2300];
-    format(body, sizeof(body), "Runtime Capacity & Archive/Replace Dry-Run\n\nRuntime capacity: %d\nRuntime rows total: %d\nRuntime active now: %d\nActive rows in replacement families: %d\n\nOffline plan\nSCM exact ready: %d\nOverlay preview required: %d\nBlocked duplicate: %d\n\nProjected active after exact-only replacement: %d\nProjected active after full 91 replacement: %d\nCapacity headroom after full plan: %d\n\nRuntime archive snapshots: %d\nLatest archive rows: %d\nLatest archive status: %s\n\nSafety\n- Runtime loader capacity raised from 80 to 128.\n- Archive SQL copies public_interiors only; it does not disable/delete runtime.\n- Dry-run SQL contains SELECT only.\n- Exact replacement apply is NOT included in this version.\n- 20 overlay points remain adjustable later via /pubintpoints and /pubintsetpoint [id] service.", MAX_PUBLIC_INTERIORS, runtimeTotal, runtimeActive, targetActive, exactReady, overlayReview, blockedRows, projectedExact, projectedFull, headroomFull, archiveSessions, latestArchiveRows, latestArchiveStatus);
+    format(body, sizeof(body), "Runtime Capacity & Archive/Replace Dry-Run\n\nRuntime capacity: %d\nRuntime rows total: %d\nRuntime active now: %d\nActive rows in replacement families: %d\n\nOffline plan\nSCM exact ready: %d\nOverlay preview required: %d\nBlocked duplicate: %d\n\nProjected active after exact-only replacement: %d\nProjected active after full 91 replacement: %d\nCapacity headroom after full plan: %d\n\nRuntime archive snapshots: %d\nLatest archive rows: %d\nLatest archive status: %s\n\nSafety\n- Runtime loader capacity raised from 80 to 128.\n- Archive SQL copies public_interiors only; it does not disable/delete runtime.\n- Dry-run SQL contains SELECT only.\n- Full 91-row apply is available only through confirmation-token SQL.\n- 20 overlay points are imported with adjustment flags and remain editable via /pubintpoints and /pubintsetpoint [id] service.", MAX_PUBLIC_INTERIORS, runtimeTotal, runtimeActive, targetActive, exactReady, overlayReview, blockedRows, projectedExact, projectedFull, headroomFull, archiveSessions, latestArchiveRows, latestArchiveStatus);
 
     ShowPlayerDialog(playerid, DIALOG_OFFLINE_RUNTIME_DRYRUN_SUMMARY, DIALOG_STYLE_MSGBOX,
                      "Offline Runtime Archive / Dry-Run", body, "Back", "Close");
+    return 1;
+}
+
+stock QueryOfflineExactApplyStatus(playerid)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+
+    new query[4200];
+    query[0] = EOS;
+    strcat(query, "SELECT ", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM public_interiors) runtime_total, ", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM public_interiors WHERE enabled=1) runtime_active, ", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM public_interiors WHERE enabled=1 AND interior_type IN ('ammunation','247','burgershot','cluckinbell','pizzastack','barber','tattoo','clothing','gym','police')) target_family_active, ", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM offline_runtime_apply_sessions WHERE apply_scope='public_interiors_offline_91') apply_sessions, ", sizeof(query));
+    strcat(query, "COALESCE((SELECT id FROM offline_runtime_apply_sessions WHERE apply_scope='public_interiors_offline_91' ORDER BY id DESC LIMIT 1),0) latest_apply_id, ", sizeof(query));
+    strcat(query, "COALESCE((SELECT apply_status FROM offline_runtime_apply_sessions WHERE apply_scope='public_interiors_offline_91' ORDER BY id DESC LIMIT 1),'none') latest_apply_status, ", sizeof(query));
+    strcat(query, "COALESCE((SELECT source_tag FROM offline_runtime_apply_sessions WHERE apply_scope='public_interiors_offline_91' ORDER BY id DESC LIMIT 1),'') latest_source_tag, ", sizeof(query));
+    strcat(query, "COALESCE((SELECT old_rows_disabled FROM offline_runtime_apply_sessions WHERE apply_scope='public_interiors_offline_91' ORDER BY id DESC LIMIT 1),0) latest_disabled, ", sizeof(query));
+    strcat(query, "COALESCE((SELECT new_rows_inserted FROM offline_runtime_apply_sessions WHERE apply_scope='public_interiors_offline_91' ORDER BY id DESC LIMIT 1),0) latest_inserted, ", sizeof(query));
+    strcat(query, "COALESCE((SELECT exact_rows_inserted FROM offline_runtime_apply_sessions WHERE apply_scope='public_interiors_offline_91' ORDER BY id DESC LIMIT 1),0) latest_exact_inserted, ", sizeof(query));
+    strcat(query, "COALESCE((SELECT overlay_rows_inserted FROM offline_runtime_apply_sessions WHERE apply_scope='public_interiors_offline_91' ORDER BY id DESC LIMIT 1),0) latest_overlay_inserted, ", sizeof(query));
+    strcat(query, "COALESCE((SELECT manual_adjustment_rows FROM offline_runtime_apply_sessions WHERE apply_scope='public_interiors_offline_91' ORDER BY id DESC LIMIT 1),0) latest_adjustment_rows, ", sizeof(query));
+    strcat(query, "COALESCE((SELECT blocked_rows_skipped FROM offline_runtime_apply_sessions WHERE apply_scope='public_interiors_offline_91' ORDER BY id DESC LIMIT 1),0) latest_blocked, ", sizeof(query));
+    strcat(query, "COALESCE((SELECT COUNT(*) FROM public_interiors p WHERE p.enabled=1 AND p.source_tag=(SELECT source_tag FROM offline_runtime_apply_sessions WHERE apply_scope='public_interiors_offline_91' ORDER BY id DESC LIMIT 1)),0) latest_import_active, ", sizeof(query));
+    strcat(query, "COALESCE((SELECT archive_status FROM offline_runtime_archive_sessions WHERE archive_scope='public_interiors' ORDER BY id DESC LIMIT 1),'none') latest_archive_status, ", sizeof(query));
+    strcat(query, "COALESCE((SELECT archived_rows FROM offline_runtime_archive_sessions WHERE archive_scope='public_interiors' ORDER BY id DESC LIMIT 1),0) latest_archive_rows", sizeof(query));
+
+    mysql_tquery(g_SQL, query, "OnOfflineExactApplyStatusLoaded", "i", playerid);
+    return 1;
+}
+
+stock ShowOfflineExactApplyActions(playerid)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+
+    new body[1100];
+    body[0] = EOS;
+    strcat(body, "Action\tEffect\n", sizeof(body));
+    strcat(body, "Reload public_interiors from DB\tApply DB state to runtime\n", sizeof(body));
+    strcat(body, "Open Archive / Dry-Run Summary\tRead-only safety gate\n", sizeof(body));
+    strcat(body, "Overlay adjustment guidance\t20 IDs via verify SQL / editor\n", sizeof(body));
+    strcat(body, "Back to GTA Offline Import Audit\tNo mutation\n", sizeof(body));
+
+    ShowPlayerDialog(playerid, DIALOG_OFFLINE_EXACT_APPLY_ACTION, DIALOG_STYLE_TABLIST_HEADERS,
+                     "Full Public Interior Apply Actions", body, "Open", "Back");
+    return 1;
+}
+
+public OnOfflineExactApplyStatusLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid) || !IsAdminLevel(playerid, ADMIN_OWNER)) return 1;
+
+    new rows;
+    cache_get_row_count(rows);
+    if (rows <= 0)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Apply tracking schema belum tersedia. Jalankan migration v0.26A.1.10.");
+        return ShowOfflineImportAuditMenu(playerid);
+    }
+
+    new runtimeTotal, runtimeActive, targetFamilyActive;
+    new applySessions, latestApplyId, latestDisabled, latestInserted;
+    new latestExactInserted, latestOverlayInserted, latestAdjustmentRows, latestBlocked;
+    new latestImportActive, latestArchiveRows;
+    new latestApplyStatus[32], latestSourceTag[96], latestArchiveStatus[32];
+
+    cache_get_value_name_int(0, "runtime_total", runtimeTotal);
+    cache_get_value_name_int(0, "runtime_active", runtimeActive);
+    cache_get_value_name_int(0, "target_family_active", targetFamilyActive);
+    cache_get_value_name_int(0, "apply_sessions", applySessions);
+    cache_get_value_name_int(0, "latest_apply_id", latestApplyId);
+    cache_get_value_name(0, "latest_apply_status", latestApplyStatus, sizeof(latestApplyStatus));
+    cache_get_value_name(0, "latest_source_tag", latestSourceTag, sizeof(latestSourceTag));
+    cache_get_value_name_int(0, "latest_disabled", latestDisabled);
+    cache_get_value_name_int(0, "latest_inserted", latestInserted);
+    cache_get_value_name_int(0, "latest_exact_inserted", latestExactInserted);
+    cache_get_value_name_int(0, "latest_overlay_inserted", latestOverlayInserted);
+    cache_get_value_name_int(0, "latest_adjustment_rows", latestAdjustmentRows);
+    cache_get_value_name_int(0, "latest_blocked", latestBlocked);
+    cache_get_value_name_int(0, "latest_import_active", latestImportActive);
+    cache_get_value_name(0, "latest_archive_status", latestArchiveStatus, sizeof(latestArchiveStatus));
+    cache_get_value_name_int(0, "latest_archive_rows", latestArchiveRows);
+
+    new body[3000];
+    format(body, sizeof(body), "Full 91 Public Interior Apply Transaction\n\nRuntime\nTotal rows: %d\nActive rows: %d\nActive rows in 10 replacement families: %d\n\nLatest archive\nStatus: %s\nRows: %d\n\nApply tracking\nSessions: %d\nLatest apply ID: %d\nLatest status: %s\nSource tag: %s\nOld rows disabled: %d\nTotal rows inserted: %d\nSCM exact inserted: %d\nOverlay inserted: %d\nRows requiring manual adjustment: %d\nDuplicate rows skipped: %d\nLatest imported rows active: %d\n\nSafety contract\n- Apply is CLI-only and requires the exact confirmation token.\n- All 10 families are replaced together: Ammu-Nation, 24/7, restaurants, barber, tattoo, clothing, gym, and police.\n- The 20 overlay rows are active but explicitly tracked for manual service-point adjustment.\n- Two duplicate Pizza Stack plans remain blocked.\n- Rollback disables all 91 imported rows and restores previous enabled states; it does not delete rows.\n- After SQL apply/rollback, use Actions > Reload public_interiors from DB.",
+        runtimeTotal, runtimeActive, targetFamilyActive,
+        latestArchiveStatus, latestArchiveRows,
+        applySessions, latestApplyId, latestApplyStatus, latestSourceTag,
+        latestDisabled, latestInserted, latestExactInserted, latestOverlayInserted,
+        latestAdjustmentRows, latestBlocked, latestImportActive);
+
+    ShowPlayerDialog(playerid, DIALOG_OFFLINE_EXACT_APPLY_SUMMARY, DIALOG_STYLE_MSGBOX,
+                     "Offline Full Public Interior Apply", body, "Actions", "Back");
     return 1;
 }
 
@@ -16065,7 +16162,7 @@ stock ShowOfflineImportSafetyPolicy(playerid)
 
     new body[1800];
     body[0] = EOS;
-    strcat(body, "SAIF v0.26A.1.9 Runtime Archive Dry-Run Safety Contract\n\n", sizeof(body));
+    strcat(body, "SAIF v0.26A.1.10 Full 91 Apply Safety Contract\n\n", sizeof(body));
     strcat(body, "Current stage:\n", sizeof(body));
     strcat(body, "- Register GTA SA source files and hashes.\n", sizeof(body));
     strcat(body, "- Store IPL ENEX records in offline_interior_queue.\n", sizeof(body));
@@ -16076,7 +16173,7 @@ stock ShowOfflineImportSafetyPolicy(playerid)
     strcat(body, "- No CreatePickup/CreateObject/CreateVehicle.\n", sizeof(body));
     strcat(body, "- No public_interiors/world_pickups/parked_vehicles mutation.\n", sizeof(body));
     strcat(body, "- Archive snapshot is allowed only into dedicated archive tables; no runtime row is disabled/deleted.\n", sizeof(body));
-    strcat(body, "- No replacement, runtime reload, or apply is performed by v0.26A.1.9.\n", sizeof(body));
+    strcat(body, "- Exact apply is performed only by the confirmation-token SQL transaction; menu remains status/reload only.\n", sizeof(body));
     strcat(body, "- All queue rows remain enabled=0, review_status=pending, apply_status=pending.\n", sizeof(body));
     strcat(body, "- Resolver only writes staging metadata and offline_interior_context_evidence.\n\n", sizeof(body));
     strcat(body, "Runtime apply/replace remains a separate patch after archive verification and explicit confirmation.", sizeof(body));
@@ -17956,7 +18053,8 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 5: QueryOfflinePairSummary(playerid);
             case 6: QueryOfflineServicePointSummary(playerid);
             case 7: QueryOfflineRuntimeDryRunSummary(playerid);
-            case 8: ShowAdminToolsMenu(playerid);
+            case 8: QueryOfflineExactApplyStatus(playerid);
+            case 9: ShowAdminToolsMenu(playerid);
         }
         return 1;
     }
@@ -18008,6 +18106,38 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
     if (dialogid == DIALOG_OFFLINE_RUNTIME_DRYRUN_SUMMARY)
     {
         if (response) ShowOfflineImportAuditMenu(playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OFFLINE_EXACT_APPLY_SUMMARY)
+    {
+        if (response) ShowOfflineExactApplyActions(playerid);
+        else ShowOfflineImportAuditMenu(playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OFFLINE_EXACT_APPLY_ACTION)
+    {
+        if (!response) return QueryOfflineExactApplyStatus(playerid);
+        switch (listitem)
+        {
+            case 0:
+            {
+                if (!CanUseOfflineImportAudit(playerid)) return 1;
+                LoadPublicInteriors();
+                SendClientMessage(playerid, COLOR_GREEN, "Public interiors direload dari database setelah apply/rollback.");
+                SetTimerEx("ReloadPublicInteriorsDelayed", 700, false, "i", playerid);
+            }
+            case 1: QueryOfflineRuntimeDryRunSummary(playerid);
+            case 2:
+            {
+                SendClientMessage(playerid, COLOR_YELLOW, "20 overlay aktif ditandai requires_manual_adjustment=1 pada mapping apply.");
+                SendClientMessage(playerid, COLOR_WHITE, "Jalankan verify SQL v0.26A.1.10 untuk daftar ID, lalu gunakan /pubintpoints [id].");
+                SendClientMessage(playerid, COLOR_WHITE, "Geser dengan /pubintsetpoint [id] service, facing, dan radius bila diperlukan.");
+                QueryOfflineExactApplyStatus(playerid);
+            }
+            case 3: ShowOfflineImportAuditMenu(playerid);
+        }
         return 1;
     }
 
@@ -39812,7 +39942,7 @@ stock ShowOrgEconomyBaselineAudit(playerid)
     new line[192];
     body[0] = EOS;
 
-    strcat(body, "SAIF v0.26A.1.9 Runtime Archive Dry-Run Foundation\n\n", sizeof(body));
+    strcat(body, "SAIF v0.26A.1.10.1 Full 91 Apply Dialog String Fix\n\n", sizeof(body));
     strcat(body, "Contract:\n", sizeof(body));
     strcat(body, "- Organization = player-made legal/economic group.\n", sizeof(body));
     strcat(body, "- Gang = preset/offline-like turf group, not org.\n", sizeof(body));
@@ -39932,6 +40062,20 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/offlineruntimedryrun", true) || !strcmp(cmdtext, "/offlinearchivestatus", true) || !strcmp(cmdtext, "/offlinecapacity", true))
     {
         QueryOfflineRuntimeDryRunSummary(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/offlinefullapply", true) || !strcmp(cmdtext, "/offlineexactapply", true) || !strcmp(cmdtext, "/offlineapplystatus", true) || !strcmp(cmdtext, "/offlineoverlaystatus", true) || !strcmp(cmdtext, "/offlineexactstatus", true) || !strcmp(cmdtext, "/offlinerollbackstatus", true))
+    {
+        QueryOfflineExactApplyStatus(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/offlineexactreload", true))
+    {
+        if (!CanUseOfflineImportAudit(playerid)) return 1;
+        LoadPublicInteriors();
+        SendClientMessage(playerid, COLOR_GREEN, "Public interiors direload dari database.");
         return 1;
     }
 
@@ -42931,7 +43075,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.9 Runtime Archive Dry-Run Foundation");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.10.1 Full 91 Apply Dialog String Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -42941,7 +43085,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.9: Public interior capacity 128 + runtime archive snapshot + replace dry-run; no runtime replacement.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.10: Controlled 91-row public interior apply (71 SCM exact + 20 reviewed overlay) + tracked rollback.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.8: Exact Interior Service Point Resolver; 71 native SCM exact + 20 overlay preview anchors, audit-only.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.7.1: memperbaiki 11 Float tag mismatch pada detail ENEX pair plan; tanpa SQL/runtime change.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.5.1: ENEX Point A/B side-aware preview + isolated interior VW + return position safety.");

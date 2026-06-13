@@ -277,6 +277,10 @@
 #define DIALOG_OFFLINE_VEHICLE_RUNTIME_DRYRUN_SUMMARY 1317
 #define DIALOG_OFFLINE_VEHICLE_APPLY_SUMMARY 1318
 #define DIALOG_OFFLINE_MAP_ICON_AUDIT 1319
+#define DIALOG_OFFLINE_PICKUP_SUMMARY 1320
+#define DIALOG_OFFLINE_PICKUP_LIST 1321
+#define DIALOG_OFFLINE_PICKUP_DETAIL 1322
+#define DIALOG_OFFLINE_PICKUP_ACTION 1323
 
 #define DIALOG_GANG_PRESET_MENU 1192
 #define DIALOG_GANG_PRESET_LIST 1193
@@ -2671,6 +2675,12 @@ new Float:PlayerOfflineServiceSelectedRadius[MAX_PLAYERS];
 new PlayerOfflineVehicleListCount[MAX_PLAYERS];
 new PlayerOfflineVehicleListDBID[MAX_PLAYERS][MAX_OFFLINE_VEHICLE_DIALOG_ROWS];
 new PlayerOfflineVehiclePage[MAX_PLAYERS];
+#define MAX_OFFLINE_PICKUP_DIALOG_ROWS 30
+#define OFFLINE_PICKUP_PAGE_SIZE 28
+new PlayerOfflinePickupListCount[MAX_PLAYERS];
+new PlayerOfflinePickupListDBID[MAX_PLAYERS][MAX_OFFLINE_PICKUP_DIALOG_ROWS];
+new PlayerOfflinePickupPage[MAX_PLAYERS];
+new PlayerOfflinePickupSelectedID[MAX_PLAYERS];
 new PlayerOfflineVehicleSelectedID[MAX_PLAYERS];
 #define MAX_OFFLINE_VEHICLE_PLAN_DIALOG_ROWS 30
 #define OFFLINE_VEHICLE_PLAN_PAGE_SIZE 28
@@ -2808,6 +2818,10 @@ forward OnOfflineServiceListLoaded(playerid, page);
 forward OnOfflineServiceDetailLoaded(playerid, serviceid);
 forward OnOfflineRuntimeDryRunSummaryLoaded(playerid);
 forward OnOfflineExactApplyStatusLoaded(playerid);
+forward OnOfflinePickupSummaryLoaded(playerid);
+forward OnOfflinePickupListLoaded(playerid, page);
+forward OnOfflinePickupDetailLoaded(playerid, queueid);
+forward OnOfflinePickupPreviewLoaded(playerid, queueid);
 forward OnOfflineVehicleSummaryLoaded(playerid);
 forward OnOfflineVehicleListLoaded(playerid, page);
 forward OnOfflineVehicleDetailLoaded(playerid, queueid);
@@ -14178,7 +14192,7 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.16.1 Hospital Map Icon Coverage Fix");
+    SetGameModeText("SAIF Dev v0.26A.1.17.1 Pickup Command Indentation Fix");
 
     new MySQLOpt:mysqlOptions = mysql_init_options();
     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
@@ -14302,6 +14316,9 @@ public OnGameModeInit()
         PlayerOfflinePairSelectedPlanID[i] = 0;
         PlayerOfflinePairExteriorQueueID[i] = 0;
         PlayerOfflinePairInteriorQueueID[i] = 0;
+        PlayerOfflinePickupListCount[i] = 0;
+        PlayerOfflinePickupPage[i] = 0;
+        PlayerOfflinePickupSelectedID[i] = 0;
         PlayerOfflineVehicleListCount[i] = 0;
         PlayerOfflineVehiclePage[i] = 0;
         PlayerOfflineVehicleSelectedID[i] = 0;
@@ -14361,9 +14378,9 @@ public OnGameModeInit()
     print("[SAIF] Skin movement baseline aktif: CJ-like via UsePlayerPedAnims; profile palsu tetap dihapus.");
     print("[SAIF] Vehicle Mission v0.25B.10 tetap aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
     print("[SAIF] Vitals Persistence aktif: health/armor DB + Ammu Body Armor persistence.");
-    print("[SAIF] Gamemode v0.26A.1.16.1 Hospital Map Icon Coverage Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.26A.1.17.1 Pickup Command Indentation Fix berhasil dijalankan.");
     print("[SAIF] GTA Offline Import Audit aktif: registry + ENEX context/evidence/pair planner read-only; runtime tidak disentuh.");
-    print("[SAIF] v0.26A.1.16.1: hospital map icon diprioritaskan; fallback 7 hospital respawn dipasang bila tidak ada public_interior hospital terdekat.");
+    print("[SAIF] v0.26A.1.17.1: command /offlinepickup dirapikan; pickup queue dan world_pickups tidak berubah.");
     print("[SAIF] Runtime lift: parked vehicle GTA offline +0.50 Z; pickup panah model 1318 +1.00 Z; spawn player public interior +0.50 Z. DB tetap original.");
     print("[SAIF] ENEX side-aware preview aktif: Point A/B, isolated interior VW, dan return position.");
     return 1;
@@ -14454,6 +14471,9 @@ public OnPlayerConnect(playerid)
     PlayerOfflinePairSelectedPlanID[playerid] = 0;
     PlayerOfflinePairExteriorQueueID[playerid] = 0;
     PlayerOfflinePairInteriorQueueID[playerid] = 0;
+    PlayerOfflinePickupListCount[playerid] = 0;
+    PlayerOfflinePickupPage[playerid] = 0;
+    PlayerOfflinePickupSelectedID[playerid] = 0;
     PlayerOfflineVehicleListCount[playerid] = 0;
     PlayerOfflineVehiclePage[playerid] = 0;
     PlayerOfflineVehicleSelectedID[playerid] = 0;
@@ -15172,7 +15192,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "SAIF Admin Menus Hub (/amenus)\n\n", sizeof(body));
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
-    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlinecontext\n/offlinepairs | /offlinepairbatches | /offlineplan [id]\n/offlineservicepoints | /offlineservicelist | /offlinepoint [id]\n/offlineruntimedryrun | /offlinearchivestatus | /offlinecapacity\n/offlinefullapply | /offlineapplystatus | /offlineoverlaystatus | /offlineexactreload\n/offlinevehicles | /offlinevehiclelist | /offlinevehicle [queue_id]\n/offlinevehicleplans | /offlinevehiclebatches | /offlinevehicleplan [plan_id]\n/offlinevehicledryrun | /offlinevehiclearchive | /offlinevehiclecapacity\n/offlinevehicleapplystatus | /offlinevehiclereload\n/offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
+    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlinecontext\n/offlinepairs | /offlinepairbatches | /offlineplan [id]\n/offlineservicepoints | /offlineservicelist | /offlinepoint [id]\n/offlineruntimedryrun | /offlinearchivestatus | /offlinecapacity\n/offlinefullapply | /offlineapplystatus | /offlineoverlaystatus | /offlineexactreload\n/offlinevehicles | /offlinevehiclelist | /offlinevehicle [queue_id]\n/offlinevehicleplans | /offlinevehiclebatches | /offlinevehicleplan [plan_id]\n/offlinevehicledryrun | /offlinevehiclearchive | /offlinevehiclecapacity\n/offlinevehicleapplystatus | /offlinevehiclereload\n/offlinepickups | /offlinepickuplist | /offlinepickup [queue_id]\n/offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
     strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/orgeconomy, /orgeconomyaudit, /orgstatus, /orgeconomyhealth, /orgbiz, /orgbusiness, /orgfinance\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /vehmissioncloseout, /vehiclemissionhealth, /missiontarget, /vehmissionconfig, /missionpointmenu, /missionpool, /vehmissionpool, /jobpointpool, /vmpool, /pointpool, /jobpool, /jobpointmenu, /taxirequest, /taxistatus, /canceltaxi, /busrequest, /busstatus, /cancelbus, /medicrequest, /medicstatus, /cancelmedic, /firestatus, /firemission\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /cjmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
@@ -15837,6 +15857,7 @@ stock ShowOfflineImportAuditMenu(playerid)
     strcat(body, "Parked Vehicle Runtime Archive / Full 130 Dry-Run\tparked_vehicles\tRead-only\n", sizeof(body));
     strcat(body, "Full 130 Parked Vehicle Apply Status\tparked_vehicles\tControlled SQL\n", sizeof(body));
     strcat(body, "Offline-like Map Icon Audit\tpublic_interiors + radar\tRead-only / refresh\n", sizeof(body));
+    strcat(body, "GTA SA Offline Pickup Queue\toffline_pickup_queue (782 rows)\tRead-only\n", sizeof(body));
     strcat(body, "Back to Admin Menus\t/amenus\tRead-only\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_OFFLINE_IMPORT_MENU, DIALOG_STYLE_TABLIST_HEADERS,
@@ -16385,6 +16406,110 @@ public OnOfflineServiceDetailLoaded(playerid, serviceid)
     PlayerOfflineServiceSelectedID[playerid]=id;PlayerOfflineServiceSelectedPlanID[playerid]=planid;PlayerOfflineServiceSelectedInteriorID[playerid]=intid;PlayerOfflineServiceSelectedX[playerid]=x;PlayerOfflineServiceSelectedY[playerid]=y;PlayerOfflineServiceSelectedZ[playerid]=z;PlayerOfflineServiceSelectedA[playerid]=a;PlayerOfflineServiceSelectedRadius[playerid]=radius;
     new body[4000];format(body,sizeof(body),"Service Point ID: %d\nPair Plan ID: %d\nName: %s\nContext/runtime: %s / %s\nPair group: %s\nRegion/area: %s / %s\nInterior ID: %d\n\nInteraction\nSemantics: %s\nCoordinate: %.4f, %.4f, %.4f\nFacing: %.2f\nRuntime radius recommendation: %.2f\nSCM source radius XY/Z: %.2f / %.2f\n\nResolution\nMethod: %s\nConfidence: %d%%\nReview: %s\nApply readiness: %s\nEnabled: %d (must be 0)\nApply status: %s (must be draft)\n\nEvidence\n%s\nLines: %d-%d\n%s\n\nReason\n%s\n\nRuntime tables touched: none",id,planid,name,ctx,rtype,group,region,area,intid,semantics,x,y,z,a,radius,sourceXY,sourceZ,method,conf,review,readiness,enabled,apply,source,sourceStart,sourceEnd,evidence,reason);
     ShowPlayerDialog(playerid,DIALOG_OFFLINE_SERVICE_DETAIL,DIALOG_STYLE_MSGBOX,"Offline Service Point Detail",body,"Actions","Back");return 1;
+}
+
+
+stock QueryOfflinePickupSummary(playerid)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+    new query[1800];
+    mysql_format(g_SQL, query, sizeof(query), "SELECT COUNT(*) total_rows,SUM(source_scope='SCM') scm_rows,SUM(source_scope='IPL') ipl_rows,SUM(position_resolved=1) resolved_rows,SUM(position_resolved=0) unresolved_rows,SUM(zero_coordinate=1) zero_rows,SUM(pickup_category='health') health_rows,SUM(pickup_category='armor') armor_rows,SUM(pickup_category='bribe') bribe_rows,SUM(pickup_category='weapon') weapon_rows,SUM(pickup_category LIKE 'collectible_%%') collectible_rows,SUM(pickup_category LIKE 'property_%%' OR pickup_category='savegame') property_rows,SUM(pickup_category IN ('money','revenue')) economy_rows,SUM(multiplayer_safety='mission_story_only') story_rows,SUM(duplicate_group_size>1) duplicate_rows,SUM(enabled=1) enabled_rows,SUM(apply_status<>'pending') nonpending_rows FROM offline_pickup_queue WHERE parser_version='%e'", "saif-pickup-parser-v0.26A.1.17");
+    mysql_tquery(g_SQL, query, "OnOfflinePickupSummaryLoaded", "i", playerid);
+    return 1;
+}
+
+public OnOfflinePickupSummaryLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid) || !IsAdminLevel(playerid, ADMIN_OWNER)) return 1;
+    new rows; cache_get_row_count(rows);
+    if (rows <= 0) { SendClientMessage(playerid, COLOR_YELLOW, "Pickup queue belum tersedia. Jalankan migration dan import v0.26A.1.17."); return ShowOfflineImportAuditMenu(playerid); }
+    new total,scm,ipl,resolved,unresolved,zero,health,armor,bribe,weapon,collectible,property,economy,story,duplicates,enabled,nonpending;
+    cache_get_value_name_int(0,"total_rows",total); cache_get_value_name_int(0,"scm_rows",scm); cache_get_value_name_int(0,"ipl_rows",ipl);
+    cache_get_value_name_int(0,"resolved_rows",resolved); cache_get_value_name_int(0,"unresolved_rows",unresolved); cache_get_value_name_int(0,"zero_rows",zero);
+    cache_get_value_name_int(0,"health_rows",health); cache_get_value_name_int(0,"armor_rows",armor); cache_get_value_name_int(0,"bribe_rows",bribe); cache_get_value_name_int(0,"weapon_rows",weapon);
+    cache_get_value_name_int(0,"collectible_rows",collectible); cache_get_value_name_int(0,"property_rows",property); cache_get_value_name_int(0,"economy_rows",economy); cache_get_value_name_int(0,"story_rows",story);
+    cache_get_value_name_int(0,"duplicate_rows",duplicates); cache_get_value_name_int(0,"enabled_rows",enabled); cache_get_value_name_int(0,"nonpending_rows",nonpending);
+    new body[2200];
+    format(body,sizeof(body),"GTA SA Offline Pickup Queue Foundation\n\nSource coverage\nSCM creation statements: %d\nIPL PICK entries: %d\nTotal staging rows: %d\n\nPosition resolution\nResolved: %d\nUnresolved variable context: %d\nZero-coordinate placeholders: %d\nRows in duplicate groups: %d\n\nInitial audit categories\nHealth: %d | Armour: %d | Bribe: %d\nWeapon: %d | Collectibles: %d\nProperty/save references: %d\nMoney/revenue: %d | Story-only: %d\n\nSafety\nQueue enabled: %d (must be 0)\nNon-pending apply: %d (must be 0)\nRuntime world_pickups touched: none\n\nBrowse menampilkan source line, command, model token, category, safety class, transform, region, script context, dan duplicate group.",scm,ipl,total,resolved,unresolved,zero,duplicates,health,armor,bribe,weapon,collectible,property,economy,story,enabled,nonpending);
+    ShowPlayerDialog(playerid,DIALOG_OFFLINE_PICKUP_SUMMARY,DIALOG_STYLE_MSGBOX,"Offline Pickup Queue",body,"Browse","Back");
+    return 1;
+}
+
+stock QueryOfflinePickupList(playerid,page=0)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+    if (page<0) page=0;
+    new query[1100];
+    mysql_format(g_SQL,query,sizeof(query),"SELECT id,source_scope,source_command,handle_name,model_token,COALESCE(model_id,-1) model_value,pickup_category,multiplayer_safety,position_resolved,city_region,area_code FROM offline_pickup_queue WHERE parser_version='%e' ORDER BY id LIMIT %d,%d","saif-pickup-parser-v0.26A.1.17",page*OFFLINE_PICKUP_PAGE_SIZE,OFFLINE_PICKUP_PAGE_SIZE+1);
+    mysql_tquery(g_SQL,query,"OnOfflinePickupListLoaded","ii",playerid,page); return 1;
+}
+
+public OnOfflinePickupListLoaded(playerid,page)
+{
+    if (!IsPlayerConnected(playerid) || !IsAdminLevel(playerid,ADMIN_OWNER)) return 1;
+    new rows; cache_get_row_count(rows); PlayerOfflinePickupListCount[playerid]=0; PlayerOfflinePickupPage[playerid]=page;
+    new body[7000]; body[0]=EOS; strcat(body,"ID / Category\tSource / Model\tPosition / Safety\n",sizeof(body));
+    if(page>0){PlayerOfflinePickupListDBID[playerid][PlayerOfflinePickupListCount[playerid]++]=-1;strcat(body,"<< Previous Page\t\tNavigation\n",sizeof(body));}
+    new dataRows=rows; if(dataRows>OFFLINE_PICKUP_PAGE_SIZE)dataRows=OFFLINE_PICKUP_PAGE_SIZE;
+    for(new i=0;i<dataRows;i++)
+    {
+        new id,modelid,resolved; new scope[16],cmd[48],handle[96],model[64],category[48],safety[48],region[32],area[32],line[260],display[96],posText[16];
+        cache_get_value_name_int(i,"id",id);cache_get_value_name_int(i,"model_value",modelid);cache_get_value_name_int(i,"position_resolved",resolved);
+        cache_get_value_name(i,"source_scope",scope,sizeof(scope));cache_get_value_name(i,"source_command",cmd,sizeof(cmd));cache_get_value_name(i,"handle_name",handle,sizeof(handle));cache_get_value_name(i,"model_token",model,sizeof(model));cache_get_value_name(i,"pickup_category",category,sizeof(category));cache_get_value_name(i,"multiplayer_safety",safety,sizeof(safety));cache_get_value_name(i,"city_region",region,sizeof(region));cache_get_value_name(i,"area_code",area,sizeof(area));
+        if(handle[0])format(display,sizeof(display),"%s",handle);else format(display,sizeof(display),"%s",cmd);
+        if(resolved)format(posText,sizeof(posText),"resolved");else format(posText,sizeof(posText),"unresolved");
+        PlayerOfflinePickupListDBID[playerid][PlayerOfflinePickupListCount[playerid]++]=id;
+        format(line,sizeof(line),"#%d %s\t%s / %s (%d)\t%s / %s / %s-%s\n",id,category,scope,model,modelid,posText,safety,region,area);strcat(body,line,sizeof(body));
+    }
+    if(rows>OFFLINE_PICKUP_PAGE_SIZE && PlayerOfflinePickupListCount[playerid]<MAX_OFFLINE_PICKUP_DIALOG_ROWS){PlayerOfflinePickupListDBID[playerid][PlayerOfflinePickupListCount[playerid]++]=-2;strcat(body,">> Next Page\t\tNavigation\n",sizeof(body));}
+    if(dataRows==0 && page==0)strcat(body,"No rows\tRun SQL v0.26A.1.17\tRead-only\n",sizeof(body));
+    ShowPlayerDialog(playerid,DIALOG_OFFLINE_PICKUP_LIST,DIALOG_STYLE_TABLIST_HEADERS,"Offline GTA SA Pickups",body,"Detail","Back");return 1;
+}
+
+stock QueryOfflinePickupDetail(playerid,queueid)
+{
+    if(!CanUseOfflineImportAudit(playerid))return 0;
+    new query[900];mysql_format(g_SQL,query,sizeof(query),"SELECT q.*,COALESCE(model_id,-1) model_value,COALESCE(ammo_amount,-1) ammo_value,COALESCE(cash_amount,-1) cash_value,COALESCE(property_price_value,-1) price_value FROM offline_pickup_queue q WHERE id=%d AND parser_version='%e' LIMIT 1",queueid,"saif-pickup-parser-v0.26A.1.17");
+    mysql_tquery(g_SQL,query,"OnOfflinePickupDetailLoaded","ii",playerid,queueid);return 1;
+}
+
+public OnOfflinePickupDetailLoaded(playerid,queueid)
+{
+    if(!IsPlayerConnected(playerid)||!IsAdminLevel(playerid,ADMIN_OWNER))return 1;
+    if(cache_num_rows()<=0)return QueryOfflinePickupList(playerid,PlayerOfflinePickupPage[playerid]);
+    PlayerOfflinePickupSelectedID[playerid]=queueid;
+    new sourceLine,modelid,weaponid,ammo,cash,price,resolved,zero,dupSize,enabled;new Float:x,Float:y,Float:z;
+    new scope[16],file[256],cmd[48],handle[128],script[64],label[128],model[64],ptype[64],category[48],context[48],safety[48],resolution[32],region[32],area[32],xToken[64],yToken[64],zToken[64];
+    cache_get_value_name_int(0,"source_line",sourceLine);cache_get_value_name_int(0,"model_value",modelid);cache_get_value_name_int(0,"weapon_id_guess",weaponid);cache_get_value_name_int(0,"ammo_value",ammo);cache_get_value_name_int(0,"cash_value",cash);cache_get_value_name_int(0,"price_value",price);cache_get_value_name_int(0,"position_resolved",resolved);cache_get_value_name_int(0,"zero_coordinate",zero);cache_get_value_name_int(0,"duplicate_group_size",dupSize);cache_get_value_name_int(0,"enabled",enabled);
+    cache_get_value_name_float(0,"pos_x",x);cache_get_value_name_float(0,"pos_y",y);cache_get_value_name_float(0,"pos_z",z);
+    cache_get_value_name(0,"source_scope",scope,sizeof(scope));cache_get_value_name(0,"source_file",file,sizeof(file));cache_get_value_name(0,"source_command",cmd,sizeof(cmd));cache_get_value_name(0,"handle_name",handle,sizeof(handle));cache_get_value_name(0,"script_name",script,sizeof(script));cache_get_value_name(0,"script_label",label,sizeof(label));cache_get_value_name(0,"model_token",model,sizeof(model));cache_get_value_name(0,"pickup_type_token",ptype,sizeof(ptype));cache_get_value_name(0,"pickup_category",category,sizeof(category));cache_get_value_name(0,"context_category",context,sizeof(context));cache_get_value_name(0,"multiplayer_safety",safety,sizeof(safety));cache_get_value_name(0,"resolution_mode",resolution,sizeof(resolution));cache_get_value_name(0,"city_region",region,sizeof(region));cache_get_value_name(0,"area_code",area,sizeof(area));cache_get_value_name(0,"pos_x_token",xToken,sizeof(xToken));cache_get_value_name(0,"pos_y_token",yToken,sizeof(yToken));cache_get_value_name(0,"pos_z_token",zToken,sizeof(zToken));
+    new body[3200];format(body,sizeof(body),"Queue ID: %d\nSource: %s / %s:%d\nCommand: %s\nHandle: %s\nScript / label: %s / %s\n\nClassification\nCategory: %s\nContext: %s\nSafety: %s\nPickup type token: %s\nModel token / ID: %s / %d\nWeapon ID guess: %d\nAmmo / cash / price: %d / %d / %d\n\nTransform\nTokens: %s | %s | %s\nResolved: %d (%s)\nX %.4f | Y %.4f | Z %.4f\nRegion / area: %s / %s\nZero coordinate: %d\nDuplicate group size: %d\n\nSafety state\nQueue enabled: %d (must remain 0)\nReview status: pending\nApply status: pending\nRuntime pickup: none",queueid,scope,file,sourceLine,cmd,handle,script,label,category,context,safety,ptype,model,modelid,weaponid,ammo,cash,price,xToken,yToken,zToken,resolved,resolution,x,y,z,region,area,zero,dupSize,enabled);
+    ShowPlayerDialog(playerid,DIALOG_OFFLINE_PICKUP_DETAIL,DIALOG_STYLE_MSGBOX,"Offline Pickup Detail",body,"Actions","Back");return 1;
+}
+
+stock ShowOfflinePickupActions(playerid)
+{
+    if(!CanUseOfflineImportAudit(playerid))return 0;
+    ShowPlayerDialog(playerid,DIALOG_OFFLINE_PICKUP_ACTION,DIALOG_STYLE_TABLIST_HEADERS,"Offline Pickup Actions","Action\tEffect\nPreview World Position\tTeleport only; no pickup spawn\nReturn to Previous Position\tRestore transform\nBack to Detail\tRead-only\nBack to Queue List\tRead-only","Open","Back");return 1;
+}
+
+stock QueryOfflinePickupPreview(playerid,queueid)
+{
+    if(!CanUseOfflineImportAudit(playerid))return 0;
+    if(IsPlayerInAnyVehicle(playerid)){SendClientMessage(playerid,COLOR_RED,"Keluar dari kendaraan sebelum preview pickup.");return QueryOfflinePickupDetail(playerid,queueid);}
+    new query[500];mysql_format(g_SQL,query,sizeof(query),"SELECT pos_x,pos_y,pos_z,position_resolved,zero_coordinate,pickup_category,source_file,source_line FROM offline_pickup_queue WHERE id=%d AND parser_version='%e' LIMIT 1",queueid,"saif-pickup-parser-v0.26A.1.17");mysql_tquery(g_SQL,query,"OnOfflinePickupPreviewLoaded","ii",playerid,queueid);return 1;
+}
+
+public OnOfflinePickupPreviewLoaded(playerid,queueid)
+{
+    if(!IsPlayerConnected(playerid)||!IsAdminLevel(playerid,ADMIN_OWNER))return 1;
+    if(cache_num_rows()<=0)return QueryOfflinePickupDetail(playerid,queueid);
+    new resolved,zero,sourceLine;new Float:x,Float:y,Float:z;new category[48],file[256];
+    cache_get_value_name_int(0,"position_resolved",resolved);cache_get_value_name_int(0,"zero_coordinate",zero);cache_get_value_name_int(0,"source_line",sourceLine);cache_get_value_name_float(0,"pos_x",x);cache_get_value_name_float(0,"pos_y",y);cache_get_value_name_float(0,"pos_z",z);cache_get_value_name(0,"pickup_category",category,sizeof(category));cache_get_value_name(0,"source_file",file,sizeof(file));
+    if(!resolved||zero){SendClientMessage(playerid,COLOR_RED,"Preview diblokir: transform unresolved atau zero-coordinate placeholder.");return QueryOfflinePickupDetail(playerid,queueid);}
+    if(z>800.0){SendClientMessage(playerid,COLOR_YELLOW,"Preview diblokir: titik kemungkinan interior; interior ID belum di-resolve pada foundation ini.");return QueryOfflinePickupDetail(playerid,queueid);}
+    SaveOfflineInteriorPreviewReturn(playerid);SetPlayerInterior(playerid,0);SetPlayerVirtualWorld(playerid,0);SetPlayerPos(playerid,x+1.0,y,z+1.0);SetCameraBehindPlayer(playerid);
+    new msg[220];format(msg,sizeof(msg),"Preview pickup #%d [%s] dari %s:%d. Tidak ada pickup runtime yang dibuat.",queueid,category,file,sourceLine);SendClientMessage(playerid,COLOR_GREEN,msg);return 1;
 }
 
 stock QueryOfflineImportSummary(playerid)
@@ -18649,8 +18774,33 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 11: QueryOfflineVehicleRuntimeDryRunSummary(playerid);
             case 12: QueryOfflineVehicleFullApplyStatus(playerid);
             case 13: ShowOfflineMapIconAudit(playerid);
-            case 14: ShowAdminToolsMenu(playerid);
+            case 14: QueryOfflinePickupSummary(playerid);
+            case 15: ShowAdminToolsMenu(playerid);
         }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OFFLINE_PICKUP_SUMMARY)
+    {
+        if(response)QueryOfflinePickupList(playerid,0);else ShowOfflineImportAuditMenu(playerid);return 1;
+    }
+    if (dialogid == DIALOG_OFFLINE_PICKUP_LIST)
+    {
+        if(!response)return QueryOfflinePickupSummary(playerid);
+        if(listitem<0||listitem>=PlayerOfflinePickupListCount[playerid])return QueryOfflinePickupList(playerid,PlayerOfflinePickupPage[playerid]);
+        new queueid=PlayerOfflinePickupListDBID[playerid][listitem];
+        if(queueid==-1)return QueryOfflinePickupList(playerid,PlayerOfflinePickupPage[playerid]-1);
+        if(queueid==-2)return QueryOfflinePickupList(playerid,PlayerOfflinePickupPage[playerid]+1);
+        return QueryOfflinePickupDetail(playerid,queueid);
+    }
+    if (dialogid == DIALOG_OFFLINE_PICKUP_DETAIL)
+    {
+        if(response)ShowOfflinePickupActions(playerid);else QueryOfflinePickupList(playerid,PlayerOfflinePickupPage[playerid]);return 1;
+    }
+    if (dialogid == DIALOG_OFFLINE_PICKUP_ACTION)
+    {
+        if(!response)return QueryOfflinePickupDetail(playerid,PlayerOfflinePickupSelectedID[playerid]);
+        switch(listitem){case 0:QueryOfflinePickupPreview(playerid,PlayerOfflinePickupSelectedID[playerid]);case 1:ReturnFromOfflineInteriorPreview(playerid);case 2:QueryOfflinePickupDetail(playerid,PlayerOfflinePickupSelectedID[playerid]);case 3:QueryOfflinePickupList(playerid,PlayerOfflinePickupPage[playerid]);}
         return 1;
     }
 
@@ -40703,6 +40853,30 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/offlinepickups", true) || !strcmp(cmdtext, "/offlinepickupqueue", true) || !strcmp(cmdtext, "/offlinepickupaudit", true))
+    {
+        QueryOfflinePickupSummary(playerid); return 1;
+    }
+    if (!strcmp(cmdtext, "/offlinepickuplist", true))
+    {
+        QueryOfflinePickupList(playerid,0); return 1;
+    }
+    if (!strcmp(cmdtext, "/offlinepickup", true))
+    {
+        SendClientMessage(playerid,COLOR_YELLOW,"Usage: /offlinepickup [queue_id]"); return 1;
+    }
+    if (strfind(cmdtext, "/offlinepickup ", true) == 0)
+    {
+        new queueid = strval(cmdtext[15]);
+        if (queueid <= 0)
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Usage: /offlinepickup [queue_id]");
+            return 1;
+        }
+        QueryOfflinePickupDetail(playerid, queueid);
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/offlinevehicles", true) || !strcmp(cmdtext, "/offlinecars", true) || !strcmp(cmdtext, "/offlinecargens", true))
     {
         QueryOfflineVehicleSummary(playerid);
@@ -43765,7 +43939,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.16.1 Hospital Map Icon Coverage Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.17.1 Pickup Command Indentation Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -43775,7 +43949,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.16.1: Hospital icon diprioritaskan dan fallback dari 7 hospital respawn dipasang bila belum tercakup public_interiors.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.17.1: warning loose indentation command /offlinepickup diperbaiki; staging 782 row tetap sama.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.10: Controlled 91-row public interior apply (71 SCM exact + 20 reviewed overlay) + tracked rollback.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.8: Exact Interior Service Point Resolver; 71 native SCM exact + 20 overlay preview anchors, audit-only.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.7.1: memperbaiki 11 Float tag mismatch pada detail ENEX pair plan; tanpa SQL/runtime change.");

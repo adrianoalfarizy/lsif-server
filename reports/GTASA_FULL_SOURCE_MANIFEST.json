@@ -1,0 +1,2919 @@
+{
+  "archive": {
+    "file_count": 998,
+    "uncompressed_bytes": 61050652
+  },
+  "raw": {
+    "file_count": 274,
+    "bytes": 21012036,
+    "manifest": [
+      {
+        "path": "animgrp.dat",
+        "size_bytes": 3096,
+        "sha256": "012b10d891840c48e0f282fdef7700673a12fe6c568a7ac9127c21095808aef8",
+        "category": "metadata"
+      },
+      {
+        "path": "animviewer.dat",
+        "size_bytes": 1807,
+        "sha256": "76615e54227deb0fc2b36213b09711bbd63916de0949096c9f11bb938326a7fe",
+        "category": "metadata"
+      },
+      {
+        "path": "ar_stats.dat",
+        "size_bytes": 3593,
+        "sha256": "3f8a184d088dc25e166ff0bb067286b5dcac2398de21d3bb4e00b43956d31d25",
+        "category": "metadata"
+      },
+      {
+        "path": "AudioEvents.txt",
+        "size_bytes": 166161,
+        "sha256": "bf21595eeeea4769fbeb16df608377e068f22e4f97de22609d748bdf9483fc00",
+        "category": "other"
+      },
+      {
+        "path": "carcols.dat",
+        "size_bytes": 15366,
+        "sha256": "527c2dc82b143c7603efe9f7a1618f67a963d9b45d8dcb328651e5d3ce614d89",
+        "category": "metadata"
+      },
+      {
+        "path": "cargrp.dat",
+        "size_bytes": 3963,
+        "sha256": "40670294c436e9d96ae30095cc720eba1655615be9a8810a079b81ebe64b6124",
+        "category": "metadata"
+      },
+      {
+        "path": "carmods.dat",
+        "size_bytes": 9110,
+        "sha256": "64f8811b676094f62157272e41f8ccf017082ca31993f2ec8ac4dc29e731d40f",
+        "category": "metadata"
+      },
+      {
+        "path": "clothes.dat",
+        "size_bytes": 5317,
+        "sha256": "5fff15c81a5f8c32f4d3dff22ad6748c9b8c0a45af7b9f67e22fb2b9ae05c593",
+        "category": "metadata"
+      },
+      {
+        "path": "Decision/Allowed/Cop.ped",
+        "size_bytes": 4908,
+        "sha256": "d91e13fb6aaf0be786e32fd37a68cf0425cef9fbc23742222d31d1ff312a8150",
+        "category": "other"
+      },
+      {
+        "path": "Decision/Allowed/Fireman.ped",
+        "size_bytes": 4435,
+        "sha256": "cb9a75b87d6960e51a12a4d896f099e5ed1576d76d7946a0570f10e98872de54",
+        "category": "other"
+      },
+      {
+        "path": "Decision/Allowed/GangMbr.ped",
+        "size_bytes": 6194,
+        "sha256": "c2653aba07c5c04017b44797cc4f1d2899da9e4d36ac6420ca22b5600172f57d",
+        "category": "other"
+      },
+      {
+        "path": "Decision/Allowed/Indoors.ped",
+        "size_bytes": 2809,
+        "sha256": "53dc5665a42bd47d9dc8be8d7a2440b5722b10940186c000235213cb8c1d8fe1",
+        "category": "other"
+      },
+      {
+        "path": "Decision/Allowed/MISSION.grp",
+        "size_bytes": 2758,
+        "sha256": "1a97a3018d9a852b699beb1904af4ae8ed1b7aab5fe1742e59917fb29eda2af6",
+        "category": "other"
+      },
+      {
+        "path": "Decision/Allowed/m_empty.ped",
+        "size_bytes": 982,
+        "sha256": "df0e18f0148152c98132381927b617140fc6e8967a68085cc630cbe734e0c9b5",
+        "category": "other"
+      },
+      {
+        "path": "Decision/Allowed/m_norm.ped",
+        "size_bytes": 4142,
+        "sha256": "fa99612c55e6b8ffc76170fc56567f57a7153f47173c1b2a065d4ef4b8299bfe",
+        "category": "other"
+      },
+      {
+        "path": "Decision/Allowed/m_plyr.ped",
+        "size_bytes": 2000,
+        "sha256": "261b87d08b49ce72c3f9d02201bae15889f2a9ff65798e704fcf53098fbd304e",
+        "category": "other"
+      },
+      {
+        "path": "Decision/Allowed/m_steal.ped",
+        "size_bytes": 3663,
+        "sha256": "635372cb7c36134f4bfdd1ae343763ad3d814db7b19fef7eb34a2ca48ed48ec4",
+        "category": "other"
+      },
+      {
+        "path": "Decision/Allowed/m_tough.ped",
+        "size_bytes": 3980,
+        "sha256": "99129a3281653e428cea13b6fb626d21bed6381849f92e11b5638f1f3c23687d",
+        "category": "other"
+      },
+      {
+        "path": "Decision/Allowed/m_weak.ped",
+        "size_bytes": 4062,
+        "sha256": "5e97f56b79986532d76d401a1929c1c3879bcae6377face62f0ed9976b28a6d6",
+        "category": "other"
+      },
+      {
+        "path": "Decision/Allowed/RANDOM.grp",
+        "size_bytes": 4623,
+        "sha256": "d4848b45f3fa6b8c9fb15b4bee0c7ee8b42a1a8ccc9e6bdfa01f1d5ab0522265",
+        "category": "other"
+      },
+      {
+        "path": "Decision/Allowed/RANDOM.ped",
+        "size_bytes": 4142,
+        "sha256": "fa99612c55e6b8ffc76170fc56567f57a7153f47173c1b2a065d4ef4b8299bfe",
+        "category": "other"
+      },
+      {
+        "path": "Decision/Allowed/RANDOM2.grp",
+        "size_bytes": 4623,
+        "sha256": "4a3f855271adb3dc41a91a7595281fd534d64768596195037ccd1cd01318352a",
+        "category": "other"
+      },
+      {
+        "path": "Decision/Allowed/R_Norm.ped",
+        "size_bytes": 6450,
+        "sha256": "33175de3da4445186551bf2aeadacd4f706879cbbe47411c73fd228d41fdb30c",
+        "category": "other"
+      },
+      {
+        "path": "Decision/Allowed/R_Tough.ped",
+        "size_bytes": 6378,
+        "sha256": "fd8d95ea1b3915983380eb48efa124883fecd5069157c8673d0a111e7ecdb1c9",
+        "category": "other"
+      },
+      {
+        "path": "Decision/Allowed/R_Weak.ped",
+        "size_bytes": 6289,
+        "sha256": "41f15594c0c639475f904b3ee09474f8ceac9f504345f421cf6f740f8287e60d",
+        "category": "other"
+      },
+      {
+        "path": "Decision/andyd/ADgrp.grp",
+        "size_bytes": 2063,
+        "sha256": "00f7ddc28f0aeb99d4b5f2946222d9b93275cde808c0df5a50ff546534931357",
+        "category": "other"
+      },
+      {
+        "path": "Decision/andyd/ADtemp.ped",
+        "size_bytes": 3725,
+        "sha256": "094efcda2df378dbc1d5131291a016cfac958e1ef7f43da04bd0aeb9cb1b571f",
+        "category": "other"
+      },
+      {
+        "path": "Decision/BLANK.ped",
+        "size_bytes": 621,
+        "sha256": "7828c3a093dcb953a90ee37ca640a8125fcad8bacf4b3073dd45b40a0b62f668",
+        "category": "other"
+      },
+      {
+        "path": "Decision/chris/maf5.ped",
+        "size_bytes": 1130,
+        "sha256": "2a60cf03343eca761883c1445d485002c23f8788216df3ee987696975620122a",
+        "category": "other"
+      },
+      {
+        "path": "Decision/chris/ryder3.ped",
+        "size_bytes": 1170,
+        "sha256": "b21daacb11c75ea46dd4522fe16613efb54c39aaefd752d31adb465ecc808114",
+        "category": "other"
+      },
+      {
+        "path": "Decision/ChrisM/CMblnk.ped",
+        "size_bytes": 397,
+        "sha256": "bacc54a11cdd29d229581c821b16ff7d45433c00e2ac82d22cb8c4104d0643b8",
+        "category": "other"
+      },
+      {
+        "path": "Decision/ChrisM/m_std_cm.ped",
+        "size_bytes": 1071,
+        "sha256": "b7b849ddc68303ab5d1f4c9c6111b03d2e1afb7ef106ac161e62e26fe64514fa",
+        "category": "other"
+      },
+      {
+        "path": "Decision/Cop.ped",
+        "size_bytes": 2354,
+        "sha256": "b6c19dc8d8d1c9831cc2b38c3538b0a0098ec1fce99d129466db13e2b9bceb75",
+        "category": "other"
+      },
+      {
+        "path": "Decision/Craig/crack1.ped",
+        "size_bytes": 796,
+        "sha256": "0023de0e8ce38af9f5c805c7d4972e5f8656cbd556b375324f557a5a0162e261",
+        "category": "other"
+      },
+      {
+        "path": "Decision/david/dam_sec.ped",
+        "size_bytes": 677,
+        "sha256": "6d3c14b75a7fe5df59ece7c40b8893e6307225025f7366eeffa6b4b6020b4172",
+        "category": "other"
+      },
+      {
+        "path": "Decision/david/hei2_sc.ped",
+        "size_bytes": 403,
+        "sha256": "3bd6d8410df4228f0a3bc3399b44fbb7949f032a966b341b8120d6b7f92736d3",
+        "category": "other"
+      },
+      {
+        "path": "Decision/FLAT.ped",
+        "size_bytes": 399,
+        "sha256": "b1317fbade90d1482fd3b41914971e195c85e803dd7fbc7aee6c3f0bfb7e704f",
+        "category": "other"
+      },
+      {
+        "path": "Decision/GangMbr.ped",
+        "size_bytes": 3067,
+        "sha256": "ea96edd37a4cc4ba46694ac0923c91cb1f320ba70855aebc058cdc503f230435",
+        "category": "other"
+      },
+      {
+        "path": "Decision/GROVE.ped",
+        "size_bytes": 393,
+        "sha256": "17606c7556763d5572136bfb6c6d8d0b0b065fda07c26bc069c8656bc1f9b9f9",
+        "category": "other"
+      },
+      {
+        "path": "Decision/Imran/sci1_is.ped",
+        "size_bytes": 672,
+        "sha256": "6ac5f83440efcfe7d878a96c0496de8504e8f1ddccc45ff2b036d268dadf077b",
+        "category": "other"
+      },
+      {
+        "path": "Decision/Imran/std1_is.ped",
+        "size_bytes": 383,
+        "sha256": "bb22da08d0b1cc30c2a1f445f87b5cca0ad8fbed66073837fce304d48b876ff9",
+        "category": "other"
+      },
+      {
+        "path": "Decision/Imran/std2_is.ped",
+        "size_bytes": 633,
+        "sha256": "f50642fdd88c779ee792dc27424a9fc99ef6daf3452637a62a54483b8f9b69bd",
+        "category": "other"
+      },
+      {
+        "path": "Decision/Indoors.ped",
+        "size_bytes": 1928,
+        "sha256": "7cc219aff058042e35f12c332199fb6ff7abb36cc079d233399871b45cad2c15",
+        "category": "other"
+      },
+      {
+        "path": "Decision/MISSION.grp",
+        "size_bytes": 530,
+        "sha256": "9097253f8868c6370b949d3b061c4030e38a316fb92122583880efb626e27b93",
+        "category": "other"
+      },
+      {
+        "path": "Decision/MISSION.ped",
+        "size_bytes": 891,
+        "sha256": "6845282cb85da9504ad245bfb153faf37c35552cef69d2c789953a1189657cb2",
+        "category": "other"
+      },
+      {
+        "path": "Decision/m_empty.ped",
+        "size_bytes": 654,
+        "sha256": "48dff95c987f7a86c0eeef82f54d29ba9ec6cb6426b2aa3ea9e458490c1994c7",
+        "category": "other"
+      },
+      {
+        "path": "Decision/m_infrm.ped",
+        "size_bytes": 1539,
+        "sha256": "31bad7e674d174ec0105b54b5c4f1c5bcf0b73da29f6fe2b69d45dcd7193ef52",
+        "category": "other"
+      },
+      {
+        "path": "Decision/m_norm.ped",
+        "size_bytes": 2085,
+        "sha256": "26fc955b2ff4f0fbc83ba75ddbd14b5ec347775ce2088e7066a389ea2e409d41",
+        "category": "other"
+      },
+      {
+        "path": "Decision/m_std.ped",
+        "size_bytes": 1487,
+        "sha256": "201b5338d20c12df35c946c2feeb95d487ceedb6a0838f202f1f2399e85d24c7",
+        "category": "other"
+      },
+      {
+        "path": "Decision/m_tough.ped",
+        "size_bytes": 2085,
+        "sha256": "26fc955b2ff4f0fbc83ba75ddbd14b5ec347775ce2088e7066a389ea2e409d41",
+        "category": "other"
+      },
+      {
+        "path": "Decision/m_weak.ped",
+        "size_bytes": 2085,
+        "sha256": "26fc955b2ff4f0fbc83ba75ddbd14b5ec347775ce2088e7066a389ea2e409d41",
+        "category": "other"
+      },
+      {
+        "path": "Decision/PedEvent.txt",
+        "size_bytes": 1298,
+        "sha256": "c61a077262a419b15a14961341144a96795f45d49014deb6fa98aa0e180400be",
+        "category": "other"
+      },
+      {
+        "path": "default.dat",
+        "size_bytes": 577,
+        "sha256": "3abbdd89a94c73c93efa95b1657e339ba25f51e84787ff63e5b5c443951fecab",
+        "category": "metadata"
+      },
+      {
+        "path": "default.ide",
+        "size_bytes": 4679,
+        "sha256": "3aea4d74891f77602e1e7e32e3dfd6716fcccf257e87f7ab43c57f64339ff8c2",
+        "category": "metadata"
+      },
+      {
+        "path": "fonts.dat",
+        "size_bytes": 3576,
+        "sha256": "0b6ecb4493b0261eece4b025e31aa7b55ae68ca8529c4f7064b5b3b7297c913c",
+        "category": "metadata"
+      },
+      {
+        "path": "furnitur.dat",
+        "size_bytes": 16480,
+        "sha256": "d7184e6ced806097582e38605f7f860e0070d05e8a2bdb84d6d6b0df8a92791a",
+        "category": "metadata"
+      },
+      {
+        "path": "gridref.dat",
+        "size_bytes": 1498,
+        "sha256": "62108eed8a03f4e61f16f83f750e54cbb894660a5c2ad104a086919dfbe13188",
+        "category": "metadata"
+      },
+      {
+        "path": "gta.dat",
+        "size_bytes": 3776,
+        "sha256": "391881940700b84d9d4a263374a9543e04ec816f3f76f54fdbcabe533f094c01",
+        "category": "metadata"
+      },
+      {
+        "path": "gta_quick.dat",
+        "size_bytes": 1079,
+        "sha256": "9109f6240d291663ade75827cdd554cd5aaa98b78d0573d36833146bccf91f5f",
+        "category": "metadata"
+      },
+      {
+        "path": "handling.cfg",
+        "size_bytes": 64533,
+        "sha256": "7b7662c34a96b18fd62f05ae327106292c30a03fcb0c111c706649f0d7170197",
+        "category": "metadata"
+      },
+      {
+        "path": "Icons/app.ico",
+        "size_bytes": 2238,
+        "sha256": "5507a473b0dedaf0c0ae007ed341d4af39506892b82946bd17cee91312d7c524",
+        "category": "other"
+      },
+      {
+        "path": "Icons/bin.ico",
+        "size_bytes": 766,
+        "sha256": "d7e17fc21092d380fad45a9562db27b44d856379528beb6c60156d5d25d77d57",
+        "category": "other"
+      },
+      {
+        "path": "Icons/saicon.ICN",
+        "size_bytes": 65800,
+        "sha256": "9b94c7f077ead920a87071ea51822b4c3c43c90ba46ea8bfe3647bed909661e5",
+        "category": "other"
+      },
+      {
+        "path": "Icons/saicon2.ICN",
+        "size_bytes": 65800,
+        "sha256": "9b94c7f077ead920a87071ea51822b4c3c43c90ba46ea8bfe3647bed909661e5",
+        "category": "other"
+      },
+      {
+        "path": "Icons/saicon3.ICN",
+        "size_bytes": 65800,
+        "sha256": "9b94c7f077ead920a87071ea51822b4c3c43c90ba46ea8bfe3647bed909661e5",
+        "category": "other"
+      },
+      {
+        "path": "info.zon",
+        "size_bytes": 28139,
+        "sha256": "9396cf9b7bec5a797fa4614ee7ab578d910ed5cdd9d475adfb35801612ec8058",
+        "category": "metadata"
+      },
+      {
+        "path": "main.sc",
+        "size_bytes": 6020,
+        "sha256": "f95b3472ad4f0614fbdf52da0eefc1ca13ae86cabaab6f0b713f77f68817b50e",
+        "category": "other"
+      },
+      {
+        "path": "map.zon",
+        "size_bytes": 436,
+        "sha256": "4f78672e3ee70a1f5e09cd9acebe23f0597a39e275bf493a1f1c29ccfd268775",
+        "category": "metadata"
+      },
+      {
+        "path": "maps/Audiozon.ipl",
+        "size_bytes": 10802,
+        "sha256": "43c552f2da0491b476778edaa6f233076fa6c35cf31773d30e9033b450c8d421",
+        "category": "map"
+      },
+      {
+        "path": "maps/country/countn2.ide",
+        "size_bytes": 35439,
+        "sha256": "aa29bd7e83ebd7d2e8dddec602e111ba3e5dad2e7da6ad92c0bb4e7364603bc0",
+        "category": "map"
+      },
+      {
+        "path": "maps/country/countn2.ipl",
+        "size_bytes": 41665,
+        "sha256": "3afc8a78a31cb41299136687debcf69740cf8bd965bbd17762ecbe9345bef9ab",
+        "category": "map"
+      },
+      {
+        "path": "maps/country/countrye.ide",
+        "size_bytes": 34529,
+        "sha256": "640e7e2ba96ffb385cd313045cd74298641a045d782ceacc1903cc883a24be46",
+        "category": "map"
+      },
+      {
+        "path": "maps/country/countrye.ipl",
+        "size_bytes": 49301,
+        "sha256": "d611734b0e0260870c9a46d33121650ca306a35f7b152bee27ff97a422ae4748",
+        "category": "map"
+      },
+      {
+        "path": "maps/country/countryN.ide",
+        "size_bytes": 11308,
+        "sha256": "0e29f8d6ef0294e3e430109a0fcb27fff783de16b8877d81370ad348ba1397ff",
+        "category": "map"
+      },
+      {
+        "path": "maps/country/countryN.ipl",
+        "size_bytes": 14407,
+        "sha256": "b5367cea8b049e11c1069b1a0bde8435ebc36a1f589fa36624a81f373ab6bbde",
+        "category": "map"
+      },
+      {
+        "path": "maps/country/countryS.ide",
+        "size_bytes": 18450,
+        "sha256": "5180fe4fce5401a86d9060fd1f375ab145af799cdf1e4eb0f5e7433563b4146f",
+        "category": "map"
+      },
+      {
+        "path": "maps/country/countryS.ipl",
+        "size_bytes": 33835,
+        "sha256": "4237ab09567168a36564f55217c26c637460d6df9c2326180f7cab7d366afed1",
+        "category": "map"
+      },
+      {
+        "path": "maps/country/countryW.ide",
+        "size_bytes": 19704,
+        "sha256": "92f33d1807a2f2c6a4c3cd96fea229d8c15ec17bae35aca320034ddf9364e760",
+        "category": "map"
+      },
+      {
+        "path": "maps/country/countryw.ipl",
+        "size_bytes": 35057,
+        "sha256": "fe7b91f9136f931dd1b295b594cac1248883143c7dcfc5a2d298c6ab9f020008",
+        "category": "map"
+      },
+      {
+        "path": "maps/country/counxref.ide",
+        "size_bytes": 8493,
+        "sha256": "0afc45d5f6a0892d395e80fb5746da97e79cbc29ef309fe6dc0bcffca301f96f",
+        "category": "map"
+      },
+      {
+        "path": "maps/cull.ipl",
+        "size_bytes": 104318,
+        "sha256": "a75be13e83f5255e5cc013302b2233b7059499095b06acfe3f66d72f6fa8413e",
+        "category": "map"
+      },
+      {
+        "path": "maps/generic/barriers.ide",
+        "size_bytes": 1437,
+        "sha256": "5b69700e5dd563e6b8b120f881e459cd7eb10550ecf5e8c1cd57b47577378223",
+        "category": "map"
+      },
+      {
+        "path": "maps/generic/dynamic.ide",
+        "size_bytes": 4611,
+        "sha256": "fdc45477f05b63bb4df3d65ea0bbb5c82fa3ad85cc799976266f7f7cebc6410a",
+        "category": "map"
+      },
+      {
+        "path": "maps/generic/dynamic2.ide",
+        "size_bytes": 10509,
+        "sha256": "332f90cc90e8583985410b196e5f990bfb97911d4f8c11621f0394276fcba3d4",
+        "category": "map"
+      },
+      {
+        "path": "maps/generic/multiobj.ide",
+        "size_bytes": 5020,
+        "sha256": "521445080cb80e11bd17576c70fca9023c69007581f65b78e437ae843e8f78f1",
+        "category": "map"
+      },
+      {
+        "path": "maps/generic/procobj.ide",
+        "size_bytes": 4755,
+        "sha256": "38b1b15e73891d130a85730d7ebfb0e3b649ff2ee5b8e414eccd68318b9246a0",
+        "category": "map"
+      },
+      {
+        "path": "maps/generic/vegepart.ide",
+        "size_bytes": 8062,
+        "sha256": "db7827eafd3499b0d738bac83e972776ee6cacb364a2181fc6f479242577eb3a",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/gen_int1.ide",
+        "size_bytes": 2747,
+        "sha256": "470d6c371015631075458870438953f1f581a5e3aadda6d6760bfb0cecd830a1",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/gen_int1.ipl",
+        "size_bytes": 21074,
+        "sha256": "33129ba14fa76515909906c0dc2cb08f5aed921643c39814638ad9267ab0a614",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/gen_int2.ide",
+        "size_bytes": 10941,
+        "sha256": "e1d8a2247ba9da1d242baeff95169b4982ef7289cff626692c25a2785e308544",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/gen_int2.ipl",
+        "size_bytes": 1683,
+        "sha256": "a779e8c280cad2fc2d8a0a107336a7ca8e87007c2d1db36f6c62c07eece1e799",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/gen_int3.ide",
+        "size_bytes": 3252,
+        "sha256": "a0762a373a240c6278aeb624eadde85312e7f39ecf14891df07042972d0553aa",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/gen_int3.ipl",
+        "size_bytes": 2091,
+        "sha256": "eacf70fbd06fe19c9dc028f81eedbf582a2694db0a73d33b5f34ecd70e8b7afb",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/gen_int4.ide",
+        "size_bytes": 2323,
+        "sha256": "50e9826c69e68258966068aa37f7185ef76776c276f61f1285bcbeda4d8c6e0e",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/gen_int4.ipl",
+        "size_bytes": 1185,
+        "sha256": "5769ca2f39579ee0c43b31658e41b7af3264e4b54e76c70229a4b4fe5916e6e0",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/gen_int5.ide",
+        "size_bytes": 4682,
+        "sha256": "88ba64416b2c8c430761790ff080ebf43077ba338188c94a78cee5e4f73d2d38",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/gen_int5.ipl",
+        "size_bytes": 2988,
+        "sha256": "192ba7b31a68ae86a9767d40f7b3918b5da70dbb4445dfe780ac135ae94221a1",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/gen_intb.ide",
+        "size_bytes": 5459,
+        "sha256": "bd694f4c11fb8ca6171d8e7e61a3b71ebdd3e7885667d8e77ae240dcf0c6ef6a",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/gen_intb.ipl",
+        "size_bytes": 1626,
+        "sha256": "76facdeb795adfcd9642c3beaa0d931d90682d12630f2b7ef242b09c4ac14cbe",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/int_cont.ide",
+        "size_bytes": 385,
+        "sha256": "715a381b2e4455594733639ef7a7a0fcde15c0f6d5ac6d8951705fe6e0eef7dd",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/int_cont.ipl",
+        "size_bytes": 910,
+        "sha256": "01d68d96bfbfda67102141a9411ccb64499a8f7a50a641220ce7b22012a540a7",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/int_LA.ide",
+        "size_bytes": 6002,
+        "sha256": "b4c26e3f22f320cd15d37abf63b9756c87c4901193d1e79738bed798e2347427",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/int_LA.ipl",
+        "size_bytes": 1312,
+        "sha256": "6daed19fdfa6f325468668a00065999bef9a8e4fff03039e552b8f4533a74d2d",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/int_SF.ide",
+        "size_bytes": 1260,
+        "sha256": "384d9de6e3a8ff1c4248fa11261863dee3748b3553f7722ed946a4d8aca2a806",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/int_SF.ipl",
+        "size_bytes": 1334,
+        "sha256": "ae36a8df0e4c502af96c661a105b28a7e08cf8a71774d07fdc0b63a0ab924fe2",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/int_veg.ide",
+        "size_bytes": 4684,
+        "sha256": "c3ad8ecb96b83f2c728ee62f61f4bdcb92dc9ba65f4d1c876704167c07ccef34",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/int_veg.ipl",
+        "size_bytes": 5299,
+        "sha256": "115974e58e84ac9772806c8f16a2e322b8b7ce14198480e27f0505872e943f2d",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/propext.ide",
+        "size_bytes": 2340,
+        "sha256": "07ff34faa2883f97fb1c538e45e92b7951463eeb8eba6d053432984f4e9abe99",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/props.ide",
+        "size_bytes": 26326,
+        "sha256": "5ba09718a9c248f83b82d306efbe95b7be5b7f7cdce6b2b17d5a5a11aa0a6b3e",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/props2.ide",
+        "size_bytes": 21174,
+        "sha256": "0e1f4ac0e3cd41af8d8ea83ea37473e91091c63bfdeff836bec40d9dacfbd5a6",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/savehous.ide",
+        "size_bytes": 1724,
+        "sha256": "48d840b6e18dee698982158f70f30b3c0eb406286ae9e7e70744061c86abf19a",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/savehous.ipl",
+        "size_bytes": 2959,
+        "sha256": "eb7b018ba03f934b14fa9ac11f7e151173e669d1c7f69a4d162c0a88a092ec38",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/stadint.ide",
+        "size_bytes": 2851,
+        "sha256": "e2d66db082e7d439472e71ad995bde42b91a9a382eb53f6369e46c1179778307",
+        "category": "map"
+      },
+      {
+        "path": "maps/interior/stadint.ipl",
+        "size_bytes": 6299,
+        "sha256": "f0720fd785069839b9b28a87ce80ede2cf8d4beb58bb009bcd50195ee54a962a",
+        "category": "map"
+      },
+      {
+        "path": "maps/LA/LAe.ide",
+        "size_bytes": 12249,
+        "sha256": "cc114af79b56e2cce26d61d5d8c68211c057d0dd7a61b32cd0ecc582853b22eb",
+        "category": "map"
+      },
+      {
+        "path": "maps/LA/LAe.ipl",
+        "size_bytes": 27328,
+        "sha256": "356c7c7812ae16de67ea816177e802500fc93024cda877d2d20dbd1a9f0f9596",
+        "category": "map"
+      },
+      {
+        "path": "maps/LA/LAe2.ide",
+        "size_bytes": 21906,
+        "sha256": "9d873781ec89a712915b57bc0e098312aea57ab0e7dad11934a1af662a8fa86d",
+        "category": "map"
+      },
+      {
+        "path": "maps/LA/LAe2.ipl",
+        "size_bytes": 33651,
+        "sha256": "0e0b143e3fd217b41dc79cb390627eba2e8d508054d10bc14d38b499a1ddd818",
+        "category": "map"
+      },
+      {
+        "path": "maps/LA/LAhills.ide",
+        "size_bytes": 10601,
+        "sha256": "2cb585a103cd40701c742beec319055b722f10f3f3558e60438b5325e490f2dd",
+        "category": "map"
+      },
+      {
+        "path": "maps/LA/LAhills.ipl",
+        "size_bytes": 34506,
+        "sha256": "eadb547f99169093c1ba2596ec79a4574d178f1832066391cb37d08a04e831fb",
+        "category": "map"
+      },
+      {
+        "path": "maps/LA/LAn.ide",
+        "size_bytes": 11107,
+        "sha256": "4b2d4cb5d602486382d306c4bf2c22e994142b3e9b27f1409ed7b6e480921bd6",
+        "category": "map"
+      },
+      {
+        "path": "maps/LA/LAn.ipl",
+        "size_bytes": 14264,
+        "sha256": "5552050a2a13f273569ac50f7a518a79eee5589b1c3858487b46c0baac7aee5c",
+        "category": "map"
+      },
+      {
+        "path": "maps/LA/LAn2.ide",
+        "size_bytes": 9565,
+        "sha256": "55539a689c5f0ad5371aa26153566064ad452d7e44f1b149b847650a0a4f5413",
+        "category": "map"
+      },
+      {
+        "path": "maps/LA/LAn2.ipl",
+        "size_bytes": 13185,
+        "sha256": "aa255df62b7182d939deab0e49c08aa93fd920d6a80eb44587b01d30a09cffe9",
+        "category": "map"
+      },
+      {
+        "path": "maps/LA/LAs.ide",
+        "size_bytes": 12575,
+        "sha256": "c5873baebb10ea25d1c6067f4f83316af22109722efe1f88a0e4d21e3e834164",
+        "category": "map"
+      },
+      {
+        "path": "maps/LA/LAs.ipl",
+        "size_bytes": 22414,
+        "sha256": "70d0b22da567a271ed9658675378bdbc14adda507ba59f58a280375d98d0211a",
+        "category": "map"
+      },
+      {
+        "path": "maps/LA/LAs2.ide",
+        "size_bytes": 12364,
+        "sha256": "79c6508be5ce34d9c29631ef4b5014db73c5fc46ca161ee9a37f6b40e867457f",
+        "category": "map"
+      },
+      {
+        "path": "maps/LA/LAs2.ipl",
+        "size_bytes": 38441,
+        "sha256": "6028feed65f354037c7c32478d23da46b4f72d91b6d5cbf21600807d8895abeb",
+        "category": "map"
+      },
+      {
+        "path": "maps/LA/LAw.ide",
+        "size_bytes": 9411,
+        "sha256": "48cb3f4bdfafd8c949b9ffd08627353850f9effca670b9fad8b4d3961dd5d062",
+        "category": "map"
+      },
+      {
+        "path": "maps/LA/LAw.ipl",
+        "size_bytes": 15105,
+        "sha256": "00b70d30638e0054695d9628e299fcc778a0c6959ad28b252d3a4388aac4233a",
+        "category": "map"
+      },
+      {
+        "path": "maps/LA/LAw2.ide",
+        "size_bytes": 11060,
+        "sha256": "a9c0b8a67b3d56157735a9f652c37e2a060104f4d05b6e099a7fb46a0766e1fa",
+        "category": "map"
+      },
+      {
+        "path": "maps/LA/LAw2.ipl",
+        "size_bytes": 18232,
+        "sha256": "90dd7ed249acb2a5da8b1261f7ddd91d6c5bfc960599a09f4c0043c1dd2b7407",
+        "category": "map"
+      },
+      {
+        "path": "maps/LA/LaWn.ide",
+        "size_bytes": 13092,
+        "sha256": "3c5e12e83a8fb39c45961dcb02a183522b00166f87a8e97caccffb4298daf2da",
+        "category": "map"
+      },
+      {
+        "path": "maps/LA/LaWn.ipl",
+        "size_bytes": 24330,
+        "sha256": "b34a1e49bf3b2b4569fdcf69e5f1525394ec49e6cdcc13d6ede7b99468272c94",
+        "category": "map"
+      },
+      {
+        "path": "maps/LA/LAxref.ide",
+        "size_bytes": 10473,
+        "sha256": "594ec1f0c3d2388fd3fd126442f5aa5dbfed1a35ae75cd5b73f250abbdb9f1b9",
+        "category": "map"
+      },
+      {
+        "path": "maps/leveldes/leveldes.ide",
+        "size_bytes": 360,
+        "sha256": "5c4cda0261a8302acd997679b3bbe604754423a7b0ce30707bfb81d7f1d569d4",
+        "category": "map"
+      },
+      {
+        "path": "maps/leveldes/leveldes.ipl",
+        "size_bytes": 165,
+        "sha256": "a023d0150ceb2b0d571901ca1d22a2a1377337ac874d593a574eb7426bed65f2",
+        "category": "map"
+      },
+      {
+        "path": "maps/leveldes/levelmap.ide",
+        "size_bytes": 3194,
+        "sha256": "c5d635c1ebd2fdd9f85c990dcf51e37f73ad8bc2e759dd5daa8ab13f45dad74d",
+        "category": "map"
+      },
+      {
+        "path": "maps/leveldes/levelmap.ipl",
+        "size_bytes": 4675,
+        "sha256": "2bacd4d04c78e17e9f34368352c5220e09cbabc45d080d3cd7005097f9d4c7d5",
+        "category": "map"
+      },
+      {
+        "path": "maps/leveldes/levelxre.ide",
+        "size_bytes": 9897,
+        "sha256": "330612dcd0250927a6931629c78d899891f7462306058637a2ea71bd2981fce2",
+        "category": "map"
+      },
+      {
+        "path": "maps/leveldes/seabed.ide",
+        "size_bytes": 12039,
+        "sha256": "5c57137733b59ec7455e821947c9fa5fb1051f69c9499a2c916ef72b77e01256",
+        "category": "map"
+      },
+      {
+        "path": "maps/leveldes/seabed.ipl",
+        "size_bytes": 23342,
+        "sha256": "4f8c7c66864c454a8546257beb54a34a1397d2d637b2c77c70cd16925ec2ab21",
+        "category": "map"
+      },
+      {
+        "path": "maps/occlu.ipl",
+        "size_bytes": 1012,
+        "sha256": "b79d16581e954255ec06394b4c1ad6303ec6ed9eeb79a44ae51764f8d9a708c7",
+        "category": "map"
+      },
+      {
+        "path": "maps/occluint.ipl",
+        "size_bytes": 2338,
+        "sha256": "23d5054e2f69d052c305c21b860c40cc135b4509d3b1aa84ca974716b25fefe0",
+        "category": "map"
+      },
+      {
+        "path": "maps/occluLA.ipl",
+        "size_bytes": 35956,
+        "sha256": "92f9a47f2cf09be813f5cbb94152fad4afdad66da85d0834b5c54179391d09eb",
+        "category": "map"
+      },
+      {
+        "path": "maps/occlusf.ipl",
+        "size_bytes": 16114,
+        "sha256": "c547a2eab51fcaa8c100ba7d6a12cf5e32d9c547756494e2fa664589450eacc3",
+        "category": "map"
+      },
+      {
+        "path": "maps/occluveg.ipl",
+        "size_bytes": 17944,
+        "sha256": "d5c59492e23c14b56409ddeaa20ee95e2c57d4225829b3c94519b52b8d6d8427",
+        "category": "map"
+      },
+      {
+        "path": "maps/paths.ipl",
+        "size_bytes": 2658607,
+        "sha256": "1b8b896eda941aaf31391af571c52d371f5d7617cb2ccf44d148f80e464142ea",
+        "category": "map"
+      },
+      {
+        "path": "maps/paths2.ipl",
+        "size_bytes": 2292241,
+        "sha256": "70a6488bf2c39e486262c6396164c7135b3966797d978d49dcc4788d6242bb1d",
+        "category": "map"
+      },
+      {
+        "path": "maps/paths3.ipl",
+        "size_bytes": 2428066,
+        "sha256": "50a8a882a36c6a39fdbe417000e27579d0f37541df3a0d54bc306c5a70316c5a",
+        "category": "map"
+      },
+      {
+        "path": "maps/paths4.ipl",
+        "size_bytes": 253014,
+        "sha256": "9e770e5ce9724b94ca74dd9256534e233f0b37b0ff72d0001dd1cf93fe5f9f25",
+        "category": "map"
+      },
+      {
+        "path": "maps/paths5.ipl",
+        "size_bytes": 457678,
+        "sha256": "67fc1be4e28dd4837d7d3f369e0d8b1ceae67f1e507959fd2c38cbce4e15949c",
+        "category": "map"
+      },
+      {
+        "path": "maps/SF/SFe.ide",
+        "size_bytes": 16223,
+        "sha256": "c7a52ee49f7fe029817493795e2e8e0da5acb7d406330909b3f310b4b4b82fe8",
+        "category": "map"
+      },
+      {
+        "path": "maps/SF/SFe.ipl",
+        "size_bytes": 26707,
+        "sha256": "0b8bb34c554b247c8aed8e309b710be27bcee66ca029323215ed6efe10eedd1c",
+        "category": "map"
+      },
+      {
+        "path": "maps/SF/SFn.ide",
+        "size_bytes": 11219,
+        "sha256": "e54fe3b0043d8265c8c4d130c0d9fcf16ada6f02a1d5063e82097b6e042fbe55",
+        "category": "map"
+      },
+      {
+        "path": "maps/SF/SFn.ipl",
+        "size_bytes": 26201,
+        "sha256": "cc169fe857e1da974d3605ba112452d7de0832455582e317d75ff8619fd4f73a",
+        "category": "map"
+      },
+      {
+        "path": "maps/SF/SFs.ide",
+        "size_bytes": 18948,
+        "sha256": "24e1f55c8259b6200bb832789616d54fdd95dba11d91d2aef220bfd2fc299078",
+        "category": "map"
+      },
+      {
+        "path": "maps/SF/SFs.ipl",
+        "size_bytes": 37969,
+        "sha256": "c0e6be2722cde673af3e20d827fd16d145d0a6e21fac80644aef01c2610357f3",
+        "category": "map"
+      },
+      {
+        "path": "maps/SF/SFSe.ide",
+        "size_bytes": 30227,
+        "sha256": "0a2c54ce2ba7aeda78a3f24ae11e5ccba5cd6849e6abcdeaacac4ef3553a6b14",
+        "category": "map"
+      },
+      {
+        "path": "maps/SF/SFSe.ipl",
+        "size_bytes": 53359,
+        "sha256": "a04ff8e238acd0de906d903225741b779a73ce8206a13ff034fcdfa2a768ebd5",
+        "category": "map"
+      },
+      {
+        "path": "maps/SF/SFw.ide",
+        "size_bytes": 16473,
+        "sha256": "9b2cea3761c5f95326d77c8989cf0f14f0755c483f667819e01e32f7733b0d0e",
+        "category": "map"
+      },
+      {
+        "path": "maps/SF/SFw.ipl",
+        "size_bytes": 29247,
+        "sha256": "b9da860c8d35d2326c2f6fdaf4bc49f16f5b2844256ba3b0d0541bdfacce8e69",
+        "category": "map"
+      },
+      {
+        "path": "maps/SF/SFxref.ide",
+        "size_bytes": 4631,
+        "sha256": "efdbdbfff67a9b8a71d4b8b250505911966708e15a3627fa8550a7063085de00",
+        "category": "map"
+      },
+      {
+        "path": "maps/tunnels.ipl",
+        "size_bytes": 3230,
+        "sha256": "62479143348a7fb579ebd8d45271afe07aed7b639a90c4933036f12d90853dfc",
+        "category": "map"
+      },
+      {
+        "path": "maps/txd.ide",
+        "size_bytes": 323,
+        "sha256": "539b23649662671a8a6a73e5d1a2e797da645069e595ea592698009798aee92c",
+        "category": "map"
+      },
+      {
+        "path": "maps/vegas/vegasE.ide",
+        "size_bytes": 35542,
+        "sha256": "a55ac1c6e995c14442f6a34672d1769f6fcfd8c5875dc985a2cefb892825ed9d",
+        "category": "map"
+      },
+      {
+        "path": "maps/vegas/vegasE.ipl",
+        "size_bytes": 61084,
+        "sha256": "09b34e42e353b20a3ebf39d1c305a00d5de5fb7cb532da92e7d7cd122f189c47",
+        "category": "map"
+      },
+      {
+        "path": "maps/vegas/VegasN.ide",
+        "size_bytes": 23715,
+        "sha256": "394aa4049796756c6773075f5954b9c93ab6963f05c29afd781d556638c6f53a",
+        "category": "map"
+      },
+      {
+        "path": "maps/vegas/vegasN.ipl",
+        "size_bytes": 36651,
+        "sha256": "a2a67b14a3ccab29c9ca4cc2a579b286ff7c1364b8448bc910e4ed6d1bbde4a7",
+        "category": "map"
+      },
+      {
+        "path": "maps/vegas/VegasS.ide",
+        "size_bytes": 18656,
+        "sha256": "5a10346606025e6793e670ad3b5ff0f4e96f59961951c80a27462cc704823ad9",
+        "category": "map"
+      },
+      {
+        "path": "maps/vegas/vegasS.ipl",
+        "size_bytes": 30343,
+        "sha256": "8608f4bcc70927fc50928a3189a9f4d96320f85db052c7e15f6fea6d40f8cec4",
+        "category": "map"
+      },
+      {
+        "path": "maps/vegas/VegasW.ide",
+        "size_bytes": 25456,
+        "sha256": "6499b130002d706e7808c63d7570b35030d4af89d211c43e5dc1ee1b9c9ea238",
+        "category": "map"
+      },
+      {
+        "path": "maps/vegas/vegasW.ipl",
+        "size_bytes": 49867,
+        "sha256": "8772cd91905a1374886376d7f0a508c666fd8b91478c5f3afc87673ae4e78abc",
+        "category": "map"
+      },
+      {
+        "path": "maps/vegas/vegaxref.ide",
+        "size_bytes": 5751,
+        "sha256": "b52b2622a39a25f62b25960e69e30a96ac43f2e76a2a428aa9d49ee51eca93ed",
+        "category": "map"
+      },
+      {
+        "path": "maps/vegas/vegaxref.ipl",
+        "size_bytes": 3661,
+        "sha256": "45a15259f02a25fcbd3a575ae2a0846a688aafc5bda2c525fa59626e1006557e",
+        "category": "map"
+      },
+      {
+        "path": "maps/veh_mods/veh_mods.ide",
+        "size_bytes": 7323,
+        "sha256": "0338813d49e3c1d92d7f660357d0ab6a6778e65a2e05b0c9cb1f99ffd29c3edc",
+        "category": "map"
+      },
+      {
+        "path": "melee.dat",
+        "size_bytes": 6306,
+        "sha256": "d82430a32f31c239c38e1db8c83589307fb221fce417962993a8c63cb1d3da4b",
+        "category": "metadata"
+      },
+      {
+        "path": "numplate.dat",
+        "size_bytes": 1145,
+        "sha256": "342902a4e6f5bafdf518f163128c24b3b20f207ac5ed7327eb122540313abc1b",
+        "category": "metadata"
+      },
+      {
+        "path": "object.dat",
+        "size_bytes": 126118,
+        "sha256": "c963c980d90891cbb4ab81a6a8daa294a5813cba46fae4b1302951c32ca472d8",
+        "category": "metadata"
+      },
+      {
+        "path": "Paths/carrec.img",
+        "size_bytes": 2357248,
+        "sha256": "58d91faf86f367e7fae5432e36ff7bdcbe5d8815cd05d779b4aa4f6ec96fe074",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES0.DAT",
+        "size_bytes": 13458,
+        "sha256": "f4910a9fa0100984bdd48f0e1d8161fe5b702081d37c66316b2d667f942fa2f2",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES1.DAT",
+        "size_bytes": 35996,
+        "sha256": "dd63cdb01f365b38edb4e69829cb09bb7d39d2105886e3e9f80e7aca05ec47ae",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES10.DAT",
+        "size_bytes": 15100,
+        "sha256": "e84c9ffb3a263f269a0c58f528111d6c6035789b6ba200bb744d791ebead8bda",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES11.DAT",
+        "size_bytes": 28886,
+        "sha256": "d51daa7922f70aab0d2dd4530a9258b40b7f4c6201863ef1eeb5c054109620db",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES12.DAT",
+        "size_bytes": 110342,
+        "sha256": "7afa915d07860ee1d02dd3d70cb28c49adf14b97206cbe330c5eee14ec78f7c3",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES13.DAT",
+        "size_bytes": 117488,
+        "sha256": "0fb989f674da4651b87c1bfc56a6bcbfd7ddd7c9a579e55bc52e1f7458898c11",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES14.DAT",
+        "size_bytes": 121566,
+        "sha256": "99eddfd66abcda9d389a432416ec3b09a5660227fc0104210b316caf18896a79",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES15.DAT",
+        "size_bytes": 93802,
+        "sha256": "eb4a82a8e6863eb2c704549603409f76ade298bdec972ce9f7fea7e84c41109a",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES16.DAT",
+        "size_bytes": 19250,
+        "sha256": "140b62bd53b0e406f11dcbe94c8e0767f562f2e4bea58ded12339eb288fc3ea5",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES17.DAT",
+        "size_bytes": 36952,
+        "sha256": "dd060d61c1ecc45c2aaa8be501c7f41fe29f136b1a5aae67d34dcfd9924c5e64",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES18.DAT",
+        "size_bytes": 17234,
+        "sha256": "8ac84c5c1188b7ea86086ad4c2a462654e46fd771907fbf7f50d43787e20cfe0",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES19.DAT",
+        "size_bytes": 39862,
+        "sha256": "bb4f72c64af33659e43c28f5f344a78a61877a6350977b92e7031735f3adda25",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES2.DAT",
+        "size_bytes": 11396,
+        "sha256": "3fc680950c483dda376f25abe375c39ae825df4671990de245e887ad259ccee0",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES20.DAT",
+        "size_bytes": 76652,
+        "sha256": "86351503a91e923f138d38a65cd74fdc964853d6c4ab340974a643c0bad93fc3",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES21.DAT",
+        "size_bytes": 138482,
+        "sha256": "9fbcf4123097b02e12047195c0d70b4ea67943dd4ef5a535ae177c6b0b9fff37",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES22.DAT",
+        "size_bytes": 120014,
+        "sha256": "831e6e888ff8c77c493abe4d3dffd9c0f96b6dfffaea91ac3cb881b60b608310",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES23.DAT",
+        "size_bytes": 87652,
+        "sha256": "fb3b028a987933691014ecd5826e82629fd0aa2133d7d8730e413bb5ac27b5e1",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES24.DAT",
+        "size_bytes": 94334,
+        "sha256": "76853143b04ef1f35d7db038e5939c048ff88ccd468fbff5344b011313ec9575",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES25.DAT",
+        "size_bytes": 95160,
+        "sha256": "ba42f7d159a5989eb1f94acdaef1e84839585a5c8d641717ae44f611450f77d8",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES26.DAT",
+        "size_bytes": 55378,
+        "sha256": "37d8919fc006e9724dc6dbc5d929384df8e3a4f3e27822597e8e994499fedb12",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES27.DAT",
+        "size_bytes": 26342,
+        "sha256": "59ddaa917fb5372f1e4e77264e3cb4ba6268ae8648498246fe6ade7128c6b6f7",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES28.DAT",
+        "size_bytes": 84224,
+        "sha256": "2be659500dc780deeaf65333bd2078fde056c6e1dec17e084d118e016256a5bc",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES29.DAT",
+        "size_bytes": 36556,
+        "sha256": "6a056c0d9da1750530086489c52952a9dd9f7c3fa04d51c73bdc863beaa415dc",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES3.DAT",
+        "size_bytes": 12438,
+        "sha256": "7a4534acc4bb66f20825966389daa197ed33a72dae3568239672ea268ba5d4b5",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES30.DAT",
+        "size_bytes": 20098,
+        "sha256": "5634a075f755fdc5abc5a3456f4199aaaccc8c4b7213f75c8e0dd8122d5535f3",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES31.DAT",
+        "size_bytes": 22552,
+        "sha256": "7aea61e71070977a590a85979fb92b5f74a415b72a870340e8f4e7349720a2e1",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES32.DAT",
+        "size_bytes": 126744,
+        "sha256": "b35ef3ea7682eb7d15e31429ec4dbca1b7a64029a71740ab8d29ed9562c536b6",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES33.DAT",
+        "size_bytes": 113784,
+        "sha256": "b25515ff4e85595b6c4f47d8d98eb9d2931cc8ab57b6ee69ca910f1fab5b61e9",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES34.DAT",
+        "size_bytes": 50594,
+        "sha256": "2acb931cf1f7675cb7573dd40441edc7ca1351742ea55c568a8c98f34fefe20d",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES35.DAT",
+        "size_bytes": 28442,
+        "sha256": "8ce944836df80b3ce795b54b19d9e96f3c050b0a4386796924f9cc13fbb3045c",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES36.DAT",
+        "size_bytes": 52546,
+        "sha256": "16956c21544e406e6f4e5f47d626712f47ad1519b5bc637ece7c22b6cb68bde8",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES37.DAT",
+        "size_bytes": 46690,
+        "sha256": "26e5849ce3512a532702abd259928055390a69c0bd08990ddd7b521312e37f8b",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES38.DAT",
+        "size_bytes": 59616,
+        "sha256": "4cf2a28bae2d8db6cff8ecdc8e191ecb24e1e7ceb6a379a6611e4538442a27ea",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES39.DAT",
+        "size_bytes": 42486,
+        "sha256": "17b40f6654df1ea1ef491a16d647c34b57f9fd32d23ffa41529bce478a57ef4b",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES4.DAT",
+        "size_bytes": 5402,
+        "sha256": "a6e9a13fa25257c0c0cad5e515dedadc988993fb80d22beb210e734d517f5f26",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES40.DAT",
+        "size_bytes": 115172,
+        "sha256": "7f42619b94223a4e187e416594b4877921dc813cd37cab78d865a6d3b006e96a",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES41.DAT",
+        "size_bytes": 141844,
+        "sha256": "b382756d8379a85090726fe59302bbda844bec3c5664fee682de84c66b645912",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES42.DAT",
+        "size_bytes": 35716,
+        "sha256": "cfaf6d7bbbc6887fa090af63f770273104d927662c2b912a618b7fda39ffbdce",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES43.DAT",
+        "size_bytes": 45006,
+        "sha256": "83a617dc3f1a33e85d66e12226132fb595cce81a94800e76f568f81aff9834ea",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES44.DAT",
+        "size_bytes": 49032,
+        "sha256": "69e80ccd3960b93595f57a0daebc793badcb869007a203902c2a56bbc17cb4ce",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES45.DAT",
+        "size_bytes": 40270,
+        "sha256": "e045bff56ed6c4ee229c6e16020c61eaf7d54b40cb076b3b12ea722e36e29e75",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES46.DAT",
+        "size_bytes": 123954,
+        "sha256": "945d2854bc5db396dbd32f9b316c4e0a51deced64e3aff4fb7b1367c2c2423eb",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES47.DAT",
+        "size_bytes": 85050,
+        "sha256": "dd8a085e90871f0ff0f6ce0511782376bf94456e777ff3af6ebaaaadd4b5ad74",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES48.DAT",
+        "size_bytes": 26170,
+        "sha256": "8b20d271c6aee0d586fff29d931bb48b50a1b8f09dda9ef20b74b5333b561d83",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES49.DAT",
+        "size_bytes": 14948,
+        "sha256": "2d8a806d58bc6cb29897d9b6f82029c595adcb6f49cde795bbe155e20744f2cc",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES5.DAT",
+        "size_bytes": 16804,
+        "sha256": "26c8008564bb70332058e5a6e3a4c1a5006c12e84979f174754c9ed9a7489114",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES50.DAT",
+        "size_bytes": 32076,
+        "sha256": "8411bf12e12afd59c3beb11ec0f939fd8cc4cec447e80bd2679265236b11708f",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES51.DAT",
+        "size_bytes": 18704,
+        "sha256": "5d6f0af1bdbf837810a1c1055e25b6548bcafd66a3a864516d0f86b5e37c8fbe",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES52.DAT",
+        "size_bytes": 37934,
+        "sha256": "3fbac1bcff5f1098472dcfe309cb43b199c38fd6b1fdbe1e8b5c526c8228fb77",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES53.DAT",
+        "size_bytes": 65650,
+        "sha256": "af395d4fbc7f5aacb84a949b48e4f32ed5a19600597e422fb838c8f5cfdc3ec8",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES54.DAT",
+        "size_bytes": 127874,
+        "sha256": "209d1b5474b2a030bda032e19cda449c038fbe89796f41016499b580c39e6331",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES55.DAT",
+        "size_bytes": 84904,
+        "sha256": "db3f7ec70518e6ddd13871ad0bcb96e401b0f605965a1faf085ddc464d8b9ea6",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES56.DAT",
+        "size_bytes": 33350,
+        "sha256": "b6d6708e050ab07b88a1ff75319fa41cfc23e298527e4a886a17704fbb5f68d5",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES57.DAT",
+        "size_bytes": 19212,
+        "sha256": "e3c430ac3a21b3abc31d7840ad2d50df1f07c704bc0f9c7dddadb5c898de9862",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES58.DAT",
+        "size_bytes": 18858,
+        "sha256": "e25f71bfe6683da82219ffb516b00c8ccc68350c920ea9271657ad8071b31b7d",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES59.DAT",
+        "size_bytes": 28114,
+        "sha256": "9c5cc3d536f9359f89b2e195d4de1511c51eebe96a082a875e77f1825526d138",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES6.DAT",
+        "size_bytes": 50642,
+        "sha256": "a3d751c73023b202d3df67d8c903614db4e816fdc241b89efd2184cfd1179839",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES60.DAT",
+        "size_bytes": 14464,
+        "sha256": "e66b0e32b2a1ea95af5f81faa6735216115cb13026984760739416666bd0fead",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES61.DAT",
+        "size_bytes": 60284,
+        "sha256": "e292dbe2c0f4678e03235f4d557dcffb3842798e7c8f7b7a5c73609f66203965",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES62.DAT",
+        "size_bytes": 70972,
+        "sha256": "1dbc30784b71ba42dd742d07b0a3a991b2de75f2c0e5523ab0abe7b2716a3edc",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES63.DAT",
+        "size_bytes": 71530,
+        "sha256": "96fe84fc7225551ab8b7ad734fe425ceec2b984d21b511c819688b86c70653c5",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES7.DAT",
+        "size_bytes": 24464,
+        "sha256": "2e39c0e99b86d1716b8fc52bfc295de712c446d3a71081b609645ff2bbb7e6c9",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES8.DAT",
+        "size_bytes": 32112,
+        "sha256": "19d5d3d503364bfdd883dcd1d46280a579447c260513eb4f4af15cca418e877e",
+        "category": "path"
+      },
+      {
+        "path": "Paths/NODES9.DAT",
+        "size_bytes": 32516,
+        "sha256": "9ad49ac7fcb2c501902a89a0196cea62fe9319f01fc965580331459e40dadc3d",
+        "category": "path"
+      },
+      {
+        "path": "Paths/ROADBLOX.DAT",
+        "size_bytes": 1304,
+        "sha256": "2da412adc28eefd4b406df53e0ab2693eb564d8dfeb73f31ca771022280342ef",
+        "category": "path"
+      },
+      {
+        "path": "Paths/spath0.dat",
+        "size_bytes": 1886,
+        "sha256": "327fcfa5b3c12d2f72dfdd9a8338ad837a6b750446b631ffcd5d831c843c6762",
+        "category": "path"
+      },
+      {
+        "path": "Paths/tracks.dat",
+        "size_bytes": 25474,
+        "sha256": "9f3509865baa1424cedce8c9185f93bf575eb1d6cb2e114f1c704f07f92d0f55",
+        "category": "path"
+      },
+      {
+        "path": "Paths/tracks2.dat",
+        "size_bytes": 1892,
+        "sha256": "f30af4dd0b7948321db633d4964898961b4ae97f5c29b6ca1cdcb9b77e6f4985",
+        "category": "path"
+      },
+      {
+        "path": "Paths/tracks3.dat",
+        "size_bytes": 8328,
+        "sha256": "b8ed468ae2aa953250f5f9bcf1ff34ec7a413cfca63357a6a531f37dfb9b5767",
+        "category": "path"
+      },
+      {
+        "path": "Paths/tracks4.dat",
+        "size_bytes": 18347,
+        "sha256": "e8decea200f701498cf1414a4d6accb1dc6fdeb147ac30cd3500e0ae27cdcd69",
+        "category": "path"
+      },
+      {
+        "path": "Paths/train.dat",
+        "size_bytes": 2476,
+        "sha256": "53f0b4b2c01a82522d37a3e3d09e14217bca2d91ced525b45bf9fabfd1a1bfb0",
+        "category": "path"
+      },
+      {
+        "path": "Paths/train2.dat",
+        "size_bytes": 4232,
+        "sha256": "0dd3a51310bbaf649de2a97267d27d6ce8fa9e3930139fa1fdafdf5b8db9bea6",
+        "category": "path"
+      },
+      {
+        "path": "ped.dat",
+        "size_bytes": 1276,
+        "sha256": "fa4a2636ba772080c75d0986379a862c4c2f7cf7bf6c1550557f3557236b450e",
+        "category": "metadata"
+      },
+      {
+        "path": "pedgrp.dat",
+        "size_bytes": 5792,
+        "sha256": "157f429231421f37d44b2b4890b14ee0537f7f32a8bdf71a140340ac04770222",
+        "category": "metadata"
+      },
+      {
+        "path": "peds.ide",
+        "size_bytes": 33401,
+        "sha256": "ec16c488c40f2c563c475130eb7ef633a024ac6bc0f01e8bfb248972a241af92",
+        "category": "metadata"
+      },
+      {
+        "path": "pedstats.dat",
+        "size_bytes": 3604,
+        "sha256": "280c12e4f8b36f6e68b68323fb3d01d853b9a91bf4497964ce5159abfd84d684",
+        "category": "metadata"
+      },
+      {
+        "path": "plants.dat",
+        "size_bytes": 9887,
+        "sha256": "d989d13c540be6e8c7e381ac1785a61a99ca8dc97002ed9013a0312b5dab08a8",
+        "category": "metadata"
+      },
+      {
+        "path": "polydensity.dat",
+        "size_bytes": 288020,
+        "sha256": "975a9b23dcfc195dc9d2722a50774d4a739f4d0c2bba4f7c24be9ae05161c94a",
+        "category": "metadata"
+      },
+      {
+        "path": "popcycle.dat",
+        "size_bytes": 127108,
+        "sha256": "7adf28ff336d652a0d85cd8c9cb37379755e7f68a00b3637ea4afc4d4184aac7",
+        "category": "metadata"
+      },
+      {
+        "path": "procobj.dat",
+        "size_bytes": 10019,
+        "sha256": "b41895965d087b90aa8b11a66849002a08256a27010209b2b534e0f4438d95c5",
+        "category": "metadata"
+      },
+      {
+        "path": "script/main.scm",
+        "size_bytes": 3079599,
+        "sha256": "601def3baae766ce6a23e2f0b9b48f6b33c9a64e2fc32eb4f22ddea8b868b0fa",
+        "category": "script"
+      },
+      {
+        "path": "script/script.img",
+        "size_bytes": 581632,
+        "sha256": "582b2ad47aafa9867238aff2d2b07cce5cc85496612157e759a4f25aa9e83187",
+        "category": "script"
+      },
+      {
+        "path": "shopping.dat",
+        "size_bytes": 46875,
+        "sha256": "93e640e29049ee9985185b7aaf1b2f3d11f8540ff8791a751632d6ba90d0bd4d",
+        "category": "metadata"
+      },
+      {
+        "path": "statdisp.dat",
+        "size_bytes": 7333,
+        "sha256": "e16ec576f165882c82524e12d05a3ca42f321a17f53675f44ef031a6f2613f72",
+        "category": "metadata"
+      },
+      {
+        "path": "surface.dat",
+        "size_bytes": 576,
+        "sha256": "09cf086c44c2409f6d5f40f58d7a753f0384d227b7f8c27fec7fe5dbe56c4a90",
+        "category": "metadata"
+      },
+      {
+        "path": "surfaud.dat",
+        "size_bytes": 6530,
+        "sha256": "5a25dfb38743e42b46f7979941f9fa8a1201788e91f991975dfed997aa4db605",
+        "category": "metadata"
+      },
+      {
+        "path": "surfinfo.dat",
+        "size_bytes": 28106,
+        "sha256": "431b95d4dcb20ce5258f7d939902c56d50fb4ee68b30ed7a044919c666291b55",
+        "category": "metadata"
+      },
+      {
+        "path": "timecyc.dat",
+        "size_bytes": 40037,
+        "sha256": "0efce1a3d36aac22bf5276f65f7a8aa411ce34bdcbe5128cef4c800f82d5754b",
+        "category": "metadata"
+      },
+      {
+        "path": "timecycp.dat",
+        "size_bytes": 40520,
+        "sha256": "34989779a9868a0e54f64edb2b5813d65eabe18f1ecf01bcbb9188a5a6964584",
+        "category": "metadata"
+      },
+      {
+        "path": "txdcut.ide",
+        "size_bytes": 478,
+        "sha256": "68299b02ec1f00da7a93a400742c9f8edf3b776cf339431228af969f95249055",
+        "category": "metadata"
+      },
+      {
+        "path": "vehicles.ide",
+        "size_bytes": 21093,
+        "sha256": "2d70455cda1ed89da9cc1a995ccb2539899b84360a2411c887d88617365ead37",
+        "category": "metadata"
+      },
+      {
+        "path": "water.dat",
+        "size_bytes": 70099,
+        "sha256": "1562bc86766ce595d7513f3ca3ae3fc4147b574c8c4e703fe6a76678507969bf",
+        "category": "metadata"
+      },
+      {
+        "path": "water1.dat",
+        "size_bytes": 60063,
+        "sha256": "c43d750c3a9b1d645235f0c987fac3b1f2fa20aafd78449e831f2aea36de5f68",
+        "category": "metadata"
+      },
+      {
+        "path": "weapon.dat",
+        "size_bytes": 11585,
+        "sha256": "033b3db45a00464fd95cb28870c97b45b0712f0ac53f3e8c586c88aaa0a420f8",
+        "category": "metadata"
+      }
+    ]
+  },
+  "tools": {
+    "file_count": 722,
+    "bytes": 25662023
+  },
+  "critical_hashes": {
+    "main.scm": "601def3baae766ce6a23e2f0b9b48f6b33c9a64e2fc32eb4f22ddea8b868b0fa",
+    "script.img": "582b2ad47aafa9867238aff2d2b07cce5cc85496612157e759a4f25aa9e83187",
+    "main_decompiled.txt": "6f9aba5978482d9f31fcc32cdbbd2c95577a9f650a13fa0df50904a6e3c3af84"
+  },
+  "reference_validation": {
+    "total": 113,
+    "present": 111,
+    "missing_data": [],
+    "external_assets_not_in_package": [
+      {
+        "source": "data/gta.dat",
+        "type": "IMG",
+        "path": "MODELS/CUTSCENE.IMG"
+      },
+      {
+        "source": "data/default.dat",
+        "type": "COLFILE",
+        "path": "MODELS/COLL/WEAPONS.COL"
+      }
+    ]
+  },
+  "decompile": {
+    "bytes": 14376049,
+    "lines": 535204,
+    "define_missions": 135,
+    "missions": [
+      {
+        "id": 0,
+        "label": "@INITIAL",
+        "name": "Initial 1",
+        "line": 393
+      },
+      {
+        "id": 1,
+        "label": "@INITIL2",
+        "name": "Initial 2",
+        "line": 394
+      },
+      {
+        "id": 2,
+        "label": "@INTRO",
+        "name": "Intro",
+        "line": 395
+      },
+      {
+        "id": 3,
+        "label": "@NONE",
+        "name": "Video Game: They Crawled From Uranus",
+        "line": 396
+      },
+      {
+        "id": 4,
+        "label": "@DUAL",
+        "name": "Video Game: Duality",
+        "line": 397
+      },
+      {
+        "id": 5,
+        "label": "@SHTR",
+        "name": "Video Game: Go Go Space Monkey",
+        "line": 398
+      },
+      {
+        "id": 6,
+        "label": "@GRAV",
+        "name": "Video Game: Let's Get Ready To Bumble",
+        "line": 399
+      },
+      {
+        "id": 7,
+        "label": "@OTB",
+        "name": "Video Game: Inside Track Betting",
+        "line": 400
+      },
+      {
+        "id": 8,
+        "label": "@POOL2",
+        "name": "Pool",
+        "line": 401
+      },
+      {
+        "id": 9,
+        "label": "@LOWR",
+        "name": "Lowrider (Bet And Dance)",
+        "line": 402
+      },
+      {
+        "id": 10,
+        "label": "@ZERO5",
+        "name": "Beefy Baron",
+        "line": 403
+      },
+      {
+        "id": 11,
+        "label": "@INTRO1",
+        "name": "Big Smoke",
+        "line": 404
+      },
+      {
+        "id": 12,
+        "label": "@INTRO2",
+        "name": "Ryder",
+        "line": 405
+      },
+      {
+        "id": 13,
+        "label": "@SWEET1",
+        "name": "Tagging Up Turf",
+        "line": 406
+      },
+      {
+        "id": 14,
+        "label": "@SWEET1B",
+        "name": "Cleaning The Hood",
+        "line": 407
+      },
+      {
+        "id": 15,
+        "label": "@SWEET3",
+        "name": "Drive-Thru",
+        "line": 408
+      },
+      {
+        "id": 16,
+        "label": "@SWEET2",
+        "name": "Nines And AK's",
+        "line": 409
+      },
+      {
+        "id": 17,
+        "label": "@SWEET4",
+        "name": "Drive-By",
+        "line": 410
+      },
+      {
+        "id": 18,
+        "label": "@HOODS5",
+        "name": "Sweet's Girl",
+        "line": 411
+      },
+      {
+        "id": 19,
+        "label": "@SWEET6",
+        "name": "Cesar Vialpando",
+        "line": 412
+      },
+      {
+        "id": 20,
+        "label": "@SWEET7",
+        "name": "Los Sepulcros",
+        "line": 413
+      },
+      {
+        "id": 21,
+        "label": "@CRASH4",
+        "name": "Doberman",
+        "line": 414
+      },
+      {
+        "id": 22,
+        "label": "@CRASH1",
+        "name": "Burning Desire",
+        "line": 415
+      },
+      {
+        "id": 23,
+        "label": "@DRUGS3",
+        "name": "Gray Imports",
+        "line": 416
+      },
+      {
+        "id": 24,
+        "label": "@GUNS1",
+        "name": "Home Invasion",
+        "line": 417
+      },
+      {
+        "id": 25,
+        "label": "@RYDER3",
+        "name": "Catalyst",
+        "line": 418
+      },
+      {
+        "id": 26,
+        "label": "@RYDER2",
+        "name": "Robbing Uncle Sam",
+        "line": 419
+      },
+      {
+        "id": 27,
+        "label": "@TWAR7",
+        "name": "OG Loc",
+        "line": 420
+      },
+      {
+        "id": 28,
+        "label": "@SMOKE2",
+        "name": "Running Dog",
+        "line": 421
+      },
+      {
+        "id": 29,
+        "label": "@SMOKE3",
+        "name": "Wrong Side of the Tracks",
+        "line": 422
+      },
+      {
+        "id": 30,
+        "label": "@DRUGS1",
+        "name": "Just Business",
+        "line": 423
+      },
+      {
+        "id": 31,
+        "label": "@MUSIC1",
+        "name": "Life's a Beach",
+        "line": 424
+      },
+      {
+        "id": 32,
+        "label": "@MUSIC2",
+        "name": "Madd Dogg's Rhymes",
+        "line": 425
+      },
+      {
+        "id": 33,
+        "label": "@MUSIC3",
+        "name": "Management Issues",
+        "line": 426
+      },
+      {
+        "id": 34,
+        "label": "@MUSIC5",
+        "name": "House Party",
+        "line": 427
+      },
+      {
+        "id": 35,
+        "label": "@CPRACE",
+        "name": "Race Tournament / 8-track / Dirt Track",
+        "line": 428
+      },
+      {
+        "id": 36,
+        "label": "@CESAR1",
+        "name": "Lowrider (High Stakes)",
+        "line": 429
+      },
+      {
+        "id": 37,
+        "label": "@DRUGS4",
+        "name": "Reuniting The Families",
+        "line": 430
+      },
+      {
+        "id": 38,
+        "label": "@LA1FIN2",
+        "name": "The Green Sabre",
+        "line": 431
+      },
+      {
+        "id": 39,
+        "label": "@BCRASH1",
+        "name": "Badlands",
+        "line": 432
+      },
+      {
+        "id": 40,
+        "label": "@CATALIN",
+        "name": "First Date",
+        "line": 433
+      },
+      {
+        "id": 41,
+        "label": "@CAT1",
+        "name": "Local Liquor Store",
+        "line": 434
+      },
+      {
+        "id": 42,
+        "label": "@CAT2",
+        "name": "Small Town Bank",
+        "line": 435
+      },
+      {
+        "id": 43,
+        "label": "@CAT3",
+        "name": "Tanker Commander",
+        "line": 436
+      },
+      {
+        "id": 44,
+        "label": "@CAT4",
+        "name": "Against All Odds",
+        "line": 437
+      },
+      {
+        "id": 45,
+        "label": "@CATCUT",
+        "name": "King in Exile",
+        "line": 438
+      },
+      {
+        "id": 46,
+        "label": "@TRUTH1",
+        "name": "Body Harvest",
+        "line": 439
+      },
+      {
+        "id": 47,
+        "label": "@TRUTH2",
+        "name": "Are you going to San Fierro?",
+        "line": 440
+      },
+      {
+        "id": 48,
+        "label": "@BCESAR4",
+        "name": "Wu Zi Mu / Farewell, My Love...",
+        "line": 441
+      },
+      {
+        "id": 49,
+        "label": "@GARAG1",
+        "name": "Wear Flowers In Your Hair",
+        "line": 442
+      },
+      {
+        "id": 50,
+        "label": "@DECON",
+        "name": "Deconstruction",
+        "line": 443
+      },
+      {
+        "id": 51,
+        "label": "@SCRASH3",
+        "name": "555 WE TIP",
+        "line": 444
+      },
+      {
+        "id": 52,
+        "label": "@SCRASH2",
+        "name": "Snail Trail",
+        "line": 445
+      },
+      {
+        "id": 53,
+        "label": "@WUZI1",
+        "name": "Mountain Cloud Boys",
+        "line": 446
+      },
+      {
+        "id": 54,
+        "label": "@FARLIE4",
+        "name": "Ran Fa Li",
+        "line": 447
+      },
+      {
+        "id": 55,
+        "label": "@DRIV6",
+        "name": "Lure",
+        "line": 448
+      },
+      {
+        "id": 56,
+        "label": "@WUZI2",
+        "name": "Amphibious Assault",
+        "line": 449
+      },
+      {
+        "id": 57,
+        "label": "@WUZI5",
+        "name": "The Da Nang Thang",
+        "line": 450
+      },
+      {
+        "id": 58,
+        "label": "@SYN1",
+        "name": "Photo Opportunity",
+        "line": 451
+      },
+      {
+        "id": 59,
+        "label": "@SYN2",
+        "name": "Jizzy",
+        "line": 452
+      },
+      {
+        "id": 60,
+        "label": "@SYN3",
+        "name": "Outrider",
+        "line": 453
+      },
+      {
+        "id": 61,
+        "label": "@SYND4",
+        "name": "Ice Cold Killa",
+        "line": 454
+      },
+      {
+        "id": 62,
+        "label": "@SYN6",
+        "name": "Toreno's Last Flight",
+        "line": 455
+      },
+      {
+        "id": 63,
+        "label": "@SYN7",
+        "name": "Yay Ka-Boom-Boom",
+        "line": 456
+      },
+      {
+        "id": 64,
+        "label": "@SYN5",
+        "name": "Pier 69",
+        "line": 457
+      },
+      {
+        "id": 65,
+        "label": "@DRIV2",
+        "name": "T-Bone Mendez",
+        "line": 458
+      },
+      {
+        "id": 66,
+        "label": "@DRIV3",
+        "name": "Mike Toreno",
+        "line": 459
+      },
+      {
+        "id": 67,
+        "label": "@STEAL1",
+        "name": "Zeroing In",
+        "line": 460
+      },
+      {
+        "id": 68,
+        "label": "@STEAL2",
+        "name": "Test Drive",
+        "line": 461
+      },
+      {
+        "id": 69,
+        "label": "@STEAL4",
+        "name": "Customs Fast Track",
+        "line": 462
+      },
+      {
+        "id": 70,
+        "label": "@STEAL5",
+        "name": "Puncture Wounds",
+        "line": 463
+      },
+      {
+        "id": 71,
+        "label": "@DSKOOL",
+        "name": "Back to School",
+        "line": 464
+      },
+      {
+        "id": 72,
+        "label": "@ZERO1",
+        "name": "Air Raid",
+        "line": 465
+      },
+      {
+        "id": 73,
+        "label": "@ZERO2",
+        "name": "Supply Lines...",
+        "line": 466
+      },
+      {
+        "id": 74,
+        "label": "@ZERO4",
+        "name": "New Model Army",
+        "line": 467
+      },
+      {
+        "id": 75,
+        "label": "@TORENO1",
+        "name": "Monster",
+        "line": 468
+      },
+      {
+        "id": 76,
+        "label": "@TORENO2",
+        "name": "Highjack",
+        "line": 469
+      },
+      {
+        "id": 77,
+        "label": "@DES3",
+        "name": "Interdiction",
+        "line": 470
+      },
+      {
+        "id": 78,
+        "label": "@DESERT4",
+        "name": "Verdant Meadows",
+        "line": 471
+      },
+      {
+        "id": 79,
+        "label": "@DESERT6",
+        "name": "N.O.E.",
+        "line": 472
+      },
+      {
+        "id": 80,
+        "label": "@DESERT9",
+        "name": "Stowaway",
+        "line": 473
+      },
+      {
+        "id": 81,
+        "label": "@MAF4",
+        "name": "Black Project",
+        "line": 474
+      },
+      {
+        "id": 82,
+        "label": "@DES10",
+        "name": "Green Goo",
+        "line": 475
+      },
+      {
+        "id": 83,
+        "label": "@DESERT5",
+        "name": "Learning to Fly",
+        "line": 476
+      },
+      {
+        "id": 84,
+        "label": "@CASINO1",
+        "name": "Fender Ketchup",
+        "line": 477
+      },
+      {
+        "id": 85,
+        "label": "@CASINO2",
+        "name": "Explosive Situation",
+        "line": 478
+      },
+      {
+        "id": 86,
+        "label": "@CASINO3",
+        "name": "You've Had Your Chips",
+        "line": 479
+      },
+      {
+        "id": 87,
+        "label": "@CASINO7",
+        "name": "Fish in a Barrel",
+        "line": 480
+      },
+      {
+        "id": 88,
+        "label": "@CASINO4",
+        "name": "Don Peyote",
+        "line": 481
+      },
+      {
+        "id": 89,
+        "label": "@CASINO5",
+        "name": "Intensive Care",
+        "line": 482
+      },
+      {
+        "id": 90,
+        "label": "@CASINO6",
+        "name": "The Meat Business",
+        "line": 483
+      },
+      {
+        "id": 91,
+        "label": "@CASINO9",
+        "name": "Freefall",
+        "line": 484
+      },
+      {
+        "id": 92,
+        "label": "@CASIN10",
+        "name": "Saint Mark's Bistro",
+        "line": 485
+      },
+      {
+        "id": 93,
+        "label": "@VCRASH1",
+        "name": "Misappropriation",
+        "line": 486
+      },
+      {
+        "id": 94,
+        "label": "@VCR2",
+        "name": "High Noon",
+        "line": 487
+      },
+      {
+        "id": 95,
+        "label": "@DOC2",
+        "name": "Madd Dogg",
+        "line": 488
+      },
+      {
+        "id": 96,
+        "label": "@HEIST1",
+        "name": "Architectural Espionage",
+        "line": 489
+      },
+      {
+        "id": 97,
+        "label": "@HEIST3",
+        "name": "Key To Her Heart",
+        "line": 490
+      },
+      {
+        "id": 98,
+        "label": "@HEIST2",
+        "name": "Dam And Blast",
+        "line": 491
+      },
+      {
+        "id": 99,
+        "label": "@HEIST4",
+        "name": "Cop Wheels",
+        "line": 492
+      },
+      {
+        "id": 100,
+        "label": "@HEIST5",
+        "name": "Up, Up and Away!",
+        "line": 493
+      },
+      {
+        "id": 101,
+        "label": "@HEIST9",
+        "name": "Breaking the Bank at Caligula's",
+        "line": 494
+      },
+      {
+        "id": 102,
+        "label": "@MANSIO1",
+        "name": "A Home In The Hills",
+        "line": 495
+      },
+      {
+        "id": 103,
+        "label": "@MANSIO2",
+        "name": "Vertical Bird",
+        "line": 496
+      },
+      {
+        "id": 104,
+        "label": "@MANSIO3",
+        "name": "Home Coming",
+        "line": 497
+      },
+      {
+        "id": 105,
+        "label": "@MANSON5",
+        "name": "Cut Throat Business",
+        "line": 498
+      },
+      {
+        "id": 106,
+        "label": "@GROVE1",
+        "name": "Beat Down on B Dup",
+        "line": 499
+      },
+      {
+        "id": 107,
+        "label": "@GROVE2",
+        "name": "Grove 4 Life",
+        "line": 500
+      },
+      {
+        "id": 108,
+        "label": "@RIOT1",
+        "name": "Riot",
+        "line": 501
+      },
+      {
+        "id": 109,
+        "label": "@RIOT2",
+        "name": "Los Desperados",
+        "line": 502
+      },
+      {
+        "id": 110,
+        "label": "@FINALEA",
+        "name": "End Of The Line (1)",
+        "line": 503
+      },
+      {
+        "id": 111,
+        "label": "@FINALEB",
+        "name": "End Of The Line (2)",
+        "line": 504
+      },
+      {
+        "id": 112,
+        "label": "@FINALEC",
+        "name": "End Of The Line (3)",
+        "line": 505
+      },
+      {
+        "id": 113,
+        "label": "@SHRANGE",
+        "name": "Shooting range",
+        "line": 506
+      },
+      {
+        "id": 114,
+        "label": "@GYMLS",
+        "name": "Los Santos Gym Fight School",
+        "line": 507
+      },
+      {
+        "id": 115,
+        "label": "@GYMSF",
+        "name": "San Fierro Gym Fight School",
+        "line": 508
+      },
+      {
+        "id": 116,
+        "label": "@GYMLV",
+        "name": "Las Venturas Gym Fight School",
+        "line": 509
+      },
+      {
+        "id": 117,
+        "label": "@TRUCK",
+        "name": "Trucking",
+        "line": 510
+      },
+      {
+        "id": 118,
+        "label": "@QUARRY",
+        "name": "Quarry",
+        "line": 511
+      },
+      {
+        "id": 119,
+        "label": "@BOAT",
+        "name": "Boat School",
+        "line": 512
+      },
+      {
+        "id": 120,
+        "label": "@BSKOOL",
+        "name": "Bike School",
+        "line": 513
+      },
+      {
+        "id": 121,
+        "label": "@TAXIODD",
+        "name": "Taxi-Driver Sub-Mission",
+        "line": 514
+      },
+      {
+        "id": 122,
+        "label": "@AMBULAN",
+        "name": "Paramedic Sub-Mission",
+        "line": 515
+      },
+      {
+        "id": 123,
+        "label": "@FIRETRU",
+        "name": "Firefighter Sub-Mission",
+        "line": 516
+      },
+      {
+        "id": 124,
+        "label": "@COPCAR",
+        "name": "Vigilante Sub-Mission",
+        "line": 517
+      },
+      {
+        "id": 125,
+        "label": "@BURGJB",
+        "name": "Burglary Sub-Mission",
+        "line": 518
+      },
+      {
+        "id": 126,
+        "label": "@FREIGHT",
+        "name": "Freight Train Sub-Mission",
+        "line": 519
+      },
+      {
+        "id": 127,
+        "label": "@PIMP",
+        "name": "Pimping Sub-Mission",
+        "line": 520
+      },
+      {
+        "id": 128,
+        "label": "@BLOOD",
+        "name": "Arena Mission: Blood Ring",
+        "line": 521
+      },
+      {
+        "id": 129,
+        "label": "@KICKSTA",
+        "name": "Arena Mission: Kickstart",
+        "line": 522
+      },
+      {
+        "id": 130,
+        "label": "@TRIA",
+        "name": "Beat the Cock!",
+        "line": 523
+      },
+      {
+        "id": 131,
+        "label": "@BCOUR",
+        "name": "Courier",
+        "line": 524
+      },
+      {
+        "id": 132,
+        "label": "@MTBIKER",
+        "name": "The Chiliad Challenge",
+        "line": 525
+      },
+      {
+        "id": 133,
+        "label": "@STUNT",
+        "name": "BMX / NRG-500 STUNT Mission",
+        "line": 526
+      },
+      {
+        "id": 134,
+        "label": "@BUYPRO1",
+        "name": "Buy Properties Mission",
+        "line": 527
+      }
+    ],
+    "external_scripts": [
+      {
+        "id": 0,
+        "name": "PLAYER_PARACHUTE",
+        "line": 458184
+      },
+      {
+        "id": 1,
+        "name": "PARACHUTE",
+        "line": 458962
+      },
+      {
+        "id": 2,
+        "name": "BCESAR2",
+        "line": 459981
+      },
+      {
+        "id": 3,
+        "name": "BCESAR3",
+        "line": 460998
+      },
+      {
+        "id": 4,
+        "name": "SLOT_MACHINE",
+        "line": 462207
+      },
+      {
+        "id": 5,
+        "name": "ROULETTE",
+        "line": 462780
+      },
+      {
+        "id": 6,
+        "name": "OTB_SCRIPT",
+        "line": 465682
+      },
+      {
+        "id": 7,
+        "name": "ARCADE",
+        "line": 465824
+      },
+      {
+        "id": 8,
+        "name": "VENDING_MACHINE",
+        "line": 465997
+      },
+      {
+        "id": 9,
+        "name": "FOOD_VENDOR",
+        "line": 466276
+      },
+      {
+        "id": 10,
+        "name": "GATES_SCRIPT",
+        "line": 466465
+      },
+      {
+        "id": 11,
+        "name": "GYMBIKE",
+        "line": 466609
+      },
+      {
+        "id": 12,
+        "name": "GYMBENCH",
+        "line": 467542
+      },
+      {
+        "id": 13,
+        "name": "GYMTREAD",
+        "line": 468861
+      },
+      {
+        "id": 14,
+        "name": "GYMDUMB",
+        "line": 469773
+      },
+      {
+        "id": 15,
+        "name": "BASKETB",
+        "line": 471032
+      },
+      {
+        "id": 16,
+        "name": "VIDPOK",
+        "line": 473969
+      },
+      {
+        "id": 17,
+        "name": "BLACKJ",
+        "line": 478273
+      },
+      {
+        "id": 18,
+        "name": "WHEELO",
+        "line": 483571
+      },
+      {
+        "id": 19,
+        "name": "DEALER",
+        "line": 486223
+      },
+      {
+        "id": 20,
+        "name": "HOME_BRAINS",
+        "line": 486931
+      },
+      {
+        "id": 21,
+        "name": "POOL_SCRIPT",
+        "line": 487487
+      },
+      {
+        "id": 22,
+        "name": "LOWR_CONT",
+        "line": 487930
+      },
+      {
+        "id": 23,
+        "name": "BURG_BRAINS",
+        "line": 488244
+      },
+      {
+        "id": 24,
+        "name": "GF_MEETING",
+        "line": 488917
+      },
+      {
+        "id": 25,
+        "name": "GF_DATE",
+        "line": 490007
+      },
+      {
+        "id": 26,
+        "name": "GF_SEX",
+        "line": 495684
+      },
+      {
+        "id": 27,
+        "name": "CASINO_AMBIENCE",
+        "line": 497886
+      },
+      {
+        "id": 28,
+        "name": "BAR_AMBIENCE",
+        "line": 498258
+      },
+      {
+        "id": 29,
+        "name": "FOODBRAINS",
+        "line": 498583
+      },
+      {
+        "id": 30,
+        "name": "OTB_AMBIENCE",
+        "line": 498771
+      },
+      {
+        "id": 31,
+        "name": "STRIP_AMBIENCE",
+        "line": 498891
+      },
+      {
+        "id": 32,
+        "name": "PLANES",
+        "line": 499753
+      },
+      {
+        "id": 33,
+        "name": "TRAINS",
+        "line": 501078
+      },
+      {
+        "id": 34,
+        "name": "ZERO_AMBIENCE",
+        "line": 501269
+      },
+      {
+        "id": 35,
+        "name": "DANCE",
+        "line": 501369
+      },
+      {
+        "id": 36,
+        "name": "SHOPKEEPER",
+        "line": 504461
+      },
+      {
+        "id": 37,
+        "name": "CUSTOMER_PANIC",
+        "line": 504745
+      },
+      {
+        "id": 38,
+        "name": "BAR_STAFF",
+        "line": 504822
+      },
+      {
+        "id": 39,
+        "name": "BOUNCER",
+        "line": 505208
+      },
+      {
+        "id": 40,
+        "name": "OTB_STAFF",
+        "line": 505392
+      },
+      {
+        "id": 41,
+        "name": "PCHAIR",
+        "line": 505545
+      },
+      {
+        "id": 42,
+        "name": "PCUSTOM",
+        "line": 506045
+      },
+      {
+        "id": 43,
+        "name": "OTBWTCH",
+        "line": 506206
+      },
+      {
+        "id": 44,
+        "name": "OTBSLP",
+        "line": 506410
+      },
+      {
+        "id": 45,
+        "name": "OTBTILL",
+        "line": 506587
+      },
+      {
+        "id": 46,
+        "name": "FBOOTHR",
+        "line": 506728
+      },
+      {
+        "id": 47,
+        "name": "FBOOTHL",
+        "line": 507221
+      },
+      {
+        "id": 48,
+        "name": "BARGUY",
+        "line": 507714
+      },
+      {
+        "id": 49,
+        "name": "PEDROUL",
+        "line": 507928
+      },
+      {
+        "id": 50,
+        "name": "PEDCARD",
+        "line": 508115
+      },
+      {
+        "id": 51,
+        "name": "PEDSLOT",
+        "line": 508339
+      },
+      {
+        "id": 52,
+        "name": "DANCER",
+        "line": 508534
+      },
+      {
+        "id": 53,
+        "name": "STRIPW",
+        "line": 508799
+      },
+      {
+        "id": 54,
+        "name": "STRIPM",
+        "line": 509276
+      },
+      {
+        "id": 55,
+        "name": "BROWSE",
+        "line": 509480
+      },
+      {
+        "id": 56,
+        "name": "COPSIT",
+        "line": 509678
+      },
+      {
+        "id": 57,
+        "name": "COPLOOK",
+        "line": 510065
+      },
+      {
+        "id": 58,
+        "name": "TICKET",
+        "line": 510276
+      },
+      {
+        "id": 59,
+        "name": "SHOPPER",
+        "line": 510422
+      },
+      {
+        "id": 60,
+        "name": "AMMU",
+        "line": 510626
+      },
+      {
+        "id": 61,
+        "name": "TATTOO",
+        "line": 512537
+      },
+      {
+        "id": 62,
+        "name": "BARBER",
+        "line": 514635
+      },
+      {
+        "id": 63,
+        "name": "WARDROBE",
+        "line": 515987
+      },
+      {
+        "id": 64,
+        "name": "CLOTHES",
+        "line": 517921
+      },
+      {
+        "id": 65,
+        "name": "JUNKFUD",
+        "line": 519508
+      },
+      {
+        "id": 66,
+        "name": "CARMOD1",
+        "line": 521646
+      },
+      {
+        "id": 67,
+        "name": "CRANE1",
+        "line": 525316
+      },
+      {
+        "id": 68,
+        "name": "CRANE2",
+        "line": 525874
+      },
+      {
+        "id": 69,
+        "name": "CRANE3",
+        "line": 526793
+      },
+      {
+        "id": 70,
+        "name": "CARPARK1",
+        "line": 527110
+      },
+      {
+        "id": 71,
+        "name": "IMPOUND",
+        "line": 527387
+      },
+      {
+        "id": 72,
+        "name": "VALET",
+        "line": 530396
+      },
+      {
+        "id": 73,
+        "name": "PHOTO",
+        "line": 533006
+      },
+      {
+        "id": 74,
+        "name": "PRISONR",
+        "line": 533350
+      },
+      {
+        "id": 75,
+        "name": "CAMERA",
+        "line": 533588
+      },
+      {
+        "id": 76,
+        "name": "DEBT",
+        "line": 534333
+      },
+      {
+        "id": 77,
+        "name": "HOTDOG",
+        "line": 535091
+      }
+    ],
+    "create_car_generator_total": 211,
+    "static_car_generator_parsed": 201,
+    "static_valid_vehicle_candidates": 195,
+    "create_pickup_total": 335,
+    "static_pickup_parsed": 288,
+    "static_valid_pickup_candidates": 286,
+    "unknown_opcode_mentions": 0,
+    "error_mentions": 0
+  },
+  "ipl": {
+    "auzo": 155,
+    "inst": 9315,
+    "grge": 52,
+    "enex": 376,
+    "tcyc": 8,
+    "pick": 5,
+    "cull": 1266,
+    "occl": 1012,
+    "path": 165152
+  },
+  "zones": {
+    "map.zon": 6,
+    "info.zon": 378
+  },
+  "readme_placeholders_not_filled": true,
+  "notes": [
+    "SannyBuilder tool files are present but are not needed for future uploads or runtime import.",
+    "README still contains template placeholders; source integrity can still be verified from hashes and decompile structure."
+  ]
+}

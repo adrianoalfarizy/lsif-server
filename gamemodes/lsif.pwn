@@ -764,6 +764,9 @@ stock IsLegacyStaticRaceMarkerEnabled() { return 0; }
 #define PARKED_VEHICLE_DEFAULT_COLOR1 1
 #define PARKED_VEHICLE_DEFAULT_COLOR2 1
 #define PARKED_VEHICLE_LABEL_DRAW_DISTANCE 18.0
+#define PARKED_VEHICLE_SOURCE_TAG_SIZE 96
+#define GTA_OFFLINE_PARKED_VEHICLE_SOURCE_PREFIX "offline_gtasa_parkveh130_a"
+#define GTA_OFFLINE_PARKED_VEHICLE_RUNTIME_Z_LIFT 0.50
 #define PARKED_VEHICLE_OFFLINE_SEED_TAG "offline_template_ls"
 #define PARKED_VEHICLE_EXACT_IMPORT_TAG "offline_exact_ls"
 
@@ -793,6 +796,7 @@ stock IsLegacyStaticRaceMarkerEnabled() { return 0; }
 #define MAX_PUBLIC_INTERIORS 128
 #define PUBLIC_INTERIOR_PICKUP_MODEL 1318
 #define PUBLIC_INTERIOR_PICKUP_TYPE 1
+#define PUBLIC_INTERIOR_ARROW_RUNTIME_Z_LIFT 0.50
 #define PUBLIC_INTERIOR_LABEL_DRAW_DISTANCE 18.0
 #define PUBLIC_INTERIOR_SERVICE_CP_SIZE 1.8
 #define PUBLIC_INTERIOR_SERVICE_RADIUS 2.2
@@ -1878,6 +1882,7 @@ new Float:ParkedVehicleX[MAX_PARKED_VEHICLES];
 new Float:ParkedVehicleY[MAX_PARKED_VEHICLES];
 new Float:ParkedVehicleZ[MAX_PARKED_VEHICLES];
 new Float:ParkedVehicleA[MAX_PARKED_VEHICLES];
+new ParkedVehicleSourceTag[MAX_PARKED_VEHICLES][PARKED_VEHICLE_SOURCE_TAG_SIZE];
 new Text3D:ParkedVehicleLabel[MAX_PARKED_VEHICLES];
 
 new WorldPickupCount;
@@ -14164,7 +14169,7 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.14 Full 130 Parked Vehicle Apply");
+    SetGameModeText("SAIF Dev v0.26A.1.15 World Spawn Height Normalization");
 
     new MySQLOpt:mysqlOptions = mysql_init_options();
     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
@@ -14347,9 +14352,10 @@ public OnGameModeInit()
     print("[SAIF] Skin movement baseline aktif: CJ-like via UsePlayerPedAnims; profile palsu tetap dihapus.");
     print("[SAIF] Vehicle Mission v0.25B.10 tetap aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
     print("[SAIF] Vitals Persistence aktif: health/armor DB + Ammu Body Armor persistence.");
-    print("[SAIF] Gamemode v0.26A.1.14 Full 130 Parked Vehicle Apply berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.26A.1.15 World Spawn Height Normalization berhasil dijalankan.");
     print("[SAIF] GTA Offline Import Audit aktif: registry + ENEX context/evidence/pair planner read-only; runtime tidak disentuh.");
-    print("[SAIF] Parked vehicle Full-130 apply v0.26A.1.14 aktif: tracked apply status, DB reload, dan rollback support.");
+    print("[SAIF] v0.26A.1.15: GTA offline parked vehicle dan public interior arrow memakai runtime Z normalization.");
+    print("[SAIF] Runtime lift: parked vehicle GTA offline +0.50 Z; pickup panah model 1318 +0.50 Z. DB coordinates tetap original.");
     print("[SAIF] ENEX side-aware preview aktif: Point A/B, isolated interior VW, dan return position.");
     return 1;
 }
@@ -27176,6 +27182,18 @@ stock FindPublicInteriorIndexByDBID(dbid)
     return -1;
 }
 
+stock Float:GetPublicInteriorPickupRuntimeZ(modelid, Float:baseZ)
+{
+    // Model 1318 adalah panah entrance/exit. Titik ENEX adalah titik lantai,
+    // sedangkan origin visual model berada terlalu rendah bila dipakai mentah.
+    if (modelid == PUBLIC_INTERIOR_PICKUP_MODEL)
+    {
+        return baseZ + PUBLIC_INTERIOR_ARROW_RUNTIME_Z_LIFT;
+    }
+
+    return baseZ;
+}
+
 stock CreatePublicInteriorRuntime(index)
 {
     if (index < 0 || index >= PublicInteriorCount)
@@ -27193,13 +27211,21 @@ stock CreatePublicInteriorRuntime(index)
     new labelText[160];
     new exitLabel[160];
     new runtimeVW = GetPublicInteriorRuntimeVW(index);
+    new Float:exteriorPickupZ = GetPublicInteriorPickupRuntimeZ(
+                                    PublicInteriorExteriorPickupModel[index],
+                                    PublicInteriorExtZ[index]
+                                );
+    new Float:interiorPickupZ = GetPublicInteriorPickupRuntimeZ(
+                                    PublicInteriorInteriorPickupModel[index],
+                                    PublicInteriorExitZ[index]
+                                );
 
     PublicInteriorPickup[index] = CreatePickup(
                                       PublicInteriorExteriorPickupModel[index],
                                       PUBLIC_INTERIOR_PICKUP_TYPE,
                                       PublicInteriorExtX[index],
                                       PublicInteriorExtY[index],
-                                      PublicInteriorExtZ[index],
+                                      exteriorPickupZ,
                                       PublicInteriorExteriorVirtualWorld[index]
                                   );
 
@@ -27220,7 +27246,7 @@ stock CreatePublicInteriorRuntime(index)
                                           PUBLIC_INTERIOR_PICKUP_TYPE,
                                           PublicInteriorExitX[index],
                                           PublicInteriorExitY[index],
-                                          PublicInteriorExitZ[index],
+                                          interiorPickupZ,
                                           runtimeVW
                                       );
 
@@ -31123,6 +31149,7 @@ stock ResetParkedVehicleArrays()
         ParkedVehicleY[i] = 0.0;
         ParkedVehicleZ[i] = 0.0;
         ParkedVehicleA[i] = 0.0;
+        format(ParkedVehicleSourceTag[i], PARKED_VEHICLE_SOURCE_TAG_SIZE, "");
         ParkedVehicleLabel[i] = Text3D:INVALID_3DTEXT_ID;
     }
 
@@ -31187,6 +31214,35 @@ stock GetParkedVehicleIndexByRuntimeID(vehicleid)
     return -1;
 }
 
+stock IsGTASAOfflineParkedVehicle(index)
+{
+    if (index < 0 || index >= ParkedVehicleCount)
+    {
+        return 0;
+    }
+
+    return strfind(
+               ParkedVehicleSourceTag[index],
+               GTA_OFFLINE_PARKED_VEHICLE_SOURCE_PREFIX,
+               true
+           ) == 0;
+}
+
+stock Float:GetParkedVehicleRuntimeZ(index)
+{
+    if (index < 0 || index >= ParkedVehicleCount)
+    {
+        return 0.0;
+    }
+
+    if (IsGTASAOfflineParkedVehicle(index))
+    {
+        return ParkedVehicleZ[index] + GTA_OFFLINE_PARKED_VEHICLE_RUNTIME_Z_LIFT;
+    }
+
+    return ParkedVehicleZ[index];
+}
+
 stock CreateParkedVehicleRuntime(index)
 {
     if (index < 0 || index >= ParkedVehicleCount)
@@ -31211,11 +31267,13 @@ stock CreateParkedVehicleRuntime(index)
         ParkedVehicleRespawnDelay[index] = 30;
     }
 
+    new Float:runtimeZ = GetParkedVehicleRuntimeZ(index);
+
     ParkedVehicleRuntimeID[index] = CreateVehicle(
                                         ParkedVehicleModel[index],
                                         ParkedVehicleX[index],
                                         ParkedVehicleY[index],
-                                        ParkedVehicleZ[index],
+                                        runtimeZ,
                                         ParkedVehicleA[index],
                                         ParkedVehicleColor1[index],
                                         ParkedVehicleColor2[index],
@@ -31249,7 +31307,7 @@ stock CreateParkedVehicleRuntime(index)
                                     COLOR_GREY,
                                     ParkedVehicleX[index],
                                     ParkedVehicleY[index],
-                                    ParkedVehicleZ[index] + 1.2,
+                                    runtimeZ + 1.2,
                                     PARKED_VEHICLE_LABEL_DRAW_DISTANCE,
                                     ParkedVehicleVirtualWorld[index],
                                     true
@@ -31262,7 +31320,7 @@ stock LoadParkedVehicles()
 {
     DestroyAllParkedVehicleRuntime();
     ResetParkedVehicleArrays();
-    mysql_tquery(g_SQL, "SELECT id, modelid, color1, color2, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, respawn_delay, locked, enabled FROM parked_vehicles WHERE enabled=1 ORDER BY id ASC LIMIT 256", "OnParkedVehiclesLoaded");
+    mysql_tquery(g_SQL, "SELECT id, modelid, color1, color2, pos_x, pos_y, pos_z, pos_a, interior, virtual_world, respawn_delay, locked, source_tag, enabled FROM parked_vehicles WHERE enabled=1 ORDER BY id ASC LIMIT 256", "OnParkedVehiclesLoaded");
     return 1;
 }
 
@@ -31286,6 +31344,7 @@ public OnParkedVehiclesLoaded()
         cache_get_value_name_int(i, "virtual_world", ParkedVehicleVirtualWorld[loaded]);
         cache_get_value_name_int(i, "respawn_delay", ParkedVehicleRespawnDelay[loaded]);
         cache_get_value_name_int(i, "locked", ParkedVehicleLocked[loaded]);
+        cache_get_value_name(i, "source_tag", ParkedVehicleSourceTag[loaded], PARKED_VEHICLE_SOURCE_TAG_SIZE);
         cache_get_value_name_int(i, "enabled", ParkedVehicleEnabled[loaded]);
 
         if (ParkedVehicleModel[loaded] < 400 || ParkedVehicleModel[loaded] > 611)
@@ -31422,7 +31481,9 @@ stock ShowParkedVehicleInfo(playerid, dbid)
     SendClientMessage(playerid, COLOR_WHITE, msg);
     format(msg, sizeof(msg), "Color: %d/%d | Locked: %d | Respawn: %d seconds", ParkedVehicleColor1[index], ParkedVehicleColor2[index], ParkedVehicleLocked[index], ParkedVehicleRespawnDelay[index]);
     SendClientMessage(playerid, COLOR_WHITE, msg);
-    format(msg, sizeof(msg), "Pos: %.2f %.2f %.2f | A %.2f | Interior %d | VW %d", ParkedVehicleX[index], ParkedVehicleY[index], ParkedVehicleZ[index], ParkedVehicleA[index], ParkedVehicleInterior[index], ParkedVehicleVirtualWorld[index]);
+    format(msg, sizeof(msg), "DB Pos: %.2f %.2f %.2f | Runtime Z: %.2f | A %.2f", ParkedVehicleX[index], ParkedVehicleY[index], ParkedVehicleZ[index], GetParkedVehicleRuntimeZ(index), ParkedVehicleA[index]);
+    SendClientMessage(playerid, COLOR_WHITE, msg);
+    format(msg, sizeof(msg), "Interior %d | VW %d | Source: %s", ParkedVehicleInterior[index], ParkedVehicleVirtualWorld[index], ParkedVehicleSourceTag[index][0] ? ParkedVehicleSourceTag[index] : "-");
     SendClientMessage(playerid, COLOR_WHITE, msg);
     SendClientMessage(playerid, COLOR_CYAN, "Commands: /parkvehgoto, /parkvehmove, /parkvehcolor, /parkvehrespawn, /parkvehlock, /parkvehdelete");
     return 1;
@@ -31440,7 +31501,7 @@ stock GotoParkedVehicle(playerid, dbid)
 
     SetPlayerInterior(playerid, ParkedVehicleInterior[index]);
     SetPlayerVirtualWorld(playerid, ParkedVehicleVirtualWorld[index]);
-    SetPlayerPos(playerid, ParkedVehicleX[index] + 2.0, ParkedVehicleY[index], ParkedVehicleZ[index]);
+    SetPlayerPos(playerid, ParkedVehicleX[index] + 2.0, ParkedVehicleY[index], GetParkedVehicleRuntimeZ(index) + 0.5);
     SetPlayerFacingAngle(playerid, ParkedVehicleA[index]);
     SendClientMessage(playerid, COLOR_GREEN, "Kamu teleport ke parked vehicle.");
     return 1;
@@ -43745,7 +43806,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.14 Full 130 Parked Vehicle Apply");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.15 World Spawn Height Normalization");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -43755,7 +43816,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.14: Full 130 parked vehicle apply transaction, tracked status, reload, dan rollback support.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.15: Runtime Z normalization untuk parked vehicle GTA offline dan pickup panah public interior.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.10: Controlled 91-row public interior apply (71 SCM exact + 20 reviewed overlay) + tracked rollback.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.8: Exact Interior Service Point Resolver; 71 native SCM exact + 20 overlay preview anchors, audit-only.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.7.1: memperbaiki 11 Float tag mismatch pada detail ENEX pair plan; tanpa SQL/runtime change.");

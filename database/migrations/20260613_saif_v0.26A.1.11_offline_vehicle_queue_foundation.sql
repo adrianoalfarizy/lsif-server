@@ -1,0 +1,65 @@
+-- SAIF / LSIF Dev v0.26A.1.11
+-- Offline Parked Vehicle / SCM Car Generator Queue Foundation
+-- SAFETY: staging/audit table only. No parked_vehicles runtime mutation.
+SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS offline_vehicle_queue (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    session_id BIGINT UNSIGNED NOT NULL,
+    source_file_id BIGINT UNSIGNED NULL,
+    source_file VARCHAR(512) NOT NULL DEFAULT '01_DECOMPILED/main_decompiled.txt',
+    source_line INT UNSIGNED NOT NULL DEFAULT 0,
+    record_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+    parser_version VARCHAR(64) NOT NULL DEFAULT 'saif-vehicle-parser-v0.26A.1.11',
+    source_tag VARCHAR(64) NOT NULL DEFAULT 'offline_scm_cargen_queue',
+    source_command VARCHAR(32) NOT NULL DEFAULT 'SCM_CARGEN',
+    generator_name VARCHAR(128) NOT NULL DEFAULT '',
+
+    modelid INT NOT NULL DEFAULT -1,
+    vehicle_model_name VARCHAR(64) NOT NULL DEFAULT '',
+    vehicle_game_name VARCHAR(64) NOT NULL DEFAULT '',
+    vehicle_type VARCHAR(32) NOT NULL DEFAULT '',
+    pos_x FLOAT NOT NULL DEFAULT 0,
+    pos_y FLOAT NOT NULL DEFAULT 0,
+    pos_z FLOAT NOT NULL DEFAULT 0,
+    pos_a FLOAT NOT NULL DEFAULT 0,
+    color1 INT NOT NULL DEFAULT -1,
+    color2 INT NOT NULL DEFAULT -1,
+    force_spawn TINYINT(1) NOT NULL DEFAULT 0,
+    alarm_chance TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    door_lock_chance TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    recommended_locked TINYINT(1) NOT NULL DEFAULT 0,
+    min_delay_ms INT UNSIGNED NOT NULL DEFAULT 0,
+    max_delay_ms INT UNSIGNED NOT NULL DEFAULT 10000,
+    plate_name VARCHAR(16) NOT NULL DEFAULT '',
+    initial_switch_amount INT NULL,
+    initial_enabled_guess TINYINT(1) NOT NULL DEFAULT 0,
+    has_been_owned TINYINT(1) NOT NULL DEFAULT 0,
+
+    resolution_mode VARCHAR(32) NOT NULL DEFAULT 'literal',
+    resolved_variables VARCHAR(128) NOT NULL DEFAULT '',
+    candidate_status VARCHAR(32) NOT NULL DEFAULT 'pending',
+    review_status VARCHAR(32) NOT NULL DEFAULT 'pending',
+    context_category VARCHAR(48) NOT NULL DEFAULT 'world_cargen',
+    city_region VARCHAR(32) NOT NULL DEFAULT '',
+    area_code VARCHAR(32) NOT NULL DEFAULT '',
+    duplicate_key CHAR(64) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL DEFAULT '',
+    duplicate_group_size SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+
+    enabled TINYINT(1) NOT NULL DEFAULT 0,
+    apply_status VARCHAR(24) NOT NULL DEFAULT 'pending',
+    notes VARCHAR(255) NOT NULL DEFAULT '',
+    raw_record TEXT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_offline_vehicle_session_hash (session_id, record_hash),
+    KEY idx_offline_vehicle_session_parser (session_id, parser_version),
+    KEY idx_offline_vehicle_candidate (candidate_status, review_status),
+    KEY idx_offline_vehicle_model (modelid),
+    KEY idx_offline_vehicle_area (city_region, area_code),
+    KEY idx_offline_vehicle_context (context_category),
+    KEY idx_offline_vehicle_apply (enabled, apply_status),
+    KEY idx_offline_vehicle_duplicate (duplicate_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

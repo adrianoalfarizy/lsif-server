@@ -778,7 +778,8 @@ stock IsLegacyStaticRaceMarkerEnabled() { return 0; }
 #define MAPICON_TYPE_PAYNSPRAY 63
 #define OFFLINE_WORLD_MAPICON_BASE 0
 #define OFFLINE_WORLD_MAPICON_SLOTS 100
-#define OFFLINE_WORLD_MAPICON_HOUSE_RESERVE MAX_HOUSES
+#define OFFLINE_WORLD_MAPICON_HOUSE_RESERVE 0
+#define OFFLINE_HOSPITAL_ICON_DEDUP_RADIUS 120.0
 
 #define MAX_DYNAMIC_LOCATIONS 80
 #define MAX_DYNAMIC_OBJECTS 300
@@ -14177,7 +14178,7 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.16 Offline-like Map Icon Canonical Audit");
+    SetGameModeText("SAIF Dev v0.26A.1.16.1 Hospital Map Icon Coverage Fix");
 
     new MySQLOpt:mysqlOptions = mysql_init_options();
     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
@@ -14360,9 +14361,9 @@ public OnGameModeInit()
     print("[SAIF] Skin movement baseline aktif: CJ-like via UsePlayerPedAnims; profile palsu tetap dihapus.");
     print("[SAIF] Vehicle Mission v0.25B.10 tetap aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
     print("[SAIF] Vitals Persistence aktif: health/armor DB + Ammu Body Armor persistence.");
-    print("[SAIF] Gamemode v0.26A.1.16 Offline-like Map Icon Canonical Audit berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.26A.1.16.1 Hospital Map Icon Coverage Fix berhasil dijalankan.");
     print("[SAIF] GTA Offline Import Audit aktif: registry + ENEX context/evidence/pair planner read-only; runtime tidak disentuh.");
-    print("[SAIF] v0.26A.1.16: map icon canonical GTA SA + MAPICON_LOCAL; semua public interior dipasang permanen di pause map dan radar hanya saat dekat.");
+    print("[SAIF] v0.26A.1.16.1: hospital map icon diprioritaskan; fallback 7 hospital respawn dipasang bila tidak ada public_interior hospital terdekat.");
     print("[SAIF] Runtime lift: parked vehicle GTA offline +0.50 Z; pickup panah model 1318 +1.00 Z; spawn player public interior +0.50 Z. DB tetap original.");
     print("[SAIF] ENEX side-aware preview aktif: Point A/B, isolated interior VW, dan return position.");
     return 1;
@@ -15843,6 +15844,36 @@ stock ShowOfflineImportAuditMenu(playerid)
     return 1;
 }
 
+stock IsHospitalMapIconCovered(Float:x, Float:y, Float:z)
+{
+    for (new i = 0; i < PublicInteriorCount; i++)
+    {
+        if (!PublicInteriorEnabled[i]) continue;
+        if (strcmp(PublicInteriorType[i], "hospital", true)) continue;
+        if (PublicInteriorExtX[i] == 0.0 && PublicInteriorExtY[i] == 0.0 && PublicInteriorExtZ[i] == 0.0) continue;
+
+        if (GetDistanceBetweenPoints3D(
+            x, y, z,
+            PublicInteriorExtX[i], PublicInteriorExtY[i], PublicInteriorExtZ[i]
+        ) <= OFFLINE_HOSPITAL_ICON_DEDUP_RADIUS)
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+stock CountActiveHouseMapIconCandidates()
+{
+    new count = 0;
+    for (new i = 0; i < MAX_HOUSES; i++)
+    {
+        if (HouseX[i] == 0.0 && HouseY[i] == 0.0 && HouseZ[i] == 0.0) continue;
+        count++;
+    }
+    return count;
+}
+
 stock ShowOfflineMapIconAudit(playerid)
 {
     if (!CanUseOfflineImportAudit(playerid)) return 0;
@@ -15851,8 +15882,7 @@ stock ShowOfflineMapIconAudit(playerid)
     new storedMismatch = 0;
     new iconAmmu = 0, icon247 = 0, iconBurger = 0, iconCluckin = 0, iconPizza = 0;
     new iconBarber = 0, iconTattoo = 0, iconClothes = 0, iconGym = 0, iconPolice = 0;
-    new iconHospital = 0, iconCasino = 0, iconOther = 0;
-    new publicLimit = OFFLINE_WORLD_MAPICON_SLOTS - OFFLINE_WORLD_MAPICON_HOUSE_RESERVE;
+    new iconHospitalDb = 0, iconHospitalFallback = 0, iconCasino = 0, iconOther = 0;
 
     for (new i = 0; i < PublicInteriorCount; i++)
     {
@@ -15867,9 +15897,6 @@ stock ShowOfflineMapIconAudit(playerid)
         }
 
         publicCandidates++;
-        if (publicRendered < publicLimit) publicRendered++;
-        else publicOmitted++;
-
         if (PublicInteriorMapIcon[i] != icon) storedMismatch++;
 
         switch (icon)
@@ -15884,24 +15911,36 @@ stock ShowOfflineMapIconAudit(playerid)
             case MAPICON_TYPE_CLOTHES: iconClothes++;
             case MAPICON_TYPE_GYM: iconGym++;
             case MAPICON_TYPE_POLICE: iconPolice++;
-            case MAPICON_TYPE_HOSPITAL: iconHospital++;
+            case MAPICON_TYPE_HOSPITAL: iconHospitalDb++;
             case MAPICON_TYPE_CALIGULAS, MAPICON_TYPE_TRIADS_CASINO: iconCasino++;
             default: iconOther++;
         }
     }
 
-    new housesRendered = MAX_HOUSES;
-    if (publicRendered + housesRendered > OFFLINE_WORLD_MAPICON_SLOTS)
+    for (new h = 0; h < MAX_HOSPITAL_RESPAWNS; h++)
     {
-        housesRendered = OFFLINE_WORLD_MAPICON_SLOTS - publicRendered;
-        if (housesRendered < 0) housesRendered = 0;
+        if (!IsHospitalMapIconCovered(HospitalRespawnX[h], HospitalRespawnY[h], HospitalRespawnZ[h]))
+        {
+            iconHospitalFallback++;
+        }
     }
 
+    new totalCanonicalCandidates = publicCandidates + iconHospitalFallback;
+    publicRendered = totalCanonicalCandidates;
+    if (publicRendered > OFFLINE_WORLD_MAPICON_SLOTS) publicRendered = OFFLINE_WORLD_MAPICON_SLOTS;
+    publicOmitted = totalCanonicalCandidates - publicRendered;
+    if (publicOmitted < 0) publicOmitted = 0;
+
+    new houseCandidates = CountActiveHouseMapIconCandidates();
+    new housesRendered = OFFLINE_WORLD_MAPICON_SLOTS - publicRendered;
+    if (housesRendered > houseCandidates) housesRendered = houseCandidates;
+    if (housesRendered < 0) housesRendered = 0;
+
     new body[3900], line[320];
-    format(body, sizeof(body), "Offline-like Map Icon Canonical Audit\n\nNative slot budget: %d\nPublic icon reserve: %d\nHouse/property reserve: %d\n\n", OFFLINE_WORLD_MAPICON_SLOTS, publicLimit, OFFLINE_WORLD_MAPICON_HOUSE_RESERVE);
-    format(line, sizeof(line), "Runtime public interiors: %d\nCanonical icon candidates: %d\nRendered public icons: %d\nOmitted due slot limit: %d\n", PublicInteriorCount, publicCandidates, publicRendered, publicOmitted);
+    format(body, sizeof(body), "Offline-like Map Icon Canonical Audit\n\nNative slot budget: %d\nPriority: hospital DB -> missing hospital fallback -> other public icons -> houses\nHospital dedup radius: %.1f m\n\n", OFFLINE_WORLD_MAPICON_SLOTS, OFFLINE_HOSPITAL_ICON_DEDUP_RADIUS);
+    format(line, sizeof(line), "Runtime public interiors: %d\nCanonical DB candidates: %d\nHospital fallback candidates: %d\nRendered service/public icons: %d\nOmitted due slot limit: %d\n", PublicInteriorCount, publicCandidates, iconHospitalFallback, publicRendered, publicOmitted);
     strcat(body, line, sizeof(body));
-    format(line, sizeof(line), "No canonical GTA SA icon: %d\nStored DB icon mismatch: %d\nHouses rendered: %d\nTotal slots projected: %d / %d\n\n", hiddenNoCanonical, storedMismatch, housesRendered, publicRendered + housesRendered, OFFLINE_WORLD_MAPICON_SLOTS);
+    format(line, sizeof(line), "No canonical GTA SA icon: %d\nStored DB icon mismatch: %d\nHouse candidates/rendered: %d / %d\nTotal slots projected: %d / %d\n\n", hiddenNoCanonical, storedMismatch, houseCandidates, housesRendered, publicRendered + housesRendered, OFFLINE_WORLD_MAPICON_SLOTS);
     strcat(body, line, sizeof(body));
     strcat(body, "Canonical symbols\n", sizeof(body));
     format(line, sizeof(line), "Ammu-Nation [6]: %d | 24/7 [52]: %d\n", iconAmmu, icon247);
@@ -15910,17 +15949,16 @@ stock ShowOfflineMapIconAudit(playerid)
     strcat(body, line, sizeof(body));
     format(line, sizeof(line), "Barber [7]: %d | Tattoo [39]: %d | Clothes [45]: %d\n", iconBarber, iconTattoo, iconClothes);
     strcat(body, line, sizeof(body));
-    format(line, sizeof(line), "Gym [54]: %d | Police [30]: %d | Hospital [22]: %d\n", iconGym, iconPolice, iconHospital);
+    format(line, sizeof(line), "Gym [54]: %d | Police [30]: %d | Hospital DB/Fallback [22]: %d / %d\n", iconGym, iconPolice, iconHospitalDb, iconHospitalFallback);
     strcat(body, line, sizeof(body));
     format(line, sizeof(line), "Casino [25/44]: %d | Other canonical: %d\n\n", iconCasino, iconOther);
     strcat(body, line, sizeof(body));
-    strcat(body, "Offline render logic\n- Pause/menu map: every allocated permanent icon is registered at all times.\n- Radar/minimap: MAPICON_LOCAL; icon appears only at native close proximity.\n- No 1500m custom radius and no GLOBAL edge marker.\n- City Hall has no canonical GTA SA legend icon and is intentionally hidden.\n- Persistent business, bus stop, Gang HQ, dealer, job and race icons are omitted from the offline registry.\n- Native SetPlayerMapIcon limit remains 100 slots.\n\nPress Refresh to rebuild icons for all online players.", sizeof(body));
+    strcat(body, "Hospital coverage fix\n- Hospital icon no longer depends only on public_interiors.\n- Seven SAIF/GTA-SA hospital respawn positions are used as fallback.\n- A fallback is skipped when an active hospital public interior exists within the dedup radius.\n- Hospital icons are allocated before other service icons, so they cannot be silently displaced by slot order.\n\nOffline render logic\n- Pause/menu map: every allocated icon is registered at all times.\n- Radar/minimap: MAPICON_LOCAL; icon appears only at native close proximity.\n- No 1500m custom radius and no GLOBAL edge marker.\n- Houses only use leftover slots after service/public icons.\n\nPress Refresh to rebuild icons for all online players.", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_OFFLINE_MAP_ICON_AUDIT, DIALOG_STYLE_MSGBOX,
                      "Offline-like Map Icon Audit", body, "Refresh", "Back");
     return 1;
 }
-
 
 stock QueryOfflineVehicleSummary(playerid)
 {
@@ -33924,30 +33962,43 @@ stock ApplyOfflineLikeWorldMapIcons(playerid)
     RemoveOfflineLikeWorldMapIcons(playerid);
 
     new slot = 0;
-    new publicLimit = OFFLINE_WORLD_MAPICON_SLOTS - OFFLINE_WORLD_MAPICON_HOUSE_RESERVE;
 
-    // Permanent service/shop icons: visible on pause map, radar only at native close proximity.
-    for (new i = 0; i < PublicInteriorCount && slot < publicLimit; i++)
+    // Priority 1: DB-backed hospital interiors.
+    for (new i = 0; i < PublicInteriorCount && slot < OFFLINE_WORLD_MAPICON_SLOTS; i++)
     {
         if (!IsPublicInteriorIconCandidateValid(i)) continue;
+        if (strcmp(PublicInteriorType[i], "hospital", true)) continue;
 
-        new iconType = GetPublicInteriorResolvedMapIcon(i);
-        if (iconType <= 0) continue;
+        if (SetPublicInteriorMapIconSlot(playerid, slot, i)) slot++;
+    }
+
+    // Priority 2: native hospital coverage fallback. This also covers servers with
+    // hospital respawn logic but no hospital row in public_interiors.
+    for (new h = 0; h < MAX_HOSPITAL_RESPAWNS && slot < OFFLINE_WORLD_MAPICON_SLOTS; h++)
+    {
+        if (IsHospitalMapIconCovered(HospitalRespawnX[h], HospitalRespawnY[h], HospitalRespawnZ[h])) continue;
 
         SetPlayerMapIcon(
             playerid,
             OFFLINE_WORLD_MAPICON_BASE + slot,
-            PublicInteriorExtX[i],
-            PublicInteriorExtY[i],
-            PublicInteriorExtZ[i],
-            iconType,
+            HospitalRespawnX[h], HospitalRespawnY[h], HospitalRespawnZ[h],
+            MAPICON_TYPE_HOSPITAL,
             0,
             MAPICON_LOCAL
         );
         slot++;
     }
 
-    // Preserve property-for-sale symbolism after all exact public services.
+    // Priority 3: every other canonical public service/shop icon.
+    for (new i = 0; i < PublicInteriorCount && slot < OFFLINE_WORLD_MAPICON_SLOTS; i++)
+    {
+        if (!IsPublicInteriorIconCandidateValid(i)) continue;
+        if (!strcmp(PublicInteriorType[i], "hospital", true)) continue;
+
+        if (SetPublicInteriorMapIconSlot(playerid, slot, i)) slot++;
+    }
+
+    // Priority 4: property-for-sale icons only use leftover native slots.
     for (new i = 0; i < MAX_HOUSES && slot < OFFLINE_WORLD_MAPICON_SLOTS; i++)
     {
         if (HouseX[i] == 0.0 && HouseY[i] == 0.0 && HouseZ[i] == 0.0) continue;
@@ -43714,7 +43765,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.16 Offline-like Map Icon Canonical Audit");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.16.1 Hospital Map Icon Coverage Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -43724,7 +43775,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.16: Map icon public interior mengikuti simbol GTA SA; pause map permanen, minimap local-range tanpa edge marker global.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.16.1: Hospital icon diprioritaskan dan fallback dari 7 hospital respawn dipasang bila belum tercakup public_interiors.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.10: Controlled 91-row public interior apply (71 SCM exact + 20 reviewed overlay) + tracked rollback.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.8: Exact Interior Service Point Resolver; 71 native SCM exact + 20 overlay preview anchors, audit-only.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.7.1: memperbaiki 11 Float tag mismatch pada detail ENEX pair plan; tanpa SQL/runtime change.");

@@ -252,6 +252,7 @@
 #define DIALOG_OFFLINE_INTERIOR_DETAIL 1292
 #define DIALOG_OFFLINE_IMPORT_POLICY 1293
 #define DIALOG_OFFLINE_INTERIOR_PREVIEW_MENU 1294
+#define DIALOG_OFFLINE_CONTEXT_SUMMARY 1295
 
 #define DIALOG_GANG_PRESET_MENU 1192
 #define DIALOG_GANG_PRESET_LIST 1193
@@ -2706,6 +2707,7 @@ forward OnOfflineSourceFilesLoaded(playerid);
 forward OnOfflineInteriorQueueLoaded(playerid, page);
 forward OnOfflineInteriorDetailLoaded(playerid, queueid);
 forward OnOfflineInteriorPreviewLoaded(playerid, queueid, pointSide);
+forward OnOfflineContextSummaryLoaded(playerid);
 forward OnLiveDBTableAuditLoaded(playerid);
 forward OnLiveDBCleanupCandidatesLoaded(playerid);
 forward OnLiveDBIntegrityLoaded(playerid);
@@ -14082,7 +14084,7 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.5.1 ENEX Side-Aware Preview");
+    SetGameModeText("SAIF Dev v0.26A.1.6 ENEX Context Resolver");
 
     new MySQLOpt:mysqlOptions = mysql_init_options();
     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
@@ -14249,8 +14251,8 @@ public OnGameModeInit()
     print("[SAIF] Skin movement baseline aktif: CJ-like via UsePlayerPedAnims; profile palsu tetap dihapus.");
     print("[SAIF] Vehicle Mission v0.25B.10 tetap aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
     print("[SAIF] Vitals Persistence aktif: health/armor DB + Ammu Body Armor persistence.");
-    print("[SAIF] Gamemode v0.26A.1.5.1 ENEX Side-Aware Preview berhasil dijalankan.");
-    print("[SAIF] GTA Offline Import Audit aktif: registry + ENEX queue read-only; runtime tidak disentuh.");
+    print("[SAIF] Gamemode v0.26A.1.6 ENEX Context Resolver berhasil dijalankan.");
+    print("[SAIF] GTA Offline Import Audit aktif: registry + ENEX context/evidence read-only; runtime tidak disentuh.");
     print("[SAIF] ENEX side-aware preview aktif: Point A/B, isolated interior VW, dan return position.");
     return 1;
 }
@@ -15066,7 +15068,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "SAIF Admin Menus Hub (/amenus)\n\n", sizeof(body));
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
-    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
+    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlinecontext | /offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
     strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/orgeconomy, /orgeconomyaudit, /orgstatus, /orgeconomyhealth, /orgbiz, /orgbusiness, /orgfinance\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /vehmissioncloseout, /vehiclemissionhealth, /missiontarget, /vehmissionconfig, /missionpointmenu, /missionpool, /vehmissionpool, /jobpointpool, /vmpool, /pointpool, /jobpool, /jobpointmenu, /taxirequest, /taxistatus, /canceltaxi, /busrequest, /busstatus, /cancelbus, /medicrequest, /medicstatus, /cancelmedic, /firestatus, /firemission\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /cjmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
@@ -15721,6 +15723,7 @@ stock ShowOfflineImportAuditMenu(playerid)
     strcat(body, "Source File Registry\toffline_source_files\tRead-only\n", sizeof(body));
     strcat(body, "Interior / ENEX Queue\toffline_interior_queue\tRead-only\n", sizeof(body));
     strcat(body, "Safety Policy\tAudit-first contract\tNo apply\n", sizeof(body));
+    strcat(body, "ENEX Context Resolver Summary\tContext + evidence\tRead-only\n", sizeof(body));
     strcat(body, "Back to Admin Menus\t/amenus\tRead-only\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_OFFLINE_IMPORT_MENU, DIALOG_STYLE_TABLIST_HEADERS,
@@ -15770,9 +15773,9 @@ stock QueryOfflineInteriorQueue(playerid, page = 0)
     PlayerOfflineInteriorListCount[playerid] = 0;
     PlayerOfflineInteriorPage[playerid] = page;
 
-    new query[1024];
+    new query[1400];
     mysql_format(g_SQL, query, sizeof(query),
-        "SELECT id, COALESCE(NULLIF(display_name,''), NULLIF(raw_name,''), 'Unnamed ENEX') AS list_name, context_type, area_code, confidence FROM offline_interior_queue WHERE session_id=(SELECT id FROM offline_import_sessions ORDER BY id DESC LIMIT 1) ORDER BY category ASC, context_type ASC, raw_name ASC, id ASC LIMIT %d, %d",
+        "SELECT id, COALESCE(NULLIF(resolved_display_name,''), NULLIF(display_name,''), NULLIF(raw_name,''), 'Unnamed ENEX') AS list_name, COALESCE(NULLIF(resolved_context_type,''), context_type) AS context_type, COALESCE(NULLIF(access_scope,''), 'review_required') AS access_scope, area_code, CASE WHEN resolver_confidence>0 THEN resolver_confidence ELSE confidence END AS confidence FROM offline_interior_queue WHERE session_id=(SELECT id FROM offline_import_sessions ORDER BY id DESC LIMIT 1) ORDER BY resolver_status ASC, resolved_category ASC, resolved_context_type ASC, raw_name ASC, id ASC LIMIT %d, %d",
         page * OFFLINE_INTERIOR_PAGE_SIZE, OFFLINE_INTERIOR_PAGE_SIZE + 1);
     mysql_tquery(g_SQL, query, "OnOfflineInteriorQueueLoaded", "ii", playerid, page);
     return 1;
@@ -15787,9 +15790,9 @@ stock QueryOfflineInteriorDetail(playerid, queueid)
         return 0;
     }
 
-    new query[1024];
+    new query[2048];
     mysql_format(g_SQL, query, sizeof(query),
-        "SELECT id, raw_name, display_name, category, context_type, confidence, entry_x, entry_y, entry_z, entry_a, entry_size_x, entry_size_y, entry_size_z, exit_x, exit_y, exit_z, exit_a, interior_id, flags, sky_color, num_peds, time_on, time_off, city_code, area_code, enabled, review_status, apply_status, source_tag, source_file, source_line, notes FROM offline_interior_queue WHERE id=%d LIMIT 1",
+        "SELECT id, raw_name, display_name, category, context_type, confidence, resolved_display_name, resolved_category, resolved_context_type, access_scope, service_type, recommended_runtime_target, resolver_status, resolver_confidence, resolver_version, resolver_reason, scm_reference_count, scm_shop_binding_count, pair_group_key, pair_group_size, pair_status, duplicate_group_size, point_a_space, point_b_space, entry_x, entry_y, entry_z, entry_a, entry_size_x, entry_size_y, entry_size_z, exit_x, exit_y, exit_z, exit_a, interior_id, flags, sky_color, num_peds, time_on, time_off, city_code, area_code, enabled, review_status, apply_status, source_tag, source_file, source_line, notes FROM offline_interior_queue WHERE id=%d LIMIT 1",
         queueid);
     mysql_tquery(g_SQL, query, "OnOfflineInteriorDetailLoaded", "ii", playerid, queueid);
     return 1;
@@ -15817,27 +15820,99 @@ stock QueryOfflineInteriorPreview(playerid, queueid, pointSide)
     return 1;
 }
 
+stock QueryOfflineInteriorContextSummary(playerid)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+
+    new query[2600];
+    query[0] = EOS;
+    strcat(query, "SELECT COUNT(*) AS total_rows, ", sizeof(query));
+    strcat(query, "SUM(resolver_status='resolved') AS resolved_rows, SUM(resolver_status='partial') AS partial_rows, ", sizeof(query));
+    strcat(query, "SUM(resolver_status='review_required') AS review_rows, SUM(resolver_status='pending') AS pending_rows, ", sizeof(query));
+    strcat(query, "SUM(access_scope='public_shared') AS public_rows, SUM(access_scope='property_private') AS property_rows, ", sizeof(query));
+    strcat(query, "SUM(access_scope='mission_reference') AS mission_rows, SUM(access_scope='gang_shared') AS gang_rows, ", sizeof(query));
+    strcat(query, "SUM(pair_status='exterior_interior_pair') AS paired_rows, SUM(duplicate_group_size>1) AS duplicate_rows, ", sizeof(query));
+    strcat(query, "SUM(recommended_runtime_target LIKE 'public_interiors%') AS public_target_rows, ", sizeof(query));
+    strcat(query, "SUM(recommended_runtime_target='player_houses') AS house_target_rows, ", sizeof(query));
+    strcat(query, "SUM(recommended_runtime_target='reference_only') AS reference_target_rows, ", sizeof(query));
+    strcat(query, "SUM(enabled=1) AS enabled_rows, SUM(apply_status<>'pending') AS applied_rows, ", sizeof(query));
+    strcat(query, "MAX(resolver_version) AS resolver_version, ", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM offline_interior_context_evidence e WHERE e.session_id=(SELECT id FROM offline_import_sessions ORDER BY id DESC LIMIT 1)) AS evidence_rows ", sizeof(query));
+    strcat(query, "FROM offline_interior_queue WHERE session_id=(SELECT id FROM offline_import_sessions ORDER BY id DESC LIMIT 1)", sizeof(query));
+
+    mysql_tquery(g_SQL, query, "OnOfflineContextSummaryLoaded", "i", playerid);
+    return 1;
+}
+
 stock ShowOfflineImportSafetyPolicy(playerid)
 {
     if (!CanUseOfflineImportAudit(playerid)) return 0;
 
     new body[1800];
     body[0] = EOS;
-    strcat(body, "SAIF v0.26A.1.5.1 ENEX Side-Aware Preview Safety Contract\n\n", sizeof(body));
+    strcat(body, "SAIF v0.26A.1.6 ENEX Context Resolver Safety Contract\n\n", sizeof(body));
     strcat(body, "Current stage:\n", sizeof(body));
     strcat(body, "- Register GTA SA source files and hashes.\n", sizeof(body));
     strcat(body, "- Store IPL ENEX records in offline_interior_queue.\n", sizeof(body));
     strcat(body, "- Review list, detail, source line, category, and confidence.\n", sizeof(body));
-    strcat(body, "- Preview Point A/Point B with detected interior space and return-position safety.\n\n", sizeof(body));
+    strcat(body, "- Preview Point A/Point B with detected interior space and return-position safety.\n", sizeof(body));
+    strcat(body, "- Resolve access scope, service type, runtime target, pair group, SCM references, and evidence.\n\n", sizeof(body));
     strcat(body, "Explicitly NOT performed:\n", sizeof(body));
     strcat(body, "- No CreatePickup/CreateObject/CreateVehicle.\n", sizeof(body));
     strcat(body, "- No public_interiors/world_pickups/parked_vehicles mutation.\n", sizeof(body));
     strcat(body, "- No delete, truncate, archive, replacement, reload, or apply.\n", sizeof(body));
-    strcat(body, "- All queue rows remain enabled=0, review_status=pending, apply_status=pending.\n\n", sizeof(body));
+    strcat(body, "- All queue rows remain enabled=0, review_status=pending, apply_status=pending.\n", sizeof(body));
+    strcat(body, "- Resolver only writes staging metadata and offline_interior_context_evidence.\n\n", sizeof(body));
     strcat(body, "Runtime apply/replace will be a separate patch after audit and explicit confirmation.", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_OFFLINE_IMPORT_POLICY, DIALOG_STYLE_MSGBOX,
                      "GTA Offline Import Safety Policy", body, "Back", "Close");
+    return 1;
+}
+
+public OnOfflineContextSummaryLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid) || !IsAdminLevel(playerid, ADMIN_OWNER)) return 1;
+    if (cache_num_rows() == 0)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "ENEX context resolver belum dijalankan atau staging session tidak tersedia.");
+        ShowOfflineImportAuditMenu(playerid);
+        return 1;
+    }
+
+    new totalRows, resolvedRows, partialRows, reviewRows, pendingRows;
+    new publicRows, propertyRows, missionRows, gangRows, pairedRows, duplicateRows;
+    new publicTargetRows, houseTargetRows, referenceTargetRows, enabledRows, appliedRows, evidenceRows;
+    new resolverVersion[64];
+    cache_get_value_name_int(0, "total_rows", totalRows);
+    cache_get_value_name_int(0, "resolved_rows", resolvedRows);
+    cache_get_value_name_int(0, "partial_rows", partialRows);
+    cache_get_value_name_int(0, "review_rows", reviewRows);
+    cache_get_value_name_int(0, "pending_rows", pendingRows);
+    cache_get_value_name_int(0, "public_rows", publicRows);
+    cache_get_value_name_int(0, "property_rows", propertyRows);
+    cache_get_value_name_int(0, "mission_rows", missionRows);
+    cache_get_value_name_int(0, "gang_rows", gangRows);
+    cache_get_value_name_int(0, "paired_rows", pairedRows);
+    cache_get_value_name_int(0, "duplicate_rows", duplicateRows);
+    cache_get_value_name_int(0, "public_target_rows", publicTargetRows);
+    cache_get_value_name_int(0, "house_target_rows", houseTargetRows);
+    cache_get_value_name_int(0, "reference_target_rows", referenceTargetRows);
+    cache_get_value_name_int(0, "enabled_rows", enabledRows);
+    cache_get_value_name_int(0, "applied_rows", appliedRows);
+    cache_get_value_name_int(0, "evidence_rows", evidenceRows);
+    cache_get_value_name(0, "resolver_version", resolverVersion, sizeof(resolverVersion));
+
+    new body[3000];
+    format(body, sizeof(body),
+        "ENEX Context Resolver Summary\n\nResolver: %s\nTotal rows: %d\nResolved: %d | Partial: %d | Review required: %d | Pending: %d\n\nAccess scope\nPublic shared: %d\nProperty private: %d\nMission reference: %d\nGang shared: %d\n\nRecommended targets\nPublic interior family: %d\nPlayer houses: %d\nReference-only: %d\n\nPair/evidence\nExterior-interior paired rows: %d\nRows in duplicate groups: %d\nEvidence rows: %d\n\nSafety\nQueue enabled rows: %d (must be 0)\nNon-pending apply rows: %d (must be 0)\nRuntime tables touched: none\n\nUse /offlineinteriors to inspect each resolved context, target, reason, SCM references, pair group, and point space.",
+        resolverVersion, totalRows, resolvedRows, partialRows, reviewRows, pendingRows,
+        publicRows, propertyRows, missionRows, gangRows,
+        publicTargetRows, houseTargetRows, referenceTargetRows,
+        pairedRows, duplicateRows, evidenceRows, enabledRows, appliedRows);
+
+    ShowPlayerDialog(playerid, DIALOG_OFFLINE_CONTEXT_SUMMARY, DIALOG_STYLE_MSGBOX,
+                     "GTA Offline ENEX Context Resolver", body, "Back", "Close");
     return 1;
 }
 
@@ -15939,7 +16014,7 @@ public OnOfflineInteriorQueueLoaded(playerid, page)
     PlayerOfflineInteriorPage[playerid] = page;
     new body[4096], line[220], title[96];
     body[0] = EOS;
-    strcat(body, "Queue ID\tName\tContext\tArea\tConfidence\n", sizeof(body));
+    strcat(body, "Queue ID\tName\tContext / Scope\tArea\tConfidence\n", sizeof(body));
 
     if (page > 0)
     {
@@ -15952,18 +16027,19 @@ public OnOfflineInteriorQueueLoaded(playerid, page)
     for (new i = 0; i < dataRows; i++)
     {
         new queueid, confidence;
-        new listName[128], contextType[64], areaCode[32];
+        new listName[128], contextType[64], accessScope[32], areaCode[32];
         cache_get_value_name_int(i, "id", queueid);
         cache_get_value_name_int(i, "confidence", confidence);
         cache_get_value_name(i, "list_name", listName, sizeof(listName));
         cache_get_value_name(i, "context_type", contextType, sizeof(contextType));
+        cache_get_value_name(i, "access_scope", accessScope, sizeof(accessScope));
         cache_get_value_name(i, "area_code", areaCode, sizeof(areaCode));
 
         new slot = PlayerOfflineInteriorListCount[playerid];
         if (slot >= MAX_OFFLINE_INTERIOR_DIALOG_ROWS) break;
         PlayerOfflineInteriorListDBID[playerid][slot] = queueid;
         PlayerOfflineInteriorListCount[playerid]++;
-        format(line, sizeof(line), "%d\t%s\t%s\t%s\t%d%%\n", queueid, listName, contextType, areaCode, confidence);
+        format(line, sizeof(line), "%d\t%s\t%s / %s\t%s\t%d%%\n", queueid, listName, contextType, accessScope, areaCode, confidence);
         strcat(body, line, sizeof(body));
     }
 
@@ -15996,6 +16072,10 @@ public OnOfflineInteriorDetailLoaded(playerid, queueid)
     new Float:sizeX, Float:sizeY, Float:sizeZ;
     new Float:exitX, Float:exitY, Float:exitZ, Float:exitA;
     new rawName[64], displayName[128], category[64], contextType[64];
+    new resolvedDisplay[128], resolvedCategory[64], resolvedContext[64], accessScope[32], serviceType[64];
+    new runtimeTarget[128], resolverStatus[24], resolverVersion[64], resolverReason[512];
+    new pairGroupKey[96], pairStatus[32], pointASpace[32], pointBSpace[32];
+    new resolverConfidence, scmReferences, shopBindings, pairGroupSize, duplicateGroupSize;
     new cityCode[32], areaCode[32], reviewStatus[24], applyStatus[24], sourceTag[64];
     new sourceFile[180], notes[256];
 
@@ -16024,6 +16104,24 @@ public OnOfflineInteriorDetailLoaded(playerid, queueid)
     cache_get_value_name(0, "display_name", displayName, sizeof(displayName));
     cache_get_value_name(0, "category", category, sizeof(category));
     cache_get_value_name(0, "context_type", contextType, sizeof(contextType));
+    cache_get_value_name(0, "resolved_display_name", resolvedDisplay, sizeof(resolvedDisplay));
+    cache_get_value_name(0, "resolved_category", resolvedCategory, sizeof(resolvedCategory));
+    cache_get_value_name(0, "resolved_context_type", resolvedContext, sizeof(resolvedContext));
+    cache_get_value_name(0, "access_scope", accessScope, sizeof(accessScope));
+    cache_get_value_name(0, "service_type", serviceType, sizeof(serviceType));
+    cache_get_value_name(0, "recommended_runtime_target", runtimeTarget, sizeof(runtimeTarget));
+    cache_get_value_name(0, "resolver_status", resolverStatus, sizeof(resolverStatus));
+    cache_get_value_name_int(0, "resolver_confidence", resolverConfidence);
+    cache_get_value_name(0, "resolver_version", resolverVersion, sizeof(resolverVersion));
+    cache_get_value_name(0, "resolver_reason", resolverReason, sizeof(resolverReason));
+    cache_get_value_name_int(0, "scm_reference_count", scmReferences);
+    cache_get_value_name_int(0, "scm_shop_binding_count", shopBindings);
+    cache_get_value_name(0, "pair_group_key", pairGroupKey, sizeof(pairGroupKey));
+    cache_get_value_name_int(0, "pair_group_size", pairGroupSize);
+    cache_get_value_name(0, "pair_status", pairStatus, sizeof(pairStatus));
+    cache_get_value_name_int(0, "duplicate_group_size", duplicateGroupSize);
+    cache_get_value_name(0, "point_a_space", pointASpace, sizeof(pointASpace));
+    cache_get_value_name(0, "point_b_space", pointBSpace, sizeof(pointBSpace));
     cache_get_value_name(0, "city_code", cityCode, sizeof(cityCode));
     cache_get_value_name(0, "area_code", areaCode, sizeof(areaCode));
     cache_get_value_name(0, "review_status", reviewStatus, sizeof(reviewStatus));
@@ -16040,10 +16138,14 @@ public OnOfflineInteriorDetailLoaded(playerid, queueid)
 
     PlayerOfflineInteriorSelectedID[playerid] = id;
 
-    new body[3800];
+    new body[4096];
     format(body, sizeof(body),
-        "Queue ID: %d\nRaw name: %s\nDisplay: %s\nCategory: %s\nContext: %s\nConfidence: %d%%\nCity/Area: %s / %s\n\nEntry: %.4f, %.4f, %.4f | A %.4f\nEntry box: %.2f x %.2f x %.2f\nExit: %.4f, %.4f, %.4f | A %.4f\nInterior ID: %d | Flags: %d | Sky: %d | Peds: %d\nTime: %d - %d\n\nQueue state: enabled=%d | review=%s | apply=%s\nSource tag: %s\nSource: %s:%d\nNotes: %s\n\nPreview opens a side-aware Point A / Point B menu. Space is detected from source IPL, coordinate, and interior ID. No runtime row is applied/spawned.",
-        id, rawName, displayName, category, contextType, confidence, cityCode, areaCode,
+        "Queue ID: %d\nRaw name: %s\nBaseline: %s | %s / %s | %d%%\n\nResolved: %s\nCategory/Context: %s / %s\nAccess scope: %s | Service: %s\nRecommended target: %s\nResolver: %s | %d%% | %s\nSCM refs: %d | Shop bindings: %d\nPair: %s | key=%s | size=%d | duplicate=%d\nPoint spaces: A=%s | B=%s\nReason: %s\nCity/Area: %s / %s\n\nEntry: %.4f, %.4f, %.4f | A %.4f\nEntry box: %.2f x %.2f x %.2f\nExit: %.4f, %.4f, %.4f | A %.4f\nInterior ID: %d | Flags: %d | Sky: %d | Peds: %d\nTime: %d - %d\n\nQueue state: enabled=%d | review=%s | apply=%s\nSource tag: %s\nSource: %s:%d\nNotes: %s\n\nContext is audit metadata only. Preview remains side-aware; no runtime row is applied/spawned.",
+        id, rawName, displayName, category, contextType, confidence,
+        resolvedDisplay, resolvedCategory, resolvedContext, accessScope, serviceType, runtimeTarget,
+        resolverStatus, resolverConfidence, resolverVersion, scmReferences, shopBindings,
+        pairStatus, pairGroupKey, pairGroupSize, duplicateGroupSize, pointASpace, pointBSpace, resolverReason,
+        cityCode, areaCode,
         entryX, entryY, entryZ, entryA, sizeX, sizeY, sizeZ,
         exitX, exitY, exitZ, exitA, interiorId, flags, skyColor, numPeds, timeOn, timeOff,
         enabled, reviewStatus, applyStatus, sourceTag, sourceFile, sourceLine, notes);
@@ -17530,8 +17632,15 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 1: QueryOfflineSourceFiles(playerid);
             case 2: QueryOfflineInteriorQueue(playerid);
             case 3: ShowOfflineImportSafetyPolicy(playerid);
-            case 4: ShowAdminToolsMenu(playerid);
+            case 4: QueryOfflineInteriorContextSummary(playerid);
+            case 5: ShowAdminToolsMenu(playerid);
         }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OFFLINE_CONTEXT_SUMMARY)
+    {
+        if (response) ShowOfflineImportAuditMenu(playerid);
         return 1;
     }
 
@@ -39304,7 +39413,7 @@ stock ShowOrgEconomyBaselineAudit(playerid)
     new line[192];
     body[0] = EOS;
 
-    strcat(body, "SAIF v0.26A.1.5.1 ENEX Side-Aware Preview\n\n", sizeof(body));
+    strcat(body, "SAIF v0.26A.1.6 ENEX Context Resolver\n\n", sizeof(body));
     strcat(body, "Contract:\n", sizeof(body));
     strcat(body, "- Organization = player-made legal/economic group.\n", sizeof(body));
     strcat(body, "- Gang = preset/offline-like turf group, not org.\n", sizeof(body));
@@ -39382,6 +39491,12 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/offlineaudit", true) || !strcmp(cmdtext, "/offlineworld", true) || !strcmp(cmdtext, "/offlineimport", true))
     {
         ShowOfflineImportAuditMenu(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/offlinecontext", true) || !strcmp(cmdtext, "/enexcontext", true) || !strcmp(cmdtext, "/offlinecontextaudit", true))
+    {
+        QueryOfflineInteriorContextSummary(playerid);
         return 1;
     }
 
@@ -42351,7 +42466,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.5.1 ENEX Side-Aware Preview");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.6 ENEX Context Resolver");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -42361,6 +42476,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.6: ENEX context resolver + SCM/shop evidence + access scope + runtime target audit; no runtime apply.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.5.1: ENEX Point A/B side-aware preview + isolated interior VW + return position safety.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.5: GTA offline source registry + 376 ENEX staging queue + Owner read-only audit; no runtime apply.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.3.1: Cold boot DB readiness; server tidak lagi berjalan dengan handle DB gagal dan auth fallback kosong.");

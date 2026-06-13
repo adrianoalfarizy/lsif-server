@@ -287,6 +287,10 @@
 #define DIALOG_OFFLINE_PICKUP_PLAN_ACTION 1327
 #define DIALOG_OFFLINE_PICKUP_RUNTIME_DRYRUN_SUMMARY 1328
 #define DIALOG_OFFLINE_PICKUP_APPLY_SUMMARY 1329
+#define DIALOG_OFFLINE_PROPERTY_SUMMARY 1330
+#define DIALOG_OFFLINE_PROPERTY_LIST 1331
+#define DIALOG_OFFLINE_PROPERTY_DETAIL 1332
+#define DIALOG_OFFLINE_PROPERTY_ACTION 1333
 
 #define DIALOG_GANG_PRESET_MENU 1192
 #define DIALOG_GANG_PRESET_LIST 1193
@@ -2694,6 +2698,12 @@ new PlayerOfflinePickupPlanListDBID[MAX_PLAYERS][MAX_OFFLINE_PICKUP_PLAN_DIALOG_
 new PlayerOfflinePickupPlanPage[MAX_PLAYERS];
 new PlayerOfflinePickupPlanSelectedID[MAX_PLAYERS];
 new PlayerOfflinePickupPlanSelectedQueueID[MAX_PLAYERS];
+#define MAX_OFFLINE_PROPERTY_DIALOG_ROWS 30
+#define OFFLINE_PROPERTY_PAGE_SIZE 28
+new PlayerOfflinePropertyListCount[MAX_PLAYERS];
+new PlayerOfflinePropertyListDBID[MAX_PLAYERS][MAX_OFFLINE_PROPERTY_DIALOG_ROWS];
+new PlayerOfflinePropertyPage[MAX_PLAYERS];
+new PlayerOfflinePropertySelectedID[MAX_PLAYERS];
 new PlayerOfflineVehicleSelectedID[MAX_PLAYERS];
 #define MAX_OFFLINE_VEHICLE_PLAN_DIALOG_ROWS 30
 #define OFFLINE_VEHICLE_PLAN_PAGE_SIZE 28
@@ -2840,6 +2850,10 @@ forward OnOfflinePickupPlanListLoaded(playerid, page);
 forward OnOfflinePickupPlanDetailLoaded(playerid, planid);
 forward OnOfflinePickupRuntimeDryRunSummaryLoaded(playerid);
 forward OnOfflinePickupFullApplyStatusLoaded(playerid);
+forward OnOfflinePropertySummaryLoaded(playerid);
+forward OnOfflinePropertyListLoaded(playerid, page);
+forward OnOfflinePropertyDetailLoaded(playerid, queueid);
+forward OnOfflinePropertyPreviewLoaded(playerid, queueid);
 forward OnOfflineVehicleSummaryLoaded(playerid);
 forward OnOfflineVehicleListLoaded(playerid, page);
 forward OnOfflineVehicleDetailLoaded(playerid, queueid);
@@ -14210,7 +14224,7 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.20 Baseline-89 Pickup Apply");
+    SetGameModeText("SAIF Dev v0.26A.1.21.1 Property State Keyword Fix");
 
     new MySQLOpt:mysqlOptions = mysql_init_options();
     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
@@ -14400,9 +14414,9 @@ public OnGameModeInit()
     print("[SAIF] Skin movement baseline aktif: CJ-like via UsePlayerPedAnims; profile palsu tetap dihapus.");
     print("[SAIF] Vehicle Mission v0.25B.10 tetap aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
     print("[SAIF] Vitals Persistence aktif: health/armor DB + Ammu Body Armor persistence.");
-    print("[SAIF] Gamemode v0.26A.1.20 Baseline-89 Pickup Apply berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.26A.1.21.1 Property State Keyword Fix berhasil dijalankan.");
     print("[SAIF] GTA Offline Import Audit aktif: registry + ENEX context/evidence/pair planner read-only; runtime tidak disentuh.");
-    print("[SAIF] v0.26A.1.20: Baseline-89 world pickup apply/verify/rollback transaction ready.");
+    print("[SAIF] v0.26A.1.21.1: reserved Pawn keyword state renamed to stateHint; queue logic unchanged.");
     print("[SAIF] Runtime lift: parked vehicle GTA offline +0.50 Z; pickup panah model 1318 +1.00 Z; spawn player public interior +0.50 Z. DB tetap original.");
     print("[SAIF] ENEX side-aware preview aktif: Point A/B, isolated interior VW, dan return position.");
     return 1;
@@ -15218,7 +15232,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "SAIF Admin Menus Hub (/amenus)\n\n", sizeof(body));
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
-    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlinecontext\n/offlinepairs | /offlinepairbatches | /offlineplan [id]\n/offlineservicepoints | /offlineservicelist | /offlinepoint [id]\n/offlineruntimedryrun | /offlinearchivestatus | /offlinecapacity\n/offlinefullapply | /offlineapplystatus | /offlineoverlaystatus | /offlineexactreload\n/offlinevehicles | /offlinevehiclelist | /offlinevehicle [queue_id]\n/offlinevehicleplans | /offlinevehiclebatches | /offlinevehicleplan [plan_id]\n/offlinevehicledryrun | /offlinevehiclearchive | /offlinevehiclecapacity\n/offlinevehicleapplystatus | /offlinevehiclereload\n/offlinepickups | /offlinepickuplist | /offlinepickup [queue_id]\n/offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
+    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlinecontext\n/offlinepairs | /offlinepairbatches | /offlineplan [id]\n/offlineservicepoints | /offlineservicelist | /offlinepoint [id]\n/offlineruntimedryrun | /offlinearchivestatus | /offlinecapacity\n/offlinefullapply | /offlineapplystatus | /offlineoverlaystatus | /offlineexactreload\n/offlinevehicles | /offlinevehiclelist | /offlinevehicle [queue_id]\n/offlinevehicleplans | /offlinevehiclebatches | /offlinevehicleplan [plan_id]\n/offlinevehicledryrun | /offlinevehiclearchive | /offlinevehiclecapacity\n/offlinevehicleapplystatus | /offlinevehiclereload\n/offlinepickups | /offlinepickuplist | /offlinepickup [queue_id]\n/offlineproperties | /offlinepropertylist | /offlineproperty [evidence_id]\n/offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
     strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/orgeconomy, /orgeconomyaudit, /orgstatus, /orgeconomyhealth, /orgbiz, /orgbusiness, /orgfinance\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /vehmissioncloseout, /vehiclemissionhealth, /missiontarget, /vehmissionconfig, /missionpointmenu, /missionpool, /vehmissionpool, /jobpointpool, /vmpool, /pointpool, /jobpool, /jobpointmenu, /taxirequest, /taxistatus, /canceltaxi, /busrequest, /busstatus, /cancelbus, /medicrequest, /medicstatus, /cancelmedic, /firestatus, /firemission\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /cjmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
@@ -15887,6 +15901,7 @@ stock ShowOfflineImportAuditMenu(playerid)
     strcat(body, "GTA SA Pickup Canonical Resolver\t89 baseline-ready / 693 deferred-blocked\tRead-only\n", sizeof(body));
     strcat(body, "World Pickup Runtime Archive / Baseline-89 Dry-Run\tworld_pickups\tRead-only\n", sizeof(body));
     strcat(body, "Full Baseline-89 World Pickup Apply Status\tworld_pickups\tControlled SQL\n", sizeof(body));
+    strcat(body, "GTA SA House / Savehouse / Property Source Queue\t255 evidence rows\tRead-only\n", sizeof(body));
     strcat(body, "Back to Admin Menus\t/amenus\tRead-only\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_OFFLINE_IMPORT_MENU, DIALOG_STYLE_TABLIST_HEADERS,
@@ -16345,6 +16360,258 @@ public OnOfflinePickupFullApplyStatusLoaded(playerid)
     new body[2300];
     format(body, sizeof(body), "GTA SA Baseline-89 World Pickup Apply\n\nLatest apply session: %d\nStatus: %s\nSource tag: %s\nArchive status: %s\n\nTracked transaction\nRuntime active before: %d\nOld rows disabled: %d\nRows inserted: %d\n- Police bribe: %d / 49\n- Body armour: %d / 40\nRuntime active after: %d\n\nCurrent database\nworld_pickups total: %d\nworld_pickups active: %d\nImported active: %d\nApply mappings: %d\nDisabled-old mappings: %d\n\nRuntime behavior\n- Police bribe mengurangi persistent wanted sebesar 1.\n- Body armour memberi hingga 100 armour.\n- Pickup tidak dikonsumsi jika efeknya tidak diperlukan.\n\nSafety\n- Apply/rollback hanya melalui SQL confirmation token.\n- Reload hanya recreate runtime dari row enabled=1.\n- Row lama dan row import tidak pernah dihapus.\n\nTekan Reload untuk memuat ulang world_pickups dari DB.", applyid, applyStatus, sourceTag[0] ? sourceTag : "-", archiveStatus, runtimeBefore, oldDisabled, insertedRows, bribeRows, armorRows, runtimeAfter, runtimeTotal, runtimeActive, importedActive, mappedRows, disabledMapped);
     ShowPlayerDialog(playerid, DIALOG_OFFLINE_PICKUP_APPLY_SUMMARY, DIALOG_STYLE_MSGBOX, "Baseline-89 World Pickup Apply Status", body, "Reload", "Back");
+    return 1;
+}
+
+
+stock QueryOfflinePropertySummary(playerid)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+
+    new query[1800];
+    mysql_format(g_SQL, query, sizeof(query),
+        "SELECT id,status,total_rows,property_for_sale_rows,property_locked_rows,savegame_rows,enex_savehouse_rows,enex_property_rows,garage_rows,unique_property_slots,unique_save_positions,duplicate_extra_rows,(SELECT COUNT(*) FROM offline_property_source_queue q WHERE q.session_id=s.id AND q.enabled<>0) enabled_rows,(SELECT COUNT(*) FROM offline_property_source_queue q WHERE q.session_id=s.id AND q.apply_status<>'pending') nonpending_rows FROM offline_property_source_sessions s WHERE BINARY parser_version=BINARY '%e' ORDER BY id DESC LIMIT 1",
+        "saif-property-source-parser-v0.26A.1.21");
+    mysql_tquery(g_SQL, query, "OnOfflinePropertySummaryLoaded", "i", playerid);
+    return 1;
+}
+
+public OnOfflinePropertySummaryLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid) || !IsAdminLevel(playerid, ADMIN_OWNER)) return 1;
+
+    new rows;
+    cache_get_row_count(rows);
+    if (rows <= 0)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "House/property source queue belum tersedia. Jalankan migration + import v0.26A.1.21.");
+        return ShowOfflineImportAuditMenu(playerid);
+    }
+
+    new sessionid, total, forsale, locked, savegame, enexSave, enexProperty, garages;
+    new uniqueSlots, uniqueSave, duplicateExtra, enabledRows, nonpendingRows;
+    new status[24];
+    cache_get_value_name_int(0, "id", sessionid);
+    cache_get_value_name_int(0, "total_rows", total);
+    cache_get_value_name_int(0, "property_for_sale_rows", forsale);
+    cache_get_value_name_int(0, "property_locked_rows", locked);
+    cache_get_value_name_int(0, "savegame_rows", savegame);
+    cache_get_value_name_int(0, "enex_savehouse_rows", enexSave);
+    cache_get_value_name_int(0, "enex_property_rows", enexProperty);
+    cache_get_value_name_int(0, "garage_rows", garages);
+    cache_get_value_name_int(0, "unique_property_slots", uniqueSlots);
+    cache_get_value_name_int(0, "unique_save_positions", uniqueSave);
+    cache_get_value_name_int(0, "duplicate_extra_rows", duplicateExtra);
+    cache_get_value_name_int(0, "enabled_rows", enabledRows);
+    cache_get_value_name_int(0, "nonpending_rows", nonpendingRows);
+    cache_get_value_name(0, "status", status, sizeof(status));
+
+    new body[2500];
+    format(body, sizeof(body), "GTA SA House / Savehouse / Property Source Queue\n\nSession: %d\nStatus: %s\nTotal evidence: %d / 255\n\nSCM pickup evidence\nProperty for sale: %d / 32\nProperty locked: %d / 29\nSavegame pickup: %d / 37\nUnique property slots: %d / 32\nUnique save positions: %d / 19\n\nIPL evidence\nSavehouse ENEX: %d / 99\nProperty ENEX: %d / 6\nGarage GRGE boundaries: %d / 52\n\nDuplicate evidence extras: %d / 21\n\nSafety\nEnabled rows: %d (must be 0)\nNon-pending apply: %d (must be 0)\nplayer_houses mutation: none\npublic_interiors mutation: none\nworld_pickups mutation: none\n\nThis is evidence staging only. Canonical pairing, ownership, private VW, garage linkage, and runtime apply are deferred.", sessionid, status, total, forsale, locked, savegame, uniqueSlots, uniqueSave, enexSave, enexProperty, garages, duplicateExtra, enabledRows, nonpendingRows);
+    ShowPlayerDialog(playerid, DIALOG_OFFLINE_PROPERTY_SUMMARY, DIALOG_STYLE_MSGBOX, "Offline House / Property Source Queue", body, "Browse", "Back");
+    return 1;
+}
+
+stock QueryOfflinePropertyList(playerid, page = 0)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+    if (page < 0) page = 0;
+
+    PlayerOfflinePropertyPage[playerid] = page;
+    PlayerOfflinePropertyListCount[playerid] = 0;
+
+    new query[1600];
+    mysql_format(g_SQL, query, sizeof(query),
+        "SELECT id,evidence_type,display_name,slot_index,state_hint,COALESCE(price_value,-1) price_value,context_type,city_region,area_code,position_resolved FROM offline_property_source_queue WHERE session_id=(SELECT id FROM offline_property_source_sessions WHERE BINARY parser_version=BINARY '%e' ORDER BY id DESC LIMIT 1) ORDER BY FIELD(evidence_type,'property_for_sale_pickup','property_locked_pickup','savegame_pickup','enex_savehouse','enex_property','garage_reference'),slot_index,id LIMIT %d,%d",
+        "saif-property-source-parser-v0.26A.1.21", page * OFFLINE_PROPERTY_PAGE_SIZE, OFFLINE_PROPERTY_PAGE_SIZE + 1);
+    mysql_tquery(g_SQL, query, "OnOfflinePropertyListLoaded", "ii", playerid, page);
+    return 1;
+}
+
+public OnOfflinePropertyListLoaded(playerid, page)
+{
+    if (!IsPlayerConnected(playerid) || !IsAdminLevel(playerid, ADMIN_OWNER)) return 1;
+
+    new rows;
+    cache_get_row_count(rows);
+    PlayerOfflinePropertyPage[playerid] = page;
+    PlayerOfflinePropertyListCount[playerid] = 0;
+
+    new body[3900];
+    body[0] = EOS;
+    strcat(body, "Evidence\tSlot / State\tContext / Area\n", sizeof(body));
+
+    if (page > 0)
+    {
+        PlayerOfflinePropertyListDBID[playerid][PlayerOfflinePropertyListCount[playerid]++] = -1;
+        strcat(body, "<< Previous Page\t\tNavigation\n", sizeof(body));
+    }
+
+    new dataRows = rows;
+    if (dataRows > OFFLINE_PROPERTY_PAGE_SIZE) dataRows = OFFLINE_PROPERTY_PAGE_SIZE;
+    for (new i = 0; i < dataRows; i++)
+    {
+        new id, slotIndex, priceValue, resolved;
+        new name[160], stateHint[48], context[48], region[32], area[32], line[320], slotText[96];
+        cache_get_value_name_int(i, "id", id);
+        cache_get_value_name_int(i, "slot_index", slotIndex);
+        cache_get_value_name_int(i, "price_value", priceValue);
+        cache_get_value_name_int(i, "position_resolved", resolved);
+        cache_get_value_name(i, "display_name", name, sizeof(name));
+        cache_get_value_name(i, "state_hint", stateHint, sizeof(stateHint));
+        cache_get_value_name(i, "context_type", context, sizeof(context));
+        cache_get_value_name(i, "city_region", region, sizeof(region));
+        cache_get_value_name(i, "area_code", area, sizeof(area));
+
+        if (slotIndex >= 0 && priceValue >= 0) format(slotText, sizeof(slotText), "Slot %d / $%d", slotIndex, priceValue);
+        else if (slotIndex >= 0) format(slotText, sizeof(slotText), "Slot %d / %s", slotIndex, stateHint);
+        else format(slotText, sizeof(slotText), "%s", stateHint);
+
+        PlayerOfflinePropertyListDBID[playerid][PlayerOfflinePropertyListCount[playerid]++] = id;
+        format(line, sizeof(line), "#%d %s\t%s\t%s / %s-%s%s\n", id, name, slotText, context, region, area, resolved ? "" : " [UNRESOLVED]");
+        strcat(body, line, sizeof(body));
+    }
+
+    if (rows > OFFLINE_PROPERTY_PAGE_SIZE && PlayerOfflinePropertyListCount[playerid] < MAX_OFFLINE_PROPERTY_DIALOG_ROWS)
+    {
+        PlayerOfflinePropertyListDBID[playerid][PlayerOfflinePropertyListCount[playerid]++] = -2;
+        strcat(body, ">> Next Page\t\tNavigation\n", sizeof(body));
+    }
+
+    if (dataRows == 0 && page == 0) strcat(body, "No rows\tRun SQL v0.26A.1.21\tRead-only\n", sizeof(body));
+    ShowPlayerDialog(playerid, DIALOG_OFFLINE_PROPERTY_LIST, DIALOG_STYLE_TABLIST_HEADERS, "Offline House / Property Evidence", body, "Detail", "Back");
+    return 1;
+}
+
+stock QueryOfflinePropertyDetail(playerid, queueid)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+    if (queueid <= 0) return QueryOfflinePropertyList(playerid, PlayerOfflinePropertyPage[playerid]);
+
+    new query[1000];
+    mysql_format(g_SQL, query, sizeof(query),
+        "SELECT *,COALESCE(price_value,-1) price_value_resolved FROM offline_property_source_queue WHERE id=%d AND BINARY parser_version=BINARY '%e' LIMIT 1",
+        queueid, "saif-property-source-parser-v0.26A.1.21");
+    mysql_tquery(g_SQL, query, "OnOfflinePropertyDetailLoaded", "ii", playerid, queueid);
+    return 1;
+}
+
+public OnOfflinePropertyDetailLoaded(playerid, queueid)
+{
+    if (!IsPlayerConnected(playerid) || !IsAdminLevel(playerid, ADMIN_OWNER)) return 1;
+    if (cache_num_rows() <= 0) return QueryOfflinePropertyList(playerid, PlayerOfflinePropertyPage[playerid]);
+
+    PlayerOfflinePropertySelectedID[playerid] = queueid;
+
+    new sourceLine, slotIndex, priceValue, confidence, resolved, interiorID, garageType, garageDoor, duplicateSize, enabled;
+    new Float:x, Float:y, Float:z, Float:a, Float:exitX, Float:exitY, Float:exitZ, Float:exitA;
+    new evidence[48], scope[24], file[256], command[48], handle[128], script[64], label[128];
+    new stateHint[48], priceToken[64], rawName[96], name[160], context[48], garage[32], region[32], area[32], review[24], apply[24], notes[255];
+
+    cache_get_value_name_int(0, "source_line", sourceLine);
+    cache_get_value_name_int(0, "slot_index", slotIndex);
+    cache_get_value_name_int(0, "price_value_resolved", priceValue);
+    cache_get_value_name_int(0, "confidence", confidence);
+    cache_get_value_name_int(0, "position_resolved", resolved);
+    cache_get_value_name_int(0, "interior_id", interiorID);
+    cache_get_value_name_int(0, "garage_type", garageType);
+    cache_get_value_name_int(0, "garage_door_type", garageDoor);
+    cache_get_value_name_int(0, "duplicate_group_size", duplicateSize);
+    cache_get_value_name_int(0, "enabled", enabled);
+    cache_get_value_name_float(0, "position_x", x);
+    cache_get_value_name_float(0, "position_y", y);
+    cache_get_value_name_float(0, "position_z", z);
+    cache_get_value_name_float(0, "position_a", a);
+    cache_get_value_name_float(0, "exit_x", exitX);
+    cache_get_value_name_float(0, "exit_y", exitY);
+    cache_get_value_name_float(0, "exit_z", exitZ);
+    cache_get_value_name_float(0, "exit_a", exitA);
+    cache_get_value_name(0, "evidence_type", evidence, sizeof(evidence));
+    cache_get_value_name(0, "source_scope", scope, sizeof(scope));
+    cache_get_value_name(0, "source_file", file, sizeof(file));
+    cache_get_value_name(0, "source_command", command, sizeof(command));
+    cache_get_value_name(0, "handle_name", handle, sizeof(handle));
+    cache_get_value_name(0, "script_name", script, sizeof(script));
+    cache_get_value_name(0, "script_label", label, sizeof(label));
+    cache_get_value_name(0, "state_hint", stateHint, sizeof(stateHint));
+    cache_get_value_name(0, "price_token", priceToken, sizeof(priceToken));
+    cache_get_value_name(0, "raw_name", rawName, sizeof(rawName));
+    cache_get_value_name(0, "display_name", name, sizeof(name));
+    cache_get_value_name(0, "context_type", context, sizeof(context));
+    cache_get_value_name(0, "garage_name", garage, sizeof(garage));
+    cache_get_value_name(0, "city_region", region, sizeof(region));
+    cache_get_value_name(0, "area_code", area, sizeof(area));
+    cache_get_value_name(0, "review_status", review, sizeof(review));
+    cache_get_value_name(0, "apply_status", apply, sizeof(apply));
+    cache_get_value_name(0, "notes", notes, sizeof(notes));
+
+    new body[3800];
+    format(body, sizeof(body), "Evidence ID: %d\nType: %s\nDisplay / raw name: %s / %s\nState hint: %s\nContext: %s\nConfidence: %d%%\n\nSource\nScope: %s\nFile: %s:%d\nCommand: %s\nHandle: %s\nScript / label: %s / %s\n\nProperty reference\nSlot index: %d\nPrice token / value: %s / %d\n\nPrimary transform\nResolved: %d\nX %.4f | Y %.4f | Z %.4f | A %.2f\nRegion / area: %s / %s\nInterior hint: %d\n\nENEX other side\nX %.4f | Y %.4f | Z %.4f | A %.2f\n\nGarage reference\nName: %s\nType / door: %d / %d\n\nDuplicate group size: %d\nReview / apply: %s / %s\nEnabled: %d (must remain 0)\n\nNotes: %s\n\nRuntime ownership/interior/garage mutation: none", queueid, evidence, name, rawName, stateHint, context, confidence, scope, file, sourceLine, command, handle, script, label, slotIndex, priceToken, priceValue, resolved, x, y, z, a, region, area, interiorID, exitX, exitY, exitZ, exitA, garage, garageType, garageDoor, duplicateSize, review, apply, enabled, notes);
+    ShowPlayerDialog(playerid, DIALOG_OFFLINE_PROPERTY_DETAIL, DIALOG_STYLE_MSGBOX, "Offline House / Property Evidence Detail", body, "Actions", "Back");
+    return 1;
+}
+
+stock ShowOfflinePropertyActions(playerid)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+    ShowPlayerDialog(playerid, DIALOG_OFFLINE_PROPERTY_ACTION, DIALOG_STYLE_TABLIST_HEADERS, "House / Property Evidence Actions", "Action\tEffect\nPreview Primary Position\tTeleport only; no marker/runtime create\nReturn to Previous Position\tRestore transform\nBack to Detail\tRead-only\nBack to Evidence List\tRead-only", "Open", "Back");
+    return 1;
+}
+
+stock QueryOfflinePropertyPreview(playerid, queueid)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+    if (IsPlayerInAnyVehicle(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Keluar dari kendaraan sebelum preview house/property evidence.");
+        return QueryOfflinePropertyDetail(playerid, queueid);
+    }
+
+    new query[700];
+    mysql_format(g_SQL, query, sizeof(query),
+        "SELECT position_x,position_y,position_z,position_resolved,evidence_type,display_name,source_file,source_line FROM offline_property_source_queue WHERE id=%d AND BINARY parser_version=BINARY '%e' LIMIT 1",
+        queueid, "saif-property-source-parser-v0.26A.1.21");
+    mysql_tquery(g_SQL, query, "OnOfflinePropertyPreviewLoaded", "ii", playerid, queueid);
+    return 1;
+}
+
+public OnOfflinePropertyPreviewLoaded(playerid, queueid)
+{
+    if (!IsPlayerConnected(playerid) || !IsAdminLevel(playerid, ADMIN_OWNER)) return 1;
+    if (cache_num_rows() <= 0) return QueryOfflinePropertyDetail(playerid, queueid);
+
+    new resolved, sourceLine;
+    new Float:x, Float:y, Float:z;
+    new evidence[48], name[160], file[256];
+    cache_get_value_name_int(0, "position_resolved", resolved);
+    cache_get_value_name_int(0, "source_line", sourceLine);
+    cache_get_value_name_float(0, "position_x", x);
+    cache_get_value_name_float(0, "position_y", y);
+    cache_get_value_name_float(0, "position_z", z);
+    cache_get_value_name(0, "evidence_type", evidence, sizeof(evidence));
+    cache_get_value_name(0, "display_name", name, sizeof(name));
+    cache_get_value_name(0, "source_file", file, sizeof(file));
+
+    if (!resolved || (floatabs(x) < 0.001 && floatabs(y) < 0.001 && floatabs(z) < 0.001))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Preview diblokir: transform unresolved atau zero-coordinate placeholder.");
+        return QueryOfflinePropertyDetail(playerid, queueid);
+    }
+    if (z > 800.0 || z < -100.0 || floatabs(x) > 4000.0 || floatabs(y) > 4000.0)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Preview diblokir: titik kemungkinan interior/dynamic atau di luar world audit aman.");
+        return QueryOfflinePropertyDetail(playerid, queueid);
+    }
+
+    SaveOfflineInteriorPreviewReturn(playerid);
+    SetPlayerInterior(playerid, 0);
+    SetPlayerVirtualWorld(playerid, 0);
+    SetPlayerPos(playerid, x + 1.0, y, z + 1.0);
+    SetCameraBehindPlayer(playerid);
+
+    new msg[260];
+    format(msg, sizeof(msg), "Preview evidence #%d [%s] %s dari %s:%d. Tidak ada pickup, door, house, atau garage runtime yang dibuat.", queueid, evidence, name, file, sourceLine);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
     return 1;
 }
 
@@ -19145,7 +19412,46 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 15: QueryOfflinePickupPlanSummary(playerid);
             case 16: QueryOfflinePickupRuntimeDryRunSummary(playerid);
             case 17: QueryOfflinePickupFullApplyStatus(playerid);
-            case 18: ShowAdminToolsMenu(playerid);
+            case 18: QueryOfflinePropertySummary(playerid);
+            case 19: ShowAdminToolsMenu(playerid);
+        }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OFFLINE_PROPERTY_SUMMARY)
+    {
+        if (response) QueryOfflinePropertyList(playerid, 0);
+        else ShowOfflineImportAuditMenu(playerid);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OFFLINE_PROPERTY_LIST)
+    {
+        if (!response) return QueryOfflinePropertySummary(playerid);
+        if (listitem < 0 || listitem >= PlayerOfflinePropertyListCount[playerid]) return QueryOfflinePropertyList(playerid, PlayerOfflinePropertyPage[playerid]);
+
+        new queueid = PlayerOfflinePropertyListDBID[playerid][listitem];
+        if (queueid == -1) return QueryOfflinePropertyList(playerid, PlayerOfflinePropertyPage[playerid] - 1);
+        if (queueid == -2) return QueryOfflinePropertyList(playerid, PlayerOfflinePropertyPage[playerid] + 1);
+        return QueryOfflinePropertyDetail(playerid, queueid);
+    }
+
+    if (dialogid == DIALOG_OFFLINE_PROPERTY_DETAIL)
+    {
+        if (response) ShowOfflinePropertyActions(playerid);
+        else QueryOfflinePropertyList(playerid, PlayerOfflinePropertyPage[playerid]);
+        return 1;
+    }
+
+    if (dialogid == DIALOG_OFFLINE_PROPERTY_ACTION)
+    {
+        if (!response) return QueryOfflinePropertyDetail(playerid, PlayerOfflinePropertySelectedID[playerid]);
+        switch (listitem)
+        {
+            case 0: QueryOfflinePropertyPreview(playerid, PlayerOfflinePropertySelectedID[playerid]);
+            case 1: ReturnFromOfflineInteriorPreview(playerid);
+            case 2: QueryOfflinePropertyDetail(playerid, PlayerOfflinePropertySelectedID[playerid]);
+            case 3: QueryOfflinePropertyList(playerid, PlayerOfflinePropertyPage[playerid]);
         }
         return 1;
     }
@@ -41366,6 +41672,39 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/offlineproperties", true) ||
+        !strcmp(cmdtext, "/offlinepropertyqueue", true) ||
+        !strcmp(cmdtext, "/offlinehouseaudit", true))
+    {
+        QueryOfflinePropertySummary(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/offlinepropertylist", true) ||
+        !strcmp(cmdtext, "/offlinehouselist", true))
+    {
+        QueryOfflinePropertyList(playerid, 0);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/offlineproperty", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Usage: /offlineproperty [evidence_id]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/offlineproperty ", true) == 0)
+    {
+        new evidenceid = strval(cmdtext[17]);
+        if (evidenceid <= 0)
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Usage: /offlineproperty [evidence_id]");
+            return 1;
+        }
+        QueryOfflinePropertyDetail(playerid, evidenceid);
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/offlinevehicles", true) || !strcmp(cmdtext, "/offlinecars", true) || !strcmp(cmdtext, "/offlinecargens", true))
     {
         QueryOfflineVehicleSummary(playerid);
@@ -44428,7 +44767,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.20 Baseline-89 Pickup Apply");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.21.1 Property State Keyword Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -44438,7 +44777,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.20: 49 police bribe + 40 body armour apply transaction, reload, verify, and rollback.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.21.1: property queue compile fix; 255 evidence rows and runtime behavior unchanged.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.10: Controlled 91-row public interior apply (71 SCM exact + 20 reviewed overlay) + tracked rollback.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.8: Exact Interior Service Point Resolver; 71 native SCM exact + 20 overlay preview anchors, audit-only.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.7.1: memperbaiki 11 Float tag mismatch pada detail ENEX pair plan; tanpa SQL/runtime change.");

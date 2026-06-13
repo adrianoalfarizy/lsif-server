@@ -276,6 +276,7 @@
 #define DIALOG_OFFLINE_VEHICLE_PLAN_ACTION 1316
 #define DIALOG_OFFLINE_VEHICLE_RUNTIME_DRYRUN_SUMMARY 1317
 #define DIALOG_OFFLINE_VEHICLE_APPLY_SUMMARY 1318
+#define DIALOG_OFFLINE_MAP_ICON_AUDIT 1319
 
 #define DIALOG_GANG_PRESET_MENU 1192
 #define DIALOG_GANG_PRESET_LIST 1193
@@ -756,6 +757,28 @@ stock IsLegacyStaticRaceMarkerEnabled() { return 0; }
 #define MAPICON_TYPE_AMMUNATION 6
 #define MAPICON_TYPE_TERRITORY 19
 #define MAPICON_TYPE_GANG_HQ 19
+
+// v0.26A.1.16 Offline-like canonical map icon registry.
+#define MAPICON_TYPE_BARBER 7
+#define MAPICON_TYPE_BURGER_SHOT 10
+#define MAPICON_TYPE_CLUCKIN_BELL 14
+#define MAPICON_TYPE_HOSPITAL 22
+#define MAPICON_TYPE_CALIGULAS 25
+#define MAPICON_TYPE_MOD_GARAGE 27
+#define MAPICON_TYPE_PIZZA_STACK 29
+#define MAPICON_TYPE_POLICE 30
+#define MAPICON_TYPE_PROPERTY_FOR_SALE 31
+#define MAPICON_TYPE_SAVE_HOUSE 35
+#define MAPICON_TYPE_TATTOO 39
+#define MAPICON_TYPE_TRIADS_CASINO 44
+#define MAPICON_TYPE_CLOTHES 45
+#define MAPICON_TYPE_RESTAURANT 50
+#define MAPICON_TYPE_247 52
+#define MAPICON_TYPE_GYM 54
+#define MAPICON_TYPE_PAYNSPRAY 63
+#define OFFLINE_WORLD_MAPICON_BASE 0
+#define OFFLINE_WORLD_MAPICON_SLOTS 100
+#define OFFLINE_WORLD_MAPICON_HOUSE_RESERVE MAX_HOUSES
 
 #define MAX_DYNAMIC_LOCATIONS 80
 #define MAX_DYNAMIC_OBJECTS 300
@@ -11564,24 +11587,8 @@ stock CreateAllGangHQExteriorRuntime()
 
 stock RefreshGangHQMapIconsForAll()
 {
-    for (new playerid = 0; playerid < MAX_PLAYERS; playerid++)
-    {
-        if (!IsPlayerConnected(playerid))
-        {
-            continue;
-        }
-
-        for (new i = 0; i < MAX_PRESET_GANGS; i++)
-        {
-            RemovePlayerMapIcon(playerid, MAPICON_BASE_GANG_HQ + i);
-            if (PresetGangEnabled[i])
-            {
-                SetPlayerMapIcon(playerid, MAPICON_BASE_GANG_HQ + i, GangHQX[i], GangHQY[i], GangHQZ[i], GangHQMapIconType[i], PresetGangColor[i], MAPICON_LOCAL);
-            }
-        }
-    }
-
-    return 1;
+    // GTA SA offline does not expose persistent Gang HQ map icons; unified registry decides available slots.
+    return RefreshAllPlayerMapIcons();
 }
 
 stock LoadGangPresetConfigFromDB()
@@ -14170,7 +14177,7 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.15.1 Interior Arrow and Spawn Z Fix");
+    SetGameModeText("SAIF Dev v0.26A.1.16 Offline-like Map Icon Canonical Audit");
 
     new MySQLOpt:mysqlOptions = mysql_init_options();
     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
@@ -14326,7 +14333,6 @@ public OnGameModeInit()
     SetTimer("FirefighterMissionTick", FIRE_MISSION_WATER_TICK_MS, true);
     ResetTurfWarData();
     g_TurfWarTimer = SetTimer("TurfWarTick", TURF_WAR_TICK_INTERVAL, true);
-    SetTimer("UpdateNearbyMapIconsForAllPlayers", NEARBY_MAPICON_UPDATE_MS, true);
 
     print("[LSIF] Autosave timer aktif setiap 5 menit.");
     print("[LSIF] Anti-cheat timer aktif setiap 10 detik.");
@@ -14338,6 +14344,7 @@ public OnGameModeInit()
     print("[LSIF] Default GTA interior enter/exit markers disabled.");
     print("[LSIF] Custom house arrow pickups aktif.");
     print("[LSIF] Map icons, 3D labels, ALT world markers, turf markers, dan colored GangZones aktif.");
+    print("[SAIF] Offline-like map icon registry aktif: 100 native slots, MAPICON_LOCAL radar proximity, no 1500m nearest-only manager.");
     print("[SAIF] Nearby Map Icon Manager aktif: slot 80-99 diisi otomatis dari icon terdekat per player.");
     print("[LSIF] Dynamic World Location Core aktif: radar icon, 3D label, pickup, dan editor lokasi admin.");
     print("[SAIF] Legacy static ATM/Dealer/Ammu/Job/Race Pawn markers deprecated; gunakan world_locations DB + /locmenu.");
@@ -14353,9 +14360,9 @@ public OnGameModeInit()
     print("[SAIF] Skin movement baseline aktif: CJ-like via UsePlayerPedAnims; profile palsu tetap dihapus.");
     print("[SAIF] Vehicle Mission v0.25B.10 tetap aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
     print("[SAIF] Vitals Persistence aktif: health/armor DB + Ammu Body Armor persistence.");
-    print("[SAIF] Gamemode v0.26A.1.15.1 Interior Arrow and Spawn Z Fix berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.26A.1.16 Offline-like Map Icon Canonical Audit berhasil dijalankan.");
     print("[SAIF] GTA Offline Import Audit aktif: registry + ENEX context/evidence/pair planner read-only; runtime tidak disentuh.");
-    print("[SAIF] v0.26A.1.15.1: pickup panah public interior dinaikkan +1.00 Z dan spawn player +0.50 Z.");
+    print("[SAIF] v0.26A.1.16: map icon canonical GTA SA + MAPICON_LOCAL; semua public interior dipasang permanen di pause map dan radar hanya saat dekat.");
     print("[SAIF] Runtime lift: parked vehicle GTA offline +0.50 Z; pickup panah model 1318 +1.00 Z; spawn player public interior +0.50 Z. DB tetap original.");
     print("[SAIF] ENEX side-aware preview aktif: Point A/B, isolated interior VW, dan return position.");
     return 1;
@@ -14913,32 +14920,8 @@ stock CreateBusinessPresetFromPlayer(playerid)
 
 stock RefreshBusinessMapIconsForAllPlayers()
 {
-    for (new playerid = 0; playerid < MAX_PLAYERS; playerid++)
-    {
-        if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid])
-        {
-            continue;
-        }
-
-        for (new i = 0; i < MAX_BUSINESSES; i++)
-        {
-            RemovePlayerMapIcon(playerid, MAPICON_BASE_BUSINESS + i);
-
-            if (!BusinessEnabled[i] || strlen(BusinessName[i]) < 1)
-            {
-                continue;
-            }
-
-            if (BusinessX[i] == 0.0 && BusinessY[i] == 0.0 && BusinessZ[i] == 0.0)
-            {
-                continue;
-            }
-
-            SetPlayerMapIcon(playerid, MAPICON_BASE_BUSINESS + i, BusinessX[i], BusinessY[i], BusinessZ[i], MAPICON_TYPE_BUSINESS, COLOR_YELLOW, MAPICON_LOCAL);
-        }
-    }
-
-    return 1;
+    // Offline-like map registry owns all native slots. Business changes trigger one canonical refresh.
+    return RefreshAllPlayerMapIcons();
 }
 
 stock SetBusinessPresetEnabled(playerid, businessIndex, enabled)
@@ -15852,6 +15835,7 @@ stock ShowOfflineImportAuditMenu(playerid)
     strcat(body, "Parked Vehicle Canonical / Apply Planner\t211 queue rows\tRead-only\n", sizeof(body));
     strcat(body, "Parked Vehicle Runtime Archive / Full 130 Dry-Run\tparked_vehicles\tRead-only\n", sizeof(body));
     strcat(body, "Full 130 Parked Vehicle Apply Status\tparked_vehicles\tControlled SQL\n", sizeof(body));
+    strcat(body, "Offline-like Map Icon Audit\tpublic_interiors + radar\tRead-only / refresh\n", sizeof(body));
     strcat(body, "Back to Admin Menus\t/amenus\tRead-only\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_OFFLINE_IMPORT_MENU, DIALOG_STYLE_TABLIST_HEADERS,
@@ -15859,6 +15843,83 @@ stock ShowOfflineImportAuditMenu(playerid)
     return 1;
 }
 
+stock ShowOfflineMapIconAudit(playerid)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+
+    new publicCandidates = 0, publicRendered = 0, publicOmitted = 0, hiddenNoCanonical = 0;
+    new storedMismatch = 0;
+    new iconAmmu = 0, icon247 = 0, iconBurger = 0, iconCluckin = 0, iconPizza = 0;
+    new iconBarber = 0, iconTattoo = 0, iconClothes = 0, iconGym = 0, iconPolice = 0;
+    new iconHospital = 0, iconCasino = 0, iconOther = 0;
+    new publicLimit = OFFLINE_WORLD_MAPICON_SLOTS - OFFLINE_WORLD_MAPICON_HOUSE_RESERVE;
+
+    for (new i = 0; i < PublicInteriorCount; i++)
+    {
+        if (!PublicInteriorEnabled[i]) continue;
+        if (PublicInteriorExtX[i] == 0.0 && PublicInteriorExtY[i] == 0.0 && PublicInteriorExtZ[i] == 0.0) continue;
+
+        new icon = GetPublicInteriorResolvedMapIcon(i);
+        if (icon <= 0)
+        {
+            hiddenNoCanonical++;
+            continue;
+        }
+
+        publicCandidates++;
+        if (publicRendered < publicLimit) publicRendered++;
+        else publicOmitted++;
+
+        if (PublicInteriorMapIcon[i] != icon) storedMismatch++;
+
+        switch (icon)
+        {
+            case MAPICON_TYPE_AMMUNATION: iconAmmu++;
+            case MAPICON_TYPE_247: icon247++;
+            case MAPICON_TYPE_BURGER_SHOT: iconBurger++;
+            case MAPICON_TYPE_CLUCKIN_BELL: iconCluckin++;
+            case MAPICON_TYPE_PIZZA_STACK: iconPizza++;
+            case MAPICON_TYPE_BARBER: iconBarber++;
+            case MAPICON_TYPE_TATTOO: iconTattoo++;
+            case MAPICON_TYPE_CLOTHES: iconClothes++;
+            case MAPICON_TYPE_GYM: iconGym++;
+            case MAPICON_TYPE_POLICE: iconPolice++;
+            case MAPICON_TYPE_HOSPITAL: iconHospital++;
+            case MAPICON_TYPE_CALIGULAS, MAPICON_TYPE_TRIADS_CASINO: iconCasino++;
+            default: iconOther++;
+        }
+    }
+
+    new housesRendered = MAX_HOUSES;
+    if (publicRendered + housesRendered > OFFLINE_WORLD_MAPICON_SLOTS)
+    {
+        housesRendered = OFFLINE_WORLD_MAPICON_SLOTS - publicRendered;
+        if (housesRendered < 0) housesRendered = 0;
+    }
+
+    new body[3900], line[320];
+    format(body, sizeof(body), "Offline-like Map Icon Canonical Audit\n\nNative slot budget: %d\nPublic icon reserve: %d\nHouse/property reserve: %d\n\n", OFFLINE_WORLD_MAPICON_SLOTS, publicLimit, OFFLINE_WORLD_MAPICON_HOUSE_RESERVE);
+    format(line, sizeof(line), "Runtime public interiors: %d\nCanonical icon candidates: %d\nRendered public icons: %d\nOmitted due slot limit: %d\n", PublicInteriorCount, publicCandidates, publicRendered, publicOmitted);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "No canonical GTA SA icon: %d\nStored DB icon mismatch: %d\nHouses rendered: %d\nTotal slots projected: %d / %d\n\n", hiddenNoCanonical, storedMismatch, housesRendered, publicRendered + housesRendered, OFFLINE_WORLD_MAPICON_SLOTS);
+    strcat(body, line, sizeof(body));
+    strcat(body, "Canonical symbols\n", sizeof(body));
+    format(line, sizeof(line), "Ammu-Nation [6]: %d | 24/7 [52]: %d\n", iconAmmu, icon247);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Burger [10]: %d | Cluckin [14]: %d | Pizza [29]: %d\n", iconBurger, iconCluckin, iconPizza);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Barber [7]: %d | Tattoo [39]: %d | Clothes [45]: %d\n", iconBarber, iconTattoo, iconClothes);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Gym [54]: %d | Police [30]: %d | Hospital [22]: %d\n", iconGym, iconPolice, iconHospital);
+    strcat(body, line, sizeof(body));
+    format(line, sizeof(line), "Casino [25/44]: %d | Other canonical: %d\n\n", iconCasino, iconOther);
+    strcat(body, line, sizeof(body));
+    strcat(body, "Offline render logic\n- Pause/menu map: every allocated permanent icon is registered at all times.\n- Radar/minimap: MAPICON_LOCAL; icon appears only at native close proximity.\n- No 1500m custom radius and no GLOBAL edge marker.\n- City Hall has no canonical GTA SA legend icon and is intentionally hidden.\n- Persistent business, bus stop, Gang HQ, dealer, job and race icons are omitted from the offline registry.\n- Native SetPlayerMapIcon limit remains 100 slots.\n\nPress Refresh to rebuild icons for all online players.", sizeof(body));
+
+    ShowPlayerDialog(playerid, DIALOG_OFFLINE_MAP_ICON_AUDIT, DIALOG_STYLE_MSGBOX,
+                     "Offline-like Map Icon Audit", body, "Refresh", "Back");
+    return 1;
+}
 
 
 stock QueryOfflineVehicleSummary(playerid)
@@ -18549,9 +18610,20 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 10: QueryOfflineVehiclePlanSummary(playerid);
             case 11: QueryOfflineVehicleRuntimeDryRunSummary(playerid);
             case 12: QueryOfflineVehicleFullApplyStatus(playerid);
-            case 13: ShowAdminToolsMenu(playerid);
+            case 13: ShowOfflineMapIconAudit(playerid);
+            case 14: ShowAdminToolsMenu(playerid);
         }
         return 1;
+    }
+
+    if (dialogid == DIALOG_OFFLINE_MAP_ICON_AUDIT)
+    {
+        if (response)
+        {
+            RefreshAllPlayerMapIcons();
+            SendClientMessage(playerid, COLOR_GREEN, "Offline-like map icons direbuild untuk semua player online.");
+        }
+        return ShowOfflineImportAuditMenu(playerid);
     }
 
     if (dialogid == DIALOG_OFFLINE_VEHICLE_APPLY_SUMMARY)
@@ -25723,35 +25795,17 @@ stock CreateDynamicLocationMarkers()
 
 stock RemoveNearbyMapIcons(playerid)
 {
-    for (new slot = 0; slot < NEARBY_MAPICON_SLOTS; slot++)
-    {
-        RemovePlayerMapIcon(playerid, NEARBY_MAPICON_BASE + slot);
-    }
+    // Nearby manager retired in v0.26A.1.16. Permanent MAPICON_LOCAL icons are owned by ApplyLSIFMapIcons.
+    #pragma unused playerid
     return 1;
 }
 
 stock IsDynamicLocationNearbyIconCandidate(index)
 {
-    if (index < 0 || index >= DynamicLocationCount)
-    {
-        return 0;
-    }
-
-    if (!DynamicLocationEnabled[index])
-    {
-        return 0;
-    }
-
-    if (DynamicLocationMapIcon[index] <= 0)
-    {
-        return 0;
-    }
-
-    if (DynamicLocationX[index] == 0.0 && DynamicLocationY[index] == 0.0 && DynamicLocationZ[index] == 0.0)
-    {
-        return 0;
-    }
-
+    if (index < 0 || index >= DynamicLocationCount) return 0;
+    if (!DynamicLocationEnabled[index]) return 0;
+    if (DynamicLocationMapIcon[index] <= 0) return 0;
+    if (DynamicLocationX[index] == 0.0 && DynamicLocationY[index] == 0.0 && DynamicLocationZ[index] == 0.0) return 0;
     return 1;
 }
 
@@ -25765,128 +25819,14 @@ stock Float:GetMapIconDistanceSq(Float:px, Float:py, Float:pz, Float:x, Float:y,
 
 stock ApplyNearbyMapIcons(playerid)
 {
-    if (!IsPlayerConnected(playerid))
-    {
-        return 0;
-    }
-
-    RemoveNearbyMapIcons(playerid);
-
-    new Float:px, Float:py, Float:pz;
-    GetPlayerPos(playerid, px, py, pz);
-
-    new selectedPub[MAX_PUBLIC_INTERIORS];
-    new selectedDyn[MAX_DYNAMIC_LOCATIONS];
-
-    new Float:radiusSq = NEARBY_MAPICON_RADIUS * NEARBY_MAPICON_RADIUS;
-    new usedSlots = 0;
-
-    for (new slot = 0; slot < NEARBY_MAPICON_SLOTS; slot++)
-    {
-        new bestKind = 0; // 1 = public interior, 2 = dynamic location
-        new bestIndex = -1;
-        new Float:bestDistance = radiusSq + 1.0;
-
-        for (new i = 0; i < PublicInteriorCount; i++)
-        {
-            if (selectedPub[i])
-            {
-                continue;
-            }
-
-            if (!IsPublicInteriorIconCandidateValid(i))
-            {
-                continue;
-            }
-
-            new Float:dist = GetMapIconDistanceSq(px, py, pz, PublicInteriorExtX[i], PublicInteriorExtY[i], PublicInteriorExtZ[i]);
-            if (dist <= radiusSq && dist < bestDistance)
-            {
-                bestDistance = dist;
-                bestKind = 1;
-                bestIndex = i;
-            }
-        }
-
-        for (new i = 0; i < DynamicLocationCount; i++)
-        {
-            if (selectedDyn[i])
-            {
-                continue;
-            }
-
-            if (!IsDynamicLocationNearbyIconCandidate(i))
-            {
-                continue;
-            }
-
-            new Float:dist = GetMapIconDistanceSq(px, py, pz, DynamicLocationX[i], DynamicLocationY[i], DynamicLocationZ[i]);
-            if (dist <= radiusSq && dist < bestDistance)
-            {
-                bestDistance = dist;
-                bestKind = 2;
-                bestIndex = i;
-            }
-        }
-
-        if (bestKind == 0 || bestIndex < 0)
-        {
-            break;
-        }
-
-        if (bestKind == 1)
-        {
-            new iconType = PublicInteriorMapIcon[bestIndex];
-            if (iconType <= 0)
-            {
-                iconType = GetPublicInteriorDefaultMapIcon(PublicInteriorType[bestIndex]);
-            }
-
-            SetPlayerMapIcon(
-                playerid,
-                NEARBY_MAPICON_BASE + usedSlots,
-                PublicInteriorExtX[bestIndex],
-                PublicInteriorExtY[bestIndex],
-                PublicInteriorExtZ[bestIndex],
-                iconType,
-                COLOR_CYAN,
-                MAPICON_GLOBAL
-            );
-            selectedPub[bestIndex] = 1;
-        }
-        else if (bestKind == 2)
-        {
-            SetPlayerMapIcon(
-                playerid,
-                NEARBY_MAPICON_BASE + usedSlots,
-                DynamicLocationX[bestIndex],
-                DynamicLocationY[bestIndex],
-                DynamicLocationZ[bestIndex],
-                DynamicLocationMapIcon[bestIndex],
-                GetDynamicLocationColor(DynamicLocationType[bestIndex]),
-                MAPICON_GLOBAL
-            );
-            selectedDyn[bestIndex] = 1;
-        }
-
-        usedSlots++;
-    }
-
-    return 1;
+    // Compatibility command: refresh canonical offline-like registry, no 1500m custom streaming.
+    RemoveLSIFMapIcons(playerid);
+    return ApplyLSIFMapIcons(playerid);
 }
 
 public UpdateNearbyMapIconsForAllPlayers()
 {
-    for (new i = 0; i < MAX_PLAYERS; i++)
-    {
-        if (!IsPlayerConnected(i) || !PlayerLoggedIn[i])
-        {
-            continue;
-        }
-
-        ApplyNearbyMapIcons(i);
-    }
-
+    // Timer-based 20-slot nearest manager is intentionally retired.
     return 1;
 }
 
@@ -26667,7 +26607,7 @@ stock ResetPublicInteriorArrays()
         PublicInteriorExtSpawnA[i] = 0.0;
         PublicInteriorExteriorPickupModel[i] = PUBLIC_INTERIOR_PICKUP_MODEL;
         PublicInteriorInteriorPickupModel[i] = PUBLIC_INTERIOR_PICKUP_MODEL;
-        PublicInteriorMapIcon[i] = MAPICON_TYPE_BUSINESS;
+        PublicInteriorMapIcon[i] = 0;
         PublicInteriorIntX[i] = 0.0;
         PublicInteriorIntY[i] = 0.0;
         PublicInteriorIntZ[i] = 0.0;
@@ -26832,19 +26772,42 @@ stock NormalizePublicInteriorType(const input[], output[], size)
 stock GetPublicInteriorDefaultMapIcon(const type[])
 {
     if (!strcmp(type, "ammunation", true)) return MAPICON_TYPE_AMMUNATION;
-    if (!strcmp(type, "247", true)) return MAPICON_TYPE_BUSINESS;
-    if (!strcmp(type, "burgershot", true)) return 10;
-    if (!strcmp(type, "cluckinbell", true)) return 14;
-    if (!strcmp(type, "pizzastack", true)) return 29;
-    if (!strcmp(type, "gym", true)) return MAPICON_TYPE_JOB;
-    if (!strcmp(type, "barber", true)) return 7;
-    if (!strcmp(type, "tattoo", true)) return 39;
-    if (IsPublicInteriorClothingType(type)) return MAPICON_TYPE_BUSINESS;
-    if (!strcmp(type, "police", true)) return 30;
-    if (!strcmp(type, "hospital", true)) return 22;
-    if (!strcmp(type, "cityhall", true)) return MAPICON_TYPE_BUSINESS;
-    if (!strcmp(type, "casino", true)) return MAPICON_TYPE_BUSINESS;
-    return MAPICON_TYPE_BUSINESS;
+    if (!strcmp(type, "247", true)) return MAPICON_TYPE_247;
+    if (!strcmp(type, "burgershot", true)) return MAPICON_TYPE_BURGER_SHOT;
+    if (!strcmp(type, "cluckinbell", true)) return MAPICON_TYPE_CLUCKIN_BELL;
+    if (!strcmp(type, "pizzastack", true)) return MAPICON_TYPE_PIZZA_STACK;
+    if (!strcmp(type, "gym", true)) return MAPICON_TYPE_GYM;
+    if (!strcmp(type, "barber", true)) return MAPICON_TYPE_BARBER;
+    if (!strcmp(type, "tattoo", true)) return MAPICON_TYPE_TATTOO;
+    if (IsPublicInteriorClothingType(type)) return MAPICON_TYPE_CLOTHES;
+    if (!strcmp(type, "police", true)) return MAPICON_TYPE_POLICE;
+    if (!strcmp(type, "hospital", true)) return MAPICON_TYPE_HOSPITAL;
+    if (!strcmp(type, "restaurant", true)) return MAPICON_TYPE_RESTAURANT;
+    if (!strcmp(type, "modgarage", true) || !strcmp(type, "carmod", true)) return MAPICON_TYPE_MOD_GARAGE;
+    if (!strcmp(type, "paynspray", true) || !strcmp(type, "pay_n_spray", true)) return MAPICON_TYPE_PAYNSPRAY;
+    if (!strcmp(type, "property", true)) return MAPICON_TYPE_PROPERTY_FOR_SALE;
+    if (!strcmp(type, "savehouse", true) || !strcmp(type, "house", true)) return MAPICON_TYPE_SAVE_HOUSE;
+    if (!strcmp(type, "casino", true)) return MAPICON_TYPE_TRIADS_CASINO;
+    if (!strcmp(type, "cityhall", true)) return 0; // no canonical GTA SA City Hall legend icon
+    return 0;
+}
+
+stock GetPublicInteriorResolvedMapIcon(index)
+{
+    if (index < 0 || index >= PublicInteriorCount) return 0;
+
+    if (!strcmp(PublicInteriorType[index], "casino", true))
+    {
+        if (strfind(PublicInteriorName[index], "Caligula", true) != -1) return MAPICON_TYPE_CALIGULAS;
+        if (strfind(PublicInteriorName[index], "Four Dragons", true) != -1 || strfind(PublicInteriorName[index], "Triad", true) != -1) return MAPICON_TYPE_TRIADS_CASINO;
+    }
+
+    new canonical = GetPublicInteriorDefaultMapIcon(PublicInteriorType[index]);
+    if (canonical > 0) return canonical;
+
+    // Unknown/custom types may still use an explicit admin-defined icon.
+    if (PublicInteriorMapIcon[index] > 0 && PublicInteriorMapIcon[index] <= 63) return PublicInteriorMapIcon[index];
+    return 0;
 }
 
 stock GetPublicInteriorDefaultName(const type[], output[], size)
@@ -33909,12 +33872,17 @@ stock IsPublicInteriorIconCandidateValid(index)
         return 0;
     }
 
+    if (GetPublicInteriorResolvedMapIcon(index) <= 0)
+    {
+        return 0;
+    }
+
     return 1;
 }
 
 stock SetPublicInteriorMapIconSlot(playerid, slotIndex, pubIdx)
 {
-    if (slotIndex < 0 || slotIndex >= PUBLIC_INTERIOR_MAPICON_SLOTS)
+    if (slotIndex < 0 || slotIndex >= OFFLINE_WORLD_MAPICON_SLOTS)
     {
         return 0;
     }
@@ -33924,174 +33892,100 @@ stock SetPublicInteriorMapIconSlot(playerid, slotIndex, pubIdx)
         return 0;
     }
 
-    new iconType = PublicInteriorMapIcon[pubIdx];
-    if (iconType <= 0)
-    {
-        iconType = GetPublicInteriorDefaultMapIcon(PublicInteriorType[pubIdx]);
-    }
+    new iconType = GetPublicInteriorResolvedMapIcon(pubIdx);
+    if (iconType <= 0) return 0;
 
     SetPlayerMapIcon(
         playerid,
-        MAPICON_BASE_PUBLIC_INTERIOR + slotIndex,
+        OFFLINE_WORLD_MAPICON_BASE + slotIndex,
         PublicInteriorExtX[pubIdx],
         PublicInteriorExtY[pubIdx],
         PublicInteriorExtZ[pubIdx],
         iconType,
-        COLOR_CYAN,
-        MAPICON_GLOBAL
+        0,
+        MAPICON_LOCAL
     );
     return 1;
 }
 
+stock RemoveOfflineLikeWorldMapIcons(playerid)
+{
+    for (new slot = 0; slot < OFFLINE_WORLD_MAPICON_SLOTS; slot++)
+    {
+        RemovePlayerMapIcon(playerid, OFFLINE_WORLD_MAPICON_BASE + slot);
+    }
+    return 1;
+}
+
+stock ApplyOfflineLikeWorldMapIcons(playerid)
+{
+    if (!IsPlayerConnected(playerid)) return 0;
+
+    RemoveOfflineLikeWorldMapIcons(playerid);
+
+    new slot = 0;
+    new publicLimit = OFFLINE_WORLD_MAPICON_SLOTS - OFFLINE_WORLD_MAPICON_HOUSE_RESERVE;
+
+    // Permanent service/shop icons: visible on pause map, radar only at native close proximity.
+    for (new i = 0; i < PublicInteriorCount && slot < publicLimit; i++)
+    {
+        if (!IsPublicInteriorIconCandidateValid(i)) continue;
+
+        new iconType = GetPublicInteriorResolvedMapIcon(i);
+        if (iconType <= 0) continue;
+
+        SetPlayerMapIcon(
+            playerid,
+            OFFLINE_WORLD_MAPICON_BASE + slot,
+            PublicInteriorExtX[i],
+            PublicInteriorExtY[i],
+            PublicInteriorExtZ[i],
+            iconType,
+            0,
+            MAPICON_LOCAL
+        );
+        slot++;
+    }
+
+    // Preserve property-for-sale symbolism after all exact public services.
+    for (new i = 0; i < MAX_HOUSES && slot < OFFLINE_WORLD_MAPICON_SLOTS; i++)
+    {
+        if (HouseX[i] == 0.0 && HouseY[i] == 0.0 && HouseZ[i] == 0.0) continue;
+        SetPlayerMapIcon(
+            playerid,
+            OFFLINE_WORLD_MAPICON_BASE + slot,
+            HouseX[i], HouseY[i], HouseZ[i],
+            MAPICON_TYPE_PROPERTY_FOR_SALE,
+            0,
+            MAPICON_LOCAL
+        );
+        slot++;
+    }
+
+    return slot;
+}
+
 stock ApplyPublicInteriorMapIcons(playerid)
 {
-    // Compatibility wrapper.
-    // Public interior icon sekarang ikut Nearby Map Icon Manager bersama dynamic location.
-    #pragma unused playerid
-    return 1;
+    return ApplyOfflineLikeWorldMapIcons(playerid);
 }
 
 stock RemovePublicInteriorMapIcons(playerid)
 {
-    return RemoveNearbyMapIcons(playerid);
+    return RemoveOfflineLikeWorldMapIcons(playerid);
 }
 
 stock ApplyLSIFMapIcons(playerid)
 {
     ApplyTerritoryZones(playerid);
-
-    if (SAIF_ENABLE_LEGACY_STATIC_ATM_MARKERS)
-    {
-        for (new i = 0; i < MAX_BANK_POINTS; i++)
-        {
-            SetPlayerMapIcon(playerid, MAPICON_BASE_ATM + i, BankPointX[i], BankPointY[i], BankPointZ[i], MAPICON_TYPE_ATM, COLOR_CYAN, MAPICON_LOCAL);
-        }
-    }
-
-    for (new i = 0; i < MAX_HOUSES; i++)
-    {
-        SetPlayerMapIcon(playerid, MAPICON_BASE_HOUSE + i, HouseX[i], HouseY[i], HouseZ[i], MAPICON_TYPE_HOUSE, COLOR_WHITE, MAPICON_LOCAL);
-    }
-
-    for (new i = 0; i < MAX_BUSINESSES; i++)
-    {
-        // v0.24K.19: business icon harus mengikuti BusinessEnabled.
-        // Remove dulu supaya icon lama hilang saat business disabled/reload.
-        RemovePlayerMapIcon(playerid, MAPICON_BASE_BUSINESS + i);
-
-        if (!BusinessEnabled[i] || strlen(BusinessName[i]) < 1)
-        {
-            continue;
-        }
-
-        if (BusinessX[i] == 0.0 && BusinessY[i] == 0.0 && BusinessZ[i] == 0.0)
-        {
-            continue;
-        }
-
-        SetPlayerMapIcon(playerid, MAPICON_BASE_BUSINESS + i, BusinessX[i], BusinessY[i], BusinessZ[i], MAPICON_TYPE_BUSINESS, COLOR_YELLOW, MAPICON_LOCAL);
-    }
-
-    if (SAIF_ENABLE_LEGACY_STATIC_DEALER_MARKERS)
-    {
-        for (new i = 0; i < MAX_DEALERSHIPS; i++)
-        {
-            SetPlayerMapIcon(playerid, MAPICON_BASE_DEALER + i, DealershipX[i], DealershipY[i], DealershipZ[i], MAPICON_TYPE_DEALER, COLOR_GREEN, MAPICON_LOCAL);
-        }
-    }
-
-    if (SAIF_ENABLE_LEGACY_STATIC_AMMUNATION_MARKERS)
-    {
-        for (new i = 0; i < MAX_AMMUNATIONS; i++)
-        {
-            SetPlayerMapIcon(playerid, MAPICON_BASE_AMMUNATION + i, AmmuNationX[i], AmmuNationY[i], AmmuNationZ[i], MAPICON_TYPE_AMMUNATION, COLOR_ORANGE, MAPICON_LOCAL);
-        }
-    }
-
-    if (SAIF_ENABLE_LEGACY_STATIC_RACE_MARKER)
-    {
-        SetPlayerMapIcon(playerid, MAPICON_BASE_RACE, RaceLSX[0], RaceLSY[0], RaceLSZ[0], MAPICON_TYPE_RACE, COLOR_ORANGE, MAPICON_LOCAL);
-    }
-
-    if (SAIF_ENABLE_LEGACY_STATIC_JOB_MARKERS)
-    {
-        for (new i = 0; i < MAX_JOB_WORLD_MARKERS; i++)
-        {
-            SetPlayerMapIcon(playerid, MAPICON_BASE_JOB + i, JobWorldX[i], JobWorldY[i], JobWorldZ[i], MAPICON_TYPE_JOB, COLOR_CYAN, MAPICON_LOCAL);
-        }
-    }
-
-    for (new i = 0; i < MAX_BUS_STOPS; i++)
-    {
-        SetPlayerMapIcon(playerid, MAPICON_BASE_BUS_STOP + i, BusStopX[i], BusStopY[i], BusStopZ[i], MAPICON_TYPE_BUS_STOP, COLOR_YELLOW, MAPICON_LOCAL);
-    }
-
-    for (new i = 0; i < MAX_PRESET_GANGS; i++)
-    {
-        if (PresetGangEnabled[i])
-        {
-            SetPlayerMapIcon(playerid, MAPICON_BASE_GANG_HQ + i, GangHQX[i], GangHQY[i], GangHQZ[i], GangHQMapIconType[i], PresetGangColor[i], MAPICON_LOCAL);
-        }
-    }
-
-    ApplyNearbyMapIcons(playerid);
-
+    ApplyOfflineLikeWorldMapIcons(playerid);
     return 1;
 }
 
 stock RemoveLSIFMapIcons(playerid)
 {
     HideTerritoryZones(playerid);
-
-    for (new i = 0; i < MAX_BANK_POINTS; i++)
-    {
-        RemovePlayerMapIcon(playerid, MAPICON_BASE_ATM + i);
-    }
-
-    for (new i = 0; i < MAX_HOUSES; i++)
-    {
-        RemovePlayerMapIcon(playerid, MAPICON_BASE_HOUSE + i);
-    }
-
-    for (new i = 0; i < MAX_BUSINESSES; i++)
-    {
-        RemovePlayerMapIcon(playerid, MAPICON_BASE_BUSINESS + i);
-    }
-
-    for (new i = 0; i < MAX_DEALERSHIPS; i++)
-    {
-        RemovePlayerMapIcon(playerid, MAPICON_BASE_DEALER + i);
-    }
-
-    for (new i = 0; i < MAX_AMMUNATIONS; i++)
-    {
-        RemovePlayerMapIcon(playerid, MAPICON_BASE_AMMUNATION + i);
-    }
-
-    RemovePlayerMapIcon(playerid, MAPICON_BASE_RACE);
-
-    for (new i = 0; i < MAX_JOB_WORLD_MARKERS; i++)
-    {
-        RemovePlayerMapIcon(playerid, MAPICON_BASE_JOB + i);
-    }
-
-    for (new i = 0; i < MAX_BUS_STOPS; i++)
-    {
-        RemovePlayerMapIcon(playerid, MAPICON_BASE_BUS_STOP + i);
-    }
-
-    for (new i = 0; i < MAX_TERRITORIES; i++)
-    {
-        RemovePlayerMapIcon(playerid, MAPICON_BASE_TERRITORY + i);
-    }
-
-    for (new i = 0; i < MAX_PRESET_GANGS; i++)
-    {
-        RemovePlayerMapIcon(playerid, MAPICON_BASE_GANG_HQ + i);
-    }
-
-    RemoveNearbyMapIcons(playerid);
-
+    RemoveOfflineLikeWorldMapIcons(playerid);
     return 1;
 }
 
@@ -34151,7 +34045,7 @@ stock ShowMapLegendDialog(playerid)
     format(
         dialogText,
         sizeof(dialogText),
-        "Radar/Map Icon LSIF:\n\nATM/Bank - transaksi bank, pakai ALT di marker ATM.\nHouse - rumah/interior; ALT untuk menu, panah untuk masuk/keluar.\nBusiness - beli/manage/collect business dengan ALT.\nDealership - vehicle shop dan garage service dengan ALT.\nAmmu-Nation - weapon shop dengan ALT.\nTerritory/Turf - blok warna transparan di map/radar sesuai owner gang, bukan icon titik. Lihat /turfmap, /refreshzones, atau /turfdebug [id].\nGang HQ - markas gang preset; tekan ALT untuk join/menu gang. Jika satu titik punya beberapa fungsi, ALT membuka Nearby Interaction Menu.\nRace - lokasi race/time trial.\nJob Marker - titik panduan vehicle mission/job.\nBus Stop - rute Bus Driver Mission.\n\nDi dunia, cari 3D label seperti [ALT] ATM, [ALT] Dealership, [ALT] Ammu-Nation, [ALT] Grove/Ballas/Vagos/Aztecas HQ, atau [JOB] Bus Terminal.\nALT = menu/transaksi. Tombol 2 = start vehicle mission/job. Turf map = /gangmenu atau /turfmap. Organization tetap untuk ekonomi/bisnis."
+        "Offline-like Radar/Map Legend:\n\nAmmu-Nation = pistol [6]\nBarber = scissors [7]\nBurger Shot = burger [10]\nCluckin' Bell = chicken [14]\nHospital = hospital [22]\nPizza Stack = pizza [29]\nPolice = badge [30]\nProperty for sale = house [31]\nTattoo = tattoo [39]\nClothing = shirt [45]\n24/7 = dollar/robbery [52]\nGym = dumbbell [54]\nCasino = Caligula [25] atau Triads Casino [44]\n\nPause map: seluruh icon service yang mendapat slot selalu terdaftar.\nMinimap/radar: icon memakai MAPICON_LOCAL, hanya muncul saat berada dekat lokasi dan tidak dipaksa tampil di tepi radar.\nCity Hall tidak mempunyai simbol legend canonical GTA SA, jadi tidak dipaksakan memakai icon toko/bank.\n\nALT tetap dipakai pada marker dunia untuk transaksi/interaksi. Tombol 2 khusus start vehicle mission/job. Turf tetap memakai GangZone, bukan icon titik."
     );
 
     ShowPlayerDialog(playerid, DIALOG_BETA_MOTD, DIALOG_STYLE_MSGBOX, "LSIF Map Legend", dialogText, "OK", "Tutup");
@@ -40666,6 +40560,12 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/mapiconaudit", true) || !strcmp(cmdtext, "/offlineicons", true) || !strcmp(cmdtext, "/offlineiconaudit", true))
+    {
+        ShowOfflineMapIconAudit(playerid);
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/offlinecontext", true) || !strcmp(cmdtext, "/enexcontext", true) || !strcmp(cmdtext, "/offlinecontextaudit", true))
     {
         QueryOfflineInteriorContextSummary(playerid);
@@ -43814,7 +43714,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.15.1 Interior Arrow and Spawn Z Fix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.16 Offline-like Map Icon Canonical Audit");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -43824,7 +43724,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.15.1: Panah public interior +1.00 Z dan spawn player +0.50 Z tanpa mengubah koordinat DB.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.16: Map icon public interior mengikuti simbol GTA SA; pause map permanen, minimap local-range tanpa edge marker global.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.10: Controlled 91-row public interior apply (71 SCM exact + 20 reviewed overlay) + tracked rollback.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.8: Exact Interior Service Point Resolver; 71 native SCM exact + 20 overlay preview anchors, audit-only.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.7.1: memperbaiki 11 Float tag mismatch pada detail ENEX pair plan; tanpa SQL/runtime change.");

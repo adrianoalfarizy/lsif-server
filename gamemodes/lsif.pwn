@@ -796,7 +796,8 @@ stock IsLegacyStaticRaceMarkerEnabled() { return 0; }
 #define MAX_PUBLIC_INTERIORS 128
 #define PUBLIC_INTERIOR_PICKUP_MODEL 1318
 #define PUBLIC_INTERIOR_PICKUP_TYPE 1
-#define PUBLIC_INTERIOR_ARROW_RUNTIME_Z_LIFT 0.50
+#define PUBLIC_INTERIOR_ARROW_RUNTIME_Z_LIFT 1.00
+#define PUBLIC_INTERIOR_PLAYER_SPAWN_RUNTIME_Z_LIFT 0.50
 #define PUBLIC_INTERIOR_LABEL_DRAW_DISTANCE 18.0
 #define PUBLIC_INTERIOR_SERVICE_CP_SIZE 1.8
 #define PUBLIC_INTERIOR_SERVICE_RADIUS 2.2
@@ -14169,7 +14170,7 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.15 World Spawn Height Normalization");
+    SetGameModeText("SAIF Dev v0.26A.1.15.1 Interior Arrow and Spawn Z Fix");
 
     new MySQLOpt:mysqlOptions = mysql_init_options();
     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
@@ -14352,10 +14353,10 @@ public OnGameModeInit()
     print("[SAIF] Skin movement baseline aktif: CJ-like via UsePlayerPedAnims; profile palsu tetap dihapus.");
     print("[SAIF] Vehicle Mission v0.25B.10 tetap aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
     print("[SAIF] Vitals Persistence aktif: health/armor DB + Ammu Body Armor persistence.");
-    print("[SAIF] Gamemode v0.26A.1.15 World Spawn Height Normalization berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.26A.1.15.1 Interior Arrow and Spawn Z Fix berhasil dijalankan.");
     print("[SAIF] GTA Offline Import Audit aktif: registry + ENEX context/evidence/pair planner read-only; runtime tidak disentuh.");
-    print("[SAIF] v0.26A.1.15: GTA offline parked vehicle dan public interior arrow memakai runtime Z normalization.");
-    print("[SAIF] Runtime lift: parked vehicle GTA offline +0.50 Z; pickup panah model 1318 +0.50 Z. DB coordinates tetap original.");
+    print("[SAIF] v0.26A.1.15.1: pickup panah public interior dinaikkan +1.00 Z dan spawn player +0.50 Z.");
+    print("[SAIF] Runtime lift: parked vehicle GTA offline +0.50 Z; pickup panah model 1318 +1.00 Z; spawn player public interior +0.50 Z. DB tetap original.");
     print("[SAIF] ENEX side-aware preview aktif: Point A/B, isolated interior VW, dan return position.");
     return 1;
 }
@@ -27194,6 +27195,13 @@ stock Float:GetPublicInteriorPickupRuntimeZ(modelid, Float:baseZ)
     return baseZ;
 }
 
+stock Float:GetPublicInteriorPlayerSpawnRuntimeZ(Float:baseZ)
+{
+    // Spawn ENEX tersimpan pada titik lantai. Runtime player diberi lift kecil
+    // agar kaki tidak tertanam pada floor/collision saat masuk atau keluar.
+    return baseZ + PUBLIC_INTERIOR_PLAYER_SPAWN_RUNTIME_Z_LIFT;
+}
+
 stock CreatePublicInteriorRuntime(index)
 {
     if (index < 0 || index >= PublicInteriorCount)
@@ -27278,7 +27286,7 @@ stock SetPlayerPublicInteriorTransform(playerid, interiorid, virtualworld, Float
     // Tidak ada delayed facing/camera correction agar tidak terasa seperti spawn point di-load beberapa kali.
     SetPlayerInterior(playerid, interiorid);
     SetPlayerVirtualWorld(playerid, virtualworld);
-    SetPlayerPos(playerid, x, y, z);
+    SetPlayerPos(playerid, x, y, GetPublicInteriorPlayerSpawnRuntimeZ(z));
     SetPlayerFacingAngle(playerid, angle);
     SetCameraBehindPlayer(playerid);
     return 1;
@@ -28125,7 +28133,7 @@ stock GotoPublicInteriorPoint(playerid, dbid, pointType)
     {
         SetPlayerInterior(playerid, PublicInteriorInteriorID[idx]);
         SetPlayerVirtualWorld(playerid, GetPublicInteriorRuntimeVW(idx));
-        SetPlayerPos(playerid, PublicInteriorIntX[idx], PublicInteriorIntY[idx], PublicInteriorIntZ[idx] + 0.5);
+        SetPlayerPos(playerid, PublicInteriorIntX[idx], PublicInteriorIntY[idx], GetPublicInteriorPlayerSpawnRuntimeZ(PublicInteriorIntZ[idx]));
         ForceApplyPublicInteriorFacing(playerid, PublicInteriorIntA[idx]);
         PlayerInsidePublicInteriorID[playerid] = PublicInteriorDBID[idx];
         ShowPublicInteriorServiceCheckpoint(playerid, idx);
@@ -28152,7 +28160,7 @@ stock GotoPublicInteriorPoint(playerid, dbid, pointType)
     {
         SetPlayerInterior(playerid, PublicInteriorExteriorInterior[idx]);
         SetPlayerVirtualWorld(playerid, PublicInteriorExteriorVirtualWorld[idx]);
-        SetPlayerPos(playerid, PublicInteriorExtSpawnX[idx], PublicInteriorExtSpawnY[idx], PublicInteriorExtSpawnZ[idx] + 0.5);
+        SetPlayerPos(playerid, PublicInteriorExtSpawnX[idx], PublicInteriorExtSpawnY[idx], GetPublicInteriorPlayerSpawnRuntimeZ(PublicInteriorExtSpawnZ[idx]));
         ForceApplyPublicInteriorFacing(playerid, PublicInteriorExtSpawnA[idx]);
         PlayerInsidePublicInteriorID[playerid] = 0;
     }
@@ -43806,7 +43814,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.15 World Spawn Height Normalization");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.15.1 Interior Arrow and Spawn Z Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -43816,7 +43824,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.15: Runtime Z normalization untuk parked vehicle GTA offline dan pickup panah public interior.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.15.1: Panah public interior +1.00 Z dan spawn player +0.50 Z tanpa mengubah koordinat DB.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.10: Controlled 91-row public interior apply (71 SCM exact + 20 reviewed overlay) + tracked rollback.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.8: Exact Interior Service Point Resolver; 71 native SCM exact + 20 overlay preview anchors, audit-only.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.7.1: memperbaiki 11 Float tag mismatch pada detail ENEX pair plan; tanpa SQL/runtime change.");

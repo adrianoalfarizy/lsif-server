@@ -296,6 +296,7 @@
 #define DIALOG_OFFLINE_HOUSE_PLAN_DETAIL 1336
 #define DIALOG_OFFLINE_HOUSE_PLAN_ACTION 1337
 #define DIALOG_HOUSE_CATALOG_AUDIT 1338
+#define DIALOG_HOUSE_CATALOG_RUNTIME_DRYRUN 1339
 
 #define DIALOG_GANG_PRESET_MENU 1192
 #define DIALOG_GANG_PRESET_LIST 1193
@@ -2746,6 +2747,7 @@ forward FuelSystemTick();
 forward OnDatabasePing(playerid);
 forward OnHouseCatalogLoaded();
 forward OnHouseCatalogAuditLoaded(playerid);
+forward OnHouseCatalogRuntimeDryRunLoaded(playerid);
 forward OnPlayerHouseLoaded(playerid);
 forward OnPlayerHouseBought(playerid, houseIndex, price);
 forward OnPlayerHouseSold(playerid, sellPrice);
@@ -14494,7 +14496,7 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.23 Dynamic House Catalog Foundation");
+    SetGameModeText("SAIF Dev v0.26A.1.24 House Catalog Archive Dry-Run");
 
     new MySQLOpt:mysqlOptions = mysql_init_options();
     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
@@ -14685,9 +14687,9 @@ public OnGameModeInit()
     print("[SAIF] Skin movement baseline aktif: CJ-like via UsePlayerPedAnims; profile palsu tetap dihapus.");
     print("[SAIF] Vehicle Mission v0.25B.10 tetap aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
     print("[SAIF] Vitals Persistence aktif: health/armor DB + Ammu Body Armor persistence.");
-    print("[SAIF] Gamemode v0.26A.1.23 Dynamic House Catalog Foundation berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.26A.1.24 House Catalog Archive Dry-Run berhasil dijalankan.");
     print("[SAIF] GTA Offline Import Audit aktif: registry + ENEX context/evidence/pair planner read-only; runtime tidak disentuh.");
-    print("[SAIF] v0.26A.1.23: house_catalog dinamis aktif; 5 legacy houses dijembatani tanpa mengubah ownership.");
+    print("[SAIF] v0.26A.1.24: house_catalog archive + 29-savehouse dry-run aktif; runtime belum diganti.");
     print("[SAIF] Runtime lift: parked vehicle GTA offline +0.50 Z; pickup panah model 1318 +1.00 Z; spawn player public interior +0.50 Z. DB tetap original.");
     print("[SAIF] ENEX side-aware preview aktif: Point A/B, isolated interior VW, dan return position.");
     return 1;
@@ -15496,7 +15498,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "SAIF Admin Menus Hub (/amenus)\n\n", sizeof(body));
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
-    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlinecontext\n/offlinepairs | /offlinepairbatches | /offlineplan [id]\n/offlineservicepoints | /offlineservicelist | /offlinepoint [id]\n/offlineruntimedryrun | /offlinearchivestatus | /offlinecapacity\n/offlinefullapply | /offlineapplystatus | /offlineoverlaystatus | /offlineexactreload\n/offlinevehicles | /offlinevehiclelist | /offlinevehicle [queue_id]\n/offlinevehicleplans | /offlinevehiclebatches | /offlinevehicleplan [plan_id]\n/offlinevehicledryrun | /offlinevehiclearchive | /offlinevehiclecapacity\n/offlinevehicleapplystatus | /offlinevehiclereload\n/offlinepickups | /offlinepickuplist | /offlinepickup [queue_id]\n/offlineproperties | /offlinepropertylist | /offlineproperty [evidence_id]\n/offlinehouseplans | /offlinehouseplanlist | /offlinehouseplan [plan_id]\n/housecatalog | /housecatalogstatus | /housecatalogreload\n/offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
+    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlinecontext\n/offlinepairs | /offlinepairbatches | /offlineplan [id]\n/offlineservicepoints | /offlineservicelist | /offlinepoint [id]\n/offlineruntimedryrun | /offlinearchivestatus | /offlinecapacity\n/offlinefullapply | /offlineapplystatus | /offlineoverlaystatus | /offlineexactreload\n/offlinevehicles | /offlinevehiclelist | /offlinevehicle [queue_id]\n/offlinevehicleplans | /offlinevehiclebatches | /offlinevehicleplan [plan_id]\n/offlinevehicledryrun | /offlinevehiclearchive | /offlinevehiclecapacity\n/offlinevehicleapplystatus | /offlinevehiclereload\n/offlinepickups | /offlinepickuplist | /offlinepickup [queue_id]\n/offlineproperties | /offlinepropertylist | /offlineproperty [evidence_id]\n/offlinehouseplans | /offlinehouseplanlist | /offlinehouseplan [plan_id]\n/housecatalog | /housecatalogstatus | /housecatalogreload\n/offlinehousedryrun | /offlinehousearchive | /offlinehousecapacity\n/offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
     strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/orgeconomy, /orgeconomyaudit, /orgstatus, /orgeconomyhealth, /orgbiz, /orgbusiness, /orgfinance\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /vehmissioncloseout, /vehiclemissionhealth, /missiontarget, /vehmissionconfig, /missionpointmenu, /missionpool, /vehmissionpool, /jobpointpool, /vmpool, /pointpool, /jobpool, /jobpointmenu, /taxirequest, /taxistatus, /canceltaxi, /busrequest, /busstatus, /cancelbus, /medicrequest, /medicstatus, /cancelmedic, /firestatus, /firemission\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /cjmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
@@ -16168,6 +16170,7 @@ stock ShowOfflineImportAuditMenu(playerid)
     strcat(body, "GTA SA House / Savehouse / Property Source Queue\t255 evidence rows\tRead-only\n", sizeof(body));
     strcat(body, "House / Property Canonical Resolver\t32 plans / 29 source-ready\tRead-only\n", sizeof(body));
     strcat(body, "Dynamic House Catalog Backend\thouse_catalog + ownership bridge\tReload / audit\n", sizeof(body));
+    strcat(body, "House Catalog Runtime Archive / 29-Savehouse Dry-Run\thouse_catalog + ownership policy\tRead-only\n", sizeof(body));
     strcat(body, "Back to Admin Menus\t/amenus\tRead-only\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_OFFLINE_IMPORT_MENU, DIALOG_STYLE_TABLIST_HEADERS,
@@ -17565,6 +17568,125 @@ public OnHouseCatalogAuditLoaded(playerid)
     );
 
     ShowPlayerDialog(playerid, DIALOG_HOUSE_CATALOG_AUDIT, DIALOG_STYLE_MSGBOX, "Dynamic House Catalog Backend", body, "Reload", "Back");
+    return 1;
+}
+
+stock QueryHouseCatalogRuntimeDryRun(playerid)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+
+    new query[7600];
+    query[0] = EOS;
+    strcat(query, "SELECT ", sizeof(query));
+    strcat(query, "COALESCE((SELECT id FROM offline_runtime_archive_sessions WHERE archive_scope='house_catalog' ORDER BY id DESC LIMIT 1),0) archive_id,", sizeof(query));
+    strcat(query, "COALESCE((SELECT archive_status FROM offline_runtime_archive_sessions WHERE archive_scope='house_catalog' ORDER BY id DESC LIMIT 1),'none') archive_status,", sizeof(query));
+    strcat(query, "COALESCE((SELECT runtime_rows_total FROM offline_runtime_archive_sessions WHERE archive_scope='house_catalog' ORDER BY id DESC LIMIT 1),0) archive_runtime_rows,", sizeof(query));
+    strcat(query, "COALESCE((SELECT active_rows_total FROM offline_runtime_archive_sessions WHERE archive_scope='house_catalog' ORDER BY id DESC LIMIT 1),0) archive_active_rows,", sizeof(query));
+    strcat(query, "COALESCE((SELECT archived_rows FROM offline_runtime_archive_sessions WHERE archive_scope='house_catalog' ORDER BY id DESC LIMIT 1),0) archived_rows,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM house_catalog) catalog_total,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM house_catalog WHERE enabled=1) catalog_active,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM house_catalog WHERE legacy_house_index BETWEEN 0 AND 4) legacy_rows,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM house_catalog WHERE canonical_slot IS NOT NULL) canonical_rows,", sizeof(query));
+    strcat(query, "COALESCE((SELECT COUNT(*) FROM offline_house_catalog_archive a JOIN house_catalog h ON h.id=a.original_id WHERE a.archive_session_id=(SELECT id FROM offline_runtime_archive_sessions WHERE archive_scope='house_catalog' ORDER BY id DESC LIMIT 1) AND BINARY a.row_checksum<>BINARY SHA2(CONCAT_WS('|',h.id,COALESCE(h.legacy_house_index,'NULL'),COALESCE(h.canonical_slot,'NULL'),COALESCE(h.display_name,''),COALESCE(h.price,0),COALESCE(h.exterior_pickup_x,0),COALESCE(h.exterior_pickup_y,0),COALESCE(h.exterior_pickup_z,0),COALESCE(h.exterior_facing,0),COALESCE(h.exterior_spawn_x,0),COALESCE(h.exterior_spawn_y,0),COALESCE(h.exterior_spawn_z,0),COALESCE(h.exterior_spawn_a,0),COALESCE(h.interior_id,0),COALESCE(h.interior_exit_x,0),COALESCE(h.interior_exit_y,0),COALESCE(h.interior_exit_z,0),COALESCE(h.interior_spawn_x,0),COALESCE(h.interior_spawn_y,0),COALESCE(h.interior_spawn_z,0),COALESCE(h.interior_spawn_a,0),COALESCE(h.savepoint_x,'NULL'),COALESCE(h.savepoint_y,'NULL'),COALESCE(h.savepoint_z,'NULL'),COALESCE(h.garage_source_evidence_id,'NULL'),COALESCE(h.map_icon_type,0),COALESCE(h.pickup_model,0),COALESCE(h.pickup_type,0),COALESCE(h.private_vw_required,0),COALESCE(h.enabled,0),COALESCE(h.sort_order,0),COALESCE(h.source_tag,'')),256)),0) checksum_mismatch,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM player_houses) ownership_rows,", sizeof(query));
+    strcat(query, "COALESCE((SELECT COUNT(*) FROM offline_house_ownership_archive WHERE archive_session_id=(SELECT id FROM offline_runtime_archive_sessions WHERE archive_scope='house_catalog' ORDER BY id DESC LIMIT 1)),0) ownership_archived,", sizeof(query));
+    strcat(query, "COALESCE((SELECT COUNT(*) FROM offline_house_ownership_transition_plan WHERE archive_session_id=(SELECT id FROM offline_runtime_archive_sessions WHERE archive_scope='house_catalog' ORDER BY id DESC LIMIT 1) AND policy_status='pending_mapping'),0) ownership_pending,", sizeof(query));
+    strcat(query, "COALESCE((SELECT COUNT(*) FROM offline_house_ownership_transition_plan WHERE archive_session_id=(SELECT id FROM offline_runtime_archive_sessions WHERE archive_scope='house_catalog' ORDER BY id DESC LIMIT 1) AND policy_status IN ('mapped','preserve_legacy','refund_then_release')),0) ownership_resolved,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM offline_property_canonical_plan WHERE resolver_version='saif-house-property-resolver-v0.26A.1.22') plan_total,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM offline_property_canonical_plan WHERE resolver_version='saif-house-property-resolver-v0.26A.1.22' AND decision_code='baseline_ready') baseline_rows,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM offline_property_canonical_plan WHERE resolver_version='saif-house-property-resolver-v0.26A.1.22' AND decision_code='baseline_ready' AND garage_status='nearby_candidate') garage_rows,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM public_interiors WHERE enabled=1 AND map_icon_type>0) public_icon_rows,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM public_interiors WHERE enabled=1 AND interior_type='hospital' AND map_icon_type>0) hospital_icon_rows", sizeof(query));
+    mysql_tquery(g_SQL, query, "OnHouseCatalogRuntimeDryRunLoaded", "i", playerid);
+    return 1;
+}
+
+public OnHouseCatalogRuntimeDryRunLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid) || !IsAdminLevel(playerid, ADMIN_OWNER)) return 1;
+    if (cache_num_rows() <= 0)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "House catalog archive/dry-run belum tersedia. Jalankan migration v0.26A.1.24.");
+        return ShowOfflineImportAuditMenu(playerid);
+    }
+
+    new archiveId, archiveRuntimeRows, archiveActiveRows, archivedRows;
+    new catalogTotal, catalogActive, legacyRows, canonicalRows, checksumMismatch;
+    new ownershipRows, ownershipArchived, ownershipPending, ownershipResolved;
+    new planTotal, baselineRows, garageRows, publicIconRows, hospitalIconRows;
+    new archiveStatus[32];
+
+    cache_get_value_name_int(0, "archive_id", archiveId);
+    cache_get_value_name_int(0, "archive_runtime_rows", archiveRuntimeRows);
+    cache_get_value_name_int(0, "archive_active_rows", archiveActiveRows);
+    cache_get_value_name_int(0, "archived_rows", archivedRows);
+    cache_get_value_name_int(0, "catalog_total", catalogTotal);
+    cache_get_value_name_int(0, "catalog_active", catalogActive);
+    cache_get_value_name_int(0, "legacy_rows", legacyRows);
+    cache_get_value_name_int(0, "canonical_rows", canonicalRows);
+    cache_get_value_name_int(0, "checksum_mismatch", checksumMismatch);
+    cache_get_value_name_int(0, "ownership_rows", ownershipRows);
+    cache_get_value_name_int(0, "ownership_archived", ownershipArchived);
+    cache_get_value_name_int(0, "ownership_pending", ownershipPending);
+    cache_get_value_name_int(0, "ownership_resolved", ownershipResolved);
+    cache_get_value_name_int(0, "plan_total", planTotal);
+    cache_get_value_name_int(0, "baseline_rows", baselineRows);
+    cache_get_value_name_int(0, "garage_rows", garageRows);
+    cache_get_value_name_int(0, "public_icon_rows", publicIconRows);
+    cache_get_value_name_int(0, "hospital_icon_rows", hospitalIconRows);
+    cache_get_value_name(0, "archive_status", archiveStatus, sizeof(archiveStatus));
+
+    new hospitalFallbackAllowance = 7 - hospitalIconRows;
+    if (hospitalFallbackAllowance < 0) hospitalFallbackAllowance = 0;
+    if (hospitalFallbackAllowance > 7) hospitalFallbackAllowance = 7;
+
+    new projectedPublicIcons = publicIconRows + hospitalFallbackAllowance;
+    if (projectedPublicIcons > OFFLINE_WORLD_MAPICON_SLOTS) projectedPublicIcons = OFFLINE_WORLD_MAPICON_SLOTS;
+
+    new projectedHouseIconSlots = OFFLINE_WORLD_MAPICON_SLOTS - projectedPublicIcons;
+    if (projectedHouseIconSlots < 0) projectedHouseIconSlots = 0;
+    new projectedHouseIconsRendered = projectedHouseIconSlots;
+    if (projectedHouseIconsRendered > 29) projectedHouseIconsRendered = 29;
+
+    new ownershipPolicyReady = 0;
+    if (ownershipRows == 0 || (ownershipPending == 0 && ownershipResolved == ownershipRows)) ownershipPolicyReady = 1;
+
+    new body[3900];
+    format(
+        body,
+        sizeof(body),
+        "House Catalog Runtime Archive / 29-Savehouse Dry-Run\n\nLatest archive\nSession ID: %d\nStatus: %s\nCatalog rows captured: %d / %d\nActive rows captured: %d\nChecksum mismatch now: %d\n\nCurrent catalog\nDB rows: %d\nEnabled rows: %d\nLegacy definitions: %d / 5\nCanonical GTA SA rows: %d (expected 0 before apply)\nRuntime loaded: %d / %d\n\nCanonical projection\nPlans: %d / 32\nBaseline savehouses: %d / 29\nNearby garage candidates: %d / 12 baseline expected\nProjected replacement: 5 legacy -> 29 GTA SA savehouses\nCatalog capacity after apply: 29 / %d\nRemaining capacity: %d\n\nOwnership safety\nCurrent ownership rows: %d\nOwnership rows archived: %d\nPending explicit mapping policy: %d\nResolved transition policy: %d\nOwnership gate ready: %s\nNo ownership is reassigned automatically.\n\nMap icon projection\nPublic DB icon candidates: %d\nConservative hospital fallback allowance: %d\nNative icon slots left for houses: %d\nProjected GTA SA house icons rendered: %d / 29\nMap-icon strategy required before apply: %s\n\nSafety contract\nThis menu is read-only. v0.26A.1.24 does not INSERT/UPDATE/DELETE house_catalog or player_houses. Capture and full dry-run remain SQL-only. Open Plan to inspect all 29 source-ready houses.",
+        archiveId,
+        archiveStatus,
+        archivedRows,
+        archiveRuntimeRows,
+        archiveActiveRows,
+        checksumMismatch,
+        catalogTotal,
+        catalogActive,
+        legacyRows,
+        canonicalRows,
+        HouseCount,
+        MAX_HOUSES,
+        planTotal,
+        baselineRows,
+        garageRows,
+        MAX_HOUSES,
+        MAX_HOUSES - 29,
+        ownershipRows,
+        ownershipArchived,
+        ownershipPending,
+        ownershipResolved,
+        ownershipPolicyReady ? ("Yes") : ("No - resolve policy first"),
+        publicIconRows,
+        hospitalFallbackAllowance,
+        projectedHouseIconSlots,
+        projectedHouseIconsRendered,
+        projectedHouseIconsRendered >= 29 ? ("No") : ("Yes")
+    );
+
+    ShowPlayerDialog(playerid, DIALOG_HOUSE_CATALOG_RUNTIME_DRYRUN, DIALOG_STYLE_MSGBOX,
+                     "House Catalog Archive / 29-Savehouse Dry-Run", body, "Open Plan", "Back");
     return 1;
 }
 
@@ -20052,7 +20174,8 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
             case 18: QueryOfflinePropertySummary(playerid);
             case 19: QueryOfflineHousePlanSummary(playerid);
             case 20: QueryHouseCatalogAudit(playerid);
-            case 21: ShowAdminToolsMenu(playerid);
+            case 21: QueryHouseCatalogRuntimeDryRun(playerid);
+            case 22: ShowAdminToolsMenu(playerid);
         }
         return 1;
     }
@@ -20161,6 +20284,13 @@ public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
         {
             ShowOfflineImportAuditMenu(playerid);
         }
+        return 1;
+    }
+
+    if (dialogid == DIALOG_HOUSE_CATALOG_RUNTIME_DRYRUN)
+    {
+        if (response) QueryOfflineHousePlanSummary(playerid);
+        else ShowOfflineImportAuditMenu(playerid);
         return 1;
     }
 
@@ -42476,6 +42606,15 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/offlinehousedryrun", true) ||
+        !strcmp(cmdtext, "/offlinehousearchive", true) ||
+        !strcmp(cmdtext, "/offlinehousecapacity", true) ||
+        !strcmp(cmdtext, "/offlinehousecatalogdryrun", true))
+    {
+        QueryHouseCatalogRuntimeDryRun(playerid);
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/housecatalog", true) ||
         !strcmp(cmdtext, "/housecatalogstatus", true) ||
         !strcmp(cmdtext, "/dynamichouses", true))
@@ -45554,7 +45693,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.23 Dynamic House Catalog Foundation");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.24 House Catalog Archive Dry-Run");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -45564,7 +45703,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.23: dynamic house_catalog backend aktif; 5 legacy definitions migrated; GTA SA 29-house apply masih deferred.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.24: house_catalog archive + 29-savehouse dry-run tersedia; ownership policy dan map-icon projection diaudit sebelum apply.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.10: Controlled 91-row public interior apply (71 SCM exact + 20 reviewed overlay) + tracked rollback.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.8: Exact Interior Service Point Resolver; 71 native SCM exact + 20 overlay preview anchors, audit-only.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.7.1: memperbaiki 11 Float tag mismatch pada detail ENEX pair plan; tanpa SQL/runtime change.");

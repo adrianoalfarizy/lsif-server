@@ -1,0 +1,107 @@
+-- SAIF / LSIF Dev v0.26A.1.24
+-- House Catalog Runtime Archive & 29-Savehouse Dry-Run Foundation
+-- SAFETY: archive and ownership-transition staging only. No house_catalog/player_houses mutation.
+SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS offline_runtime_archive_sessions (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    session_key VARCHAR(96) COLLATE utf8mb4_unicode_ci NOT NULL,
+    archive_scope VARCHAR(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+    archive_label VARCHAR(160) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+    archive_status VARCHAR(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'capturing',
+    runtime_rows_total INT UNSIGNED NOT NULL DEFAULT 0,
+    active_rows_total INT UNSIGNED NOT NULL DEFAULT 0,
+    target_rows_total INT UNSIGNED NOT NULL DEFAULT 0,
+    archived_rows INT UNSIGNED NOT NULL DEFAULT 0,
+    notes VARCHAR(768) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP NULL DEFAULT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_offline_runtime_archive_session_key (session_key),
+    KEY idx_offline_runtime_archive_scope (archive_scope, created_at),
+    KEY idx_offline_runtime_archive_status (archive_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS offline_house_catalog_archive (
+    archive_row_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    archive_session_id BIGINT UNSIGNED NOT NULL,
+    original_id INT UNSIGNED NOT NULL,
+    legacy_house_index INT NULL,
+    canonical_slot INT NULL,
+    display_name VARCHAR(64) NOT NULL,
+    price INT NOT NULL,
+    exterior_pickup_x DECIMAL(11,4) NOT NULL,
+    exterior_pickup_y DECIMAL(11,4) NOT NULL,
+    exterior_pickup_z DECIMAL(11,4) NOT NULL,
+    exterior_facing DECIMAL(8,4) NOT NULL,
+    exterior_spawn_x DECIMAL(11,4) NOT NULL,
+    exterior_spawn_y DECIMAL(11,4) NOT NULL,
+    exterior_spawn_z DECIMAL(11,4) NOT NULL,
+    exterior_spawn_a DECIMAL(8,4) NOT NULL,
+    interior_id INT NOT NULL,
+    interior_exit_x DECIMAL(11,4) NOT NULL,
+    interior_exit_y DECIMAL(11,4) NOT NULL,
+    interior_exit_z DECIMAL(11,4) NOT NULL,
+    interior_spawn_x DECIMAL(11,4) NOT NULL,
+    interior_spawn_y DECIMAL(11,4) NOT NULL,
+    interior_spawn_z DECIMAL(11,4) NOT NULL,
+    interior_spawn_a DECIMAL(8,4) NOT NULL,
+    savepoint_x DECIMAL(11,4) NULL,
+    savepoint_y DECIMAL(11,4) NULL,
+    savepoint_z DECIMAL(11,4) NULL,
+    garage_source_evidence_id BIGINT UNSIGNED NULL,
+    map_icon_type SMALLINT NOT NULL,
+    pickup_model INT NOT NULL,
+    pickup_type INT NOT NULL,
+    private_vw_required TINYINT(1) NOT NULL,
+    enabled TINYINT(1) NOT NULL,
+    sort_order INT NOT NULL,
+    source_tag VARCHAR(64) NOT NULL,
+    row_checksum CHAR(64) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+    captured_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (archive_row_id),
+    UNIQUE KEY uq_offline_house_catalog_archive (archive_session_id, original_id),
+    KEY idx_offline_house_catalog_archive_enabled (archive_session_id, enabled),
+    KEY idx_offline_house_catalog_archive_source (archive_session_id, source_tag),
+    KEY idx_offline_house_catalog_archive_checksum (row_checksum)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS offline_house_ownership_archive (
+    archive_row_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    archive_session_id BIGINT UNSIGNED NOT NULL,
+    player_house_id INT UNSIGNED NOT NULL,
+    owner_id INT UNSIGNED NOT NULL,
+    house_catalog_id INT UNSIGNED NULL,
+    house_index INT NOT NULL,
+    house_name VARCHAR(128) NOT NULL DEFAULT '',
+    price INT NOT NULL DEFAULT 0,
+    locked TINYINT(1) NOT NULL DEFAULT 1,
+    pos_x DECIMAL(11,4) NOT NULL DEFAULT 0,
+    pos_y DECIMAL(11,4) NOT NULL DEFAULT 0,
+    pos_z DECIMAL(11,4) NOT NULL DEFAULT 0,
+    row_checksum CHAR(64) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+    captured_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (archive_row_id),
+    UNIQUE KEY uq_offline_house_ownership_archive (archive_session_id, player_house_id),
+    KEY idx_offline_house_ownership_owner (archive_session_id, owner_id),
+    KEY idx_offline_house_ownership_catalog (archive_session_id, house_catalog_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS offline_house_ownership_transition_plan (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    archive_session_id BIGINT UNSIGNED NOT NULL,
+    player_house_id INT UNSIGNED NOT NULL,
+    owner_id INT UNSIGNED NOT NULL,
+    old_house_catalog_id INT UNSIGNED NULL,
+    old_house_index INT NOT NULL,
+    target_canonical_slot INT NULL,
+    target_plan_id BIGINT UNSIGNED NULL,
+    policy_status VARCHAR(32) NOT NULL DEFAULT 'pending_mapping',
+    notes VARCHAR(512) NOT NULL DEFAULT '',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_offline_house_transition (archive_session_id, player_house_id),
+    KEY idx_offline_house_transition_status (archive_session_id, policy_status),
+    KEY idx_offline_house_transition_target (target_canonical_slot, target_plan_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

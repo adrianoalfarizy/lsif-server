@@ -14496,7 +14496,7 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.24 House Catalog Archive Dry-Run");
+    SetGameModeText("SAIF Dev v0.26A.1.24.1 House Map Icon Schema Fix");
 
     new MySQLOpt:mysqlOptions = mysql_init_options();
     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
@@ -14687,9 +14687,9 @@ public OnGameModeInit()
     print("[SAIF] Skin movement baseline aktif: CJ-like via UsePlayerPedAnims; profile palsu tetap dihapus.");
     print("[SAIF] Vehicle Mission v0.25B.10 tetap aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
     print("[SAIF] Vitals Persistence aktif: health/armor DB + Ammu Body Armor persistence.");
-    print("[SAIF] Gamemode v0.26A.1.24 House Catalog Archive Dry-Run berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.26A.1.24.1 House Map Icon Schema Fix berhasil dijalankan.");
     print("[SAIF] GTA Offline Import Audit aktif: registry + ENEX context/evidence/pair planner read-only; runtime tidak disentuh.");
-    print("[SAIF] v0.26A.1.24: house_catalog archive + 29-savehouse dry-run aktif; runtime belum diganti.");
+    print("[SAIF] v0.26A.1.24.1: map-icon projection memakai public_interiors.exterior_map_icon; runtime belum diganti.");
     print("[SAIF] Runtime lift: parked vehicle GTA offline +0.50 Z; pickup panah model 1318 +1.00 Z; spawn player public interior +0.50 Z. DB tetap original.");
     print("[SAIF] ENEX side-aware preview aktif: Point A/B, isolated interior VW, dan return position.");
     return 1;
@@ -17595,8 +17595,8 @@ stock QueryHouseCatalogRuntimeDryRun(playerid)
     strcat(query, "(SELECT COUNT(*) FROM offline_property_canonical_plan WHERE resolver_version='saif-house-property-resolver-v0.26A.1.22') plan_total,", sizeof(query));
     strcat(query, "(SELECT COUNT(*) FROM offline_property_canonical_plan WHERE resolver_version='saif-house-property-resolver-v0.26A.1.22' AND decision_code='baseline_ready') baseline_rows,", sizeof(query));
     strcat(query, "(SELECT COUNT(*) FROM offline_property_canonical_plan WHERE resolver_version='saif-house-property-resolver-v0.26A.1.22' AND decision_code='baseline_ready' AND garage_status='nearby_candidate') garage_rows,", sizeof(query));
-    strcat(query, "(SELECT COUNT(*) FROM public_interiors WHERE enabled=1 AND map_icon_type>0) public_icon_rows,", sizeof(query));
-    strcat(query, "(SELECT COUNT(*) FROM public_interiors WHERE enabled=1 AND interior_type='hospital' AND map_icon_type>0) hospital_icon_rows", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM public_interiors WHERE enabled=1 AND exterior_map_icon>0) public_icon_rows,", sizeof(query));
+    strcat(query, "(SELECT COUNT(*) FROM public_interiors WHERE enabled=1 AND interior_type='hospital' AND exterior_map_icon>0) hospital_icon_rows", sizeof(query));
     mysql_tquery(g_SQL, query, "OnHouseCatalogRuntimeDryRunLoaded", "i", playerid);
     return 1;
 }
@@ -45693,7 +45693,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.24 House Catalog Archive Dry-Run");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.24.1 House Map Icon Schema Fix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -45703,7 +45703,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.24: house_catalog archive + 29-savehouse dry-run tersedia; ownership policy dan map-icon projection diaudit sebelum apply.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.24.1: map-icon projection schema diperbaiki; ownership policy tetap wajib sebelum apply.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.10: Controlled 91-row public interior apply (71 SCM exact + 20 reviewed overlay) + tracked rollback.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.8: Exact Interior Service Point Resolver; 71 native SCM exact + 20 overlay preview anchors, audit-only.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.7.1: memperbaiki 11 Float tag mismatch pada detail ENEX pair plan; tanpa SQL/runtime change.");

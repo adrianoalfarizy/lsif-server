@@ -1,0 +1,33 @@
+{
+  "version": "v0.26A.1.27",
+  "title": "Dynamic World Garage Catalog Backend & House Link Bridge",
+  "pawn": {
+    "lines": 52383,
+    "curly": [6059, 6059],
+    "parentheses": [27007, 27007],
+    "square_brackets": [10246, 10246],
+    "duplicate_dialog_ids": 0,
+    "duplicate_functions": 0,
+    "new_dialog_id": 1346,
+    "world_garage_capacity": 64
+  },
+  "runtime_create_delta": {
+    "CreatePickup": 0,
+    "CreateDynamicObject": 0,
+    "CreateObject": 0,
+    "CreateVehicle": 0,
+    "AddStaticVehicle": 0
+  },
+  "safety": {
+    "garage_catalog_rows_applied": 0,
+    "house_garage_links_applied": 0,
+    "player_vehicles_mutation": 0,
+    "player_houses_mutation": 0,
+    "house_catalog_mutation": 0,
+    "runtime_policy_enabled": false,
+    "store_enabled": false,
+    "retrieve_enabled": false,
+    "door_animation_enabled": false
+  },
+  "compile_claimed": false
+}

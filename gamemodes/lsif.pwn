@@ -14539,7 +14539,7 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.25 Controlled 29-Savehouse Apply");
+    SetGameModeText("SAIF Dev v0.26A.1.25.1 Map Icon Allocator Gate Fix");
 
     new MySQLOpt:mysqlOptions = mysql_init_options();
     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
@@ -14732,9 +14732,9 @@ public OnGameModeInit()
     print("[SAIF] Skin movement baseline aktif: CJ-like via UsePlayerPedAnims; profile palsu tetap dihapus.");
     print("[SAIF] Vehicle Mission v0.25B.10 tetap aktif: Closeout Audit + Player-target contracts + Mission Pool Management tetap aktif.");
     print("[SAIF] Vitals Persistence aktif: health/armor DB + Ammu Body Armor persistence.");
-    print("[SAIF] Gamemode v0.26A.1.25 Controlled 29-Savehouse Apply berhasil dijalankan.");
+    print("[SAIF] Gamemode v0.26A.1.25.1 Map Icon Allocator Gate Fix berhasil dijalankan.");
     print("[SAIF] GTA Offline Import Audit aktif: registry + ENEX context/evidence/pair planner read-only; runtime tidak disentuh.");
-    print("[SAIF] v0.26A.1.25: 29 canonical savehouses memakai tracked apply/rollback; owned legacy definitions dapat dipertahankan.");
+    print("[SAIF] v0.26A.1.25.1: public icon overflow is allocator-managed; 9 house slots remain protected.");
     print("[SAIF] Runtime lift: parked vehicle GTA offline +0.50 Z; pickup panah model 1318 +1.00 Z; spawn player public interior +0.50 Z. DB tetap original.");
     print("[SAIF] ENEX side-aware preview aktif: Point A/B, isolated interior VW, dan return position.");
     return 1;
@@ -17602,7 +17602,7 @@ public OnHouseCatalogAuditLoaded(playerid)
     format(
         body,
         sizeof(body),
-        "Dynamic House Catalog v0.26A.1.24.2\n\nRuntime\nLoaded rows: %d / %d capacity\nCatalog ready: %s\nFallback active: %s\n\nDatabase\nTotal catalog rows: %d\nEnabled rows: %d\nLegacy seed rows: %d / 5\nCanonical imported rows: %d\nSeed source-tag rows: %d / 5\n\nOwnership bridge\nplayer_houses rows: %d\nMapped catalog IDs: %d\nOrphan catalog IDs: %d (must be 0)\n\nSafety\nZero exterior rows: %d (must be 0)\nInvalid interior rows: %d (must be 0)\nOffline source-ready plans: %d / 29\n\nWorld definitions come from house_catalog and ownership remains in player_houses. Canonical rows may be controlled by the tracked 29-savehouse apply/rollback pipeline.\n\nPress Reload to rebuild house pickups, labels, and map icons from DB.",
+        "Dynamic House Catalog v0.26A.1.25.1\n\nRuntime\nLoaded rows: %d / %d capacity\nCatalog ready: %s\nFallback active: %s\n\nDatabase\nTotal catalog rows: %d\nEnabled rows: %d\nLegacy seed rows: %d / 5\nCanonical imported rows: %d\nSeed source-tag rows: %d / 5\n\nOwnership bridge\nplayer_houses rows: %d\nMapped catalog IDs: %d\nOrphan catalog IDs: %d (must be 0)\n\nSafety\nZero exterior rows: %d (must be 0)\nInvalid interior rows: %d (must be 0)\nOffline source-ready plans: %d / 29\n\nWorld definitions come from house_catalog and ownership remains in player_houses. Canonical rows may be controlled by the tracked 29-savehouse apply/rollback pipeline.\n\nPress Reload to rebuild house pickups, labels, and map icons from DB.",
         HouseCount,
         MAX_HOUSES,
         HouseCatalogReady ? ("Yes") : ("No"),
@@ -17708,7 +17708,7 @@ public OnHouseCatalogRuntimeDryRunLoaded(playerid)
     format(
         body,
         sizeof(body),
-        "House Catalog Runtime Archive / 29-Savehouse Dry-Run\n\nLatest archive\nSession ID: %d\nStatus: %s\nCatalog rows captured: %d / %d\nActive rows captured: %d\nChecksum mismatch now: %d\n\nCurrent catalog\nDB rows: %d\nEnabled rows: %d\nLegacy definitions: %d / 5\nCanonical GTA SA rows: %d (expected 0 before apply)\nRuntime loaded: %d / %d\n\nCanonical projection\nPlans: %d / 32\nBaseline savehouses: %d / 29\nNearby garage candidates: %d / 12 baseline expected\nProjected replacement: 5 legacy -> 29 GTA SA savehouses\nCatalog capacity after apply: 29 / %d\nRemaining capacity: %d\n\nOwnership safety\nCurrent ownership rows: %d\nOwnership rows archived: %d\nPending explicit mapping policy: %d\nResolved transition policy: %d\nOwnership gate ready: %s\nNo ownership is reassigned automatically.\n\nMap icon projection\nPublic DB icon candidates: %d\nConservative hospital fallback allowance: %d\nPermanent public-service budget: %d\nPublic overflow beyond reserved budget: %d\nHouse stream slots: %d (1 owned + 8 nearby)\nAll 29 houses eligible through streaming: Yes\nMap-icon policy ready: %s\n\nSafety contract\nThis menu is read-only. v0.26A.1.24.2 does not apply 29 houses or mutate player_houses; policy decisions remain controlled SQL. Capture and full dry-run remain SQL-only. Open Plan to inspect all 29 source-ready houses.",
+        "House Catalog Runtime Archive / 29-Savehouse Dry-Run\n\nLatest archive\nSession ID: %d\nStatus: %s\nCatalog rows captured: %d / %d\nActive rows captured: %d\nChecksum mismatch now: %d\n\nCurrent catalog\nDB rows: %d\nEnabled rows: %d\nLegacy definitions: %d / 5\nCanonical GTA SA rows: %d (expected 0 before apply)\nRuntime loaded: %d / %d\n\nCanonical projection\nPlans: %d / 32\nBaseline savehouses: %d / 29\nNearby garage candidates: %d / 12 baseline expected\nProjected replacement: 5 legacy -> 29 GTA SA savehouses\nCatalog capacity after apply: 29 / %d\nRemaining capacity: %d\n\nOwnership safety\nCurrent ownership rows: %d\nOwnership rows archived: %d\nPending explicit mapping policy: %d\nResolved transition policy: %d\nOwnership gate ready: %s\nNo ownership is reassigned automatically.\n\nMap icon projection\nPublic DB icon candidates: %d\nConservative hospital fallback allowance: %d\nPermanent public-service budget: %d\nPublic candidates omitted by 91-slot allocator: %d (informational)\nHouse stream slots: %d (1 owned + 8 nearby)\nAll 29 houses eligible through streaming: Yes\nMap-icon allocator contract: %s\n\nSafety contract\nThis menu is read-only. v0.26A.1.24.2 does not apply 29 houses or mutate player_houses; policy decisions remain controlled SQL. Capture and full dry-run remain SQL-only. Open Plan to inspect all 29 source-ready houses.",
         archiveId,
         archiveStatus,
         archivedRows,
@@ -17736,7 +17736,7 @@ public OnHouseCatalogRuntimeDryRunLoaded(playerid)
         OFFLINE_WORLD_MAPICON_PUBLIC_SLOTS,
         projectedPublicOverflow,
         projectedHouseIconsRendered,
-        projectedPublicOverflow == 0 ? ("Yes") : ("Review public overflow")
+        ("Yes - public overflow is clipped by priority; house slots stay protected")
     );
 
     ShowPlayerDialog(playerid, DIALOG_HOUSE_CATALOG_RUNTIME_DRYRUN, DIALOG_STYLE_MSGBOX,

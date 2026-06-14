@@ -1,0 +1,60 @@
+{
+  "version": "v0.26A.1.28",
+  "lines": 52794,
+  "curly_open": 6088,
+  "curly_close": 6088,
+  "paren_open": 27319,
+  "paren_close": 27319,
+  "square_open": 10316,
+  "square_close": 10316,
+  "duplicate_dialog_id": 0,
+  "duplicate_stock_public": 0,
+  "callback_forward_public_valid": true,
+  "new_dialog_ids": [
+    1347,
+    1348,
+    1349,
+    1350
+  ],
+  "adjacent_pawn_strings_added": 0,
+  "runtime_call_delta": {
+    "CreatePickup": {
+      "before": 20,
+      "after": 20,
+      "delta": 0
+    },
+    "CreateDynamicObject": {
+      "before": 5,
+      "after": 5,
+      "delta": 0
+    },
+    "CreateObject": {
+      "before": 4,
+      "after": 4,
+      "delta": 0
+    },
+    "CreateVehicle": {
+      "before": 5,
+      "after": 5,
+      "delta": 0
+    },
+    "AddStaticVehicle": {
+      "before": 0,
+      "after": 0,
+      "delta": 0
+    },
+    "SetPlayerCheckpoint": {
+      "before": 10,
+      "after": 10,
+      "delta": 0
+    },
+    "SetPlayerRaceCheckpoint": {
+      "before": 0,
+      "after": 0,
+      "delta": 0
+    }
+  },
+  "geometry_plans_expected": 52,
+  "baseline_geometry_expected": 12,
+  "runtime_mutation_sql": "none"
+}

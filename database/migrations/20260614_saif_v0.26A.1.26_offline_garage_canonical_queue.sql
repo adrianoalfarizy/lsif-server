@@ -1,0 +1,96 @@
+-- SAIF / LSIF Dev v0.26A.1.26
+-- GTA SA Garage Offline Canonical Queue Foundation
+-- SAFETY: staging/audit schema only. No runtime garage, door, checkpoint, vehicle, house, or ownership mutation.
+SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS offline_garage_resolver_sessions (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    source_session_id BIGINT UNSIGNED NOT NULL,
+    house_resolver_session_id BIGINT UNSIGNED NOT NULL,
+    resolver_version VARCHAR(80) NOT NULL,
+    source_parser_version VARCHAR(80) NOT NULL,
+    house_resolver_version VARCHAR(80) NOT NULL,
+    status VARCHAR(24) NOT NULL DEFAULT 'building',
+    total_garages INT UNSIGNED NOT NULL DEFAULT 0,
+    linked_garages INT UNSIGNED NOT NULL DEFAULT 0,
+    linked_house_plans INT UNSIGNED NOT NULL DEFAULT 0,
+    baseline_house_links INT UNSIGNED NOT NULL DEFAULT 0,
+    story_asset_links INT UNSIGNED NOT NULL DEFAULT 0,
+    unlinked_garages INT UNSIGNED NOT NULL DEFAULT 0,
+    service_garages INT UNSIGNED NOT NULL DEFAULT 0,
+    world_reference_garages INT UNSIGNED NOT NULL DEFAULT 0,
+    invalid_bounds INT UNSIGNED NOT NULL DEFAULT 0,
+    notes VARCHAR(768) NOT NULL DEFAULT '',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP NULL DEFAULT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_offline_garage_resolver_version_source (resolver_version,source_session_id,house_resolver_session_id),
+    KEY idx_offline_garage_resolver_status (resolver_version,status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS offline_garage_canonical_plan (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    resolver_session_id BIGINT UNSIGNED NOT NULL,
+    source_session_id BIGINT UNSIGNED NOT NULL,
+    resolver_version VARCHAR(80) NOT NULL,
+    source_queue_id BIGINT UNSIGNED NOT NULL,
+    garage_key CHAR(64) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+    garage_name VARCHAR(32) NOT NULL,
+    runtime_class VARCHAR(40) NOT NULL DEFAULT 'world_garage',
+    safety_class VARCHAR(48) NOT NULL DEFAULT 'world_reference',
+    link_status VARCHAR(32) NOT NULL DEFAULT 'unlinked_world',
+    garage_type INT NOT NULL DEFAULT -1,
+    garage_door_type INT NOT NULL DEFAULT -1,
+    center_x FLOAT NOT NULL DEFAULT 0,
+    center_y FLOAT NOT NULL DEFAULT 0,
+    center_z FLOAT NOT NULL DEFAULT 0,
+    bounds_json TEXT NULL,
+    source_scope VARCHAR(24) NOT NULL DEFAULT '',
+    source_file VARCHAR(512) NOT NULL DEFAULT '',
+    source_line INT UNSIGNED NOT NULL DEFAULT 0,
+    source_record_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+    city_region VARCHAR(32) NOT NULL DEFAULT '',
+    area_code VARCHAR(32) NOT NULL DEFAULT '',
+    confidence TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    linked_house_count SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    baseline_house_count SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    story_house_count SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    source_tag VARCHAR(64) NOT NULL DEFAULT 'offline_gtasa_garage_plan',
+    enabled TINYINT(1) NOT NULL DEFAULT 0,
+    apply_status VARCHAR(24) NOT NULL DEFAULT 'draft',
+    row_checksum CHAR(64) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL DEFAULT '',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_offline_garage_plan_source (resolver_session_id,source_queue_id),
+    UNIQUE KEY uq_offline_garage_plan_key (resolver_session_id,garage_key),
+    KEY idx_offline_garage_plan_class (resolver_version,safety_class,runtime_class),
+    KEY idx_offline_garage_plan_link (resolver_session_id,link_status),
+    KEY idx_offline_garage_plan_apply (enabled,apply_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS offline_garage_house_links (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    resolver_session_id BIGINT UNSIGNED NOT NULL,
+    garage_plan_id BIGINT UNSIGNED NOT NULL,
+    garage_source_queue_id BIGINT UNSIGNED NOT NULL,
+    house_plan_id BIGINT UNSIGNED NOT NULL,
+    house_slot INT NOT NULL,
+    house_display_name VARCHAR(160) NOT NULL,
+    house_decision_code VARCHAR(48) NOT NULL,
+    house_runtime_target VARCHAR(48) NOT NULL,
+    house_garage_status VARCHAR(32) NOT NULL,
+    garage_distance FLOAT NULL,
+    link_class VARCHAR(48) NOT NULL,
+    confidence TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_offline_garage_house_link (resolver_session_id,house_plan_id),
+    KEY idx_offline_garage_link_plan (resolver_session_id,garage_plan_id),
+    KEY idx_offline_garage_link_class (resolver_session_id,link_class)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+SELECT 'GARAGE_QUEUE_SCHEMA' section,
+       (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='offline_garage_resolver_sessions') sessions_table_should_be_1,
+       (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='offline_garage_canonical_plan') plan_table_should_be_1,
+       (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='offline_garage_house_links') links_table_should_be_1;

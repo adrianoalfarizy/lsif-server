@@ -1,0 +1,20 @@
+{
+  "lines": 52128,
+  "curly_open": 6046,
+  "curly_close": 6046,
+  "paren_open": 26836,
+  "paren_close": 26836,
+  "square_open": 10199,
+  "square_close": 10199,
+  "duplicate_dialog_ids": {},
+  "duplicate_stock_public": {},
+  "new_dialog_ids": [
+    1342,
+    1343,
+    1344,
+    1345
+  ],
+  "delete_house_catalog": 0,
+  "delete_player_houses": 0,
+  "runtime_create_calls_in_new_block": 0
+}

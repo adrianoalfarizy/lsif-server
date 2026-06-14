@@ -8387,7 +8387,7 @@ public OnWorldGarageCatalogAuditLoaded(playerid)
     format(
         body,
         sizeof(body),
-        "Dynamic World Garage Catalog v0.26A.1.27.1\n\nRuntime loader\nLoaded enabled rows: %d / %d\nCatalog query ready: %s\n\n",
+        "Dynamic World Garage Catalog v0.26A.1.29\n\nRuntime loader\nLoaded enabled rows: %d / %d\nCatalog query ready: %s\n\n",
         WorldGarageCount,
         MAX_WORLD_GARAGES,
         readyText
@@ -8396,7 +8396,7 @@ public OnWorldGarageCatalogAuditLoaded(playerid)
     format(
         line,
         sizeof(line),
-        "Runtime tables\nCatalog rows: %d\nEnabled rows: %d (must remain 0 in this phase)\nNon-draft rows: %d (must remain 0)\nMapped canonical plan IDs: %d\nHouse link rows: %d\nEnabled links: %d (must remain 0)\n\n",
+        "Runtime tables\nCatalog rows: %d\nEnabled rows: %d (expected 12 after controlled apply)\nNon-draft rows: %d (expected 12 applied rows)\nMapped canonical plan IDs: %d\nHouse link rows: %d (expected 12)\nEnabled links: %d (expected 12)\n\n",
         catalogTotal,
         catalogEnabled,
         catalogNondraft,
@@ -8442,10 +8442,10 @@ public OnWorldGarageCatalogAuditLoaded(playerid)
     strcat(body, line, sizeof(body));
 
     strcat(body,
-        "This backend is intentionally separated from the existing /garage three-vehicle-slot system. ",
+        "Twelve baseline savehouse garage definitions may now be loaded, while the backend remains separated from the existing /garage three-vehicle-slot system. ",
         sizeof(body));
     strcat(body,
-        "No world door, checkpoint, vehicle storage, retrieval, or ownership mutation is active.\n\n",
+        "Policy remains disabled: no world door, checkpoint, vehicle storage, retrieval, or ownership mutation is active.\n\n",
         sizeof(body));
     strcat(body,
         "Press Reload only to rebuild the in-memory catalog from DB.",
@@ -14834,7 +14834,7 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.28 Garage Geometry Planner");
+    SetGameModeText("SAIF Dev v0.26A.1.29 Controlled 12 Garage Apply");
 
     new MySQLOpt:mysqlOptions = mysql_init_options();
     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
@@ -16517,7 +16517,7 @@ stock ShowOfflineImportAuditMenu(playerid)
     strcat(body, "GTA SA House / Savehouse / Property Source Queue\t255 evidence rows\tRead-only\n", sizeof(body));
     strcat(body, "House / Property Canonical Resolver\t32 plans / 29 source-ready\tRead-only\n", sizeof(body));
     strcat(body, "GTA SA Garage Canonical Queue\t52 GRGE / 13 house links\tRead-only\n", sizeof(body));
-    strcat(body, "Dynamic World Garage Catalog Backend\tgarage_catalog + house link bridge\tReload / audit\n", sizeof(body));
+    strcat(body, "Controlled 12 Savehouse Garage Catalog Apply\tgarage_catalog + house_garage_links\tControlled SQL\n", sizeof(body));
     strcat(body, "Garage Vehicle Spawn / Interaction Geometry\t52 GRGE geometry plans / 12 baseline-ready\tRead-only\n", sizeof(body));
     strcat(body, "Dynamic House Catalog Backend\thouse_catalog + ownership bridge\tReload / audit\n", sizeof(body));
     strcat(body, "House Catalog Runtime Archive / 29-Savehouse Dry-Run\thouse_catalog + ownership policy\tRead-only\n", sizeof(body));
@@ -47131,7 +47131,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.28 Garage Vehicle Spawn Geometry Planner");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.29 Controlled 12 Savehouse Garage Catalog Apply");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -47141,6 +47141,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.29: controlled apply 12 baseline savehouse garage definitions; runtime interaction/storage/door policy tetap disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.25.2: 29 canonical savehouse fixed pada map slot 66-94; radius/nearest house streaming dihapus.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.24.1: map-icon projection schema diperbaiki; ownership policy tetap wajib sebelum apply.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.10: Controlled 91-row public interior apply (71 SCM exact + 20 reviewed overlay) + tracked rollback.");

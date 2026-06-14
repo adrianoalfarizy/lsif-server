@@ -1,0 +1,28 @@
+{
+  "lines": 52794,
+  "curly_open": 6088,
+  "curly_close": 6088,
+  "paren_open": 27321,
+  "paren_close": 27321,
+  "bracket_open": 10316,
+  "bracket_close": 10316,
+  "duplicate_dialog_ids": 0,
+  "duplicate_stock_public": 0,
+  "adjacent_pawn_strings": 0,
+  "runtime_call_delta": {
+    "CreatePickup": 0,
+    "CreateDynamicObject": 0,
+    "CreateObject": 0,
+    "CreateVehicle": 0,
+    "AddStaticVehicle": 0,
+    "SetPlayerCheckpoint": 0,
+    "SetPlayerRaceCheckpoint": 0
+  },
+  "new_dialog_ids": [],
+  "controlled_catalog_target": 12,
+  "controlled_link_target": 12,
+  "policy_expected_enabled": 0,
+  "store_expected_enabled": 0,
+  "retrieve_expected_enabled": 0,
+  "door_expected_enabled": 0
+}

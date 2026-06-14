@@ -1,0 +1,23 @@
+# STATIC VALIDATION v0.26A.1.30.1
+
+- Lines: 54123
+- Curly braces: 6218 / 6218
+- Parentheses: 28049 / 28049
+- Square brackets: 10765 / 10765
+- Lexical braces excluding strings/comments: 6216 / 6216
+- Lexical parentheses excluding strings/comments: 26671 / 26671
+- Lexical brackets excluding strings/comments: 9975 / 9975
+- Duplicate stock/public: 0
+- Duplicate dialog values: 0
+- Adjacent Pawn string pattern: 0
+- New dialog IDs: 1352-1357
+- Exact house locations applied/enabled: 12
+- Pending editor house locations: 17
+- House sell guards: dialog + command
+- Storage operation concurrency guard: enabled
+- Retrieve crash-recovery state: stored/releasing
+- Capacity/disable guard while vehicles are stored: enabled
+- ALTER player_vehicles: none
+- Pawn format/mysql_format argument-count scan in modified regions: no mismatch detected
+- git diff --check equivalent: clean
+- Final validation remains Pawn F5 with project includes.

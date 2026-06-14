@@ -1,0 +1,30 @@
+{
+  "version": "v0.26A.1.30.1",
+  "lines": 54123,
+  "curly": [6218, 6218],
+  "parentheses": [28049, 28049],
+  "brackets": [10765, 10765],
+  "lexical_curly": [6216, 6216],
+  "lexical_parentheses": [26671, 26671],
+  "lexical_brackets": [9975, 9975],
+  "duplicate_functions": [],
+  "duplicate_dialog_values": {},
+  "adjacent_string_pattern_count": 0,
+  "new_dialog_range": "1352-1357",
+  "exact_enabled_locations_expected": 12,
+  "pending_editor_locations_expected": 17,
+  "runtime_features": [
+    "owner-only red checkpoint",
+    "ALT store confirmation",
+    "vehicle despawn after committed store",
+    "retrieve list and vehicle respawn",
+    "12 exact GTA garage geometries",
+    "17-house admin editor",
+    "house sale blocked while vehicles are stored",
+    "capacity and disable guards",
+    "stored/releasing recovery state",
+    "transaction audit log"
+  ],
+  "player_vehicles_alter_sql": 0,
+  "pawn_compiler_executed": false
+}

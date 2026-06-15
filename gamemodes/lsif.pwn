@@ -16553,7 +16553,7 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.31.1 Vehicle Colour Compile Hotfix");
+    SetGameModeText("SAIF Dev v0.26A.1.31.2 In-Vehicle ALT Routing Hotfix");
 
     new MySQLOpt:mysqlOptions = mysql_init_options();
     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
@@ -45555,6 +45555,21 @@ public OnPlayerKeyStateChange(playerid, KEY:newkeys, KEY:oldkeys)
         return 1;
     }
 
+    // GTA SA/open.mp maps the default LALT key to KEY_FIRE while inside a vehicle.
+    // Route that edge directly to vehicle-only ALT interactions before the on-foot KEY_WALK path.
+    if (IsPlayerInAnyVehicle(playerid) && (newkeys & KEY_FIRE) && !(oldkeys & KEY_FIRE))
+    {
+        if (TryHandleVehicleMissionAlt(playerid))
+        {
+            return 1;
+        }
+
+        if (TryHandleHouseVehicleStorageAlt(playerid))
+        {
+            return 1;
+        }
+    }
+
     if ((newkeys & KEY_WALK) && !(oldkeys & KEY_WALK))
     {
         if (TryStartTurfChallengeHold(playerid))
@@ -49212,7 +49227,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.31.1 ChangeVehicleColours Compile Hotfix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.31.2 In-Vehicle ALT Key Routing Hotfix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -49222,7 +49237,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.31.1: mengganti native deprecated ChangeVehicleColor menjadi ChangeVehicleColours; tanpa perubahan runtime/SQL.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.31.2: ALT di kendaraan dirutekan dari KEY_FIRE ke vehicle mission dan house storage; ALT berjalan kaki tetap KEY_WALK.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.31: dealer_pending, home garage, /despawn, nearest parking spawn, /park disabled, dan warna commit saat garage save.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.29: controlled apply 12 baseline savehouse garage definitions; runtime interaction/storage/door policy tetap disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.25.2: 29 canonical savehouse fixed pada map slot 66-94; radius/nearest house streaming dihapus.");

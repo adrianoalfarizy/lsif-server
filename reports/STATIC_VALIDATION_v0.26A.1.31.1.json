@@ -1,0 +1,13 @@
+{
+  "lines": 54919,
+  "curly_open": 6310,
+  "curly_close": 6310,
+  "paren_open": 28468,
+  "paren_close": 28468,
+  "square_open": 11223,
+  "square_close": 11223,
+  "deprecated_change_vehicle_color": 0,
+  "change_vehicle_colours": 2,
+  "sql_files_changed": 0,
+  "runtime_logic_changed": 0
+}

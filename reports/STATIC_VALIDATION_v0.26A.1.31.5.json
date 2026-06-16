@@ -1,0 +1,22 @@
+{
+  "lines": 55356,
+  "curly_open": 6365,
+  "curly_close": 6365,
+  "paren_open": 28701,
+  "paren_close": 28701,
+  "bracket_open": 11317,
+  "bracket_close": 11317,
+  "deprecated_change_vehicle_color": 0,
+  "change_vehicle_colours": 2,
+  "global_spawn_capacity_1024": 1,
+  "parking_add_command": 5,
+  "parking_disable_command": 6,
+  "parking_audit_command": 3,
+  "parking_reload_command": 3,
+  "create_vehicle_delta_manual": 0,
+  "database_player_vehicle_delete": 0,
+  "stock_duplicates": 0,
+  "public_duplicates": 0,
+  "duplicate_dialog_ids": 0,
+  "adjacent_standalone_strings": 0
+}

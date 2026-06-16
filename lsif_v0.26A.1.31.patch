@@ -1,0 +1,1719 @@
+--- gamemodes/lsif.pwn.v0.26A.1.30.1
++++ gamemodes/lsif.pwn
+@@ -897,7 +897,7 @@
+ #define MAPICON_GLOBAL 1
+ #endif
+ 
+-#define MAX_GARAGE_SLOTS 3
++#define MAX_GARAGE_SLOTS 32
+ 
+ // v0.26A.1.27.1: physical/world garage catalog is separate from the existing
+ // three player vehicle slots. No runtime door, storage, or retrieval is enabled yet.
+@@ -919,9 +919,9 @@
+ new Float:WorldGarageCenterY[MAX_WORLD_GARAGES];
+ new Float:WorldGarageCenterZ[MAX_WORLD_GARAGES];
+ 
+-// v0.26A.1.30.1: complete house vehicle storage runtime.
+-// Existing /garage remains the three-vehicle inventory; this layer controls
+-// physical house storage, red checkpoints, ALT confirmation, and retrieval.
++// v0.26A.1.31: owned vehicle + garage storage runtime rework.
++// The legacy slot column remains only as a stable display/order index. Permanent
++// capacity comes from owned house/public garage storage, not a three-slot cap.
+ #define MAX_VEHICLE_STORAGE_LOCATIONS 64
+ #define VEHICLE_STORAGE_NAME_SIZE 96
+ #define VEHICLE_STORAGE_TYPE_SIZE 24
+@@ -977,6 +977,42 @@
+ new PlayerPendingHouseStorageLocked[MAX_PLAYERS];
+ new g_VehicleStorageCheckpointTimer;
+ 
++// v0.26A.1.31 owned vehicle lifecycle and nearest parking spawn runtime.
++#define OWNED_VEHICLE_STATE_LEGACY_UNASSIGNED 0
++#define OWNED_VEHICLE_STATE_DEALER_PENDING 1
++#define OWNED_VEHICLE_STATE_STORED 2
++#define OWNED_VEHICLE_STATE_ACTIVE 3
++#define OWNED_VEHICLE_STATE_DESTROYED_COOLDOWN 4
++#define MAX_OWNED_VEHICLE_SPAWN_POINTS 512
++#define OWNED_VEHICLE_SPAWN_NAME_SIZE 64
++#define OWNED_VEHICLE_SPAWN_SEARCH_LIMIT 2500.0
++#define OWNED_VEHICLE_SPAWN_CLEAR_RADIUS 4.5
++#define STORED_OWNED_VEHICLE_STREAM_IN 120.0
++#define STORED_OWNED_VEHICLE_STREAM_OUT 180.0
++#define STORED_OWNED_VEHICLE_STREAM_LIMIT 6
++#define PARKED_VEHICLE_LIFECYCLE_TICK_MS 10000
++#define OWNED_VEHICLE_DESTROYED_COOLDOWN_DEFAULT 120
++new bool:OwnedVehicleSpawnPointsReady = false;
++new OwnedVehicleSpawnPointCount = 0;
++new OwnedVehicleSpawnPointID[MAX_OWNED_VEHICLE_SPAWN_POINTS];
++new OwnedVehicleSpawnPointInterior[MAX_OWNED_VEHICLE_SPAWN_POINTS];
++new OwnedVehicleSpawnPointVW[MAX_OWNED_VEHICLE_SPAWN_POINTS];
++new Float:OwnedVehicleSpawnPointX[MAX_OWNED_VEHICLE_SPAWN_POINTS];
++new Float:OwnedVehicleSpawnPointY[MAX_OWNED_VEHICLE_SPAWN_POINTS];
++new Float:OwnedVehicleSpawnPointZ[MAX_OWNED_VEHICLE_SPAWN_POINTS];
++new Float:OwnedVehicleSpawnPointA[MAX_OWNED_VEHICLE_SPAWN_POINTS];
++new OwnedVehicleSpawnPointName[MAX_OWNED_VEHICLE_SPAWN_POINTS][OWNED_VEHICLE_SPAWN_NAME_SIZE];
++new VehicleStorageDealerPendingEnabled = 0;
++new VehicleStorageNearestSpawnEnabled = 0;
++new VehicleStorageDespawnEnabled = 0;
++new VehicleStorageColorModificationEnabled = 0;
++new VehicleStorageParkedLifecycleEnabled = 0;
++new VehicleStorageDestroyedCooldownSeconds = OWNED_VEHICLE_DESTROYED_COOLDOWN_DEFAULT;
++new VehicleStorageParkedAbandonSeconds = 180;
++new Float:VehicleStorageParkedHomeRadius = 40.0;
++new g_VehicleLifecycleTimer;
++new ParkedVehicleLastOccupiedTick[MAX_PARKED_VEHICLES];
++
+ #define VEHICLE_MAX_FUEL 100
+ #define VEHICLE_REPAIR_COST 1500
+ #define VEHICLE_REFUEL_COST_PER_POINT 20
+@@ -1137,6 +1173,15 @@
+ new OwnedVehicleName[MAX_PLAYERS][32];
+ new Float:OwnedVehicleHealth[MAX_PLAYERS];
+ new OwnedVehicleFuel[MAX_PLAYERS];
++new OwnedVehicleColor1[MAX_PLAYERS];
++new OwnedVehicleColor2[MAX_PLAYERS];
++new OwnedVehiclePendingColor1[MAX_PLAYERS];
++new OwnedVehiclePendingColor2[MAX_PLAYERS];
++new OwnedVehicleModificationDirty[MAX_PLAYERS];
++new OwnedVehicleLifecycle[MAX_PLAYERS];
++new OwnedVehicleHomeStorageLocationID[MAX_PLAYERS];
++new OwnedVehicleHomeStorageSlot[MAX_PLAYERS];
++new OwnedVehicleDestroyedCooldownSeconds[MAX_PLAYERS];
+ 
+ new PlayerGarageDBID[MAX_PLAYERS][MAX_GARAGE_SLOTS];
+ new PlayerGarageModel[MAX_PLAYERS][MAX_GARAGE_SLOTS];
+@@ -1147,6 +1192,13 @@
+ new PlayerGarageStored[MAX_PLAYERS][MAX_GARAGE_SLOTS];
+ new PlayerGarageStorageLocationID[MAX_PLAYERS][MAX_GARAGE_SLOTS];
+ new PlayerGarageStorageSlot[MAX_PLAYERS][MAX_GARAGE_SLOTS];
++new PlayerGarageColor1[MAX_PLAYERS][MAX_GARAGE_SLOTS];
++new PlayerGarageColor2[MAX_PLAYERS][MAX_GARAGE_SLOTS];
++new PlayerGarageLifecycle[MAX_PLAYERS][MAX_GARAGE_SLOTS];
++new PlayerGarageHomeLocationID[MAX_PLAYERS][MAX_GARAGE_SLOTS];
++new PlayerGarageHomeSlot[MAX_PLAYERS][MAX_GARAGE_SLOTS];
++new PlayerGarageDestroyedCooldownSeconds[MAX_PLAYERS][MAX_GARAGE_SLOTS];
++new PlayerGarageParkedRuntimeID[MAX_PLAYERS][MAX_GARAGE_SLOTS];
+ 
+ new Float:PlayerGarageX[MAX_PLAYERS][MAX_GARAGE_SLOTS];
+ new Float:PlayerGarageY[MAX_PLAYERS][MAX_GARAGE_SLOTS];
+@@ -2856,6 +2908,13 @@
+ forward OnOwnedVehicleBought(playerid, modelid, price);
+ forward OnOwnedVehicleSaved(playerid, notify);
+ forward OnOwnedVehicleSold(playerid, sellPrice);
++forward OnOwnedVehicleStatesNormalized(playerid);
++forward OnOwnedVehicleStorageStatesNormalized(playerid);
++forward Float:GetParkedVehicleRuntimeZ(index);
++forward OnOwnedVehicleSpawnPointsLoaded();
++forward VehicleLifecycleTick();
++forward OnOwnedVehicleDespawned(playerid, slotIndex);
++forward OnOwnedVehicleRemoteSpawned(playerid, slotIndex);
+ forward DelayedKick(playerid);
+ forward EnsureAuthDialog(playerid);
+ forward OnPlayerBanCheck(playerid);
+@@ -6942,6 +7001,15 @@
+     format(OwnedVehicleName[playerid], 32, "Vehicle");
+     OwnedVehicleHealth[playerid] = 1000.0;
+     OwnedVehicleFuel[playerid] = VEHICLE_MAX_FUEL;
++    OwnedVehicleColor1[playerid] = 1;
++    OwnedVehicleColor2[playerid] = 1;
++    OwnedVehiclePendingColor1[playerid] = 1;
++    OwnedVehiclePendingColor2[playerid] = 1;
++    OwnedVehicleModificationDirty[playerid] = 0;
++    OwnedVehicleLifecycle[playerid] = OWNED_VEHICLE_STATE_LEGACY_UNASSIGNED;
++    OwnedVehicleHomeStorageLocationID[playerid] = 0;
++    OwnedVehicleHomeStorageSlot[playerid] = 0;
++    OwnedVehicleDestroyedCooldownSeconds[playerid] = 0;
+ 
+     OwnedVehicleX[playerid] = SPAWN_X + 3.0;
+     OwnedVehicleY[playerid] = SPAWN_Y;
+@@ -7020,8 +7088,8 @@
+                                    OwnedVehicleY[playerid],
+                                    OwnedVehicleZ[playerid],
+                                    OwnedVehicleA[playerid],
+-                                   1,
+-                                   1,
++                                   OwnedVehiclePendingColor1[playerid],
++                                   OwnedVehiclePendingColor2[playerid],
+                                    -1
+                                );
+ 
+@@ -7032,17 +7100,276 @@
+     }
+ 
+     SetVehicleHealth(OwnedVehicleID[playerid], OwnedVehicleHealth[playerid]);
++    LinkVehicleToInterior(OwnedVehicleID[playerid], GetPlayerInterior(playerid));
++    SetVehicleVirtualWorld(OwnedVehicleID[playerid], GetPlayerVirtualWorld(playerid));
+ 
+     ApplyOwnedVehicleParams(playerid);
+     CreateOwnedVehicleLabel(playerid);
+ 
+     new msg[144];
+-    format(msg, sizeof(msg), "Kendaraan slot %d [%s] model %d berhasil di-spawn.", OwnedVehicleSlot[playerid] + 1, OwnedVehicleName[playerid], OwnedVehicleModel[playerid]);
++    format(msg, sizeof(msg), "Kendaraan nomor %d [%s] model %d berhasil di-spawn.", OwnedVehicleSlot[playerid] + 1, OwnedVehicleName[playerid], OwnedVehicleModel[playerid]);
+     SendClientMessage(playerid, COLOR_GREEN, msg);
+ 
+     return 1;
+ }
+ 
++stock ResetOwnedVehiclePendingModification(playerid)
++{
++    OwnedVehiclePendingColor1[playerid] = OwnedVehicleColor1[playerid];
++    OwnedVehiclePendingColor2[playerid] = OwnedVehicleColor2[playerid];
++    OwnedVehicleModificationDirty[playerid] = 0;
++    if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
++    {
++        ChangeVehicleColor(OwnedVehicleID[playerid], OwnedVehicleColor1[playerid], OwnedVehicleColor2[playerid]);
++    }
++    return 1;
++}
++
++stock DestroyStoredOwnedVehicleRuntime(playerid, slotIndex)
++{
++    if (!IsValidGarageSlot(slotIndex)) return 0;
++    if (PlayerGarageParkedRuntimeID[playerid][slotIndex] != INVALID_VEHICLE_ID)
++    {
++        DestroyVehicle(PlayerGarageParkedRuntimeID[playerid][slotIndex]);
++        PlayerGarageParkedRuntimeID[playerid][slotIndex] = INVALID_VEHICLE_ID;
++    }
++    return 1;
++}
++
++stock DestroyAllStoredOwnedVehicleRuntime(playerid)
++{
++    for (new i = 0; i < MAX_GARAGE_SLOTS; i++) DestroyStoredOwnedVehicleRuntime(playerid, i);
++    return 1;
++}
++
++stock IsAnyVehicleNearOwnedSpawn(Float:x, Float:y, Float:z, Float:radius)
++{
++    for (new vehicleid = 1; vehicleid < MAX_VEHICLES; vehicleid++)
++    {
++        if (!IsValidVehicle(vehicleid)) continue;
++        new Float:vx, Float:vy, Float:vz;
++        GetVehiclePos(vehicleid, vx, vy, vz);
++        if (floatsqroot(floatpower(vx-x,2.0)+floatpower(vy-y,2.0)+floatpower(vz-z,2.0)) <= radius) return 1;
++    }
++    return 0;
++}
++
++stock FindNearestOwnedVehicleSpawn(playerid, &Float:x, &Float:y, &Float:z, &Float:a)
++{
++    if (!OwnedVehicleSpawnPointsReady || OwnedVehicleSpawnPointCount <= 0) return 0;
++    new best = -1;
++    new Float:bestDistance = OWNED_VEHICLE_SPAWN_SEARCH_LIMIT + 1.0;
++    new interior = GetPlayerInterior(playerid);
++    new vw = GetPlayerVirtualWorld(playerid);
++    for (new i = 0; i < OwnedVehicleSpawnPointCount; i++)
++    {
++        if (OwnedVehicleSpawnPointInterior[i] != interior || OwnedVehicleSpawnPointVW[i] != vw) continue;
++        new Float:distance = GetPlayerDistanceFromPoint(playerid, OwnedVehicleSpawnPointX[i], OwnedVehicleSpawnPointY[i], OwnedVehicleSpawnPointZ[i]);
++        if (distance >= bestDistance || distance > OWNED_VEHICLE_SPAWN_SEARCH_LIMIT) continue;
++        if (IsAnyVehicleNearOwnedSpawn(OwnedVehicleSpawnPointX[i], OwnedVehicleSpawnPointY[i], OwnedVehicleSpawnPointZ[i], OWNED_VEHICLE_SPAWN_CLEAR_RADIUS)) continue;
++        best = i;
++        bestDistance = distance;
++    }
++    if (best == -1) return 0;
++    x = OwnedVehicleSpawnPointX[best];
++    y = OwnedVehicleSpawnPointY[best];
++    z = OwnedVehicleSpawnPointZ[best];
++    a = OwnedVehicleSpawnPointA[best];
++    return 1;
++}
++
++stock GetOwnedVehicleHomeTransform(playerid, &Float:x, &Float:y, &Float:z, &Float:a)
++{
++    if (OwnedVehicleHomeStorageLocationID[playerid] <= 0) return 0;
++    new locationIndex = GetVehicleStorageLocationIndexByID(OwnedVehicleHomeStorageLocationID[playerid]);
++    if (locationIndex == -1) return 0;
++    x = VehicleStorageSpawnX[locationIndex];
++    y = VehicleStorageSpawnY[locationIndex];
++    z = VehicleStorageSpawnZ[locationIndex];
++    a = VehicleStorageSpawnA[locationIndex];
++    return 1;
++}
++
++stock ProcessOwnedVehicleSpawnRequest(playerid, slotIndex)
++{
++    if (!IsValidGarageSlot(slotIndex) || PlayerGarageDBID[playerid][slotIndex] <= 0)
++    {
++        SendClientMessage(playerid, COLOR_RED, "Nomor kendaraan tidak valid.");
++        return 0;
++    }
++    if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
++    {
++        SendClientMessage(playerid, COLOR_RED, "Masih ada owned vehicle aktif. Gunakan /despawn terlebih dahulu.");
++        return 0;
++    }
++    if (PlayerGarageDestroyedCooldownSeconds[playerid][slotIndex] > 0)
++    {
++        new msg[144];
++        format(msg, sizeof(msg), "Kendaraan masih dalam cooldown perbaikan selama %d detik.", PlayerGarageDestroyedCooldownSeconds[playerid][slotIndex]);
++        SendClientMessage(playerid, COLOR_RED, msg);
++        return 0;
++    }
++    if (PlayerGarageLifecycle[playerid][slotIndex] == OWNED_VEHICLE_STATE_DEALER_PENDING && !IsPlayerNearDealership(playerid))
++    {
++        SendClientMessage(playerid, COLOR_RED, "Kendaraan dealer_pending hanya dapat diambil ulang di dealership.");
++        return 0;
++    }
++
++    new Float:x, Float:y, Float:z, Float:a;
++    if (PlayerGarageLifecycle[playerid][slotIndex] == OWNED_VEHICLE_STATE_DEALER_PENDING)
++    {
++        GetPlayerPos(playerid, x, y, z);
++        GetPlayerFacingAngle(playerid, a);
++        x += 4.0;
++    }
++    else
++    {
++        if (!VehicleStorageNearestSpawnEnabled || !FindNearestOwnedVehicleSpawn(playerid, x, y, z, a))
++        {
++            SendClientMessage(playerid, COLOR_RED, "Tidak ada titik parkir kosong di dekat posisi aktifmu.");
++            return 0;
++        }
++    }
++
++    DestroyStoredOwnedVehicleRuntime(playerid, slotIndex);
++    PlayerGarageX[playerid][slotIndex] = x;
++    PlayerGarageY[playerid][slotIndex] = y;
++    PlayerGarageZ[playerid][slotIndex] = z;
++    PlayerGarageA[playerid][slotIndex] = a;
++    PlayerGarageStored[playerid][slotIndex] = 0;
++    PlayerGarageLifecycle[playerid][slotIndex] = OWNED_VEHICLE_STATE_ACTIVE;
++    SetActiveVehicleFromGarage(playerid, slotIndex);
++    if (!SpawnOwnedVehicle(playerid)) return 0;
++
++    new query[1024];
++    mysql_format(g_SQL, query, sizeof(query),
++        "UPDATE player_vehicles SET lifecycle_status='active',lifecycle_source_tag='saif_owned_vehicle_rework_v0.26A.1.31',pos_x=%f,pos_y=%f,pos_z=%f,pos_a=%f,destroyed_until=NULL,last_state_changed_at=NOW() WHERE id=%d AND owner_id=%d LIMIT 1",
++        x,y,z,a,OwnedVehicleDBID[playerid],PlayerDBID[playerid]);
++    mysql_tquery(g_SQL, query, "OnOwnedVehicleRemoteSpawned", "ii", playerid, slotIndex);
++    if (OwnedVehicleHomeStorageLocationID[playerid] > 0)
++    {
++        mysql_format(g_SQL, query, sizeof(query),
++            "UPDATE player_vehicle_storage SET storage_status='active',released_at=NOW() WHERE player_vehicle_id=%d AND owner_player_id=%d LIMIT 1",
++            OwnedVehicleDBID[playerid],PlayerDBID[playerid]);
++        mysql_tquery(g_SQL, query);
++    }
++    mysql_format(g_SQL, query, sizeof(query),
++        "INSERT INTO vehicle_storage_transactions (transaction_token,action_type,status,player_vehicle_id,owner_player_id,from_storage_location_id,storage_slot,vehicle_health,vehicle_fuel,vehicle_locked,source_tag,completed_at) VALUES (SHA1(CONCAT('spawn-tx-',%d,'-',UNIX_TIMESTAMP(NOW(6)))),'remote_spawn','complete',%d,%d,NULLIF(%d,0),NULLIF(%d,0),%f,%d,%d,'saif_owned_vehicle_rework_v0.26A.1.31',NOW())",
++        OwnedVehicleDBID[playerid],OwnedVehicleDBID[playerid],PlayerDBID[playerid],OwnedVehicleHomeStorageLocationID[playerid],OwnedVehicleHomeStorageSlot[playerid],OwnedVehicleHealth[playerid],OwnedVehicleFuel[playerid],OwnedVehicleLocked[playerid]);
++    mysql_tquery(g_SQL, query);
++    return 1;
++}
++
++public OnOwnedVehicleRemoteSpawned(playerid, slotIndex)
++{
++    if (!IsPlayerConnected(playerid)) return 1;
++    if (cache_affected_rows() <= 0) SendClientMessage(playerid, COLOR_YELLOW, "Kendaraan spawn, tetapi lifecycle DB perlu diperiksa.");
++    else SendClientMessage(playerid, COLOR_GREEN, "Owned vehicle aktif di titik parkir terdekat.");
++    return 1;
++}
++
++stock ProcessOwnedVehicleDespawn(playerid)
++{
++    if (!VehicleStorageDespawnEnabled)
++    {
++        SendClientMessage(playerid, COLOR_RED, "Fitur /despawn sedang dinonaktifkan oleh policy.");
++        return 0;
++    }
++    if (OwnedVehicleID[playerid] == INVALID_VEHICLE_ID || OwnedVehicleDBID[playerid] <= 0 || OwnedVehicleSlot[playerid] < 0)
++    {
++        SendClientMessage(playerid, COLOR_RED, "Tidak ada owned vehicle aktif.");
++        return 0;
++    }
++    if (OwnedVehicleHomeStorageLocationID[playerid] <= 0 || OwnedVehicleHomeStorageSlot[playerid] <= 0)
++    {
++        SendClientMessage(playerid, COLOR_RED, "Kendaraan ini belum pernah disimpan di garage. /despawn ditolak.");
++        return 0;
++    }
++    if (HasOtherPlayerInVehicle(playerid, OwnedVehicleID[playerid]))
++    {
++        SendClientMessage(playerid, COLOR_RED, "Turunkan semua penumpang sebelum /despawn.");
++        return 0;
++    }
++
++    new slotIndex = OwnedVehicleSlot[playerid];
++    new Float:health,Float:homeX,Float:homeY,Float:homeZ,Float:homeA;
++    GetVehicleHealth(OwnedVehicleID[playerid], health);
++    if (!GetOwnedVehicleHomeTransform(playerid,homeX,homeY,homeZ,homeA))
++    {
++        SendClientMessage(playerid, COLOR_RED, "Transform home garage tidak ditemukan. /despawn dibatalkan.");
++        return 0;
++    }
++    OwnedVehicleHealth[playerid] = health;
++    ResetOwnedVehiclePendingModification(playerid);
++    PlayerGarageX[playerid][slotIndex]=homeX;
++    PlayerGarageY[playerid][slotIndex]=homeY;
++    PlayerGarageZ[playerid][slotIndex]=homeZ;
++    PlayerGarageA[playerid][slotIndex]=homeA;
++    new query[1536];
++    mysql_format(g_SQL, query, sizeof(query),
++        "UPDATE player_vehicles SET lifecycle_status='stored',lifecycle_source_tag='saif_owned_vehicle_rework_v0.26A.1.31',pos_x=%f,pos_y=%f,pos_z=%f,pos_a=%f,health=%f,fuel=%d,locked=%d,destroyed_until=NULL,last_state_changed_at=NOW() WHERE id=%d AND owner_id=%d LIMIT 1",
++        homeX,homeY,homeZ,homeA,health,OwnedVehicleFuel[playerid],OwnedVehicleLocked[playerid],OwnedVehicleDBID[playerid],PlayerDBID[playerid]);
++    mysql_tquery(g_SQL, query, "OnOwnedVehicleDespawned", "ii", playerid, slotIndex);
++    mysql_format(g_SQL, query, sizeof(query),
++        "INSERT INTO player_vehicle_storage (player_vehicle_id,owner_player_id,storage_location_id,storage_slot,storage_status,stored_health,stored_fuel,stored_locked,transaction_token,source_tag) VALUES (%d,%d,%d,%d,'stored',%f,%d,%d,SHA1(CONCAT('despawn-',%d,'-',UNIX_TIMESTAMP(NOW(6)))),'saif_owned_vehicle_rework_v0.26A.1.31') ON DUPLICATE KEY UPDATE storage_location_id=VALUES(storage_location_id),storage_slot=VALUES(storage_slot),storage_status='stored',stored_health=VALUES(stored_health),stored_fuel=VALUES(stored_fuel),stored_locked=VALUES(stored_locked),stored_at=NOW(),released_at=NULL,source_tag=VALUES(source_tag)",
++        OwnedVehicleDBID[playerid],PlayerDBID[playerid],OwnedVehicleHomeStorageLocationID[playerid],OwnedVehicleHomeStorageSlot[playerid],health,OwnedVehicleFuel[playerid],OwnedVehicleLocked[playerid],OwnedVehicleDBID[playerid]);
++    mysql_tquery(g_SQL, query);
++    mysql_format(g_SQL, query, sizeof(query),
++        "INSERT INTO vehicle_storage_transactions (transaction_token,action_type,status,player_vehicle_id,owner_player_id,to_storage_location_id,storage_slot,vehicle_health,vehicle_fuel,vehicle_locked,source_tag,completed_at) VALUES (SHA1(CONCAT('despawn-tx-',%d,'-',UNIX_TIMESTAMP(NOW(6)))),'despawn','complete',%d,%d,%d,%d,%f,%d,%d,'saif_owned_vehicle_rework_v0.26A.1.31',NOW())",
++        OwnedVehicleDBID[playerid],OwnedVehicleDBID[playerid],PlayerDBID[playerid],OwnedVehicleHomeStorageLocationID[playerid],OwnedVehicleHomeStorageSlot[playerid],health,OwnedVehicleFuel[playerid],OwnedVehicleLocked[playerid]);
++    mysql_tquery(g_SQL, query);
++    return 1;
++}
++
++public OnOwnedVehicleDespawned(playerid, slotIndex)
++{
++    if (!IsPlayerConnected(playerid)) return 1;
++    if (cache_affected_rows() <= 0)
++    {
++        SendClientMessage(playerid, COLOR_RED, "Gagal mengembalikan lifecycle kendaraan ke garage.");
++        return 1;
++    }
++    if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
++    {
++        if (IsPlayerInVehicle(playerid, OwnedVehicleID[playerid])) RemovePlayerFromVehicle(playerid);
++        DestroyOwnedVehicleLabel(playerid);
++        DestroyVehicle(OwnedVehicleID[playerid]);
++        OwnedVehicleID[playerid] = INVALID_VEHICLE_ID;
++    }
++    PlayerGarageStored[playerid][slotIndex] = 1;
++    PlayerGarageLifecycle[playerid][slotIndex] = OWNED_VEHICLE_STATE_STORED;
++    OwnedVehicleLifecycle[playerid] = OWNED_VEHICLE_STATE_STORED;
++    SendClientMessage(playerid, COLOR_GREEN, "Kendaraan aktif di-despawn dan kembali ke posisi default garage.");
++    return 1;
++}
++
++stock ProcessOwnedVehicleColorModification(playerid, color1, color2)
++{
++    if (!VehicleStorageColorModificationEnabled)
++    {
++        SendClientMessage(playerid, COLOR_RED, "Modifikasi warna sedang dinonaktifkan oleh policy.");
++        return 0;
++    }
++    if (!IsPlayerDrivingActiveOwnedVehicle(playerid))
++    {
++        SendClientMessage(playerid, COLOR_RED, "Kamu harus mengemudikan owned vehicle aktif.");
++        return 0;
++    }
++    if (color1 < 0 || color1 > 255 || color2 < 0 || color2 > 255)
++    {
++        SendClientMessage(playerid, COLOR_RED, "Color ID harus 0 sampai 255.");
++        return 0;
++    }
++    OwnedVehiclePendingColor1[playerid] = color1;
++    OwnedVehiclePendingColor2[playerid] = color2;
++    OwnedVehicleModificationDirty[playerid] = 1;
++    ChangeVehicleColor(OwnedVehicleID[playerid], color1, color2);
++    new msg[192];
++    format(msg, sizeof(msg), "Preview warna diterapkan: %d / %d. Simpan kendaraan di garage agar permanen.", color1, color2);
++    SendClientMessage(playerid, COLOR_GREEN, msg);
++    return 1;
++}
++
+ stock SaveOwnedVehicle(playerid, notify = 0)
+ {
+     if (!PlayerLoggedIn[playerid] || OwnedVehicleDBID[playerid] <= 0)
+@@ -8771,7 +9098,12 @@
+     if (PlayerHouseCatalogID[playerid] <= 0) return 0;
+     new locationIndex = GetHouseVehicleStorageLocationIndex(PlayerHouseCatalogID[playerid]);
+     if (locationIndex == -1) return 0;
+-    return GetStoredVehicleCountAtLocation(playerid, VehicleStorageLocationID[locationIndex]) > 0;
++    new locationId = VehicleStorageLocationID[locationIndex];
++    for (new i = 0; i < MAX_GARAGE_SLOTS; i++)
++    {
++        if (PlayerGarageDBID[playerid][i] > 0 && PlayerGarageHomeLocationID[playerid][i] == locationId) return 1;
++    }
++    return 0;
+ }
+ 
+ stock GetFreeStoredVehicleSlotAtLocation(playerid, locationIndex)
+@@ -8781,14 +9113,25 @@
+     if (capacity < 1) return -1;
+     if (capacity > VehicleStorageMaxSlotsPerLocation && VehicleStorageMaxSlotsPerLocation > 0) capacity = VehicleStorageMaxSlotsPerLocation;
+ 
++    new currentVehicleIndex = OwnedVehicleSlot[playerid];
++    new locationId = VehicleStorageLocationID[locationIndex];
++    if (IsValidGarageSlot(currentVehicleIndex) &&
++        PlayerGarageHomeLocationID[playerid][currentVehicleIndex] == locationId &&
++        PlayerGarageHomeSlot[playerid][currentVehicleIndex] >= 1 &&
++        PlayerGarageHomeSlot[playerid][currentVehicleIndex] <= capacity)
++    {
++        return PlayerGarageHomeSlot[playerid][currentVehicleIndex];
++    }
++
+     for (new storageSlot = 1; storageSlot <= capacity; storageSlot++)
+     {
+         new used = 0;
+         for (new i = 0; i < MAX_GARAGE_SLOTS; i++)
+         {
+-            if (PlayerGarageStored[playerid][i] &&
+-                PlayerGarageStorageLocationID[playerid][i] == VehicleStorageLocationID[locationIndex] &&
+-                PlayerGarageStorageSlot[playerid][i] == storageSlot)
++            if (i == currentVehicleIndex) continue;
++            if (PlayerGarageDBID[playerid][i] > 0 &&
++                PlayerGarageHomeLocationID[playerid][i] == locationId &&
++                PlayerGarageHomeSlot[playerid][i] == storageSlot)
+             {
+                 used = 1;
+                 break;
+@@ -8824,7 +9167,7 @@
+     PlayerDialogHouseStorageLocationIndex[playerid] = locationIndex;
+     new body[512];
+     format(body, sizeof(body),
+-        "Kendaraan: %s\nGarage slot: %d\nLokasi: %s\nKapasitas: %d/%d\n\nKendaraan akan disimpan dan hilang dari dunia. Ambil kembali melalui checkpoint merah rumah ini.",
++        "Kendaraan: %s\nNomor owned vehicle: %d\nLokasi: %s\nKapasitas: %d/%d\n\nKendaraan akan disimpan permanen, modifikasi pending dikomit, lalu diparkir pada posisi default garage.",
+         PlayerGarageName[playerid][slotIndex], slotIndex + 1, VehicleStorageName[locationIndex],
+         GetStoredVehicleCountAtLocation(playerid, VehicleStorageLocationID[locationIndex]), VehicleStorageCapacity[locationIndex]);
+     ShowPlayerDialog(playerid, DIALOG_HOUSE_STORAGE_STORE_CONFIRM, DIALOG_STYLE_MSGBOX,
+@@ -8848,7 +9191,7 @@
+         new rowIndex = PlayerHouseStorageRetrieveCount[playerid];
+         if (rowIndex >= MAX_GARAGE_SLOTS) break;
+         PlayerHouseStorageRetrieveSlotMap[playerid][rowIndex] = slotIndex;
+-        format(row, sizeof(row), "Slot %d: %s | Model %d | Fuel %d | HP %.0f\n",
++        format(row, sizeof(row), "No. %d: %s | Model %d | Fuel %d | HP %.0f\n",
+             slotIndex + 1, PlayerGarageName[playerid][slotIndex], PlayerGarageModel[playerid][slotIndex],
+             PlayerGarageFuel[playerid][slotIndex], PlayerGarageHealth[playerid][slotIndex]);
+         strcat(body, row, sizeof(body));
+@@ -8931,7 +9274,7 @@
+     }
+     if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
+     {
+-        SendClientMessage(playerid, COLOR_RED, "Masih ada kendaraan pribadi aktif di dunia. Simpan/parkir kendaraan itu terlebih dahulu.");
++        SendClientMessage(playerid, COLOR_RED, "Masih ada kendaraan pribadi aktif di dunia. Simpan ke garage atau gunakan /despawn terlebih dahulu.");
+         return 1;
+     }
+     return ShowHouseVehicleRetrieveList(playerid, locationIndex);
+@@ -8975,7 +9318,7 @@
+ 
+     new query[1024];
+     mysql_format(g_SQL, query, sizeof(query),
+-        "INSERT INTO player_vehicle_storage (player_vehicle_id,owner_player_id,storage_location_id,storage_slot,storage_status,stored_health,stored_fuel,stored_locked,transaction_token,source_tag) VALUES (%d,%d,%d,%d,'stored',%f,%d,%d,'%e','saif_house_storage_runtime_v0.26A.1.30.1')",
++        "INSERT INTO player_vehicle_storage (player_vehicle_id,owner_player_id,storage_location_id,storage_slot,storage_status,stored_health,stored_fuel,stored_locked,transaction_token,source_tag) VALUES (%d,%d,%d,%d,'stored',%f,%d,%d,'%e','saif_owned_vehicle_rework_v0.26A.1.31') ON DUPLICATE KEY UPDATE owner_player_id=VALUES(owner_player_id),storage_location_id=VALUES(storage_location_id),storage_slot=VALUES(storage_slot),storage_status='stored',stored_health=VALUES(stored_health),stored_fuel=VALUES(stored_fuel),stored_locked=VALUES(stored_locked),transaction_token=VALUES(transaction_token),stored_at=NOW(),released_at=NULL,source_tag=VALUES(source_tag)",
+         OwnedVehicleDBID[playerid], PlayerDBID[playerid], VehicleStorageLocationID[locationIndex], storageSlot,
+         PlayerPendingHouseStorageHealth[playerid], PlayerPendingHouseStorageFuel[playerid],
+         PlayerPendingHouseStorageLocked[playerid], PlayerPendingHouseStorageToken[playerid]);
+@@ -9005,14 +9348,15 @@
+     if (storageSlot < 1) storageSlot = 1;
+     new query[1024];
+     mysql_format(g_SQL, query, sizeof(query),
+-        "UPDATE player_vehicles SET pos_x=%f,pos_y=%f,pos_z=%f,pos_a=%f,health=%f,fuel=%d,locked=%d WHERE id=%d AND owner_id=%d LIMIT 1",
++        "UPDATE player_vehicles SET pos_x=%f,pos_y=%f,pos_z=%f,pos_a=%f,health=%f,fuel=%d,locked=%d,color1=%d,color2=%d,lifecycle_status='stored',home_storage_location_id=%d,home_storage_slot=%d,first_garage_saved_at=COALESCE(first_garage_saved_at,NOW()),destroyed_until=NULL,lifecycle_source_tag='saif_owned_vehicle_rework_v0.26A.1.31',last_state_changed_at=NOW() WHERE id=%d AND owner_id=%d LIMIT 1",
+         VehicleStorageSpawnX[locationIndex], VehicleStorageSpawnY[locationIndex], VehicleStorageSpawnZ[locationIndex], VehicleStorageSpawnA[locationIndex],
+         PlayerPendingHouseStorageHealth[playerid], PlayerPendingHouseStorageFuel[playerid], PlayerPendingHouseStorageLocked[playerid],
++        OwnedVehiclePendingColor1[playerid], OwnedVehiclePendingColor2[playerid], VehicleStorageLocationID[locationIndex], storageSlot,
+         PlayerGarageDBID[playerid][slotIndex], PlayerDBID[playerid]);
+     mysql_tquery(g_SQL, query);
+ 
+     mysql_format(g_SQL, query, sizeof(query),
+-        "INSERT INTO vehicle_storage_transactions (transaction_token,action_type,status,player_vehicle_id,owner_player_id,to_storage_location_id,storage_slot,vehicle_health,vehicle_fuel,vehicle_locked,source_tag,completed_at) SELECT '%e','store','complete',player_vehicle_id,owner_player_id,storage_location_id,storage_slot,stored_health,stored_fuel,stored_locked,'saif_house_storage_runtime_v0.26A.1.30.1',NOW() FROM player_vehicle_storage WHERE player_vehicle_id=%d LIMIT 1",
++        "INSERT INTO vehicle_storage_transactions (transaction_token,action_type,status,player_vehicle_id,owner_player_id,to_storage_location_id,storage_slot,vehicle_health,vehicle_fuel,vehicle_locked,source_tag,completed_at) SELECT '%e','store','complete',player_vehicle_id,owner_player_id,storage_location_id,storage_slot,stored_health,stored_fuel,stored_locked,'saif_owned_vehicle_rework_v0.26A.1.31',NOW() FROM player_vehicle_storage WHERE player_vehicle_id=%d LIMIT 1",
+         PlayerPendingHouseStorageToken[playerid], PlayerGarageDBID[playerid][slotIndex]);
+     mysql_tquery(g_SQL, query);
+ 
+@@ -9026,6 +9370,17 @@
+     PlayerGarageHealth[playerid][slotIndex] = PlayerPendingHouseStorageHealth[playerid];
+     PlayerGarageFuel[playerid][slotIndex] = PlayerPendingHouseStorageFuel[playerid];
+     PlayerGarageLocked[playerid][slotIndex] = PlayerPendingHouseStorageLocked[playerid];
++    PlayerGarageColor1[playerid][slotIndex] = OwnedVehiclePendingColor1[playerid];
++    PlayerGarageColor2[playerid][slotIndex] = OwnedVehiclePendingColor2[playerid];
++    PlayerGarageLifecycle[playerid][slotIndex] = OWNED_VEHICLE_STATE_STORED;
++    PlayerGarageHomeLocationID[playerid][slotIndex] = VehicleStorageLocationID[locationIndex];
++    PlayerGarageHomeSlot[playerid][slotIndex] = storageSlot;
++    OwnedVehicleColor1[playerid] = OwnedVehiclePendingColor1[playerid];
++    OwnedVehicleColor2[playerid] = OwnedVehiclePendingColor2[playerid];
++    OwnedVehicleModificationDirty[playerid] = 0;
++    OwnedVehicleLifecycle[playerid] = OWNED_VEHICLE_STATE_STORED;
++    OwnedVehicleHomeStorageLocationID[playerid] = VehicleStorageLocationID[locationIndex];
++    OwnedVehicleHomeStorageSlot[playerid] = storageSlot;
+ 
+     new pendingVehicleId = PlayerPendingHouseStorageVehicleID[playerid];
+     if (pendingVehicleId != INVALID_VEHICLE_ID)
+@@ -9130,21 +9485,22 @@
+     }
+ 
+     mysql_format(g_SQL, query, sizeof(query),
+-        "DELETE FROM player_vehicle_storage WHERE player_vehicle_id=%d AND owner_player_id=%d AND storage_location_id=%d AND storage_status='releasing' LIMIT 1",
++        "UPDATE player_vehicle_storage SET storage_status='active',released_at=NOW() WHERE player_vehicle_id=%d AND owner_player_id=%d AND storage_location_id=%d AND storage_status='releasing' LIMIT 1",
+         PlayerGarageDBID[playerid][slotIndex], PlayerDBID[playerid], oldLocationId);
+     mysql_tquery(g_SQL, query);
+ 
+     PlayerGarageStored[playerid][slotIndex] = 0;
+-    PlayerGarageStorageLocationID[playerid][slotIndex] = 0;
+-    PlayerGarageStorageSlot[playerid][slotIndex] = 0;
++    PlayerGarageLifecycle[playerid][slotIndex] = OWNED_VEHICLE_STATE_ACTIVE;
++    OwnedVehicleLifecycle[playerid] = OWNED_VEHICLE_STATE_ACTIVE;
++    DestroyStoredOwnedVehicleRuntime(playerid, slotIndex);
+     mysql_format(g_SQL, query, sizeof(query),
+-        "UPDATE player_vehicles SET pos_x=%f,pos_y=%f,pos_z=%f,pos_a=%f WHERE id=%d AND owner_id=%d LIMIT 1",
++        "UPDATE player_vehicles SET pos_x=%f,pos_y=%f,pos_z=%f,pos_a=%f,lifecycle_status='active',destroyed_until=NULL,last_state_changed_at=NOW() WHERE id=%d AND owner_id=%d LIMIT 1",
+         VehicleStorageSpawnX[locationIndex], VehicleStorageSpawnY[locationIndex], VehicleStorageSpawnZ[locationIndex], VehicleStorageSpawnA[locationIndex],
+         PlayerGarageDBID[playerid][slotIndex], PlayerDBID[playerid]);
+     mysql_tquery(g_SQL, query);
+ 
+     mysql_format(g_SQL, query, sizeof(query),
+-        "INSERT INTO vehicle_storage_transactions (transaction_token,action_type,status,player_vehicle_id,owner_player_id,from_storage_location_id,storage_slot,vehicle_health,vehicle_fuel,vehicle_locked,source_tag,completed_at) VALUES ('%e','retrieve','complete',%d,%d,%d,%d,%f,%d,%d,'saif_house_storage_runtime_v0.26A.1.30.1',NOW())",
++        "INSERT INTO vehicle_storage_transactions (transaction_token,action_type,status,player_vehicle_id,owner_player_id,from_storage_location_id,storage_slot,vehicle_health,vehicle_fuel,vehicle_locked,source_tag,completed_at) VALUES ('%e','retrieve','complete',%d,%d,%d,%d,%f,%d,%d,'saif_owned_vehicle_rework_v0.26A.1.31',NOW())",
+         PlayerPendingHouseStorageToken[playerid], PlayerGarageDBID[playerid][slotIndex], PlayerDBID[playerid], oldLocationId, PlayerPendingHouseStorageDBSlot[playerid],
+         PlayerGarageHealth[playerid][slotIndex], PlayerGarageFuel[playerid][slotIndex], PlayerGarageLocked[playerid][slotIndex]);
+     mysql_tquery(g_SQL, query);
+@@ -9212,7 +9568,7 @@
+     GetPlayerPos(playerid, x, y, z);
+     new query[1536];
+     mysql_format(g_SQL, query, sizeof(query),
+-        "INSERT INTO vehicle_storage_locations (storage_key,storage_type,reference_id,location_name,ownership_mode,access_mode,capacity,interaction_x,interaction_y,interaction_z,interaction_radius,interior_id,virtual_world,geometry_status,enabled,apply_status,source_tag) VALUES ('house_%d','house',%d,'%e Vehicle Storage','inherit_house_owner','house_owner_only',1,%f,%f,%f,2.5,%d,%d,'pending',0,'draft','manual_house_storage_editor_v0.26A.1.30.1') ON DUPLICATE KEY UPDATE interaction_x=VALUES(interaction_x),interaction_y=VALUES(interaction_y),interaction_z=VALUES(interaction_z),interaction_radius=VALUES(interaction_radius),interior_id=VALUES(interior_id),virtual_world=VALUES(virtual_world),location_name=VALUES(location_name)",
++        "INSERT INTO vehicle_storage_locations (storage_key,storage_type,reference_id,location_name,ownership_mode,access_mode,capacity,interaction_x,interaction_y,interaction_z,interaction_radius,interior_id,virtual_world,geometry_status,enabled,apply_status,source_tag) VALUES ('house_%d','house',%d,'%e Vehicle Storage','inherit_house_owner','house_owner_only',1,%f,%f,%f,2.5,%d,%d,'pending',0,'draft','manual_house_storage_editor_v0.26A.1.31') ON DUPLICATE KEY UPDATE interaction_x=VALUES(interaction_x),interaction_y=VALUES(interaction_y),interaction_z=VALUES(interaction_z),interaction_radius=VALUES(interaction_radius),interior_id=VALUES(interior_id),virtual_world=VALUES(virtual_world),location_name=VALUES(location_name)",
+         HouseCatalogID[houseIndex], HouseCatalogID[houseIndex], HouseName[houseIndex], x, y, z, GetPlayerInterior(playerid), GetPlayerVirtualWorld(playerid));
+     mysql_tquery(g_SQL, query, "OnHouseStorageEditorSaved", "ii", playerid, 1);
+     return 1;
+@@ -9236,7 +9592,7 @@
+     }
+     new query[1536];
+     mysql_format(g_SQL, query, sizeof(query),
+-        "INSERT INTO vehicle_storage_locations (storage_key,storage_type,reference_id,location_name,ownership_mode,access_mode,capacity,spawn_x,spawn_y,spawn_z,spawn_a,interior_id,virtual_world,geometry_status,enabled,apply_status,source_tag) VALUES ('house_%d','house',%d,'%e Vehicle Storage','inherit_house_owner','house_owner_only',1,%f,%f,%f,%f,%d,%d,'pending',0,'draft','manual_house_storage_editor_v0.26A.1.30.1') ON DUPLICATE KEY UPDATE spawn_x=VALUES(spawn_x),spawn_y=VALUES(spawn_y),spawn_z=VALUES(spawn_z),spawn_a=VALUES(spawn_a),interior_id=VALUES(interior_id),virtual_world=VALUES(virtual_world),location_name=VALUES(location_name)",
++        "INSERT INTO vehicle_storage_locations (storage_key,storage_type,reference_id,location_name,ownership_mode,access_mode,capacity,spawn_x,spawn_y,spawn_z,spawn_a,interior_id,virtual_world,geometry_status,enabled,apply_status,source_tag) VALUES ('house_%d','house',%d,'%e Vehicle Storage','inherit_house_owner','house_owner_only',1,%f,%f,%f,%f,%d,%d,'pending',0,'draft','manual_house_storage_editor_v0.26A.1.31') ON DUPLICATE KEY UPDATE spawn_x=VALUES(spawn_x),spawn_y=VALUES(spawn_y),spawn_z=VALUES(spawn_z),spawn_a=VALUES(spawn_a),interior_id=VALUES(interior_id),virtual_world=VALUES(virtual_world),location_name=VALUES(location_name)",
+         HouseCatalogID[houseIndex], HouseCatalogID[houseIndex], HouseName[houseIndex], x, y, z, a, GetPlayerInterior(playerid), GetPlayerVirtualWorld(playerid));
+     mysql_tquery(g_SQL, query, "OnHouseStorageEditorSaved", "ii", playerid, 2);
+     return 1;
+@@ -9245,7 +9601,12 @@
+ stock SaveHouseStorageEditorCapacity(playerid, capacity)
+ {
+     new houseIndex = PlayerHouseStorageEditHouseIndex[playerid];
+-    if (!IsValidHouseIndex(houseIndex) || capacity < 1 || capacity > VehicleStorageMaxSlotsPerLocation) return 0;
++    if (!IsValidHouseIndex(houseIndex)) return 0;
++    if (capacity != 1)
++    {
++        SendClientMessage(playerid, COLOR_RED, "House storage v0.26A.1.31 memakai 1 physical parking slot. Multi-slot disiapkan untuk public garage.");
++        return 0;
++    }
+     new query[512];
+     mysql_format(g_SQL, query, sizeof(query),
+         "UPDATE vehicle_storage_locations SET capacity=%d WHERE storage_type='house' AND reference_id=%d AND id NOT IN (SELECT storage_location_id FROM player_vehicle_storage GROUP BY storage_location_id HAVING COUNT(*)>%d) LIMIT 1",
+@@ -9285,6 +9646,7 @@
+         return 1;
+     }
+     LoadVehicleStorageLocations();
++    LoadOwnedVehicleSpawnPoints();
+     switch (actionType)
+     {
+         case 1: SendClientMessage(playerid, COLOR_GREEN, "Posisi checkpoint merah disimpan.");
+@@ -9297,6 +9659,167 @@
+     return 1;
+ }
+ 
++stock ResetOwnedVehicleSpawnPoints()
++{
++    OwnedVehicleSpawnPointCount = 0;
++    OwnedVehicleSpawnPointsReady = false;
++    for (new i = 0; i < MAX_OWNED_VEHICLE_SPAWN_POINTS; i++)
++    {
++        OwnedVehicleSpawnPointID[i] = 0;
++        OwnedVehicleSpawnPointInterior[i] = 0;
++        OwnedVehicleSpawnPointVW[i] = 0;
++        OwnedVehicleSpawnPointX[i] = 0.0;
++        OwnedVehicleSpawnPointY[i] = 0.0;
++        OwnedVehicleSpawnPointZ[i] = 0.0;
++        OwnedVehicleSpawnPointA[i] = 0.0;
++        format(OwnedVehicleSpawnPointName[i], OWNED_VEHICLE_SPAWN_NAME_SIZE, "Parking");
++    }
++    return 1;
++}
++
++stock LoadOwnedVehicleSpawnPoints()
++{
++    ResetOwnedVehicleSpawnPoints();
++    if (!g_DatabaseReady || g_SQL == MYSQL_INVALID_HANDLE) return 0;
++    mysql_tquery(g_SQL,
++        "SELECT id,point_name,pos_x,pos_y,pos_z,pos_a,interior_id,virtual_world FROM vehicle_spawn_points WHERE enabled=1 ORDER BY priority ASC,id ASC LIMIT 512",
++        "OnOwnedVehicleSpawnPointsLoaded");
++    return 1;
++}
++
++public OnOwnedVehicleSpawnPointsLoaded()
++{
++    new rows = cache_num_rows();
++    for (new i = 0; i < rows && i < MAX_OWNED_VEHICLE_SPAWN_POINTS; i++)
++    {
++        cache_get_value_name_int(i, "id", OwnedVehicleSpawnPointID[i]);
++        cache_get_value_name(i, "point_name", OwnedVehicleSpawnPointName[i], OWNED_VEHICLE_SPAWN_NAME_SIZE);
++        cache_get_value_name_float(i, "pos_x", OwnedVehicleSpawnPointX[i]);
++        cache_get_value_name_float(i, "pos_y", OwnedVehicleSpawnPointY[i]);
++        cache_get_value_name_float(i, "pos_z", OwnedVehicleSpawnPointZ[i]);
++        cache_get_value_name_float(i, "pos_a", OwnedVehicleSpawnPointA[i]);
++        cache_get_value_name_int(i, "interior_id", OwnedVehicleSpawnPointInterior[i]);
++        cache_get_value_name_int(i, "virtual_world", OwnedVehicleSpawnPointVW[i]);
++        OwnedVehicleSpawnPointCount++;
++    }
++    OwnedVehicleSpawnPointsReady = true;
++    new msg[144];
++    format(msg, sizeof(msg), "[SAIF][OWNED-VEHICLE] Parking spawn points loaded: %d/512.", OwnedVehicleSpawnPointCount);
++    print(msg);
++    return 1;
++}
++
++stock RefreshStoredOwnedVehicleRuntime(playerid)
++{
++    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid]) return 0;
++    new streamed = 0;
++    for (new slotIndex = 0; slotIndex < MAX_GARAGE_SLOTS; slotIndex++)
++    {
++        if (PlayerGarageDBID[playerid][slotIndex] <= 0 || !PlayerGarageStored[playerid][slotIndex])
++        {
++            DestroyStoredOwnedVehicleRuntime(playerid, slotIndex);
++            continue;
++        }
++        new locationIndex = GetVehicleStorageLocationIndexByID(PlayerGarageStorageLocationID[playerid][slotIndex]);
++        if (locationIndex == -1 || GetPlayerInterior(playerid) != VehicleStorageInterior[locationIndex] || GetPlayerVirtualWorld(playerid) != VehicleStorageVirtualWorld[locationIndex])
++        {
++            DestroyStoredOwnedVehicleRuntime(playerid, slotIndex);
++            continue;
++        }
++        new Float:distance = GetPlayerDistanceFromPoint(playerid, PlayerGarageX[playerid][slotIndex], PlayerGarageY[playerid][slotIndex], PlayerGarageZ[playerid][slotIndex]);
++        if (distance > STORED_OWNED_VEHICLE_STREAM_OUT)
++        {
++            DestroyStoredOwnedVehicleRuntime(playerid, slotIndex);
++            continue;
++        }
++        if (distance <= STORED_OWNED_VEHICLE_STREAM_IN && streamed < STORED_OWNED_VEHICLE_STREAM_LIMIT)
++        {
++            streamed++;
++            if (PlayerGarageParkedRuntimeID[playerid][slotIndex] != INVALID_VEHICLE_ID && !IsValidVehicle(PlayerGarageParkedRuntimeID[playerid][slotIndex]))
++            {
++                PlayerGarageParkedRuntimeID[playerid][slotIndex] = INVALID_VEHICLE_ID;
++            }
++            if (PlayerGarageParkedRuntimeID[playerid][slotIndex] == INVALID_VEHICLE_ID)
++            {
++                new vehicleid = CreateVehicle(PlayerGarageModel[playerid][slotIndex],PlayerGarageX[playerid][slotIndex],PlayerGarageY[playerid][slotIndex],PlayerGarageZ[playerid][slotIndex],PlayerGarageA[playerid][slotIndex],PlayerGarageColor1[playerid][slotIndex],PlayerGarageColor2[playerid][slotIndex],-1);
++                if (vehicleid != INVALID_VEHICLE_ID)
++                {
++                    PlayerGarageParkedRuntimeID[playerid][slotIndex] = vehicleid;
++                    LinkVehicleToInterior(vehicleid, VehicleStorageInterior[locationIndex]);
++                    SetVehicleVirtualWorld(vehicleid, VehicleStorageVirtualWorld[locationIndex]);
++                    SetVehicleHealth(vehicleid, PlayerGarageHealth[playerid][slotIndex]);
++                    SetVehicleParamsEx(vehicleid,0,0,0,1,0,0,0);
++                }
++            }
++        }
++    }
++    return 1;
++}
++
++public VehicleLifecycleTick()
++{
++    new now = GetTickCount();
++    for (new playerid = 0; playerid < MAX_PLAYERS; playerid++)
++    {
++        if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid]) continue;
++        for (new slotIndex = 0; slotIndex < MAX_GARAGE_SLOTS; slotIndex++)
++        {
++            if (PlayerGarageLifecycle[playerid][slotIndex] != OWNED_VEHICLE_STATE_DESTROYED_COOLDOWN) continue;
++            if (PlayerGarageDestroyedCooldownSeconds[playerid][slotIndex] > 0)
++            {
++                PlayerGarageDestroyedCooldownSeconds[playerid][slotIndex] -= PARKED_VEHICLE_LIFECYCLE_TICK_MS / 1000;
++            }
++            if (PlayerGarageDestroyedCooldownSeconds[playerid][slotIndex] <= 0)
++            {
++                PlayerGarageDestroyedCooldownSeconds[playerid][slotIndex] = 0;
++                PlayerGarageLifecycle[playerid][slotIndex] = OWNED_VEHICLE_STATE_STORED;
++                PlayerGarageStored[playerid][slotIndex] = 1;
++                new query[768];
++                mysql_format(g_SQL, query, sizeof(query),
++                    "UPDATE player_vehicles SET lifecycle_status='stored',destroyed_until=NULL,last_state_changed_at=NOW() WHERE id=%d AND owner_id=%d LIMIT 1",
++                    PlayerGarageDBID[playerid][slotIndex],PlayerDBID[playerid]);
++                mysql_tquery(g_SQL, query);
++                mysql_format(g_SQL, query, sizeof(query),
++                    "UPDATE player_vehicle_storage SET storage_status='stored' WHERE player_vehicle_id=%d AND owner_player_id=%d LIMIT 1",
++                    PlayerGarageDBID[playerid][slotIndex],PlayerDBID[playerid]);
++                mysql_tquery(g_SQL, query);
++                SendClientMessage(playerid, COLOR_GREEN, "Salah satu kendaraan selesai cooldown dan kembali tersimpan di home garage.");
++            }
++        }
++        RefreshStoredOwnedVehicleRuntime(playerid);
++    }
++    if (!VehicleStorageParkedLifecycleEnabled) return 1;
++    for (new i = 0; i < ParkedVehicleCount; i++)
++    {
++        new vehicleid = ParkedVehicleRuntimeID[i];
++        if (vehicleid == INVALID_VEHICLE_ID || !IsValidVehicle(vehicleid)) continue;
++        new occupied = 0;
++        for (new playerid = 0; playerid < MAX_PLAYERS; playerid++)
++        {
++            if (IsPlayerConnected(playerid) && IsPlayerInVehicle(playerid, vehicleid))
++            {
++                occupied = 1;
++                break;
++            }
++        }
++        if (occupied)
++        {
++            ParkedVehicleLastOccupiedTick[i] = now;
++            continue;
++        }
++        new Float:x,Float:y,Float:z;
++        GetVehiclePos(vehicleid,x,y,z);
++        new Float:dx=x-ParkedVehicleX[i],Float:dy=y-ParkedVehicleY[i],Float:dz=z-GetParkedVehicleRuntimeZ(i);
++        new Float:distance=floatsqroot(dx*dx+dy*dy+dz*dz);
++        if (distance > VehicleStorageParkedHomeRadius && now-ParkedVehicleLastOccupiedTick[i] >= VehicleStorageParkedAbandonSeconds*1000)
++        {
++            CreateParkedVehicleRuntime(i);
++            ParkedVehicleLastOccupiedTick[i] = now;
++        }
++    }
++    return 1;
++}
++
+ stock ResetUnifiedVehicleStoragePolicy()
+ {
+     VehicleStoragePolicyReady = false;
+@@ -9312,6 +9835,14 @@
+     VehicleStorageOwnerRequired = 1;
+     VehicleStorageMaxLocations = 0;
+     VehicleStorageMaxSlotsPerLocation = 0;
++    VehicleStorageDealerPendingEnabled = 0;
++    VehicleStorageNearestSpawnEnabled = 0;
++    VehicleStorageDespawnEnabled = 0;
++    VehicleStorageColorModificationEnabled = 0;
++    VehicleStorageParkedLifecycleEnabled = 0;
++    VehicleStorageDestroyedCooldownSeconds = OWNED_VEHICLE_DESTROYED_COOLDOWN_DEFAULT;
++    VehicleStorageParkedAbandonSeconds = 180;
++    VehicleStorageParkedHomeRadius = 40.0;
+     return 1;
+ }
+ 
+@@ -9327,7 +9858,10 @@
+         "business_storage_enabled,store_enabled,retrieve_enabled,alt_confirmation_required,",
+         sizeof(query));
+     strcat(query,
+-        "driver_required,vehicle_owner_required,max_locations,max_slots_per_location ",
++        "driver_required,vehicle_owner_required,max_locations,max_slots_per_location,",
++        sizeof(query));
++    strcat(query,
++        "dealer_pending_enabled,nearest_spawn_enabled,despawn_enabled,color_modification_enabled,parked_vehicle_lifecycle_enabled,destroyed_cooldown_seconds,parked_abandon_seconds,parked_home_radius ",
+         sizeof(query));
+     strcat(query,
+         "FROM vehicle_storage_policy WHERE id=1 LIMIT 1",
+@@ -9359,6 +9893,14 @@
+     cache_get_value_name_int(0, "vehicle_owner_required", VehicleStorageOwnerRequired);
+     cache_get_value_name_int(0, "max_locations", VehicleStorageMaxLocations);
+     cache_get_value_name_int(0, "max_slots_per_location", VehicleStorageMaxSlotsPerLocation);
++    cache_get_value_name_int(0, "dealer_pending_enabled", VehicleStorageDealerPendingEnabled);
++    cache_get_value_name_int(0, "nearest_spawn_enabled", VehicleStorageNearestSpawnEnabled);
++    cache_get_value_name_int(0, "despawn_enabled", VehicleStorageDespawnEnabled);
++    cache_get_value_name_int(0, "color_modification_enabled", VehicleStorageColorModificationEnabled);
++    cache_get_value_name_int(0, "parked_vehicle_lifecycle_enabled", VehicleStorageParkedLifecycleEnabled);
++    cache_get_value_name_int(0, "destroyed_cooldown_seconds", VehicleStorageDestroyedCooldownSeconds);
++    cache_get_value_name_int(0, "parked_abandon_seconds", VehicleStorageParkedAbandonSeconds);
++    cache_get_value_name_float(0, "parked_home_radius", VehicleStorageParkedHomeRadius);
+     VehicleStoragePolicyReady = true;
+     LoadVehicleStorageLocations();
+ 
+@@ -9417,7 +9959,7 @@
+ 
+     if (cache_num_rows() <= 0)
+     {
+-        SendClientMessage(playerid, COLOR_RED, "Unified vehicle storage audit gagal. Jalankan migration dan apply v0.26A.1.30.1 sebelum deploy PWN.");
++        SendClientMessage(playerid, COLOR_RED, "Unified vehicle storage audit gagal. Jalankan migration dan apply v0.26A.1.31 sebelum deploy PWN.");
+         return 1;
+     }
+ 
+@@ -9459,7 +10001,7 @@
+ 
+     new body[2800], line[720];
+     format(body, sizeof(body),
+-        "House Vehicle Storage Runtime v0.26A.1.30.1\n\nPolicy loader\nPolicy query ready: %s\n\n",
++        "Owned Vehicle & Garage Storage Runtime v0.26A.1.31\n\nPolicy loader\nPolicy query ready: %s\n\n",
+         readyText
+     );
+ 
+@@ -14969,6 +15511,17 @@
+         PlayerGarageStored[playerid][i] = 0;
+         PlayerGarageStorageLocationID[playerid][i] = 0;
+         PlayerGarageStorageSlot[playerid][i] = 0;
++        PlayerGarageColor1[playerid][i] = 1;
++        PlayerGarageColor2[playerid][i] = 1;
++        PlayerGarageLifecycle[playerid][i] = OWNED_VEHICLE_STATE_LEGACY_UNASSIGNED;
++        PlayerGarageHomeLocationID[playerid][i] = 0;
++        PlayerGarageHomeSlot[playerid][i] = 0;
++        PlayerGarageDestroyedCooldownSeconds[playerid][i] = 0;
++        if (PlayerGarageParkedRuntimeID[playerid][i] != INVALID_VEHICLE_ID)
++        {
++            DestroyVehicle(PlayerGarageParkedRuntimeID[playerid][i]);
++        }
++        PlayerGarageParkedRuntimeID[playerid][i] = INVALID_VEHICLE_ID;
+ 
+         PlayerGarageX[playerid][i] = SPAWN_X + 3.0;
+         PlayerGarageY[playerid][i] = SPAWN_Y;
+@@ -14979,6 +15532,63 @@
+     return 1;
+ }
+ 
++stock CountDealerPendingVehicles(playerid)
++{
++    new count=0;
++    for (new i=0;i<MAX_GARAGE_SLOTS;i++)
++    {
++        if (PlayerGarageDBID[playerid][i]>0 && PlayerGarageLifecycle[playerid][i]==OWNED_VEHICLE_STATE_DEALER_PENDING) count++;
++    }
++    return count;
++}
++
++stock GetPlayerOwnedGarageCapacity(playerid)
++{
++    new capacity=0;
++    if (PlayerHouseCatalogID[playerid]>0)
++    {
++        new locationIndex=GetHouseVehicleStorageLocationIndex(PlayerHouseCatalogID[playerid]);
++        if (locationIndex!=-1) capacity+=VehicleStorageCapacity[locationIndex];
++    }
++    return capacity;
++}
++
++stock CountGarageAssignedOwnedVehicles(playerid)
++{
++    new count=0;
++    for (new i=0;i<MAX_GARAGE_SLOTS;i++)
++    {
++        if (PlayerGarageDBID[playerid][i]>0 && PlayerGarageHomeLocationID[playerid][i]>0) count++;
++    }
++    return count;
++}
++
++stock CanPurchaseDealerPendingVehicle(playerid)
++{
++    if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
++    {
++        SendClientMessage(playerid,COLOR_RED,"Masih ada owned vehicle aktif. Simpan kendaraan itu ke garage terlebih dahulu.");
++        return 0;
++    }
++    if (!VehicleStorageDealerPendingEnabled)
++    {
++        SendClientMessage(playerid,COLOR_RED,"Pembelian dealer_pending sedang dinonaktifkan oleh policy.");
++        return 0;
++    }
++    if (CountDealerPendingVehicles(playerid)>=1)
++    {
++        SendClientMessage(playerid,COLOR_RED,"Simpan kendaraan dealer_pending yang sekarang ke garage sebelum membeli kendaraan lain.");
++        return 0;
++    }
++    new capacity=GetPlayerOwnedGarageCapacity(playerid);
++    new assigned=CountGarageAssignedOwnedVehicles(playerid);
++    if (capacity>0 && assigned>=capacity)
++    {
++        SendClientMessage(playerid,COLOR_YELLOW,"Kapasitas garage permanen penuh. Satu kendaraan baru tetap boleh dibeli sebagai dealer_pending, tetapi harus dipindahkan setelah kapasitas tersedia.");
++    }
++    return 1;
++}
++
+ stock GetFreeGarageSlot(playerid)
+ {
+     for (new i = 0; i < MAX_GARAGE_SLOTS; i++)
+@@ -15037,6 +15647,15 @@
+     format(OwnedVehicleName[playerid], 32, "%s", PlayerGarageName[playerid][slotIndex]);
+     OwnedVehicleHealth[playerid] = PlayerGarageHealth[playerid][slotIndex];
+     OwnedVehicleFuel[playerid] = PlayerGarageFuel[playerid][slotIndex];
++    OwnedVehicleColor1[playerid] = PlayerGarageColor1[playerid][slotIndex];
++    OwnedVehicleColor2[playerid] = PlayerGarageColor2[playerid][slotIndex];
++    OwnedVehiclePendingColor1[playerid] = PlayerGarageColor1[playerid][slotIndex];
++    OwnedVehiclePendingColor2[playerid] = PlayerGarageColor2[playerid][slotIndex];
++    OwnedVehicleModificationDirty[playerid] = 0;
++    OwnedVehicleLifecycle[playerid] = PlayerGarageLifecycle[playerid][slotIndex];
++    OwnedVehicleHomeStorageLocationID[playerid] = PlayerGarageHomeLocationID[playerid][slotIndex];
++    OwnedVehicleHomeStorageSlot[playerid] = PlayerGarageHomeSlot[playerid][slotIndex];
++    OwnedVehicleDestroyedCooldownSeconds[playerid] = PlayerGarageDestroyedCooldownSeconds[playerid][slotIndex];
+ 
+     OwnedVehicleX[playerid] = PlayerGarageX[playerid][slotIndex];
+     OwnedVehicleY[playerid] = PlayerGarageY[playerid][slotIndex];
+@@ -15046,6 +15665,35 @@
+     return 1;
+ }
+ 
++stock NormalizePlayerOwnedVehicleStates(playerid)
++{
++    if (!PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0) return 0;
++    new query[1024];
++    mysql_format(g_SQL, query, sizeof(query),
++        "UPDATE player_vehicles pv LEFT JOIN player_vehicle_storage pvs ON pvs.player_vehicle_id=pv.id SET pv.lifecycle_status=CASE WHEN pv.home_storage_location_id IS NOT NULL THEN 'stored' ELSE 'dealer_pending' END,pv.destroyed_until=NULL WHERE pv.owner_id=%d AND (pv.lifecycle_status='active' OR (pv.lifecycle_status='destroyed_cooldown' AND (pv.destroyed_until IS NULL OR pv.destroyed_until<=NOW())))",
++        PlayerDBID[playerid]);
++    mysql_tquery(g_SQL, query, "OnOwnedVehicleStatesNormalized", "i", playerid);
++    return 1;
++}
++
++public OnOwnedVehicleStatesNormalized(playerid)
++{
++    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid]) return 1;
++    new query[512];
++    mysql_format(g_SQL, query, sizeof(query),
++        "UPDATE player_vehicle_storage SET storage_status='stored' WHERE (owner_player_id=%d AND storage_status IN ('active','releasing')) OR (owner_player_id=%d AND storage_status='destroyed_cooldown' AND player_vehicle_id IN (SELECT id FROM player_vehicles WHERE owner_id=%d AND lifecycle_status='stored'))",
++        PlayerDBID[playerid],PlayerDBID[playerid],PlayerDBID[playerid]);
++    mysql_tquery(g_SQL, query, "OnOwnedVehicleStorageStatesNormalized", "i", playerid);
++    return 1;
++}
++
++public OnOwnedVehicleStorageStatesNormalized(playerid)
++{
++    if (!IsPlayerConnected(playerid) || !PlayerLoggedIn[playerid]) return 1;
++    LoadPlayerGarage(playerid);
++    return 1;
++}
++
+ stock LoadPlayerGarage(playerid)
+ {
+     if (!PlayerLoggedIn[playerid] || PlayerDBID[playerid] <= 0)
+@@ -15053,13 +15701,13 @@
+         return 0;
+     }
+ 
+-    new query[512];
++    new query[1536];
+ 
+     mysql_format(
+         g_SQL,
+         query,
+         sizeof(query),
+-        "SELECT pv.id,pv.slot,pv.model_id,pv.vehicle_name,pv.pos_x,pv.pos_y,pv.pos_z,pv.pos_a,pv.health,pv.fuel,pv.locked,COALESCE(pvs.storage_location_id,0) storage_location_id,COALESCE(pvs.storage_slot,0) storage_slot,IF(pvs.id IS NULL,0,1) stored FROM player_vehicles pv LEFT JOIN player_vehicle_storage pvs ON pvs.player_vehicle_id=pv.id AND pvs.storage_status IN ('stored','releasing') WHERE pv.owner_id=%d ORDER BY pv.slot ASC",
++        "SELECT pv.id,pv.slot,pv.model_id,pv.vehicle_name,pv.color1,pv.color2,pv.pos_x,pv.pos_y,pv.pos_z,pv.pos_a,pv.health,pv.fuel,pv.locked,COALESCE(pvs.storage_location_id,pv.home_storage_location_id,0) storage_location_id,COALESCE(pvs.storage_slot,pv.home_storage_slot,0) storage_slot,IF(COALESCE(pvs.storage_status,pv.lifecycle_status)='stored',1,0) stored,CASE pv.lifecycle_status WHEN 'dealer_pending' THEN 1 WHEN 'stored' THEN 2 WHEN 'active' THEN 3 WHEN 'destroyed_cooldown' THEN 4 ELSE 0 END lifecycle_code,COALESCE(pv.home_storage_location_id,0) home_location_id,COALESCE(pv.home_storage_slot,0) home_slot,IF(pv.destroyed_until>NOW(),TIMESTAMPDIFF(SECOND,NOW(),pv.destroyed_until),0) destroyed_seconds FROM player_vehicles pv LEFT JOIN player_vehicle_storage pvs ON pvs.player_vehicle_id=pv.id WHERE pv.owner_id=%d ORDER BY pv.slot ASC,pv.id ASC LIMIT 32",
+         PlayerDBID[playerid]
+     );
+ 
+@@ -15905,7 +16553,7 @@
+     DisableInteriorEnterExits();
+     ManualVehicleEngineAndLights();
+     UsePlayerPedAnims();
+-    SetGameModeText("SAIF Dev v0.26A.1.30.1 House Vehicle Storage Runtime");
++    SetGameModeText("SAIF Dev v0.26A.1.31 Owned Vehicle Garage Runtime");
+ 
+     new MySQLOpt:mysqlOptions = mysql_init_options();
+     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
+@@ -15956,6 +16604,7 @@
+     LoadHouseCatalog();
+     LoadWorldGarageCatalog();
+     LoadUnifiedVehicleStoragePolicy();
++    LoadOwnedVehicleSpawnPoints();
+     CreateWorldInteractionMarkers();
+     LoadGangTerritories();
+     LoadGangWeaponStash();
+@@ -16071,6 +16720,7 @@
+     g_FuelTimer = SetTimer("FuelSystemTick", FUEL_TIMER_INTERVAL, true);
+     g_HouseMapIconRefreshTimer = SetTimer("RefreshHouseMapIconStreams", OFFLINE_HOUSE_ICON_REFRESH_MS, true);
+     g_VehicleStorageCheckpointTimer = SetTimer("VehicleStorageCheckpointTick", VEHICLE_STORAGE_CHECKPOINT_TICK_MS, true);
++    g_VehicleLifecycleTimer = SetTimer("VehicleLifecycleTick", PARKED_VEHICLE_LIFECYCLE_TICK_MS, true);
+     SetTimer("FirefighterMissionTick", FIRE_MISSION_WATER_TICK_MS, true);
+     ResetTurfWarData();
+     g_TurfWarTimer = SetTimer("TurfWarTick", TURF_WAR_TICK_INTERVAL, true);
+@@ -16146,6 +16796,11 @@
+         KillTimer(g_VehicleStorageCheckpointTimer);
+         g_VehicleStorageCheckpointTimer = 0;
+     }
++    if (g_VehicleLifecycleTimer)
++    {
++        KillTimer(g_VehicleLifecycleTimer);
++        g_VehicleLifecycleTimer = 0;
++    }
+ 
+     if (g_TurfWarTimer)
+     {
+@@ -16245,7 +16900,34 @@
+     DestroyPlayerTurfHud(playerid);
+     ClearSkinPreviewRuntimeState(playerid, 1);
+     SavePlayerData(playerid);
+-    SaveOwnedVehicle(playerid);
++    if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
++    {
++        ResetOwnedVehiclePendingModification(playerid);
++        new query[1024];
++        if (OwnedVehicleHomeStorageLocationID[playerid] > 0)
++        {
++            new Float:homeX,Float:homeY,Float:homeZ,Float:homeA;
++            if (!GetOwnedVehicleHomeTransform(playerid,homeX,homeY,homeZ,homeA))
++            {
++                homeX=OwnedVehicleX[playerid]; homeY=OwnedVehicleY[playerid]; homeZ=OwnedVehicleZ[playerid]; homeA=OwnedVehicleA[playerid];
++            }
++            mysql_format(g_SQL, query, sizeof(query),
++                "UPDATE player_vehicles SET lifecycle_status='stored',lifecycle_source_tag='saif_owned_vehicle_rework_v0.26A.1.31',pos_x=%f,pos_y=%f,pos_z=%f,pos_a=%f,destroyed_until=NULL,last_state_changed_at=NOW() WHERE id=%d AND owner_id=%d LIMIT 1",
++                homeX,homeY,homeZ,homeA,OwnedVehicleDBID[playerid],PlayerDBID[playerid]);
++            mysql_tquery(g_SQL, query);
++            mysql_format(g_SQL, query, sizeof(query),
++                "UPDATE player_vehicle_storage SET storage_status='stored',released_at=NULL WHERE player_vehicle_id=%d AND owner_player_id=%d LIMIT 1",
++                OwnedVehicleDBID[playerid],PlayerDBID[playerid]);
++            mysql_tquery(g_SQL, query);
++        }
++        else
++        {
++            mysql_format(g_SQL, query, sizeof(query),
++                "UPDATE player_vehicles SET lifecycle_status='dealer_pending',lifecycle_source_tag='saif_owned_vehicle_rework_v0.26A.1.31',destroyed_until=NULL,last_state_changed_at=NOW() WHERE id=%d AND owner_id=%d LIMIT 1",
++                OwnedVehicleDBID[playerid],PlayerDBID[playerid]);
++            mysql_tquery(g_SQL, query);
++        }
++    }
+     RemoveLSIFMapIcons(playerid);
+     DestroyPlayerHouseExitPickup(playerid);
+     if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
+@@ -16255,6 +16937,7 @@
+         OwnedVehicleID[playerid] = INVALID_VEHICLE_ID;
+     }
+ 
++    DestroyAllStoredOwnedVehicleRuntime(playerid);
+     ResetPlayerGarageData(playerid);
+     DisablePlayerCheckpoint(playerid);
+     ResetPlayerHouseVehicleStorageRuntime(playerid);
+@@ -22103,7 +22786,7 @@
+             strcat(body, "/garage: lihat slot kendaraan.\n", sizeof(body));
+             strcat(body, "/myveh [slot]: spawn kendaraan.\n", sizeof(body));
+             strcat(body, "/sellveh [slot]: jual kendaraan.\n", sizeof(body));
+-            strcat(body, "/park: simpan posisi kendaraan aktif.\n", sizeof(body));
++            strcat(body, "/despawn: kembalikan kendaraan aktif ke home garage.\n", sizeof(body));
+             strcat(body, "/lock: kunci/buka kendaraan.\n", sizeof(body));
+             strcat(body, "/vehstatus, /vehinfo, /fuelinfo.\n", sizeof(body));
+             strcat(body, "/renameveh [slot] [name].\n", sizeof(body));
+@@ -22424,7 +23107,7 @@
+             case 3:
+             {
+                 new prompt[256];
+-                format(prompt, sizeof(prompt), "Masukkan kapasitas 1 sampai %d.", VehicleStorageMaxSlotsPerLocation);
++                format(prompt, sizeof(prompt), "House storage v0.26A.1.31 menggunakan 1 physical parking slot. Masukkan: 1");
+                 ShowPlayerDialog(playerid, DIALOG_HOUSE_STORAGE_CAPACITY_INPUT, DIALOG_STYLE_INPUT, "House Storage Capacity", prompt, "Save", "Back");
+             }
+             case 4: SetHouseStorageEditorEnabled(playerid, 1);
+@@ -22449,9 +23132,9 @@
+             return ShowHouseStorageAdminAction(playerid);
+         }
+         new capacity = strval(inputtext);
+-        if (capacity < 1 || capacity > VehicleStorageMaxSlotsPerLocation)
++        if (capacity != 1)
+         {
+-            SendClientMessage(playerid, COLOR_RED, "Kapasitas di luar batas policy.");
++            SendClientMessage(playerid, COLOR_RED, "House storage saat ini hanya mendukung kapasitas 1 physical parking slot.");
+             return ShowHouseStorageAdminAction(playerid);
+         }
+         SaveHouseStorageEditorCapacity(playerid, capacity);
+@@ -28454,7 +29137,7 @@
+ 
+         if (!IsValidGarageSlot(listitem) || PlayerGarageDBID[playerid][listitem] <= 0)
+         {
+-            SendClientMessage(playerid, COLOR_RED, "Slot garage ini kosong/tidak valid.");
++            SendClientMessage(playerid, COLOR_RED, "Nomor owned vehicle kosong/tidak valid.");
+             ShowGarageRenameSlotDialog(playerid);
+             return 1;
+         }
+@@ -28485,7 +29168,7 @@
+ 
+         if (!IsValidGarageSlot(listitem) || PlayerGarageDBID[playerid][listitem] <= 0)
+         {
+-            SendClientMessage(playerid, COLOR_RED, "Slot garage ini kosong/tidak valid.");
++            SendClientMessage(playerid, COLOR_RED, "Nomor owned vehicle kosong/tidak valid.");
+             ShowGarageSellSlotDialog(playerid);
+             return 1;
+         }
+@@ -29013,7 +29696,7 @@
+ 
+     ApplyLoadedPlayerData(playerid);
+     LoadPersistentArrestJailHold(playerid);
+-    LoadPlayerGarage(playerid);
++    NormalizePlayerOwnedVehicleStates(playerid);
+     LoadPlayerHouse(playerid);
+     LoadPlayerOrganization(playerid);
+     LoadPlayerGang(playerid);
+@@ -35395,6 +36078,7 @@
+     {
+         return 0;
+     }
++    ParkedVehicleLastOccupiedTick[index] = GetTickCount();
+ 
+     LinkVehicleToInterior(ParkedVehicleRuntimeID[index], ParkedVehicleInterior[index]);
+     SetVehicleVirtualWorld(ParkedVehicleRuntimeID[index], ParkedVehicleVirtualWorld[index]);
+@@ -38719,7 +39403,7 @@
+ {
+     if (!IsValidGarageSlot(slotIndex) || PlayerGarageDBID[playerid][slotIndex] <= 0)
+     {
+-        SendClientMessage(playerid, COLOR_RED, "Slot garage ini kosong/tidak valid.");
++        SendClientMessage(playerid, COLOR_RED, "Nomor owned vehicle kosong/tidak valid.");
+         return 0;
+     }
+ 
+@@ -38767,7 +39451,7 @@
+ {
+     if (!IsValidGarageSlot(slotIndex) || PlayerGarageDBID[playerid][slotIndex] <= 0)
+     {
+-        SendClientMessage(playerid, COLOR_RED, "Slot garage ini kosong/tidak valid.");
++        SendClientMessage(playerid, COLOR_RED, "Nomor owned vehicle kosong/tidak valid.");
+         return 0;
+     }
+ 
+@@ -38894,38 +39578,25 @@
+ {
+     if (!IsValidGarageSlot(slotIndex))
+     {
+-        SendClientMessage(playerid, COLOR_RED, "Slot tidak valid.");
++        SendClientMessage(playerid, COLOR_RED, "Nomor kendaraan tidak valid.");
+         return 0;
+     }
+ 
+     if (PlayerGarageDBID[playerid][slotIndex] <= 0)
+     {
+-        SendClientMessage(playerid, COLOR_RED, "Slot garage ini kosong.");
++        SendClientMessage(playerid, COLOR_RED, "Nomor owned vehicle ini kosong.");
+         ShowGarageSpawnDialog(playerid);
+         return 0;
+     }
+ 
+-    if (PlayerGarageStored[playerid][slotIndex])
+-    {
+-        SendClientMessage(playerid, COLOR_RED, "Kendaraan ini tersimpan di rumah dan tidak bisa di-spawn dari dealership.");
+-        SendClientMessage(playerid, COLOR_WHITE, "Datang ke checkpoint merah rumahmu lalu tekan ALT untuk mengambil kendaraan.");
+-        return 0;
+-    }
+-
+-    SetActiveVehicleFromGarage(playerid, slotIndex);
+-    SpawnOwnedVehicle(playerid);
+-
+-    new msg[144];
+-    format(msg, sizeof(msg), "Kendaraan slot %d sekarang aktif.", slotIndex + 1);
+-    SendClientMessage(playerid, COLOR_GREEN, msg);
+-    return 1;
++    return ProcessOwnedVehicleSpawnRequest(playerid, slotIndex);
+ }
+ 
+ stock ProcessDialogGarageRename(playerid, slotIndex, const newName[])
+ {
+     if (!IsValidGarageSlot(slotIndex) || PlayerGarageDBID[playerid][slotIndex] <= 0)
+     {
+-        SendClientMessage(playerid, COLOR_RED, "Slot garage ini kosong/tidak valid.");
++        SendClientMessage(playerid, COLOR_RED, "Nomor owned vehicle kosong/tidak valid.");
+         return 0;
+     }
+ 
+@@ -38978,7 +39649,7 @@
+     }
+     if (!IsValidGarageSlot(slotIndex) || PlayerGarageDBID[playerid][slotIndex] <= 0)
+     {
+-        SendClientMessage(playerid, COLOR_RED, "Slot garage ini kosong/tidak valid.");
++        SendClientMessage(playerid, COLOR_RED, "Nomor owned vehicle kosong/tidak valid.");
+         return 0;
+     }
+ 
+@@ -39148,7 +39819,7 @@
+     format(
+         dialogText,
+         sizeof(dialogText),
+-        "Vehicle: %s\nModel ID: %d\nPrice: $%d\n\nKendaraan akan masuk ke slot garage kosong pertama.\nLanjutkan pembelian?",
++        "Vehicle: %s\nModel ID: %d\nPrice: $%d\n\nKendaraan akan berstatus dealer_pending sampai pertama kali disimpan di garage.\nLanjutkan pembelian?",
+         ShopVehicleName[shopIndex],
+         ShopVehicleModel[shopIndex],
+         ShopVehiclePrice[shopIndex]
+@@ -39184,9 +39855,10 @@
+ 
+     if (freeSlot == -1)
+     {
+-        SendClientMessage(playerid, COLOR_RED, "Garage penuh. Jual salah satu kendaraan dengan /sellveh [slot].");
++        SendClientMessage(playerid, COLOR_RED, "Batas internal 32 owned vehicle tercapai.");
+         return 0;
+     }
++    if (!CanPurchaseDealerPendingVehicle(playerid)) return 0;
+ 
+     new modelid = ShopVehicleModel[shopIndex];
+     new price = ShopVehiclePrice[shopIndex];
+@@ -39209,7 +39881,7 @@
+         g_SQL,
+         query,
+         sizeof(query),
+-        "INSERT INTO player_vehicles (owner_id, slot, model_id, vehicle_name, color1, color2, pos_x, pos_y, pos_z, pos_a, health, fuel, locked) VALUES (%d, %d, %d, '%e', 1, 1, %f, %f, %f, %f, 1000.0, 100, 0)",
++        "INSERT INTO player_vehicles (owner_id, slot, model_id, vehicle_name, color1, color2, pos_x, pos_y, pos_z, pos_a, health, fuel, locked,lifecycle_status,purchase_origin,lifecycle_source_tag,last_state_changed_at) VALUES (%d, %d, %d, '%e', 1, 1, %f, %f, %f, %f, 1000.0, 100, 0,'dealer_pending','dealership','saif_owned_vehicle_rework_v0.26A.1.31',NOW())",
+         PlayerDBID[playerid],
+         freeSlot + 1,
+         modelid,
+@@ -42521,6 +43193,79 @@
+     return 1;
+ }
+ 
++public OnVehicleDeath(vehicleid, killerid)
++{
++    for (new ownerid = 0; ownerid < MAX_PLAYERS; ownerid++)
++    {
++        if (!IsPlayerConnected(ownerid)) continue;
++        for (new slotIndex = 0; slotIndex < MAX_GARAGE_SLOTS; slotIndex++)
++        {
++            if (PlayerGarageParkedRuntimeID[ownerid][slotIndex] == vehicleid)
++            {
++                PlayerGarageParkedRuntimeID[ownerid][slotIndex] = INVALID_VEHICLE_ID;
++                return 1;
++            }
++        }
++    }
++    new parkedIndex = GetParkedVehicleIndexByRuntimeID(vehicleid);
++    if (parkedIndex != -1)
++    {
++        ParkedVehicleLastOccupiedTick[parkedIndex] = GetTickCount();
++        return 1;
++    }
++    for (new playerid = 0; playerid < MAX_PLAYERS; playerid++)
++    {
++        if (!IsPlayerConnected(playerid) || OwnedVehicleID[playerid] != vehicleid) continue;
++        DestroyOwnedVehicleLabel(playerid);
++        OwnedVehicleID[playerid] = INVALID_VEHICLE_ID;
++        ResetOwnedVehiclePendingModification(playerid);
++        new query[1536];
++        if (OwnedVehicleHomeStorageLocationID[playerid] > 0)
++        {
++            OwnedVehicleLifecycle[playerid] = OWNED_VEHICLE_STATE_DESTROYED_COOLDOWN;
++            OwnedVehicleDestroyedCooldownSeconds[playerid] = VehicleStorageDestroyedCooldownSeconds;
++            if (IsValidGarageSlot(OwnedVehicleSlot[playerid]))
++            {
++                PlayerGarageLifecycle[playerid][OwnedVehicleSlot[playerid]] = OWNED_VEHICLE_STATE_DESTROYED_COOLDOWN;
++                PlayerGarageDestroyedCooldownSeconds[playerid][OwnedVehicleSlot[playerid]] = VehicleStorageDestroyedCooldownSeconds;
++            }
++            new Float:homeX,Float:homeY,Float:homeZ,Float:homeA;
++            if (!GetOwnedVehicleHomeTransform(playerid,homeX,homeY,homeZ,homeA))
++            {
++                homeX=OwnedVehicleX[playerid]; homeY=OwnedVehicleY[playerid]; homeZ=OwnedVehicleZ[playerid]; homeA=OwnedVehicleA[playerid];
++            }
++            if (IsValidGarageSlot(OwnedVehicleSlot[playerid]))
++            {
++                PlayerGarageX[playerid][OwnedVehicleSlot[playerid]]=homeX;
++                PlayerGarageY[playerid][OwnedVehicleSlot[playerid]]=homeY;
++                PlayerGarageZ[playerid][OwnedVehicleSlot[playerid]]=homeZ;
++                PlayerGarageA[playerid][OwnedVehicleSlot[playerid]]=homeA;
++            }
++            mysql_format(g_SQL, query, sizeof(query),
++                "UPDATE player_vehicles SET lifecycle_status='destroyed_cooldown',lifecycle_source_tag='saif_owned_vehicle_rework_v0.26A.1.31',pos_x=%f,pos_y=%f,pos_z=%f,pos_a=%f,destroyed_until=DATE_ADD(NOW(),INTERVAL %d SECOND),last_state_changed_at=NOW() WHERE id=%d AND owner_id=%d LIMIT 1",
++                homeX,homeY,homeZ,homeA,VehicleStorageDestroyedCooldownSeconds,OwnedVehicleDBID[playerid],PlayerDBID[playerid]);
++            mysql_tquery(g_SQL, query);
++            mysql_format(g_SQL, query, sizeof(query),
++                "UPDATE player_vehicle_storage SET storage_status='destroyed_cooldown' WHERE player_vehicle_id=%d AND owner_player_id=%d LIMIT 1",
++                OwnedVehicleDBID[playerid],PlayerDBID[playerid]);
++            mysql_tquery(g_SQL, query);
++            SendClientMessage(playerid, COLOR_RED, "Owned vehicle hancur. Setelah cooldown kendaraan kembali ke home garage.");
++        }
++        else
++        {
++            OwnedVehicleLifecycle[playerid] = OWNED_VEHICLE_STATE_DEALER_PENDING;
++            if (IsValidGarageSlot(OwnedVehicleSlot[playerid])) PlayerGarageLifecycle[playerid][OwnedVehicleSlot[playerid]] = OWNED_VEHICLE_STATE_DEALER_PENDING;
++            mysql_format(g_SQL, query, sizeof(query),
++                "UPDATE player_vehicles SET lifecycle_status='dealer_pending',lifecycle_source_tag='saif_owned_vehicle_rework_v0.26A.1.31',destroyed_until=NULL,last_state_changed_at=NOW() WHERE id=%d AND owner_id=%d LIMIT 1",
++                OwnedVehicleDBID[playerid],PlayerDBID[playerid]);
++            mysql_tquery(g_SQL, query);
++            SendClientMessage(playerid, COLOR_RED, "Kendaraan dealer_pending hancur dan kembali ke delivery queue dealership.");
++        }
++        break;
++    }
++    return 1;
++}
++
+ public OnPlayerEnterVehicle(playerid, vehicleid, ispassenger)
+ {
+     new ownerid = GetOwnedVehicleOwner(vehicleid);
+@@ -44356,6 +45101,12 @@
+     new stored;
+     new storageLocationId;
+     new storageSlot;
++    new color1;
++    new color2;
++    new lifecycleCode;
++    new homeLocationId;
++    new homeSlot;
++    new destroyedSeconds;
+     new Float:health;
+ 
+     for (new i = 0; i < rows; i++)
+@@ -44374,6 +45125,12 @@
+         cache_get_value_name_int(i, "stored", stored);
+         cache_get_value_name_int(i, "storage_location_id", storageLocationId);
+         cache_get_value_name_int(i, "storage_slot", storageSlot);
++        cache_get_value_name_int(i, "color1", color1);
++        cache_get_value_name_int(i, "color2", color2);
++        cache_get_value_name_int(i, "lifecycle_code", lifecycleCode);
++        cache_get_value_name_int(i, "home_location_id", homeLocationId);
++        cache_get_value_name_int(i, "home_slot", homeSlot);
++        cache_get_value_name_int(i, "destroyed_seconds", destroyedSeconds);
+ 
+         slotIndex = slot - 1;
+ 
+@@ -44391,6 +45148,12 @@
+         PlayerGarageStored[playerid][slotIndex] = stored;
+         PlayerGarageStorageLocationID[playerid][slotIndex] = storageLocationId;
+         PlayerGarageStorageSlot[playerid][slotIndex] = storageSlot;
++        PlayerGarageColor1[playerid][slotIndex] = color1;
++        PlayerGarageColor2[playerid][slotIndex] = color2;
++        PlayerGarageLifecycle[playerid][slotIndex] = lifecycleCode;
++        PlayerGarageHomeLocationID[playerid][slotIndex] = homeLocationId;
++        PlayerGarageHomeSlot[playerid][slotIndex] = homeSlot;
++        PlayerGarageDestroyedCooldownSeconds[playerid][slotIndex] = destroyedSeconds;
+ 
+         PlayerGarageX[playerid][slotIndex] = x;
+         PlayerGarageY[playerid][slotIndex] = y;
+@@ -44408,8 +45171,9 @@
+     }
+ 
+     new msg[144];
+-    format(msg, sizeof(msg), "Garage berhasil dimuat. Total kendaraan: %d/%d. Gunakan /garage.", CountPlayerGarageVehicles(playerid), MAX_GARAGE_SLOTS);
++    format(msg, sizeof(msg), "Owned vehicle berhasil dimuat. Total kendaraan: %d. Gunakan /garage.", CountPlayerGarageVehicles(playerid));
+     SendClientMessage(playerid, COLOR_GREEN, msg);
++    RefreshStoredOwnedVehicleRuntime(playerid);
+ 
+     return 1;
+ }
+@@ -44437,6 +45201,11 @@
+     format(PlayerGarageName[playerid][slotIndex], 32, "Vehicle");
+     PlayerGarageHealth[playerid][slotIndex] = 1000.0;
+     PlayerGarageFuel[playerid][slotIndex] = VEHICLE_MAX_FUEL;
++    PlayerGarageColor1[playerid][slotIndex] = 1;
++    PlayerGarageColor2[playerid][slotIndex] = 1;
++    PlayerGarageLifecycle[playerid][slotIndex] = OWNED_VEHICLE_STATE_DEALER_PENDING;
++    PlayerGarageHomeLocationID[playerid][slotIndex] = 0;
++    PlayerGarageHomeSlot[playerid][slotIndex] = 0;
+ 
+     new Float:x, Float:y, Float:z, Float:a;
+ 
+@@ -44454,8 +45223,10 @@
+     format(msg, sizeof(msg), "Kamu berhasil membeli kendaraan model %d seharga $%d.", modelid, price);
+     SendClientMessage(playerid, COLOR_GREEN, msg);
+ 
+-    format(msg, sizeof(msg), "Kendaraan masuk ke garage slot %d. Gunakan /myveh %d.", slotIndex + 1, slotIndex + 1);
++    format(msg, sizeof(msg), "Kendaraan nomor %d berstatus dealer_pending sampai pertama kali disimpan di garage.", slotIndex + 1);
+     SendClientMessage(playerid, COLOR_CYAN, msg);
++    SpawnOwnedVehicle(playerid);
++    SendClientMessage(playerid, COLOR_WHITE, "Bawa kendaraan ke checkpoint merah garage milikmu dan tekan ALT untuk menyimpan permanen.");
+ 
+     SavePlayerData(playerid);
+     return 1;
+@@ -44489,9 +45260,18 @@
+         ResetOwnedVehicleData(playerid);
+     }
+ 
++    DestroyStoredOwnedVehicleRuntime(playerid, slotIndex);
+     PlayerGarageDBID[playerid][slotIndex] = 0;
+     PlayerGarageModel[playerid][slotIndex] = 0;
+     PlayerGarageLocked[playerid][slotIndex] = 0;
++    PlayerGarageColor1[playerid][slotIndex] = 1;
++    PlayerGarageColor2[playerid][slotIndex] = 1;
++    PlayerGarageLifecycle[playerid][slotIndex] = OWNED_VEHICLE_STATE_LEGACY_UNASSIGNED;
++    PlayerGarageHomeLocationID[playerid][slotIndex] = 0;
++    PlayerGarageHomeSlot[playerid][slotIndex] = 0;
++    PlayerGarageStored[playerid][slotIndex] = 0;
++    PlayerGarageStorageLocationID[playerid][slotIndex] = 0;
++    PlayerGarageStorageSlot[playerid][slotIndex] = 0;
+ 
+     PlayerGarageX[playerid][slotIndex] = SPAWN_X + 3.0;
+     PlayerGarageY[playerid][slotIndex] = SPAWN_Y;
+@@ -45238,7 +46018,8 @@
+     {
+         if (!CanUseOfflineImportAudit(playerid)) return 1;
+         LoadUnifiedVehicleStoragePolicy();
+-        SendClientMessage(playerid, COLOR_GREEN, "Reload unified vehicle storage policy dan locations dijalankan dari database.");
++        LoadOwnedVehicleSpawnPoints();
++        SendClientMessage(playerid, COLOR_GREEN, "Reload vehicle storage policy, locations, dan parking spawn points dijalankan dari database.");
+         return 1;
+     }
+ 
+@@ -45252,7 +46033,8 @@
+     {
+         if (!IsAdminLevel(playerid, ADMIN_OWNER)) return 1;
+         LoadVehicleStorageLocations();
+-        SendClientMessage(playerid, COLOR_GREEN, "Reload house vehicle storage locations dijalankan.");
++        LoadOwnedVehicleSpawnPoints();
++        SendClientMessage(playerid, COLOR_GREEN, "Reload house storage locations dan parking spawn points dijalankan.");
+         return 1;
+     }
+ 
+@@ -48430,7 +49212,7 @@
+     {
+         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
+         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
+-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.30.1 House Vehicle Storage Complete Runtime");
++        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.31 Owned Vehicle, Garage Storage & Color Runtime Rework");
+         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
+         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
+         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
+@@ -48440,7 +49222,7 @@
+     if (!strcmp(cmdtext, "/changelog", true))
+     {
+         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+-        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.30.1: 12 exact house storage aktif; checkpoint merah + ALT store/retrieve; 17 rumah lain melalui editor.");
++        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.31: dealer_pending, home garage, /despawn, nearest parking spawn, /park disabled, dan warna commit saat garage save.");
+         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.29: controlled apply 12 baseline savehouse garage definitions; runtime interaction/storage/door policy tetap disabled.");
+         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.25.2: 29 canonical savehouse fixed pada map slot 66-94; radius/nearest house streaming dihapus.");
+         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.24.1: map-icon projection schema diperbaiki; ownership policy tetap wajib sebelum apply.");
+@@ -49677,7 +50459,7 @@
+         format(msg, sizeof(msg), "Starter Pack Claimed: %s", PlayerStarterPackClaimed[playerid] ? ("Yes") : ("No"));
+         SendClientMessage(playerid, COLOR_WHITE, msg);
+ 
+-        format(msg, sizeof(msg), "Garage: %d/%d vehicles", CountPlayerGarageVehicles(playerid), MAX_GARAGE_SLOTS);
++        format(msg, sizeof(msg), "Owned Vehicles: %d", CountPlayerGarageVehicles(playerid));
+         SendClientMessage(playerid, COLOR_WHITE, msg);
+ 
+         if (OwnedVehicleSlot[playerid] != -1)
+@@ -49772,11 +50554,13 @@
+             return 1;
+         }
+ 
+-        if (OwnedVehicleDBID[playerid] > 0)
++        new freeSlot = GetFreeGarageSlot(playerid);
++        if (freeSlot == -1)
+         {
+-            SendClientMessage(playerid, COLOR_RED, "Kamu sudah punya kendaraan pribadi. Gunakan /sellveh dulu.");
++            SendClientMessage(playerid, COLOR_RED, "Batas internal 32 owned vehicle tercapai.");
+             return 1;
+         }
++        if (!CanPurchaseDealerPendingVehicle(playerid)) return 1;
+ 
+         new price = GetVehicleBasePrice(modelid);
+ 
+@@ -49804,8 +50588,9 @@
+             g_SQL,
+             query,
+             sizeof(query),
+-            "INSERT INTO player_vehicles (owner_id, model_id, color1, color2, pos_x, pos_y, pos_z, pos_a, locked) VALUES (%d, %d, 1, 1, %f, %f, %f, %f, 0)",
++            "INSERT INTO player_vehicles (owner_id,slot,model_id,vehicle_name,color1,color2,pos_x,pos_y,pos_z,pos_a,health,fuel,locked,lifecycle_status,purchase_origin,lifecycle_source_tag,last_state_changed_at) VALUES (%d,%d,%d,'Owner Test Vehicle',1,1,%f,%f,%f,%f,1000.0,100,0,'dealer_pending','owner_command','saif_owned_vehicle_rework_v0.26A.1.31',NOW())",
+             PlayerDBID[playerid],
++            freeSlot + 1,
+             modelid,
+             x + 3.0,
+             y,
+@@ -49813,7 +50598,7 @@
+             a
+         );
+ 
+-        mysql_tquery(g_SQL, query, "OnOwnedVehicleBought", "iii", playerid, modelid, price);
++        mysql_tquery(g_SQL, query, "OnGarageVehicleBought", "iiii", playerid, freeSlot, modelid, price);
+         return 1;
+     }
+ 
+@@ -49821,7 +50606,7 @@
+     {
+         SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /myveh [slot]");
+         SendClientMessage(playerid, COLOR_WHITE, "Contoh: /myveh 1");
+-        SendClientMessage(playerid, COLOR_WHITE, "Lihat slot kendaraan: /garage");
++        SendClientMessage(playerid, COLOR_WHITE, "Lihat nomor kendaraan: /garage");
+         return 1;
+     }
+ 
+@@ -49842,7 +50627,7 @@
+ 
+         if (!IsNumericString(slotStr))
+         {
+-            SendClientMessage(playerid, COLOR_RED, "Slot harus angka.");
++            SendClientMessage(playerid, COLOR_RED, "Nomor kendaraan harus angka.");
+             return 1;
+         }
+ 
+@@ -49850,48 +50635,48 @@
+ 
+         if (!IsValidGarageSlot(slotIndex))
+         {
+-            SendClientMessage(playerid, COLOR_RED, "Slot tidak valid.");
++            SendClientMessage(playerid, COLOR_RED, "Nomor kendaraan tidak valid.");
+             return 1;
+         }
+ 
+         if (PlayerGarageDBID[playerid][slotIndex] <= 0)
+         {
+-            SendClientMessage(playerid, COLOR_RED, "Slot garage ini kosong.");
++            SendClientMessage(playerid, COLOR_RED, "Nomor owned vehicle ini kosong.");
+             return 1;
+         }
+ 
+-        if (PlayerGarageStored[playerid][slotIndex])
+-        {
+-            SendClientMessage(playerid, COLOR_RED, "Kendaraan ini tersimpan di rumah.");
+-            SendClientMessage(playerid, COLOR_WHITE, "Datang ke checkpoint merah rumahmu lalu tekan ALT untuk mengambilnya.");
+-            return 1;
+-        }
+-
+-        SetActiveVehicleFromGarage(playerid, slotIndex);
+-        SpawnOwnedVehicle(playerid);
++        ProcessOwnedVehicleSpawnRequest(playerid, slotIndex);
++        return 1;
++    }
+ 
+-        new msg[144];
+-        format(msg, sizeof(msg), "Kendaraan slot %d sekarang aktif.", slotIndex + 1);
+-        SendClientMessage(playerid, COLOR_GREEN, msg);
++    if (!strcmp(cmdtext, "/park", true))
++    {
++        SendClientMessage(playerid, COLOR_RED, "/park sudah dinonaktifkan. Posisi default hanya berubah saat kendaraan disimpan melalui checkpoint garage.");
++        return 1;
++    }
+ 
++    if (!strcmp(cmdtext, "/despawn", true))
++    {
++        ProcessOwnedVehicleDespawn(playerid);
+         return 1;
+     }
+ 
+-    if (!strcmp(cmdtext, "/park", true))
++    if (!strcmp(cmdtext, "/vehcolor", true))
+     {
+-        if (OwnedVehicleID[playerid] == INVALID_VEHICLE_ID)
+-        {
+-            SendClientMessage(playerid, COLOR_RED, "Kendaraan pribadi belum di-spawn.");
+-            return 1;
+-        }
++        SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /vehcolor [primary 0-255] [secondary 0-255]");
++        return 1;
++    }
+ 
+-        if (!IsPlayerInAnyVehicle(playerid) || GetPlayerVehicleID(playerid) != OwnedVehicleID[playerid])
++    if (strfind(cmdtext, "/vehcolor ", true) == 0)
++    {
++        new color1Str[16], color2Str[16];
++        if (!GetTwoParams(cmdtext[10], color1Str, sizeof(color1Str), color2Str, sizeof(color2Str)) ||
++            !IsNumericString(color1Str) || !IsNumericString(color2Str))
+         {
+-            SendClientMessage(playerid, COLOR_RED, "Kamu harus berada di kendaraan pribadi untuk park.");
++            SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /vehcolor [primary 0-255] [secondary 0-255]");
+             return 1;
+         }
+-
+-        SaveOwnedVehicle(playerid, 1);
++        ProcessOwnedVehicleColorModification(playerid, strval(color1Str), strval(color2Str));
+         return 1;
+     }
+ 
+@@ -49930,7 +50715,7 @@
+     {
+         SendClientMessage(playerid, COLOR_YELLOW, "Gunakan: /sellveh [slot]");
+         SendClientMessage(playerid, COLOR_WHITE, "Contoh: /sellveh 1");
+-        SendClientMessage(playerid, COLOR_WHITE, "Lihat slot kendaraan: /garage");
++        SendClientMessage(playerid, COLOR_WHITE, "Lihat nomor kendaraan: /garage");
+         return 1;
+     }
+ 
+@@ -49951,7 +50736,7 @@
+ 
+         if (!IsNumericString(slotStr))
+         {
+-            SendClientMessage(playerid, COLOR_RED, "Slot harus angka.");
++            SendClientMessage(playerid, COLOR_RED, "Nomor kendaraan harus angka.");
+             return 1;
+         }
+ 
+@@ -49959,13 +50744,13 @@
+ 
+         if (!IsValidGarageSlot(slotIndex))
+         {
+-            SendClientMessage(playerid, COLOR_RED, "Slot tidak valid.");
++            SendClientMessage(playerid, COLOR_RED, "Nomor kendaraan tidak valid.");
+             return 1;
+         }
+ 
+         if (PlayerGarageDBID[playerid][slotIndex] <= 0)
+         {
+-            SendClientMessage(playerid, COLOR_RED, "Slot garage ini kosong.");
++            SendClientMessage(playerid, COLOR_RED, "Nomor owned vehicle ini kosong.");
+             return 1;
+         }
+ 
+@@ -53029,9 +53814,10 @@
+ 
+         if (freeSlot == -1)
+         {
+-            SendClientMessage(playerid, COLOR_RED, "Garage penuh. Jual salah satu kendaraan dengan /sellveh [slot].");
++            SendClientMessage(playerid, COLOR_RED, "Batas internal 32 owned vehicle tercapai.");
+             return 1;
+         }
++        if (!CanPurchaseDealerPendingVehicle(playerid)) return 1;
+ 
+         new shopIndex = strval(vehicleStr) - 1;
+ 
+@@ -53061,7 +53847,7 @@
+             g_SQL,
+             query,
+             sizeof(query),
+-            "INSERT INTO player_vehicles (owner_id, slot, model_id, vehicle_name, color1, color2, pos_x, pos_y, pos_z, pos_a, health, fuel, locked) VALUES (%d, %d, %d, '%e', 1, 1, %f, %f, %f, %f, 1000.0, 100, 0)",
++            "INSERT INTO player_vehicles (owner_id, slot, model_id, vehicle_name, color1, color2, pos_x, pos_y, pos_z, pos_a, health, fuel, locked,lifecycle_status,purchase_origin,lifecycle_source_tag,last_state_changed_at) VALUES (%d, %d, %d, '%e', 1, 1, %f, %f, %f, %f, 1000.0, 100, 0,'dealer_pending','dealership','saif_owned_vehicle_rework_v0.26A.1.31',NOW())",
+             PlayerDBID[playerid],
+             freeSlot + 1,
+             modelid,
+@@ -53080,19 +53866,29 @@
+     {
+         new msg[144];
+ 
+-        SendClientMessage(playerid, COLOR_YELLOW, "========== GARAGE ==========");
++        SendClientMessage(playerid, COLOR_YELLOW, "========== OWNED VEHICLES ==========");
+ 
+         for (new i = 0; i < MAX_GARAGE_SLOTS; i++)
+         {
+             if (PlayerGarageDBID[playerid][i] > 0)
+             {
++                new statusName[24];
++                switch (PlayerGarageLifecycle[playerid][i])
++                {
++                    case OWNED_VEHICLE_STATE_DEALER_PENDING: format(statusName, sizeof(statusName), "dealer_pending");
++                    case OWNED_VEHICLE_STATE_STORED: format(statusName, sizeof(statusName), "stored");
++                    case OWNED_VEHICLE_STATE_ACTIVE: format(statusName, sizeof(statusName), "active");
++                    case OWNED_VEHICLE_STATE_DESTROYED_COOLDOWN: format(statusName, sizeof(statusName), "destroyed_cooldown");
++                    default: format(statusName, sizeof(statusName), "legacy_unassigned");
++                }
+                 format(
+                     msg,
+                     sizeof(msg),
+-                    "Slot %d: %s | Model %d | Fuel %d | HP %.0f",
++                    "%d. %s | Model %d | %s | Fuel %d | HP %.0f",
+                     i + 1,
+                     PlayerGarageName[playerid][i],
+                     PlayerGarageModel[playerid][i],
++                    statusName,
+                     PlayerGarageFuel[playerid][i],
+                     PlayerGarageHealth[playerid][i]
+                 );
+@@ -53100,15 +53896,14 @@
+             }
+             else
+             {
+-                format(msg, sizeof(msg), "Slot %d: Empty", i + 1);
+-                SendClientMessage(playerid, COLOR_WHITE, msg);
++                continue;
+             }
+         }
+ 
+-        format(msg, sizeof(msg), "Active slot: %d", OwnedVehicleSlot[playerid] + 1);
++        format(msg, sizeof(msg), "Owned vehicle aktif: %d | Total: %d", OwnedVehicleSlot[playerid] + 1, CountPlayerGarageVehicles(playerid));
+         SendClientMessage(playerid, COLOR_CYAN, msg);
+ 
+-        SendClientMessage(playerid, COLOR_CYAN, "Gunakan /myveh [slot], /park, /lock, /sellveh [slot].");
++        SendClientMessage(playerid, COLOR_CYAN, "Gunakan /myveh [nomor], /despawn, /vehcolor [c1] [c2], /lock, /sellveh [nomor].");
+         return 1;
+     }
+ 
+@@ -53116,7 +53911,7 @@
+     {
+         if (OwnedVehicleDBID[playerid] <= 0 || OwnedVehicleSlot[playerid] == -1)
+         {
+-            SendClientMessage(playerid, COLOR_RED, "Tidak ada kendaraan aktif. Gunakan /garage dan /myveh [slot].");
++            SendClientMessage(playerid, COLOR_RED, "Tidak ada kendaraan aktif. Gunakan /garage dan /myveh [nomor].");
+             return 1;
+         }
+ 
+@@ -53154,7 +53949,7 @@
+     {
+         if (OwnedVehicleDBID[playerid] <= 0 || OwnedVehicleSlot[playerid] == -1)
+         {
+-            SendClientMessage(playerid, COLOR_RED, "Tidak ada kendaraan aktif. Gunakan /garage dan /myveh [slot].");
++            SendClientMessage(playerid, COLOR_RED, "Tidak ada kendaraan aktif. Gunakan /garage dan /myveh [nomor].");
+             return 1;
+         }
+ 
+@@ -53257,7 +54052,7 @@
+ 
+         if (!IsNumericString(slotStr))
+         {
+-            SendClientMessage(playerid, COLOR_RED, "Slot harus angka.");
++            SendClientMessage(playerid, COLOR_RED, "Nomor kendaraan harus angka.");
+             return 1;
+         }
+ 
+@@ -53271,13 +54066,13 @@
+ 
+         if (!IsValidGarageSlot(slotIndex))
+         {
+-            SendClientMessage(playerid, COLOR_RED, "Slot tidak valid.");
++            SendClientMessage(playerid, COLOR_RED, "Nomor kendaraan tidak valid.");
+             return 1;
+         }
+ 
+         if (PlayerGarageDBID[playerid][slotIndex] <= 0)
+         {
+-            SendClientMessage(playerid, COLOR_RED, "Slot garage ini kosong.");
++            SendClientMessage(playerid, COLOR_RED, "Nomor owned vehicle ini kosong.");
+             return 1;
+         }
+ 

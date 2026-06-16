@@ -1,0 +1,29 @@
+--- database/verify/verify_saif_v0.26A.1.29_controlled_12_savehouse_garage_apply.sql
++++ database/verify/verify_saif_v0.26A.1.29.1_controlled_12_savehouse_garage_apply.sql
+@@ -1,4 +1,4 @@
+--- SAIF / LSIF Dev v0.26A.1.29
++-- SAIF / LSIF Dev v0.26A.1.29.1
+ -- Verify controlled 12 baseline savehouse garage catalog apply.
+ SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
+ SET @apply_version := _utf8mb4'saif-controlled-12-savehouse-garage-apply-v0.26A.1.29' COLLATE utf8mb4_unicode_ci;
+@@ -48,13 +48,13 @@
+ 
+ SELECT 'HOUSE_LINK_GATE' section,
+        COUNT(*) link_rows_expected_12,
+-       COUNT(DISTINCT house_catalog_id) unique_houses_expected_12,
+-       COUNT(DISTINCT garage_catalog_id) unique_garages_expected_12,
+-       COUNT(DISTINCT canonical_house_slot) unique_slots_expected_12,
+-       SUM(enabled=1) enabled_links_expected_12,
+-       SUM(link_class<>'baseline_savehouse') wrong_link_class_should_be_zero,
+-       SUM(ownership_mode<>'inherit_house_owner') wrong_ownership_mode_should_be_zero,
+-       SUM(access_mode<>'house_owner_only') wrong_access_mode_should_be_zero,
++       COUNT(DISTINCT hgl.house_catalog_id) unique_houses_expected_12,
++       COUNT(DISTINCT hgl.garage_catalog_id) unique_garages_expected_12,
++       COUNT(DISTINCT hgl.canonical_house_slot) unique_slots_expected_12,
++       SUM(hgl.enabled=1) enabled_links_expected_12,
++       SUM(hgl.link_class<>'baseline_savehouse') wrong_link_class_should_be_zero,
++       SUM(hgl.ownership_mode<>'inherit_house_owner') wrong_ownership_mode_should_be_zero,
++       SUM(hgl.access_mode<>'house_owner_only') wrong_access_mode_should_be_zero,
+        SUM(hc.id IS NULL) orphan_house_should_be_zero,
+        SUM(gc.id IS NULL) orphan_garage_should_be_zero,
+        SUM(hc.id IS NOT NULL AND hc.enabled<>1) disabled_house_should_be_zero,

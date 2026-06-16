@@ -1,0 +1,43 @@
+{
+  "version": "v0.26A.1.31",
+  "title": "Owned Vehicle, Garage Storage & Color Runtime Rework",
+  "lines": 54918,
+  "curly_open": 6308,
+  "curly_close": 6308,
+  "parentheses_open": 27019,
+  "parentheses_close": 27019,
+  "square_open": 10427,
+  "square_close": 10427,
+  "duplicate_dialog_id_count": 0,
+  "duplicate_stock_public_count": 0,
+  "callback_forward_public": "valid by static scan",
+  "adjacent_pawn_string_count": 0,
+  "legacy_owned_vehicle_limit": 3,
+  "new_internal_compatibility_ceiling": 32,
+  "house_storage_locations": 29,
+  "exact_house_storage_enabled": 12,
+  "pending_house_storage_editor": 17,
+  "house_physical_slots_per_location": 1,
+  "new_database_tables": [
+    "vehicle_storage_slots",
+    "vehicle_spawn_points"
+  ],
+  "new_player_vehicle_lifecycle_columns": 8,
+  "commands": [
+    "/garage",
+    "/myveh [number]",
+    "/despawn",
+    "/vehcolor [primary] [secondary]",
+    "/park disabled"
+  ],
+  "runtime_features": [
+    "dealer_pending",
+    "stored",
+    "active",
+    "destroyed_cooldown",
+    "nearest parking spawn",
+    "parked vehicle abandonment",
+    "pending color commit on garage save"
+  ],
+  "pawncc_executed": false
+}

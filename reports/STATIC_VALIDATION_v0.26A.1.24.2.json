@@ -1,0 +1,27 @@
+{
+  "curly": [
+    6004,
+    6004
+  ],
+  "paren": [
+    26403,
+    26403
+  ],
+  "bracket": [
+    10083,
+    10083
+  ],
+  "duplicate_functions": {},
+  "duplicate_dialog_numbers": {},
+  "new_dialog_count": 1,
+  "forward_public_refresh": [
+    1,
+    1
+  ],
+  "forward_public_owner_audit": [
+    1,
+    1
+  ],
+  "delete_player_houses_sql": 0,
+  "delete_house_catalog_sql": 0
+}

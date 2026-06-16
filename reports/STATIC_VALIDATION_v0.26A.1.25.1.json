@@ -1,0 +1,25 @@
+{
+  "counts": {
+    "curly_open": 6015,
+    "curly_close": 6015,
+    "paren_open": 26542,
+    "paren_close": 26542,
+    "square_open": 10089,
+    "square_close": 10089
+  },
+  "duplicate_functions": [],
+  "duplicate_dialog_ids": [],
+  "checks": {
+    "old_fatal_gate_count": 0,
+    "policy_gate_present": 1,
+    "apply_omitted_metric": 1,
+    "dryrun_omitted_metric": 1,
+    "verify_allocator_gate": 1,
+    "delete_house_catalog": 0,
+    "delete_player_houses": 0,
+    "create_new_procedure": 1,
+    "call_new_procedure": 1,
+    "drop_new_procedure": 2,
+    "drop_old_procedure_cleanup": 2
+  }
+}

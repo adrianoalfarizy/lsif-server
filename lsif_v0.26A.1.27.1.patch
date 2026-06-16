@@ -1,0 +1,140 @@
+--- /mnt/data/v0.26A.1.27.1_original/lsif.pwn	2026-06-14 09:05:44.742645638 +0000
++++ /mnt/data/SAIF_v0.26A.1.27_Dynamic_World_Garage_Catalog_Backend/gamemodes/lsif.pwn	2026-06-14 09:06:24.829685044 +0000
+@@ -888,7 +888,7 @@
+ 
+ #define MAX_GARAGE_SLOTS 3
+ 
+-// v0.26A.1.27: physical/world garage catalog is separate from the existing
++// v0.26A.1.27.1: physical/world garage catalog is separate from the existing
+ // three player vehicle slots. No runtime door, storage, or retrieval is enabled yet.
+ #define MAX_WORLD_GARAGES 64
+ #define WORLD_GARAGE_NAME_SIZE 40
+@@ -8240,15 +8240,23 @@
+ {
+     if (!g_DatabaseReady || g_SQL == MYSQL_INVALID_HANDLE) return 0;
+ 
+-    mysql_tquery(
+-        g_SQL,
+-        "SELECT gc.id,COALESCE(gc.canonical_garage_plan_id,0) canonical_garage_plan_id,gc.source_queue_id,"
+-        "gc.garage_name,gc.runtime_class,gc.garage_type,gc.garage_door_type,gc.center_x,gc.center_y,gc.center_z,"
+-        "gc.enabled,COALESCE((SELECT hgl.house_catalog_id FROM house_garage_links hgl "
+-        "WHERE hgl.garage_catalog_id=gc.id AND hgl.enabled=1 ORDER BY hgl.id LIMIT 1),0) house_catalog_id "
++    new query[768];
++    format(query, sizeof(query),
++        "SELECT gc.id,COALESCE(gc.canonical_garage_plan_id,0) canonical_garage_plan_id,gc.source_queue_id,");
++    strcat(query,
++        "gc.garage_name,gc.runtime_class,gc.garage_type,gc.garage_door_type,gc.center_x,gc.center_y,gc.center_z,",
++        sizeof(query));
++    strcat(query,
++        "gc.enabled,COALESCE((SELECT hgl.house_catalog_id FROM house_garage_links hgl ",
++        sizeof(query));
++    strcat(query,
++        "WHERE hgl.garage_catalog_id=gc.id AND hgl.enabled=1 ORDER BY hgl.id LIMIT 1),0) house_catalog_id ",
++        sizeof(query));
++    strcat(query,
+         "FROM garage_catalog gc WHERE gc.enabled=1 ORDER BY gc.sort_order ASC,gc.id ASC LIMIT 64",
+-        "OnWorldGarageCatalogLoaded"
+-    );
++        sizeof(query));
++
++    mysql_tquery(g_SQL, query, "OnWorldGarageCatalogLoaded");
+     return 1;
+ }
+ 
+@@ -8361,43 +8369,73 @@
+     if (WorldGarageCatalogReady) format(readyText, sizeof(readyText), "YES");
+     else format(readyText, sizeof(readyText), "NO");
+ 
+-    new body[2400];
++    new body[2400], line[640];
+     format(
+         body,
+         sizeof(body),
+-        "Dynamic World Garage Catalog v0.26A.1.27\n\n"
+-        "Runtime loader\nLoaded enabled rows: %d / %d\nCatalog query ready: %s\n\n"
+-        "Runtime tables\nCatalog rows: %d\nEnabled rows: %d (must remain 0 in this phase)\nNon-draft rows: %d (must remain 0)\nMapped canonical plan IDs: %d\nHouse link rows: %d\nEnabled links: %d (must remain 0)\n\n"
+-        "Integrity\nOrphan house links: %d\nOrphan garage links: %d\nZero center rows: %d\nSpawn geometry ready: %d\nSpawn geometry pending: %d\n\n"
+-        "Policy safety\nMaster enabled: %d\nStore enabled: %d\nRetrieve enabled: %d\nDoor animation enabled: %d\nCapacity: %d / compiled %d\n\n"
+-        "Source readiness\nCanonical GRGE plans: %d / 52\nBaseline savehouse links: %d / 12\nActive canonical houses: %d / 29\n\n"
+-        "This backend is intentionally separated from the existing /garage three-vehicle-slot system. "
+-        "No world door, checkpoint, vehicle storage, retrieval, or ownership mutation is active.\n\n"
+-        "Press Reload only to rebuild the in-memory catalog from DB.",
++        "Dynamic World Garage Catalog v0.26A.1.27.1\n\nRuntime loader\nLoaded enabled rows: %d / %d\nCatalog query ready: %s\n\n",
+         WorldGarageCount,
+         MAX_WORLD_GARAGES,
+-        readyText,
++        readyText
++    );
++
++    format(
++        line,
++        sizeof(line),
++        "Runtime tables\nCatalog rows: %d\nEnabled rows: %d (must remain 0 in this phase)\nNon-draft rows: %d (must remain 0)\nMapped canonical plan IDs: %d\nHouse link rows: %d\nEnabled links: %d (must remain 0)\n\n",
+         catalogTotal,
+         catalogEnabled,
+         catalogNondraft,
+         mappedPlanRows,
+         linkTotal,
+-        linkEnabled,
++        linkEnabled
++    );
++    strcat(body, line, sizeof(body));
++
++    format(
++        line,
++        sizeof(line),
++        "Integrity\nOrphan house links: %d\nOrphan garage links: %d\nZero center rows: %d\nSpawn geometry ready: %d\nSpawn geometry pending: %d\n\n",
+         orphanHouseLinks,
+         orphanGarageLinks,
+         zeroCenterRows,
+         spawnReadyRows,
+-        spawnPendingRows,
++        spawnPendingRows
++    );
++    strcat(body, line, sizeof(body));
++
++    format(
++        line,
++        sizeof(line),
++        "Policy safety\nMaster enabled: %d\nStore enabled: %d\nRetrieve enabled: %d\nDoor animation enabled: %d\nCapacity: %d / compiled %d\n\n",
+         policyEnabled,
+         storeEnabled,
+         retrieveEnabled,
+         doorEnabled,
+         policyCapacity,
+-        MAX_WORLD_GARAGES,
++        MAX_WORLD_GARAGES
++    );
++    strcat(body, line, sizeof(body));
++
++    format(
++        line,
++        sizeof(line),
++        "Source readiness\nCanonical GRGE plans: %d / 52\nBaseline savehouse links: %d / 12\nActive canonical houses: %d / 29\n\n",
+         sourcePlanRows,
+         sourceBaselineLinks,
+         activeCanonicalHouses
+     );
++    strcat(body, line, sizeof(body));
++
++    strcat(body,
++        "This backend is intentionally separated from the existing /garage three-vehicle-slot system. ",
++        sizeof(body));
++    strcat(body,
++        "No world door, checkpoint, vehicle storage, retrieval, or ownership mutation is active.\n\n",
++        sizeof(body));
++    strcat(body,
++        "Press Reload only to rebuild the in-memory catalog from DB.",
++        sizeof(body));
+ 
+     ShowPlayerDialog(
+         playerid,
+@@ -14782,7 +14820,7 @@
+     DisableInteriorEnterExits();
+     ManualVehicleEngineAndLights();
+     UsePlayerPedAnims();
+-    SetGameModeText("SAIF Dev v0.26A.1.27 Dynamic World Garage Catalog");
++    SetGameModeText("SAIF Dev v0.26A.1.27.1 Garage Catalog Compile Fix");
+ 
+     new MySQLOpt:mysqlOptions = mysql_init_options();
+     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);

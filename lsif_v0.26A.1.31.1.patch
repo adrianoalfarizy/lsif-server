@@ -1,0 +1,46 @@
+--- /mnt/data/SAIF_v0.26A.1.31_Owned_Vehicle_Garage_Storage_Color_Runtime_Rework/gamemodes/lsif.pwn	2026-06-15 14:09:36.286960310 +0000
++++ /mnt/data/SAIF_v0.26A.1.31.1_ChangeVehicleColours_Compile_Hotfix/gamemodes/lsif.pwn	2026-06-15 14:32:31.169304397 +0000
+@@ -7120,7 +7120,7 @@
+     OwnedVehicleModificationDirty[playerid] = 0;
+     if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
+     {
+-        ChangeVehicleColor(OwnedVehicleID[playerid], OwnedVehicleColor1[playerid], OwnedVehicleColor2[playerid]);
++        ChangeVehicleColours(OwnedVehicleID[playerid], OwnedVehicleColor1[playerid], OwnedVehicleColor2[playerid]);
+     }
+     return 1;
+ }
+@@ -7363,7 +7363,7 @@
+     OwnedVehiclePendingColor1[playerid] = color1;
+     OwnedVehiclePendingColor2[playerid] = color2;
+     OwnedVehicleModificationDirty[playerid] = 1;
+-    ChangeVehicleColor(OwnedVehicleID[playerid], color1, color2);
++    ChangeVehicleColours(OwnedVehicleID[playerid], color1, color2);
+     new msg[192];
+     format(msg, sizeof(msg), "Preview warna diterapkan: %d / %d. Simpan kendaraan di garage agar permanen.", color1, color2);
+     SendClientMessage(playerid, COLOR_GREEN, msg);
+@@ -16553,7 +16553,7 @@
+     DisableInteriorEnterExits();
+     ManualVehicleEngineAndLights();
+     UsePlayerPedAnims();
+-    SetGameModeText("SAIF Dev v0.26A.1.31 Owned Vehicle Garage Runtime");
++    SetGameModeText("SAIF Dev v0.26A.1.31.1 Vehicle Colour Compile Hotfix");
+ 
+     new MySQLOpt:mysqlOptions = mysql_init_options();
+     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
+@@ -49212,7 +49212,7 @@
+     {
+         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
+         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
+-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.31 Owned Vehicle, Garage Storage & Color Runtime Rework");
++        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.31.1 ChangeVehicleColours Compile Hotfix");
+         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
+         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
+         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
+@@ -49222,6 +49222,7 @@
+     if (!strcmp(cmdtext, "/changelog", true))
+     {
+         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
++        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.31.1: mengganti native deprecated ChangeVehicleColor menjadi ChangeVehicleColours; tanpa perubahan runtime/SQL.");
+         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.31: dealer_pending, home garage, /despawn, nearest parking spawn, /park disabled, dan warna commit saat garage save.");
+         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.29: controlled apply 12 baseline savehouse garage definitions; runtime interaction/storage/door policy tetap disabled.");
+         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.25.2: 29 canonical savehouse fixed pada map slot 66-94; radius/nearest house streaming dihapus.");

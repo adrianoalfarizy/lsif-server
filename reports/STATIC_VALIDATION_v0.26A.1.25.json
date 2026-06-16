@@ -1,0 +1,12 @@
+{
+  "counts": {
+    "curly_open": 6015,
+    "curly_close": 6015,
+    "paren_open": 26542,
+    "paren_close": 26542,
+    "square_open": 10089,
+    "square_close": 10089
+  },
+  "duplicate_dialogs": {},
+  "duplicate_functions": []
+}

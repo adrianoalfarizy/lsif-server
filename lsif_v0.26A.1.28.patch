@@ -1,0 +1,467 @@
+--- a/gamemodes/lsif.pwn
++++ b/gamemodes/lsif.pwn
+@@ -304,6 +304,10 @@
+ #define DIALOG_OFFLINE_GARAGE_DETAIL 1344
+ #define DIALOG_OFFLINE_GARAGE_ACTION 1345
+ #define DIALOG_GARAGE_CATALOG_AUDIT 1346
++#define DIALOG_GARAGE_GEOMETRY_SUMMARY 1347
++#define DIALOG_GARAGE_GEOMETRY_LIST 1348
++#define DIALOG_GARAGE_GEOMETRY_DETAIL 1349
++#define DIALOG_GARAGE_GEOMETRY_ACTION 1350
+ 
+ #define DIALOG_GANG_PRESET_MENU 1192
+ #define DIALOG_GANG_PRESET_LIST 1193
+@@ -2757,6 +2761,12 @@
+ new PlayerOfflineGaragePage[MAX_PLAYERS];
+ new PlayerOfflineGarageSelectedID[MAX_PLAYERS];
+ new PlayerOfflineGarageSelectedSourceQueueID[MAX_PLAYERS];
++#define MAX_GARAGE_GEOMETRY_DIALOG_ROWS 30
++#define GARAGE_GEOMETRY_PAGE_SIZE 28
++new PlayerGarageGeometryListCount[MAX_PLAYERS];
++new PlayerGarageGeometryListDBID[MAX_PLAYERS][MAX_GARAGE_GEOMETRY_DIALOG_ROWS];
++new PlayerGarageGeometryPage[MAX_PLAYERS];
++new PlayerGarageGeometrySelectedID[MAX_PLAYERS];
+ new PlayerOfflineVehicleSelectedID[MAX_PLAYERS];
+ #define MAX_OFFLINE_VEHICLE_PLAN_DIALOG_ROWS 30
+ #define OFFLINE_VEHICLE_PLAN_PAGE_SIZE 28
+@@ -2922,6 +2932,10 @@
+ forward OnOfflineGaragePreviewLoaded(playerid, garageid);
+ forward OnWorldGarageCatalogLoaded();
+ forward OnWorldGarageCatalogAuditLoaded(playerid);
++forward OnGarageGeometrySummaryLoaded(playerid);
++forward OnGarageGeometryListLoaded(playerid, page);
++forward OnGarageGeometryDetailLoaded(playerid, geometryid);
++forward OnGarageGeometryPreviewLoaded(playerid, geometryid, pointType);
+ forward OnOfflineVehicleSummaryLoaded(playerid);
+ forward OnOfflineVehicleListLoaded(playerid, page);
+ forward OnOfflineVehicleDetailLoaded(playerid, queueid);
+@@ -14820,7 +14834,7 @@
+     DisableInteriorEnterExits();
+     ManualVehicleEngineAndLights();
+     UsePlayerPedAnims();
+-    SetGameModeText("SAIF Dev v0.26A.1.27.1 Garage Catalog Compile Fix");
++    SetGameModeText("SAIF Dev v0.26A.1.28 Garage Geometry Planner");
+ 
+     new MySQLOpt:mysqlOptions = mysql_init_options();
+     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
+@@ -15831,7 +15845,7 @@
+     strcat(body, "SAIF Admin Menus Hub (/amenus)\n\n", sizeof(body));
+     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
+     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
+-    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlinecontext\n/offlinepairs | /offlinepairbatches | /offlineplan [id]\n/offlineservicepoints | /offlineservicelist | /offlinepoint [id]\n/offlineruntimedryrun | /offlinearchivestatus | /offlinecapacity\n/offlinefullapply | /offlineapplystatus | /offlineoverlaystatus | /offlineexactreload\n/offlinevehicles | /offlinevehiclelist | /offlinevehicle [queue_id]\n/offlinevehicleplans | /offlinevehiclebatches | /offlinevehicleplan [plan_id]\n/offlinevehicledryrun | /offlinevehiclearchive | /offlinevehiclecapacity\n/offlinevehicleapplystatus | /offlinevehiclereload\n/offlinepickups | /offlinepickuplist | /offlinepickup [queue_id]\n/offlineproperties | /offlinepropertylist | /offlineproperty [evidence_id]\n/offlinehouseplans | /offlinehouseplanlist | /offlinehouseplan [plan_id]\n/offlinegarages | /offlinegaragelist | /offlinegarage [garage_id]\n/garagecatalog | /garagecatalogstatus | /garagecatalogreload\n/housecatalog | /housecatalogstatus | /housecatalogreload\n/houseownershipplan | /housemigrationplan\n/offlinehouseapplystatus | /offlinehousereload\n/offlinehousedryrun | /offlinehousearchive | /offlinehousecapacity\n/offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
++    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlinecontext\n/offlinepairs | /offlinepairbatches | /offlineplan [id]\n/offlineservicepoints | /offlineservicelist | /offlinepoint [id]\n/offlineruntimedryrun | /offlinearchivestatus | /offlinecapacity\n/offlinefullapply | /offlineapplystatus | /offlineoverlaystatus | /offlineexactreload\n/offlinevehicles | /offlinevehiclelist | /offlinevehicle [queue_id]\n/offlinevehicleplans | /offlinevehiclebatches | /offlinevehicleplan [plan_id]\n/offlinevehicledryrun | /offlinevehiclearchive | /offlinevehiclecapacity\n/offlinevehicleapplystatus | /offlinevehiclereload\n/offlinepickups | /offlinepickuplist | /offlinepickup [queue_id]\n/offlineproperties | /offlinepropertylist | /offlineproperty [evidence_id]\n/offlinehouseplans | /offlinehouseplanlist | /offlinehouseplan [plan_id]\n/offlinegarages | /offlinegaragelist | /offlinegarage [garage_id]\n/garagecatalog | /garagecatalogstatus | /garagecatalogreload\n/garagegeometry | /garagegeometrylist | /garagegeometrydetail [geometry_id]\n/housecatalog | /housecatalogstatus | /housecatalogreload\n/houseownershipplan | /housemigrationplan\n/offlinehouseapplystatus | /offlinehousereload\n/offlinehousedryrun | /offlinehousearchive | /offlinehousecapacity\n/offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
+     strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/orgeconomy, /orgeconomyaudit, /orgstatus, /orgeconomyhealth, /orgbiz, /orgbusiness, /orgfinance\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /vehmissioncloseout, /vehiclemissionhealth, /missiontarget, /vehmissionconfig, /missionpointmenu, /missionpool, /vehmissionpool, /jobpointpool, /vmpool, /pointpool, /jobpool, /jobpointmenu, /taxirequest, /taxistatus, /canceltaxi, /busrequest, /busstatus, /cancelbus, /medicrequest, /medicstatus, /cancelmedic, /firestatus, /firemission\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /cjmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
+     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
+     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
+@@ -16504,6 +16518,7 @@
+     strcat(body, "House / Property Canonical Resolver\t32 plans / 29 source-ready\tRead-only\n", sizeof(body));
+     strcat(body, "GTA SA Garage Canonical Queue\t52 GRGE / 13 house links\tRead-only\n", sizeof(body));
+     strcat(body, "Dynamic World Garage Catalog Backend\tgarage_catalog + house link bridge\tReload / audit\n", sizeof(body));
++    strcat(body, "Garage Vehicle Spawn / Interaction Geometry\t52 GRGE geometry plans / 12 baseline-ready\tRead-only\n", sizeof(body));
+     strcat(body, "Dynamic House Catalog Backend\thouse_catalog + ownership bridge\tReload / audit\n", sizeof(body));
+     strcat(body, "House Catalog Runtime Archive / 29-Savehouse Dry-Run\thouse_catalog + ownership policy\tRead-only\n", sizeof(body));
+     strcat(body, "House Ownership Transition Audit\tlegacy owners / policy staging\tRead-only\n", sizeof(body));
+@@ -18474,6 +18489,287 @@
+     return 1;
+ }
+ 
++
++stock QueryGarageGeometrySummary(playerid)
++{
++    if (!CanUseOfflineImportAudit(playerid)) return 0;
++
++    new query[1900];
++    query[0] = EOS;
++    strcat(query, "SELECT s.id,s.status,s.total_rows,s.baseline_rows,s.baseline_ready_rows,s.story_rows,s.service_rows,s.world_reference_rows,", sizeof(query));
++    strcat(query, "s.invalid_bounds,s.invalid_dimensions,s.invalid_spawn,", sizeof(query));
++    strcat(query, "(SELECT COUNT(*) FROM offline_garage_geometry_plan p WHERE p.geometry_session_id=s.id AND p.enabled<>0) enabled_rows,", sizeof(query));
++    strcat(query, "(SELECT COUNT(*) FROM offline_garage_geometry_plan p WHERE p.geometry_session_id=s.id AND p.apply_status<>'draft') nondraft_rows ", sizeof(query));
++    strcat(query, "FROM offline_garage_geometry_sessions s WHERE BINARY s.planner_version=BINARY 'saif-garage-geometry-planner-v0.26A.1.28' ORDER BY s.id DESC LIMIT 1", sizeof(query));
++    mysql_tquery(g_SQL, query, "OnGarageGeometrySummaryLoaded", "i", playerid);
++    return 1;
++}
++
++public OnGarageGeometrySummaryLoaded(playerid)
++{
++    if (!IsPlayerConnected(playerid) || !IsAdminLevel(playerid, ADMIN_OWNER)) return 1;
++    if (cache_num_rows() <= 0)
++    {
++        SendClientMessage(playerid, COLOR_YELLOW, "Garage geometry planner belum tersedia. Jalankan migration + planner v0.26A.1.28.");
++        return ShowOfflineImportAuditMenu(playerid);
++    }
++
++    new sessionid, total, baseline, baselineReady, story, services, worldRefs, invalidBounds, invalidDimensions, invalidSpawn, enabledRows, nondraftRows;
++    new status[24];
++    cache_get_value_name_int(0, "id", sessionid);
++    cache_get_value_name_int(0, "total_rows", total);
++    cache_get_value_name_int(0, "baseline_rows", baseline);
++    cache_get_value_name_int(0, "baseline_ready_rows", baselineReady);
++    cache_get_value_name_int(0, "story_rows", story);
++    cache_get_value_name_int(0, "service_rows", services);
++    cache_get_value_name_int(0, "world_reference_rows", worldRefs);
++    cache_get_value_name_int(0, "invalid_bounds", invalidBounds);
++    cache_get_value_name_int(0, "invalid_dimensions", invalidDimensions);
++    cache_get_value_name_int(0, "invalid_spawn", invalidSpawn);
++    cache_get_value_name_int(0, "enabled_rows", enabledRows);
++    cache_get_value_name_int(0, "nondraft_rows", nondraftRows);
++    cache_get_value_name(0, "status", status, sizeof(status));
++
++    new body[2600];
++    format(body, sizeof(body),
++        "Garage Vehicle Spawn & Interaction Geometry Planner v0.26A.1.28\n\nSession: %d\nStatus: %s\nGeometry rows: %d / 52\n\nBaseline savehouse\nCandidates: %d / 12\nGeometry ready: %d / 12\n\nDeferred/reference\nStory rows: %d\nService rows: %d\nWorld reference rows: %d\n\nGeometry gates\nInvalid bounds: %d\nInvalid dimensions: %d\nInvalid spawn: %d\n\nSafety\nEnabled rows: %d (must be 0)\nNon-draft rows: %d (must be 0)\nRuntime garage/vehicle/door/checkpoint mutation: none\n\nBrowse untuk melihat front edge, interaction point, entry transform, vehicle spawn transform, heading, dan dimensi exact GRGE.",
++        sessionid, status, total, baseline, baselineReady, story, services, worldRefs,
++        invalidBounds, invalidDimensions, invalidSpawn, enabledRows, nondraftRows);
++    ShowPlayerDialog(playerid, DIALOG_GARAGE_GEOMETRY_SUMMARY, DIALOG_STYLE_MSGBOX,
++                     "Garage Geometry Planner", body, "Browse", "Back");
++    return 1;
++}
++
++stock QueryGarageGeometryList(playerid, page = 0)
++{
++    if (!CanUseOfflineImportAudit(playerid)) return 0;
++    if (page < 0) page = 0;
++
++    PlayerGarageGeometryPage[playerid] = page;
++    PlayerGarageGeometryListCount[playerid] = 0;
++
++    new query[1500];
++    mysql_format(g_SQL, query, sizeof(query),
++        "SELECT g.id,g.garage_name,g.safety_class,g.geometry_status,g.front_width,g.depth_length,g.height_clearance,COALESCE((SELECT GROUP_CONCAT(l.house_slot ORDER BY l.house_slot SEPARATOR ',') FROM offline_garage_house_links l JOIN offline_garage_geometry_sessions s ON s.garage_resolver_session_id=l.resolver_session_id WHERE s.id=g.geometry_session_id AND l.garage_plan_id=g.garage_plan_id),'') house_slots FROM offline_garage_geometry_plan g WHERE g.geometry_session_id=(SELECT id FROM offline_garage_geometry_sessions WHERE BINARY planner_version=BINARY '%e' ORDER BY id DESC LIMIT 1) ORDER BY FIELD(g.safety_class,'baseline_savehouse_candidate','story_asset_deferred','service_reference','world_reference'),g.garage_name,g.id LIMIT %d,%d",
++        "saif-garage-geometry-planner-v0.26A.1.28", page * GARAGE_GEOMETRY_PAGE_SIZE, GARAGE_GEOMETRY_PAGE_SIZE + 1);
++    mysql_tquery(g_SQL, query, "OnGarageGeometryListLoaded", "ii", playerid, page);
++    return 1;
++}
++
++public OnGarageGeometryListLoaded(playerid, page)
++{
++    if (!IsPlayerConnected(playerid) || !IsAdminLevel(playerid, ADMIN_OWNER)) return 1;
++
++    new rows;
++    cache_get_row_count(rows);
++    PlayerGarageGeometryPage[playerid] = page;
++    PlayerGarageGeometryListCount[playerid] = 0;
++
++    new body[6000];
++    body[0] = EOS;
++    strcat(body, "Garage / House Slot\tStatus\tWidth / Depth / Height\n", sizeof(body));
++
++    if (page > 0)
++    {
++        PlayerGarageGeometryListDBID[playerid][PlayerGarageGeometryListCount[playerid]++] = -1;
++        strcat(body, "<< Previous Page\tNavigation\t\n", sizeof(body));
++    }
++
++    new dataRows = rows;
++    if (dataRows > GARAGE_GEOMETRY_PAGE_SIZE) dataRows = GARAGE_GEOMETRY_PAGE_SIZE;
++    for (new i = 0; i < dataRows; i++)
++    {
++        new id;
++        new Float:width, Float:depth, Float:height;
++        new name[40], safety[48], status[32], slots[128], line[320];
++        cache_get_value_name_int(i, "id", id);
++        cache_get_value_name_float(i, "front_width", width);
++        cache_get_value_name_float(i, "depth_length", depth);
++        cache_get_value_name_float(i, "height_clearance", height);
++        cache_get_value_name(i, "garage_name", name, sizeof(name));
++        cache_get_value_name(i, "safety_class", safety, sizeof(safety));
++        cache_get_value_name(i, "geometry_status", status, sizeof(status));
++        cache_get_value_name(i, "house_slots", slots, sizeof(slots));
++
++        PlayerGarageGeometryListDBID[playerid][PlayerGarageGeometryListCount[playerid]++] = id;
++        if (slots[0] == EOS) format(slots, sizeof(slots), "-");
++        format(line, sizeof(line), "#%d %s / %s\t%s / %s\t%.2f / %.2f / %.2f\n", id, name, slots, status, safety, width, depth, height);
++        strcat(body, line, sizeof(body));
++    }
++
++    if (rows > GARAGE_GEOMETRY_PAGE_SIZE && PlayerGarageGeometryListCount[playerid] < MAX_GARAGE_GEOMETRY_DIALOG_ROWS)
++    {
++        PlayerGarageGeometryListDBID[playerid][PlayerGarageGeometryListCount[playerid]++] = -2;
++        strcat(body, ">> Next Page\tNavigation\t\n", sizeof(body));
++    }
++
++    if (dataRows == 0 && page == 0) strcat(body, "No rows\tRun planner SQL v0.26A.1.28\tRead-only\n", sizeof(body));
++    ShowPlayerDialog(playerid, DIALOG_GARAGE_GEOMETRY_LIST, DIALOG_STYLE_TABLIST_HEADERS,
++                     "Garage Geometry Plans", body, "Detail", "Back");
++    return 1;
++}
++
++stock QueryGarageGeometryDetail(playerid, geometryid)
++{
++    if (!CanUseOfflineImportAudit(playerid)) return 0;
++    if (geometryid <= 0) return QueryGarageGeometryList(playerid, PlayerGarageGeometryPage[playerid]);
++
++    new query[2600];
++    mysql_format(g_SQL, query, sizeof(query),
++        "SELECT g.*,p.garage_type,p.garage_door_type,p.source_file,p.source_line,COALESCE((SELECT GROUP_CONCAT(CONCAT('Slot ',l.house_slot,' - ',l.house_display_name) ORDER BY l.house_slot SEPARATOR '\\n') FROM offline_garage_house_links l JOIN offline_garage_geometry_sessions s ON s.garage_resolver_session_id=l.resolver_session_id WHERE s.id=g.geometry_session_id AND l.garage_plan_id=g.garage_plan_id),'None') house_links FROM offline_garage_geometry_plan g JOIN offline_garage_canonical_plan p ON p.id=g.garage_plan_id WHERE g.id=%d AND g.geometry_session_id=(SELECT id FROM offline_garage_geometry_sessions WHERE BINARY planner_version=BINARY '%e' ORDER BY id DESC LIMIT 1) LIMIT 1",
++        geometryid, "saif-garage-geometry-planner-v0.26A.1.28");
++    mysql_tquery(g_SQL, query, "OnGarageGeometryDetailLoaded", "ii", playerid, geometryid);
++    return 1;
++}
++
++public OnGarageGeometryDetailLoaded(playerid, geometryid)
++{
++    if (!IsPlayerConnected(playerid) || !IsAdminLevel(playerid, ADMIN_OWNER)) return 1;
++    if (cache_num_rows() <= 0) return QueryGarageGeometryList(playerid, PlayerGarageGeometryPage[playerid]);
++
++    new id, garagePlanID, sourceQueueID, garageType, doorType, sourceLine, enabled;
++    new Float:x1, Float:y1, Float:z1, Float:x2, Float:y2, Float:x3, Float:y3, Float:z2;
++    new Float:width, Float:depth, Float:height, Float:ix, Float:iy, Float:iz;
++    new Float:ex, Float:ey, Float:ez, Float:ea, Float:sx, Float:sy, Float:sz, Float:sa, Float:radius;
++    new name[40], runtimeClass[40], safetyClass[48], geometryStatus[32], applyStatus[24], sourceFile[256], reason[512], houseLinks[900];
++
++    cache_get_value_name_int(0, "id", id);
++    cache_get_value_name_int(0, "garage_plan_id", garagePlanID);
++    cache_get_value_name_int(0, "source_queue_id", sourceQueueID);
++    cache_get_value_name_int(0, "garage_type", garageType);
++    cache_get_value_name_int(0, "garage_door_type", doorType);
++    cache_get_value_name_int(0, "source_line", sourceLine);
++    cache_get_value_name_int(0, "enabled", enabled);
++    cache_get_value_name_float(0, "point1_x", x1);
++    cache_get_value_name_float(0, "point1_y", y1);
++    cache_get_value_name_float(0, "floor_z", z1);
++    cache_get_value_name_float(0, "point2_x", x2);
++    cache_get_value_name_float(0, "point2_y", y2);
++    cache_get_value_name_float(0, "point3_x", x3);
++    cache_get_value_name_float(0, "point3_y", y3);
++    cache_get_value_name_float(0, "ceiling_z", z2);
++    cache_get_value_name_float(0, "front_width", width);
++    cache_get_value_name_float(0, "depth_length", depth);
++    cache_get_value_name_float(0, "height_clearance", height);
++    cache_get_value_name_float(0, "interaction_x", ix);
++    cache_get_value_name_float(0, "interaction_y", iy);
++    cache_get_value_name_float(0, "interaction_z", iz);
++    cache_get_value_name_float(0, "vehicle_entry_x", ex);
++    cache_get_value_name_float(0, "vehicle_entry_y", ey);
++    cache_get_value_name_float(0, "vehicle_entry_z", ez);
++    cache_get_value_name_float(0, "vehicle_entry_a", ea);
++    cache_get_value_name_float(0, "vehicle_spawn_x", sx);
++    cache_get_value_name_float(0, "vehicle_spawn_y", sy);
++    cache_get_value_name_float(0, "vehicle_spawn_z", sz);
++    cache_get_value_name_float(0, "vehicle_spawn_a", sa);
++    cache_get_value_name_float(0, "checkpoint_radius", radius);
++    cache_get_value_name(0, "garage_name", name, sizeof(name));
++    cache_get_value_name(0, "runtime_class", runtimeClass, sizeof(runtimeClass));
++    cache_get_value_name(0, "safety_class", safetyClass, sizeof(safetyClass));
++    cache_get_value_name(0, "geometry_status", geometryStatus, sizeof(geometryStatus));
++    cache_get_value_name(0, "apply_status", applyStatus, sizeof(applyStatus));
++    cache_get_value_name(0, "source_file", sourceFile, sizeof(sourceFile));
++    cache_get_value_name(0, "review_reason", reason, sizeof(reason));
++    cache_get_value_name(0, "house_links", houseLinks, sizeof(houseLinks));
++
++    PlayerGarageGeometrySelectedID[playerid] = id;
++
++    new body[5200];
++    format(body, sizeof(body),
++        "Geometry ID: %d\nGarage plan ID: %d\nSource queue ID: %d\nName: %s\nRuntime / safety: %s / %s\nStatus: %s\nType / door: %d / %d\n\nExact GRGE triangle\nP1: %.4f, %.4f, %.4f\nP2: %.4f, %.4f\nP3: %.4f, %.4f\nCeiling Z: %.4f\nWidth / depth / height: %.3f / %.3f / %.3f\n\nInteraction point\n%.4f, %.4f, %.4f\nRadius: %.2f\n\nVehicle entry\n%.4f, %.4f, %.4f / A %.3f\n\nVehicle spawn\n%.4f, %.4f, %.4f / A %.3f\n\nHouse links\n%s\n\nSource\n%s:%d\n\nReview\n%s\n\nSafety state\nEnabled: %d\nApply status: %s\nNo runtime garage, vehicle, door, object, checkpoint, or ownership mutation.",
++        id, garagePlanID, sourceQueueID, name, runtimeClass, safetyClass, geometryStatus, garageType, doorType,
++        x1, y1, z1, x2, y2, x3, y3, z2, width, depth, height,
++        ix, iy, iz, radius, ex, ey, ez, ea, sx, sy, sz, sa,
++        houseLinks, sourceFile, sourceLine, reason, enabled, applyStatus);
++    ShowPlayerDialog(playerid, DIALOG_GARAGE_GEOMETRY_DETAIL, DIALOG_STYLE_MSGBOX,
++                     "Garage Geometry Detail", body, "Actions", "Back");
++    return 1;
++}
++
++stock ShowGarageGeometryActions(playerid)
++{
++    if (!CanUseOfflineImportAudit(playerid)) return 0;
++    ShowPlayerDialog(playerid, DIALOG_GARAGE_GEOMETRY_ACTION, DIALOG_STYLE_TABLIST_HEADERS,
++        "Garage Geometry Preview",
++        "Action\tEffect\nPreview Interaction Point\tTeleport only\nPreview Vehicle Entry Point\tTeleport + inward heading\nPreview Vehicle Spawn Point\tTeleport + outward heading\nReturn to Previous Position\tRestore transform\nBack to Geometry Detail\tRead-only\nBack to Geometry List\tRead-only",
++        "Open", "Back");
++    return 1;
++}
++
++stock QueryGarageGeometryPreview(playerid, geometryid, pointType)
++{
++    if (!CanUseOfflineImportAudit(playerid)) return 0;
++    if (IsPlayerInAnyVehicle(playerid))
++    {
++        SendClientMessage(playerid, COLOR_RED, "Keluar dari kendaraan sebelum preview geometry garage.");
++        return QueryGarageGeometryDetail(playerid, geometryid);
++    }
++
++    new query[1000];
++    mysql_format(g_SQL, query, sizeof(query),
++        "SELECT garage_name,geometry_status,interaction_x,interaction_y,interaction_z,vehicle_entry_x,vehicle_entry_y,vehicle_entry_z,vehicle_entry_a,vehicle_spawn_x,vehicle_spawn_y,vehicle_spawn_z,vehicle_spawn_a FROM offline_garage_geometry_plan WHERE id=%d AND geometry_session_id=(SELECT id FROM offline_garage_geometry_sessions WHERE BINARY planner_version=BINARY '%e' ORDER BY id DESC LIMIT 1) LIMIT 1",
++        geometryid, "saif-garage-geometry-planner-v0.26A.1.28");
++    mysql_tquery(g_SQL, query, "OnGarageGeometryPreviewLoaded", "iii", playerid, geometryid, pointType);
++    return 1;
++}
++
++public OnGarageGeometryPreviewLoaded(playerid, geometryid, pointType)
++{
++    if (!IsPlayerConnected(playerid) || !IsAdminLevel(playerid, ADMIN_OWNER)) return 1;
++    if (cache_num_rows() <= 0) return QueryGarageGeometryDetail(playerid, geometryid);
++
++    new Float:x, Float:y, Float:z, Float:a = 0.0;
++    new name[40], geometryStatus[32], pointName[32];
++    cache_get_value_name(0, "garage_name", name, sizeof(name));
++    cache_get_value_name(0, "geometry_status", geometryStatus, sizeof(geometryStatus));
++
++    switch (pointType)
++    {
++        case 0:
++        {
++            cache_get_value_name_float(0, "interaction_x", x);
++            cache_get_value_name_float(0, "interaction_y", y);
++            cache_get_value_name_float(0, "interaction_z", z);
++            format(pointName, sizeof(pointName), "interaction");
++        }
++        case 1:
++        {
++            cache_get_value_name_float(0, "vehicle_entry_x", x);
++            cache_get_value_name_float(0, "vehicle_entry_y", y);
++            cache_get_value_name_float(0, "vehicle_entry_z", z);
++            cache_get_value_name_float(0, "vehicle_entry_a", a);
++            format(pointName, sizeof(pointName), "vehicle entry");
++        }
++        case 2:
++        {
++            cache_get_value_name_float(0, "vehicle_spawn_x", x);
++            cache_get_value_name_float(0, "vehicle_spawn_y", y);
++            cache_get_value_name_float(0, "vehicle_spawn_z", z);
++            cache_get_value_name_float(0, "vehicle_spawn_a", a);
++            format(pointName, sizeof(pointName), "vehicle spawn");
++        }
++        default: return QueryGarageGeometryDetail(playerid, geometryid);
++    }
++
++    if (floatabs(x) > 4000.0 || floatabs(y) > 4000.0 || z < -100.0 || z > 1500.0 || (floatabs(x) < 0.001 && floatabs(y) < 0.001 && floatabs(z) < 0.001))
++    {
++        SendClientMessage(playerid, COLOR_RED, "Preview diblokir: geometry point unresolved/abnormal.");
++        return QueryGarageGeometryDetail(playerid, geometryid);
++    }
++
++    SaveOfflineInteriorPreviewReturn(playerid);
++    SetPlayerInterior(playerid, 0);
++    SetPlayerVirtualWorld(playerid, 0);
++    SetPlayerPos(playerid, x, y, z + 0.80);
++    SetPlayerFacingAngle(playerid, a);
++    SetCameraBehindPlayer(playerid);
++
++    new msg[260];
++    format(msg, sizeof(msg), "Preview %s geometry #%d %s [%s]. Tidak ada vehicle/checkpoint/object dibuat. /offlineintreturn untuk kembali.", pointName, geometryid, name, geometryStatus);
++    SendClientMessage(playerid, COLOR_GREEN, msg);
++    return 1;
++}
++
+ stock QueryOfflineHousePlanSummary(playerid)
+ {
+     if (!CanUseOfflineImportAudit(playerid)) return 0;
+@@ -20959,11 +21255,12 @@
+             case 19: QueryOfflineHousePlanSummary(playerid);
+             case 20: QueryOfflineGarageSummary(playerid);
+             case 21: QueryWorldGarageCatalogAudit(playerid);
+-            case 22: QueryHouseCatalogAudit(playerid);
+-            case 23: QueryHouseCatalogRuntimeDryRun(playerid);
+-            case 24: QueryHouseOwnershipTransitionAudit(playerid);
+-            case 25: QueryHouseCatalogApplyStatus(playerid);
+-            case 26: ShowAdminToolsMenu(playerid);
++            case 22: QueryGarageGeometrySummary(playerid);
++            case 23: QueryHouseCatalogAudit(playerid);
++            case 24: QueryHouseCatalogRuntimeDryRun(playerid);
++            case 25: QueryHouseOwnershipTransitionAudit(playerid);
++            case 26: QueryHouseCatalogApplyStatus(playerid);
++            case 27: ShowAdminToolsMenu(playerid);
+         }
+         return 1;
+     }
+@@ -21114,6 +21411,47 @@
+         return 1;
+     }
+ 
++
++    if (dialogid == DIALOG_GARAGE_GEOMETRY_SUMMARY)
++    {
++        if (response) QueryGarageGeometryList(playerid, 0);
++        else ShowOfflineImportAuditMenu(playerid);
++        return 1;
++    }
++
++    if (dialogid == DIALOG_GARAGE_GEOMETRY_LIST)
++    {
++        if (!response) return QueryGarageGeometrySummary(playerid);
++        if (listitem < 0 || listitem >= PlayerGarageGeometryListCount[playerid]) return QueryGarageGeometryList(playerid, PlayerGarageGeometryPage[playerid]);
++
++        new geometryid = PlayerGarageGeometryListDBID[playerid][listitem];
++        if (geometryid == -1) return QueryGarageGeometryList(playerid, PlayerGarageGeometryPage[playerid] - 1);
++        if (geometryid == -2) return QueryGarageGeometryList(playerid, PlayerGarageGeometryPage[playerid] + 1);
++        return QueryGarageGeometryDetail(playerid, geometryid);
++    }
++
++    if (dialogid == DIALOG_GARAGE_GEOMETRY_DETAIL)
++    {
++        if (response) ShowGarageGeometryActions(playerid);
++        else QueryGarageGeometryList(playerid, PlayerGarageGeometryPage[playerid]);
++        return 1;
++    }
++
++    if (dialogid == DIALOG_GARAGE_GEOMETRY_ACTION)
++    {
++        if (!response) return QueryGarageGeometryDetail(playerid, PlayerGarageGeometrySelectedID[playerid]);
++        switch (listitem)
++        {
++            case 0: QueryGarageGeometryPreview(playerid, PlayerGarageGeometrySelectedID[playerid], 0);
++            case 1: QueryGarageGeometryPreview(playerid, PlayerGarageGeometrySelectedID[playerid], 1);
++            case 2: QueryGarageGeometryPreview(playerid, PlayerGarageGeometrySelectedID[playerid], 2);
++            case 3: ReturnFromOfflineInteriorPreview(playerid);
++            case 4: QueryGarageGeometryDetail(playerid, PlayerGarageGeometrySelectedID[playerid]);
++            case 5: QueryGarageGeometryList(playerid, PlayerGarageGeometryPage[playerid]);
++        }
++        return 1;
++    }
++
+     if (dialogid == DIALOG_HOUSE_CATALOG_AUDIT)
+     {
+         if (response)
+@@ -43647,6 +43985,40 @@
+         return 1;
+     }
+ 
++
++    if (!strcmp(cmdtext, "/garagegeometry", true) ||
++        !strcmp(cmdtext, "/garagegeometryaudit", true) ||
++        !strcmp(cmdtext, "/offlinegaragegeometry", true))
++    {
++        QueryGarageGeometrySummary(playerid);
++        return 1;
++    }
++
++    if (!strcmp(cmdtext, "/garagegeometrylist", true) ||
++        !strcmp(cmdtext, "/offlinegaragegeometrylist", true))
++    {
++        QueryGarageGeometryList(playerid, 0);
++        return 1;
++    }
++
++    if (!strcmp(cmdtext, "/garagegeometrydetail", true))
++    {
++        SendClientMessage(playerid, COLOR_YELLOW, "Usage: /garagegeometrydetail [geometry_id]");
++        return 1;
++    }
++
++    if (strfind(cmdtext, "/garagegeometrydetail ", true) == 0)
++    {
++        new geometryid = strval(cmdtext[22]);
++        if (geometryid <= 0)
++        {
++            SendClientMessage(playerid, COLOR_YELLOW, "Usage: /garagegeometrydetail [geometry_id]");
++            return 1;
++        }
++        QueryGarageGeometryDetail(playerid, geometryid);
++        return 1;
++    }
++
+     if (!strcmp(cmdtext, "/offlinehousedryrun", true) ||
+         !strcmp(cmdtext, "/offlinehousearchive", true) ||
+         !strcmp(cmdtext, "/offlinehousecapacity", true) ||
+@@ -46759,7 +47131,7 @@
+     {
+         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
+         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
+-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.25.2 Offline-Like Full 29 Savehouse Map Icons");
++        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.28 Garage Vehicle Spawn Geometry Planner");
+         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
+         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
+         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");

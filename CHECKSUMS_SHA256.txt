@@ -1,9 +1,7 @@
-c161fd6e82750bb9db605c49d8e6f64118513d26d591c19c1235491a605d04fc  ./README_SAIF_v0.26A.1.31.5.md
-18df309def52f002cd2de4ed9d2c89118611f83d79c1410ce3fe36d220fbc8c1  ./database/apply/apply_saif_v0.26A.1.31.5_global_nearest_parking_spawn_rework.sql
-2621b6aabb02a9f2e1da79884a7a89732d36e4bfc77fda900bb77938457013b9  ./database/migrations/20260616_saif_v0.26A.1.31.5_global_nearest_parking_spawn_rework.sql
-cb71a6d2fe75ea6b614263dba9b6b47a423a3b3c9156501185abd9e44497b373  ./database/rollback/rollback_saif_v0.26A.1.31.5_global_nearest_parking_spawn_rework.sql
-56c9fd06be37a9cfc0448f254793009f07ff2c683e004113805b2acd89a48413  ./database/verify/verify_saif_v0.26A.1.31.5_global_nearest_parking_spawn_rework.sql
-27cc5e784eb7e12f5f367d3b3cb24ee1537b45b0498fca58cc921fe79a2fc12e  ./gamemodes/lsif.pwn
-ed66ff24957b0484e63acce18836f4984200dd093988d5de09973792d7cd71e6  ./lsif_v0.26A.1.31.5.patch
-f25e5bf8b84b5dd59be5a50542bd9e6951b7b0012f04833e4a37960289600ac6  ./reports/STATIC_VALIDATION_v0.26A.1.31.5.json
-f98a93960025bfe76b5f5dd40d8df0d2fd2989b78575f086aa634d770c4dbfab  ./reports/STATIC_VALIDATION_v0.26A.1.31.5.md
+16147f31f01cee2c76356953afdf1ed9b2aa36ad695c7972316c97c0b84a7b1c  ./COLANDREAS_DEPENDENCY_v0.26A.1.31.6.md
+1690731524f4de0d84c344cdbc2e36c5e7e4f5ba00f5a521964ebcd1f868f7ad  ./README_SAIF_v0.26A.1.31.6.1.md
+88ccb46aad57902f4524667a99c2003b74443b7a3187f4f75ec15f63c070ce29  ./gamemodes/lsif.pwn
+a2b8906dc825578e383acf39e1ce3b382e84ca06a84165de629f0cd9b18dedb5  ./lsif_v0.26A.1.31.6.1.patch
+bb239237c93088e3115f39aa8d1a18732e0e256ddf95e13f27e70b7e2b5ca1e9  ./reports/STATIC_VALIDATION_v0.26A.1.31.6.1.json
+91c4b2d85fabdc25be91f57a432a07ca1cda5e2a8525fc047c5c787ca9145497  ./reports/STATIC_VALIDATION_v0.26A.1.31.6.1.md
+fc16a90d41894c9e79e9fbb4f82d1bf85fcea8c40f75c2de16d867623fe20ef6  ./tools/verify/verify_colandreas_v0.26A.1.31.6.sh

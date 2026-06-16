@@ -1,5 +1,6 @@
 #include <open.mp>
 #include <a_mysql>
+#include <colandreas>
 #pragma dynamic 131072
 
 #define COLOR_WHITE     0xFFFFFFFF
@@ -1003,6 +1004,54 @@ new g_VehicleStorageCheckpointTimer;
 #define OWNED_VEHICLE_SPAWN_MAPICON_TYPE 0
 #define OWNED_VEHICLE_SPAWN_MAPICON_COLOR 0xFFFF00FF
 #define OWNED_VEHICLE_SPAWN_MARKER_CLEAR_DISTANCE 18.0
+
+// v0.26A.1.31.6.1: Dynamic parking stat tag compile hotfix.
+// Dynamic candidates are attempted first in exterior world 0. The global
+// parking catalog remains a safe fallback when no candidate passes collision,
+// ground, slope, edge-support, occupancy, and reservation checks.
+#define DYNAMIC_PARKING_MAX_RESERVATIONS 64
+#define DYNAMIC_PARKING_RESERVATION_MS 15000
+#define DYNAMIC_PARKING_MIN_SURFACE_NORMAL_Z 0.90
+#define DYNAMIC_PARKING_MAX_GROUND_RISE 2.0
+#define DYNAMIC_PARKING_MAX_GROUND_DROP 5.0
+#define DYNAMIC_PARKING_EDGE_HEIGHT_TOLERANCE 0.55
+#define DYNAMIC_PARKING_GROUND_CLEARANCE 0.30
+#define DYNAMIC_PARKING_CLEARANCE_MARGIN 0.80
+#define DYNAMIC_PARKING_PLAYER_CLEAR_RADIUS 3.5
+#define DYNAMIC_PARKING_MAX_RADIUS 80.0
+
+enum
+{
+    DYNAMIC_STAT_TESTED,
+    DYNAMIC_STAT_NO_GROUND,
+    DYNAMIC_STAT_WATER,
+    DYNAMIC_STAT_SLOPE,
+    DYNAMIC_STAT_HEIGHT_DELTA,
+    DYNAMIC_STAT_EDGE_SUPPORT,
+    DYNAMIC_STAT_WORLD_COLLISION,
+    DYNAMIC_STAT_VEHICLE_OCCUPIED,
+    DYNAMIC_STAT_PLAYER_OCCUPIED,
+    DYNAMIC_STAT_RESERVED,
+    DYNAMIC_STAT_VALID,
+    DYNAMIC_STAT_COUNT
+};
+
+new bool:DynamicParkingColAndreasReady = false;
+new DynamicParkingReservationOwner[DYNAMIC_PARKING_MAX_RESERVATIONS];
+new DynamicParkingReservationInterior[DYNAMIC_PARKING_MAX_RESERVATIONS];
+new DynamicParkingReservationVW[DYNAMIC_PARKING_MAX_RESERVATIONS];
+new Float:DynamicParkingReservationX[DYNAMIC_PARKING_MAX_RESERVATIONS];
+new Float:DynamicParkingReservationY[DYNAMIC_PARKING_MAX_RESERVATIONS];
+new Float:DynamicParkingReservationZ[DYNAMIC_PARKING_MAX_RESERVATIONS];
+new Float:DynamicParkingReservationRadius[DYNAMIC_PARKING_MAX_RESERVATIONS];
+new DynamicParkingReservationUntil[DYNAMIC_PARKING_MAX_RESERVATIONS];
+new PlayerDynamicParkingLastStats[MAX_PLAYERS][DYNAMIC_STAT_COUNT];
+new bool:PlayerDynamicParkingLastFound[MAX_PLAYERS];
+new Float:PlayerDynamicParkingLastX[MAX_PLAYERS];
+new Float:PlayerDynamicParkingLastY[MAX_PLAYERS];
+new Float:PlayerDynamicParkingLastZ[MAX_PLAYERS];
+new Float:PlayerDynamicParkingLastA[MAX_PLAYERS];
+
 new bool:PlayerOwnedVehicleSpawnMarkerActive[MAX_PLAYERS];
 new Float:PlayerOwnedVehicleSpawnMarkerX[MAX_PLAYERS];
 new Float:PlayerOwnedVehicleSpawnMarkerY[MAX_PLAYERS];
@@ -7037,6 +7086,15 @@ stock ResetOwnedVehicleData(playerid)
     PlayerOwnedVehicleSpawnMarkerX[playerid] = 0.0;
     PlayerOwnedVehicleSpawnMarkerY[playerid] = 0.0;
     PlayerOwnedVehicleSpawnMarkerZ[playerid] = 0.0;
+    PlayerDynamicParkingLastFound[playerid] = false;
+    PlayerDynamicParkingLastX[playerid] = 0.0;
+    PlayerDynamicParkingLastY[playerid] = 0.0;
+    PlayerDynamicParkingLastZ[playerid] = 0.0;
+    PlayerDynamicParkingLastA[playerid] = 0.0;
+    for (new statIndex = 0; statIndex < DYNAMIC_STAT_COUNT; statIndex++)
+    {
+        PlayerDynamicParkingLastStats[playerid][statIndex] = 0;
+    }
 
     OwnedVehicleX[playerid] = SPAWN_X + 3.0;
     OwnedVehicleY[playerid] = SPAWN_Y;
@@ -7224,8 +7282,384 @@ stock ClearOwnedVehicleSpawnPointReservation(playerid, pointIndex)
     return 1;
 }
 
+stock Float:NormalizeDynamicParkingAngle(Float:angle)
+{
+    while (angle < 0.0) angle += 360.0;
+    while (angle >= 360.0) angle -= 360.0;
+    return angle;
+}
+
+stock ResetDynamicParkingStats(stats[])
+{
+    for (new i = 0; i < DYNAMIC_STAT_COUNT; i++) stats[i] = 0;
+    return 1;
+}
+
+stock SaveDynamicParkingStatsForPlayer(playerid, const stats[], bool:found, Float:x = 0.0, Float:y = 0.0, Float:z = 0.0, Float:a = 0.0)
+{
+    if (playerid < 0 || playerid >= MAX_PLAYERS) return 0;
+    for (new i = 0; i < DYNAMIC_STAT_COUNT; i++)
+    {
+        PlayerDynamicParkingLastStats[playerid][i] = stats[i];
+    }
+    PlayerDynamicParkingLastFound[playerid] = found;
+    PlayerDynamicParkingLastX[playerid] = x;
+    PlayerDynamicParkingLastY[playerid] = y;
+    PlayerDynamicParkingLastZ[playerid] = z;
+    PlayerDynamicParkingLastA[playerid] = a;
+    return 1;
+}
+
+stock GetDynamicParkingVehicleBounds(modelid, &Float:halfWidth, &Float:halfLength, &Float:minZ)
+{
+    new Float:minX, Float:minY, Float:maxX, Float:maxY, Float:maxZ;
+    if (!CA_GetModelBoundingBox(modelid, minX, minY, minZ, maxX, maxY, maxZ) || maxZ <= minZ)
+    {
+        halfWidth = 1.15;
+        halfLength = 2.35;
+        minZ = -0.55;
+        return 0;
+    }
+
+    halfWidth = floatabs(maxX - minX) * 0.5;
+    halfLength = floatabs(maxY - minY) * 0.5;
+    if (halfWidth < 0.65) halfWidth = 0.65;
+    if (halfLength < 1.00) halfLength = 1.00;
+    return 1;
+}
+
+stock GetDynamicParkingGround(Float:x, Float:y, Float:referenceZ, &Float:groundZ, &Float:normalZ, &surfaceModel)
+{
+    new Float:hitX, Float:hitY, Float:hitZ;
+    new Float:normalX, Float:normalY;
+    surfaceModel = CA_RayCastLineNormal(
+        x, y, referenceZ + DYNAMIC_PARKING_MAX_GROUND_RISE,
+        x, y, referenceZ - DYNAMIC_PARKING_MAX_GROUND_DROP,
+        hitX, hitY, hitZ,
+        normalX, normalY, normalZ
+    );
+    if (surfaceModel == 0) return 0;
+    groundZ = hitZ;
+    return 1;
+}
+
+stock IsDynamicParkingGroundSupported(Float:centerX, Float:centerY, Float:centerGroundZ, Float:heading, Float:halfWidth, Float:halfLength)
+{
+    new Float:forwardX = floatsin(-heading, degrees);
+    new Float:forwardY = floatcos(-heading, degrees);
+    new Float:rightX = floatcos(-heading, degrees);
+    new Float:rightY = floatsin(-heading, degrees);
+    new Float:sampleLength = halfLength * 0.82;
+    new Float:sampleWidth = halfWidth * 0.82;
+    new Float:sampleX[4], Float:sampleY[4];
+
+    sampleX[0] = centerX + forwardX * sampleLength + rightX * sampleWidth;
+    sampleY[0] = centerY + forwardY * sampleLength + rightY * sampleWidth;
+    sampleX[1] = centerX + forwardX * sampleLength - rightX * sampleWidth;
+    sampleY[1] = centerY + forwardY * sampleLength - rightY * sampleWidth;
+    sampleX[2] = centerX - forwardX * sampleLength + rightX * sampleWidth;
+    sampleY[2] = centerY - forwardY * sampleLength + rightY * sampleWidth;
+    sampleX[3] = centerX - forwardX * sampleLength - rightX * sampleWidth;
+    sampleY[3] = centerY - forwardY * sampleLength - rightY * sampleWidth;
+
+    for (new i = 0; i < 4; i++)
+    {
+        new Float:hitX, Float:hitY, Float:hitZ;
+        new surfaceModel = CA_RayCastLine(
+            sampleX[i], sampleY[i], centerGroundZ + 1.25,
+            sampleX[i], sampleY[i], centerGroundZ - 1.50,
+            hitX, hitY, hitZ
+        );
+        if (surfaceModel == 0 || surfaceModel == WATER_OBJECT) return 0;
+        if (floatabs(hitZ - centerGroundZ) > DYNAMIC_PARKING_EDGE_HEIGHT_TOLERANCE) return 0;
+    }
+    return 1;
+}
+
+stock IsDynamicParkingHorizontalClear(Float:x, Float:y, Float:probeZ, Float:heading, Float:halfWidth, Float:halfLength)
+{
+    new Float:forwardX = floatsin(-heading, degrees);
+    new Float:forwardY = floatcos(-heading, degrees);
+    new Float:rightX = floatcos(-heading, degrees);
+    new Float:rightY = floatsin(-heading, degrees);
+    new Float:forwardDistance = halfLength + DYNAMIC_PARKING_CLEARANCE_MARGIN;
+    new Float:sideDistance = halfWidth + DYNAMIC_PARKING_CLEARANCE_MARGIN;
+    new Float:hitX, Float:hitY, Float:hitZ;
+
+    if (CA_RayCastLine(x, y, probeZ, x + forwardX * forwardDistance, y + forwardY * forwardDistance, probeZ, hitX, hitY, hitZ) != 0) return 0;
+    if (CA_RayCastLine(x, y, probeZ, x - forwardX * forwardDistance, y - forwardY * forwardDistance, probeZ, hitX, hitY, hitZ) != 0) return 0;
+    if (CA_RayCastLine(x, y, probeZ, x + rightX * sideDistance, y + rightY * sideDistance, probeZ, hitX, hitY, hitZ) != 0) return 0;
+    if (CA_RayCastLine(x, y, probeZ, x - rightX * sideDistance, y - rightY * sideDistance, probeZ, hitX, hitY, hitZ) != 0) return 0;
+    return 1;
+}
+
+stock IsDynamicParkingReservedForOther(playerid, interior, virtualWorld, Float:x, Float:y, Float:z, Float:radius)
+{
+    new currentTick = GetTickCount();
+    for (new i = 0; i < DYNAMIC_PARKING_MAX_RESERVATIONS; i++)
+    {
+        if (DynamicParkingReservationUntil[i] == 0) continue;
+        if (currentTick >= DynamicParkingReservationUntil[i])
+        {
+            DynamicParkingReservationUntil[i] = 0;
+            DynamicParkingReservationOwner[i] = INVALID_PLAYER_ID;
+            continue;
+        }
+        if (DynamicParkingReservationOwner[i] == playerid) continue;
+        if (DynamicParkingReservationInterior[i] != interior || DynamicParkingReservationVW[i] != virtualWorld) continue;
+
+        new Float:dx = DynamicParkingReservationX[i] - x;
+        new Float:dy = DynamicParkingReservationY[i] - y;
+        new Float:dz = DynamicParkingReservationZ[i] - z;
+        new Float:combinedRadius = DynamicParkingReservationRadius[i] + radius;
+        if ((dx * dx) + (dy * dy) + (dz * dz) <= combinedRadius * combinedRadius) return 1;
+    }
+    return 0;
+}
+
+stock ReserveDynamicParkingSpawn(playerid, interior, virtualWorld, Float:x, Float:y, Float:z, Float:radius)
+{
+    new selectedIndex = -1;
+    new currentTick = GetTickCount();
+    for (new i = 0; i < DYNAMIC_PARKING_MAX_RESERVATIONS; i++)
+    {
+        if (DynamicParkingReservationUntil[i] == 0 || currentTick >= DynamicParkingReservationUntil[i])
+        {
+            selectedIndex = i;
+            break;
+        }
+    }
+    if (selectedIndex == -1) selectedIndex = playerid % DYNAMIC_PARKING_MAX_RESERVATIONS;
+
+    DynamicParkingReservationOwner[selectedIndex] = playerid;
+    DynamicParkingReservationInterior[selectedIndex] = interior;
+    DynamicParkingReservationVW[selectedIndex] = virtualWorld;
+    DynamicParkingReservationX[selectedIndex] = x;
+    DynamicParkingReservationY[selectedIndex] = y;
+    DynamicParkingReservationZ[selectedIndex] = z;
+    DynamicParkingReservationRadius[selectedIndex] = radius;
+    DynamicParkingReservationUntil[selectedIndex] = currentTick + DYNAMIC_PARKING_RESERVATION_MS;
+    return selectedIndex;
+}
+
+stock ClearDynamicParkingReservation(playerid, reservationIndex)
+{
+    if (reservationIndex < 0 || reservationIndex >= DYNAMIC_PARKING_MAX_RESERVATIONS) return 0;
+    if (DynamicParkingReservationOwner[reservationIndex] != playerid) return 0;
+    DynamicParkingReservationUntil[reservationIndex] = 0;
+    DynamicParkingReservationOwner[reservationIndex] = INVALID_PLAYER_ID;
+    return 1;
+}
+
+stock ClearDynamicParkingReservationsForPlayer(playerid)
+{
+    for (new i = 0; i < DYNAMIC_PARKING_MAX_RESERVATIONS; i++)
+    {
+        if (DynamicParkingReservationUntil[i] != 0 && DynamicParkingReservationOwner[i] == playerid)
+        {
+            DynamicParkingReservationUntil[i] = 0;
+            DynamicParkingReservationOwner[i] = INVALID_PLAYER_ID;
+        }
+    }
+    return 1;
+}
+
+stock ValidateDynamicParkingPoint(playerid, Float:candidateX, Float:candidateY, Float:referenceZ, Float:minZ, Float:halfWidth, Float:halfLength, &Float:groundZ, &Float:spawnZ, stats[])
+{
+    stats[DYNAMIC_STAT_TESTED]++;
+
+    new Float:normalZ;
+    new surfaceModel;
+    if (!GetDynamicParkingGround(candidateX, candidateY, referenceZ, groundZ, normalZ, surfaceModel))
+    {
+        stats[DYNAMIC_STAT_NO_GROUND]++;
+        return 0;
+    }
+    if (surfaceModel == WATER_OBJECT)
+    {
+        stats[DYNAMIC_STAT_WATER]++;
+        return 0;
+    }
+    if (floatabs(normalZ) < DYNAMIC_PARKING_MIN_SURFACE_NORMAL_Z)
+    {
+        stats[DYNAMIC_STAT_SLOPE]++;
+        return 0;
+    }
+    if (groundZ > referenceZ + DYNAMIC_PARKING_MAX_GROUND_RISE || groundZ < referenceZ - DYNAMIC_PARKING_MAX_GROUND_DROP)
+    {
+        stats[DYNAMIC_STAT_HEIGHT_DELTA]++;
+        return 0;
+    }
+
+    spawnZ = groundZ - minZ + DYNAMIC_PARKING_GROUND_CLEARANCE;
+    new Float:clearRadius = halfLength;
+    if (halfWidth > clearRadius) clearRadius = halfWidth;
+    clearRadius += 1.25;
+
+    if (IsAnyVehicleNearOwnedSpawn(candidateX, candidateY, spawnZ, clearRadius))
+    {
+        stats[DYNAMIC_STAT_VEHICLE_OCCUPIED]++;
+        return 0;
+    }
+
+    new interior = GetPlayerInterior(playerid);
+    new virtualWorld = GetPlayerVirtualWorld(playerid);
+    if (IsAnyPlayerNearOwnedSpawn(interior, virtualWorld, candidateX, candidateY, spawnZ, DYNAMIC_PARKING_PLAYER_CLEAR_RADIUS))
+    {
+        stats[DYNAMIC_STAT_PLAYER_OCCUPIED]++;
+        return 0;
+    }
+    if (IsDynamicParkingReservedForOther(playerid, interior, virtualWorld, candidateX, candidateY, spawnZ, clearRadius))
+    {
+        stats[DYNAMIC_STAT_RESERVED]++;
+        return 0;
+    }
+    return 1;
+}
+
+stock IsDynamicParkingOrientationSafe(modelid, Float:candidateX, Float:candidateY, Float:groundZ, Float:spawnZ, Float:heading, Float:halfWidth, Float:halfLength, stats[])
+{
+    if (!IsDynamicParkingGroundSupported(candidateX, candidateY, groundZ, heading, halfWidth, halfLength))
+    {
+        stats[DYNAMIC_STAT_EDGE_SUPPORT]++;
+        return 0;
+    }
+    if (CA_ContactTest(modelid, candidateX, candidateY, spawnZ, 0.0, 0.0, heading))
+    {
+        stats[DYNAMIC_STAT_WORLD_COLLISION]++;
+        return 0;
+    }
+
+    new Float:probeZ = groundZ + 1.10;
+    if (!IsDynamicParkingHorizontalClear(candidateX, candidateY, probeZ, heading, halfWidth, halfLength))
+    {
+        stats[DYNAMIC_STAT_WORLD_COLLISION]++;
+        return 0;
+    }
+    return 1;
+}
+
+stock FindDynamicNearPlayerParking(playerid, modelid, &Float:x, &Float:y, &Float:z, &Float:a, stats[])
+{
+    ResetDynamicParkingStats(stats);
+    if (!DynamicParkingColAndreasReady ||
+        GetPlayerInterior(playerid) != 0 ||
+        GetPlayerVirtualWorld(playerid) != 0 ||
+        modelid < 400 || modelid > 611)
+    {
+        SaveDynamicParkingStatsForPlayer(playerid, stats, false);
+        return 0;
+    }
+
+    new Float:playerX, Float:playerY, Float:playerZ, Float:playerA;
+    GetPlayerPos(playerid, playerX, playerY, playerZ);
+    GetPlayerFacingAngle(playerid, playerA);
+
+    new Float:halfWidth, Float:halfLength, Float:minZ;
+    GetDynamicParkingVehicleBounds(modelid, halfWidth, halfLength, minZ);
+
+    new Float:radii[7] = {12.0, 18.0, 26.0, 36.0, 50.0, 65.0, DYNAMIC_PARKING_MAX_RADIUS};
+    new Float:angleOffsets[8] = {90.0, -90.0, 135.0, -135.0, 45.0, -45.0, 180.0, 0.0};
+
+    for (new radiusIndex = 0; radiusIndex < sizeof(radii); radiusIndex++)
+    {
+        for (new angleIndex = 0; angleIndex < sizeof(angleOffsets); angleIndex++)
+        {
+            new Float:candidateAngle = NormalizeDynamicParkingAngle(playerA + angleOffsets[angleIndex]);
+            new Float:candidateX = playerX + floatsin(-candidateAngle, degrees) * radii[radiusIndex];
+            new Float:candidateY = playerY + floatcos(-candidateAngle, degrees) * radii[radiusIndex];
+            new Float:candidateGroundZ, Float:candidateSpawnZ;
+            if (!ValidateDynamicParkingPoint(playerid, candidateX, candidateY, playerZ, minZ, halfWidth, halfLength, candidateGroundZ, candidateSpawnZ, stats)) continue;
+
+            new Float:headingCandidates[3];
+            headingCandidates[0] = NormalizeDynamicParkingAngle(candidateAngle + 90.0);
+            headingCandidates[1] = NormalizeDynamicParkingAngle(candidateAngle - 90.0);
+            headingCandidates[2] = NormalizeDynamicParkingAngle(playerA);
+
+            for (new headingIndex = 0; headingIndex < sizeof(headingCandidates); headingIndex++)
+            {
+                if (!IsDynamicParkingOrientationSafe(modelid, candidateX, candidateY, candidateGroundZ, candidateSpawnZ, headingCandidates[headingIndex], halfWidth, halfLength, stats)) continue;
+
+                x = candidateX;
+                y = candidateY;
+                z = candidateSpawnZ;
+                a = headingCandidates[headingIndex];
+                stats[DYNAMIC_STAT_VALID]++;
+                SaveDynamicParkingStatsForPlayer(playerid, stats, true, x, y, z, a);
+                return 1;
+            }
+        }
+    }
+
+    SaveDynamicParkingStatsForPlayer(playerid, stats, false);
+    return 0;
+}
+
+stock ShowDynamicParkingSolverAudit(playerid)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+
+    new readyText[4], fallbackText[4], foundText[4];
+    if (DynamicParkingColAndreasReady) format(readyText, sizeof(readyText), "YES");
+    else format(readyText, sizeof(readyText), "NO");
+    if (OwnedVehicleSpawnPointsReady) format(fallbackText, sizeof(fallbackText), "YES");
+    else format(fallbackText, sizeof(fallbackText), "NO");
+    if (PlayerDynamicParkingLastFound[playerid]) format(foundText, sizeof(foundText), "YES");
+    else format(foundText, sizeof(foundText), "NO");
+
+    new body[1800];
+    format(body, sizeof(body),
+        "Dynamic Parking Solver v0.26A.1.31.6.1\n\nColAndreas ready: %s\nNearest spawn policy: %d\nDynamic solver domain: exterior Interior 0 / VW 0\nFallback catalog ready: %s (%d rows)\n\nLast solver result: %s\nTransform: %.3f, %.3f, %.3f, %.2f\n\nCandidate audit\nTested: %d\nNo ground: %d\nWater: %d\nSteep surface: %d\nHeight delta: %d\nEdge support: %d\nWorld collision: %d\nVehicle occupied: %d\nPlayer occupied: %d\nReserved: %d\nValid: %d\n\nCommand\n/parkingprobe - read-only solver probe using active owned model or model 411",
+        readyText,
+        VehicleStorageNearestSpawnEnabled,
+        fallbackText,
+        OwnedVehicleSpawnPointCount,
+        foundText,
+        PlayerDynamicParkingLastX[playerid],
+        PlayerDynamicParkingLastY[playerid],
+        PlayerDynamicParkingLastZ[playerid],
+        PlayerDynamicParkingLastA[playerid],
+        PlayerDynamicParkingLastStats[playerid][DYNAMIC_STAT_TESTED],
+        PlayerDynamicParkingLastStats[playerid][DYNAMIC_STAT_NO_GROUND],
+        PlayerDynamicParkingLastStats[playerid][DYNAMIC_STAT_WATER],
+        PlayerDynamicParkingLastStats[playerid][DYNAMIC_STAT_SLOPE],
+        PlayerDynamicParkingLastStats[playerid][DYNAMIC_STAT_HEIGHT_DELTA],
+        PlayerDynamicParkingLastStats[playerid][DYNAMIC_STAT_EDGE_SUPPORT],
+        PlayerDynamicParkingLastStats[playerid][DYNAMIC_STAT_WORLD_COLLISION],
+        PlayerDynamicParkingLastStats[playerid][DYNAMIC_STAT_VEHICLE_OCCUPIED],
+        PlayerDynamicParkingLastStats[playerid][DYNAMIC_STAT_PLAYER_OCCUPIED],
+        PlayerDynamicParkingLastStats[playerid][DYNAMIC_STAT_RESERVED],
+        PlayerDynamicParkingLastStats[playerid][DYNAMIC_STAT_VALID]
+    );
+    ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "Dynamic Parking Solver Audit", body, "Close", "");
+    return 1;
+}
+
+stock RunDynamicParkingSolverProbe(playerid)
+{
+    if (!CanUseOfflineImportAudit(playerid)) return 0;
+    new modelid = OwnedVehicleModel[playerid];
+    if (modelid < 400 || modelid > 611) modelid = 411;
+
+    new Float:x, Float:y, Float:z, Float:a;
+    new stats[DYNAMIC_STAT_COUNT];
+    if (!FindDynamicNearPlayerParking(playerid, modelid, x, y, z, a, stats))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Dynamic solver tidak menemukan ruang parkir aman. Gunakan /parkingsolver untuk melihat rejection audit.");
+        ShowDynamicParkingSolverAudit(playerid);
+        return 0;
+    }
+
+    new msg[200];
+    format(msg, sizeof(msg), "Dynamic parking candidate model %d: %.3f, %.3f, %.3f angle %.2f. Probe tidak membuat kendaraan.", modelid, x, y, z, a);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    ShowDynamicParkingSolverAudit(playerid);
+    return 1;
+}
+
 stock ClearOwnedVehicleSpawnReservationsForPlayer(playerid)
 {
+    ClearDynamicParkingReservationsForPlayer(playerid);
     for (new i = 0; i < OwnedVehicleSpawnPointCount; i++)
     {
         if (OwnedVehicleSpawnPointReservedBy[i] == playerid)
@@ -7391,6 +7825,8 @@ stock ProcessOwnedVehicleSpawnRequest(playerid, slotIndex)
 
     new Float:x, Float:y, Float:z, Float:a;
     new spawnPointIndex = -1;
+    new dynamicReservationIndex = -1;
+    new bool:usedDynamicSolver = false;
     if (PlayerGarageLifecycle[playerid][slotIndex] == OWNED_VEHICLE_STATE_DEALER_PENDING)
     {
         GetPlayerPos(playerid, x, y, z);
@@ -7399,12 +7835,32 @@ stock ProcessOwnedVehicleSpawnRequest(playerid, slotIndex)
     }
     else
     {
-        if (!VehicleStorageNearestSpawnEnabled || !FindNearestOwnedVehicleSpawn(playerid, x, y, z, a, spawnPointIndex))
+        if (!VehicleStorageNearestSpawnEnabled)
         {
-            SendClientMessage(playerid, COLOR_RED, "Tidak ada tempat parkir global yang kosong dan aman di sekitar posisi aktifmu.");
+            SendClientMessage(playerid, COLOR_RED, "Pemanggilan nearest parking sedang dinonaktifkan oleh policy.");
             return 0;
         }
-        ReserveOwnedVehicleSpawnPoint(playerid, spawnPointIndex);
+
+        new dynamicStats[DYNAMIC_STAT_COUNT];
+        if (FindDynamicNearPlayerParking(playerid, PlayerGarageModel[playerid][slotIndex], x, y, z, a, dynamicStats))
+        {
+            new Float:halfWidth, Float:halfLength, Float:minZ;
+            GetDynamicParkingVehicleBounds(PlayerGarageModel[playerid][slotIndex], halfWidth, halfLength, minZ);
+            new Float:dynamicRadius = halfLength;
+            if (halfWidth > dynamicRadius) dynamicRadius = halfWidth;
+            dynamicRadius += 1.25;
+            dynamicReservationIndex = ReserveDynamicParkingSpawn(playerid, GetPlayerInterior(playerid), GetPlayerVirtualWorld(playerid), x, y, z, dynamicRadius);
+            usedDynamicSolver = true;
+        }
+        else if (!FindNearestOwnedVehicleSpawn(playerid, x, y, z, a, spawnPointIndex))
+        {
+            SendClientMessage(playerid, COLOR_RED, "Dynamic solver dan global parking fallback tidak menemukan tempat parkir aman di sekitar posisi aktifmu.");
+            return 0;
+        }
+        else
+        {
+            ReserveOwnedVehicleSpawnPoint(playerid, spawnPointIndex);
+        }
     }
 
     DestroyStoredOwnedVehicleRuntime(playerid, slotIndex);
@@ -7418,14 +7874,20 @@ stock ProcessOwnedVehicleSpawnRequest(playerid, slotIndex)
     if (!SpawnOwnedVehicle(playerid))
     {
         ClearOwnedVehicleSpawnPointReservation(playerid, spawnPointIndex);
+        ClearDynamicParkingReservation(playerid, dynamicReservationIndex);
         return 0;
     }
     ClearOwnedVehicleSpawnPointReservation(playerid, spawnPointIndex);
+    ClearDynamicParkingReservation(playerid, dynamicReservationIndex);
     ShowOwnedVehicleSpawnMapMarker(playerid, x, y, z);
-    if (spawnPointIndex >= 0 && spawnPointIndex < OwnedVehicleSpawnPointCount)
+    if (usedDynamicSolver)
     {
-        new spawnMsg[160];
-        format(spawnMsg, sizeof(spawnMsg), "Owned vehicle dipanggil ke %s (%s). Ikuti marker kuning.", OwnedVehicleSpawnPointName[spawnPointIndex], OwnedVehicleSpawnPointSource[spawnPointIndex]);
+        SendClientMessage(playerid, COLOR_YELLOW, "Owned vehicle dipanggil ke ruang parkir aman dinamis dekat posisi aktifmu (ColAndreas). Ikuti marker kuning.");
+    }
+    else if (spawnPointIndex >= 0 && spawnPointIndex < OwnedVehicleSpawnPointCount)
+    {
+        new spawnMsg[176];
+        format(spawnMsg, sizeof(spawnMsg), "Dynamic solver tidak menemukan kandidat; fallback ke %s (%s). Ikuti marker kuning.", OwnedVehicleSpawnPointName[spawnPointIndex], OwnedVehicleSpawnPointSource[spawnPointIndex]);
         SendClientMessage(playerid, COLOR_YELLOW, spawnMsg);
     }
 
@@ -16873,7 +17335,22 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.31.3 Yellow Vehicle Spawn Map Marker");
+    SetGameModeText("SAIF Dev v0.26A.1.31.6.1 Dynamic Parking Stat Tag Compile Hotfix");
+
+    DynamicParkingColAndreasReady = (CA_Init() != 0);
+    if (DynamicParkingColAndreasReady)
+    {
+        print("[SAIF][DYNAMIC-PARKING] ColAndreas map loaded. Near-player collision solver enabled; global catalog remains fallback.");
+    }
+    else
+    {
+        print("[SAIF][DYNAMIC-PARKING] ColAndreas data unavailable. Dynamic solver disabled; global parking catalog fallback remains active.");
+    }
+    for (new reservationIndex = 0; reservationIndex < DYNAMIC_PARKING_MAX_RESERVATIONS; reservationIndex++)
+    {
+        DynamicParkingReservationOwner[reservationIndex] = INVALID_PLAYER_ID;
+        DynamicParkingReservationUntil[reservationIndex] = 0;
+    }
 
     new MySQLOpt:mysqlOptions = mysql_init_options();
     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
@@ -17921,6 +18398,7 @@ stock ShowAdminToolsMenu(playerid)
     strcat(body, "Maintenance Reference\t/maintref\tOwner\n", sizeof(body));
     strcat(body, "Command Reference\t/amenus\tHelper+\n", sizeof(body));
     strcat(body, "House Vehicle Storage Editor\t/houseparkeditor\tOwner\n", sizeof(body));
+    strcat(body, "Dynamic Parking Solver\t/parkingsolver\tOwner\n", sizeof(body));
     strcat(body, "Global Parking Point Editor\t/parkingpointaudit\tOwner\n", sizeof(body));
     strcat(body, "GTA Offline Import Audit\t/offlineaudit\tOwner\n", sizeof(body));
 
@@ -17936,7 +18414,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "SAIF Admin Menus Hub (/amenus)\n\n", sizeof(body));
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
-    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlinecontext\n/offlinepairs | /offlinepairbatches | /offlineplan [id]\n/offlineservicepoints | /offlineservicelist | /offlinepoint [id]\n/offlineruntimedryrun | /offlinearchivestatus | /offlinecapacity\n/offlinefullapply | /offlineapplystatus | /offlineoverlaystatus | /offlineexactreload\n/offlinevehicles | /offlinevehiclelist | /offlinevehicle [queue_id]\n/offlinevehicleplans | /offlinevehiclebatches | /offlinevehicleplan [plan_id]\n/offlinevehicledryrun | /offlinevehiclearchive | /offlinevehiclecapacity\n/offlinevehicleapplystatus | /offlinevehiclereload\n/offlinepickups | /offlinepickuplist | /offlinepickup [queue_id]\n/offlineproperties | /offlinepropertylist | /offlineproperty [evidence_id]\n/offlinehouseplans | /offlinehouseplanlist | /offlinehouseplan [plan_id]\n/offlinegarages | /offlinegaragelist | /offlinegarage [garage_id]\n/garagecatalog | /garagecatalogstatus | /garagecatalogreload\n/garagegeometry | /garagegeometrylist | /garagegeometrydetail [geometry_id]\n/vehiclestorage | /vehiclestorageaudit | /vehiclestoragereload\n/houseparkeditor | /houseparkedit [house_id] | /houseparkreload\n/parkingpointaudit | /parkingpointadd [name] | /parkingpointdisable [id] | /parkingpointreload\n/housecatalog | /housecatalogstatus | /housecatalogreload\n/houseownershipplan | /housemigrationplan\n/offlinehouseapplystatus | /offlinehousereload\n/offlinehousedryrun | /offlinehousearchive | /offlinehousecapacity\n/offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
+    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlinecontext\n/offlinepairs | /offlinepairbatches | /offlineplan [id]\n/offlineservicepoints | /offlineservicelist | /offlinepoint [id]\n/offlineruntimedryrun | /offlinearchivestatus | /offlinecapacity\n/offlinefullapply | /offlineapplystatus | /offlineoverlaystatus | /offlineexactreload\n/offlinevehicles | /offlinevehiclelist | /offlinevehicle [queue_id]\n/offlinevehicleplans | /offlinevehiclebatches | /offlinevehicleplan [plan_id]\n/offlinevehicledryrun | /offlinevehiclearchive | /offlinevehiclecapacity\n/offlinevehicleapplystatus | /offlinevehiclereload\n/offlinepickups | /offlinepickuplist | /offlinepickup [queue_id]\n/offlineproperties | /offlinepropertylist | /offlineproperty [evidence_id]\n/offlinehouseplans | /offlinehouseplanlist | /offlinehouseplan [plan_id]\n/offlinegarages | /offlinegaragelist | /offlinegarage [garage_id]\n/garagecatalog | /garagecatalogstatus | /garagecatalogreload\n/garagegeometry | /garagegeometrylist | /garagegeometrydetail [geometry_id]\n/vehiclestorage | /vehiclestorageaudit | /vehiclestoragereload\n/houseparkeditor | /houseparkedit [house_id] | /houseparkreload\n/parkingpointaudit | /parkingpointadd [name] | /parkingpointdisable [id] | /parkingpointreload\n/parkingsolver | /parkingprobe\n/housecatalog | /housecatalogstatus | /housecatalogreload\n/houseownershipplan | /housemigrationplan\n/offlinehouseapplystatus | /offlinehousereload\n/offlinehousedryrun | /offlinehousearchive | /offlinehousecapacity\n/offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
     strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/orgeconomy, /orgeconomyaudit, /orgstatus, /orgeconomyhealth, /orgbiz, /orgbusiness, /orgfinance\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /vehmissioncloseout, /vehiclemissionhealth, /missiontarget, /vehmissionconfig, /missionpointmenu, /missionpool, /vehmissionpool, /jobpointpool, /vmpool, /pointpool, /jobpool, /jobpointmenu, /taxirequest, /taxistatus, /canceltaxi, /busrequest, /busstatus, /cancelbus, /medicrequest, /medicstatus, /cancelmedic, /firestatus, /firemission\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /cjmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
@@ -46419,6 +46897,18 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/parkingsolver", true) || !strcmp(cmdtext, "/dynamicparking", true))
+    {
+        ShowDynamicParkingSolverAudit(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/parkingprobe", true) || !strcmp(cmdtext, "/dynamicparkingprobe", true))
+    {
+        RunDynamicParkingSolverProbe(playerid);
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/parkingpointaudit", true) || !strcmp(cmdtext, "/parkingaudit", true))
     {
         QueryGlobalParkingPointAudit(playerid);
@@ -49648,7 +50138,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.31.5 Global Nearest Parking Spawn Rework");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.31.6.1 Dynamic Parking Stat Tag Compile Hotfix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -49658,6 +50148,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.31.6.1: Compile hotfix untuk dynamic parking stat array, const input, dan model bounding-box validation.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.31.5: owned vehicle mencari seluruh global parking catalog terdekat; parked origin, sisi parkir, mission spawn, garage slot, dan admin custom point.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.31.2: ALT di kendaraan dirutekan dari KEY_FIRE ke vehicle mission dan house storage; ALT berjalan kaki tetap KEY_WALK.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.31: dealer_pending, home garage, /despawn, nearest parking spawn, /park disabled, dan warna commit saat garage save.");

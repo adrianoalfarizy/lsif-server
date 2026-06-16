@@ -975,6 +975,7 @@ new PlayerPendingHouseStorageToken[MAX_PLAYERS][40];
 new Float:PlayerPendingHouseStorageHealth[MAX_PLAYERS];
 new PlayerPendingHouseStorageFuel[MAX_PLAYERS];
 new PlayerPendingHouseStorageLocked[MAX_PLAYERS];
+new bool:PlayerVehicleAltInputHeld[MAX_PLAYERS];
 new g_VehicleStorageCheckpointTimer;
 
 // v0.26A.1.31 owned vehicle lifecycle and nearest parking spawn runtime.
@@ -8984,6 +8985,7 @@ stock ResetPlayerHouseVehicleStorageRuntime(playerid)
     PlayerPendingHouseStorageHealth[playerid] = 1000.0;
     PlayerPendingHouseStorageFuel[playerid] = VEHICLE_MAX_FUEL;
     PlayerPendingHouseStorageLocked[playerid] = 0;
+    PlayerVehicleAltInputHeld[playerid] = false;
     for (new i = 0; i < MAX_GARAGE_SLOTS; i++) PlayerHouseStorageRetrieveSlotMap[playerid][i] = -1;
     return 1;
 }
@@ -45622,6 +45624,52 @@ public OnGangTurfListDialogLoaded(playerid, gangid)
     return 1;
 }
 
+stock IsVehicleAltInputDown(t_KEY:keys)
+{
+    return ((keys & KEY_FIRE) || (keys & KEY_ACTION) || (keys & KEY_WALK));
+}
+
+stock RouteVehicleAltInteraction(playerid)
+{
+    if (TryHandleVehicleMissionAlt(playerid))
+    {
+        return 1;
+    }
+
+    if (TryHandleHouseVehicleStorageAlt(playerid))
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
+public OnPlayerUpdate(playerid)
+{
+    if (!PlayerLoggedIn[playerid] || !IsPlayerInAnyVehicle(playerid))
+    {
+        PlayerVehicleAltInputHeld[playerid] = false;
+        return 1;
+    }
+
+    new t_KEY:keys;
+    new updown, leftright;
+    GetPlayerKeys(playerid, keys, updown, leftright);
+
+    new altDown = IsVehicleAltInputDown(keys);
+    if (altDown && !PlayerVehicleAltInputHeld[playerid])
+    {
+        PlayerVehicleAltInputHeld[playerid] = true;
+        RouteVehicleAltInteraction(playerid);
+    }
+    else if (!altDown)
+    {
+        PlayerVehicleAltInputHeld[playerid] = false;
+    }
+
+    return 1;
+}
+
 public OnPlayerKeyStateChange(playerid, KEY:newkeys, KEY:oldkeys)
 {
     if (!PlayerLoggedIn[playerid])
@@ -45641,18 +45689,24 @@ public OnPlayerKeyStateChange(playerid, KEY:newkeys, KEY:oldkeys)
         return 1;
     }
 
-    // GTA SA/open.mp maps the default LALT key to KEY_FIRE while inside a vehicle.
-    // Route that edge directly to vehicle-only ALT interactions before the on-foot KEY_WALK path.
-    if (IsPlayerInAnyVehicle(playerid) && (newkeys & KEY_FIRE) && !(oldkeys & KEY_FIRE))
+    // Vehicle ALT is routed from all relevant GTA key mappings.
+    // OnPlayerUpdate provides a polling fallback for clients where the key edge is not delivered here.
+    if (IsPlayerInAnyVehicle(playerid))
     {
-        if (TryHandleVehicleMissionAlt(playerid))
-        {
-            return 1;
-        }
+        new altNow = ((newkeys & KEY_FIRE) || (newkeys & KEY_ACTION) || (newkeys & KEY_WALK));
+        new altBefore = ((oldkeys & KEY_FIRE) || (oldkeys & KEY_ACTION) || (oldkeys & KEY_WALK));
 
-        if (TryHandleHouseVehicleStorageAlt(playerid))
+        if (altNow && !altBefore && !PlayerVehicleAltInputHeld[playerid])
         {
-            return 1;
+            PlayerVehicleAltInputHeld[playerid] = true;
+            if (RouteVehicleAltInteraction(playerid))
+            {
+                return 1;
+            }
+        }
+        else if (!altNow)
+        {
+            PlayerVehicleAltInputHeld[playerid] = false;
         }
     }
 
@@ -49313,7 +49367,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.31.3 Owned Vehicle Yellow Spawn Map Marker");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.31.4 Vehicle ALT Polling Fallback Hotfix");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -49323,7 +49377,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.31.3: pemanggilan owned vehicle memberi marker kuning pada lokasi spawn sampai kendaraan didekati/diambil.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.31.4: ALT kendaraan memakai callback + polling fallback untuk house storage; marker kuning owned vehicle tetap aktif.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.31.2: ALT di kendaraan dirutekan dari KEY_FIRE ke vehicle mission dan house storage; ALT berjalan kaki tetap KEY_WALK.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.31: dealer_pending, home garage, /despawn, nearest parking spawn, /park disabled, dan warna commit saat garage save.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.29: controlled apply 12 baseline savehouse garage definitions; runtime interaction/storage/door policy tetap disabled.");

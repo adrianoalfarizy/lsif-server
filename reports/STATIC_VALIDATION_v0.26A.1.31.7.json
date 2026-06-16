@@ -1,0 +1,101 @@
+{
+  "version": "v0.26A.1.31.7",
+  "title": "Semantic Public Parking Zone Runtime",
+  "generated_at_utc": "2026-06-16T04:34:54.225895+00:00",
+  "pawn": {
+    "line_count": 56619,
+    "raw_braces": [
+      6497,
+      6497
+    ],
+    "raw_parentheses": [
+      29357,
+      29357
+    ],
+    "raw_square_brackets": [
+      11648,
+      11648
+    ],
+    "lexical_braces": [
+      6495,
+      6495
+    ],
+    "lexical_parentheses": [
+      27840,
+      27840
+    ],
+    "lexical_square_brackets": [
+      10808,
+      10808
+    ],
+    "lexical_end_state": "code",
+    "function_definition_count": 1492,
+    "duplicate_function_definitions": {},
+    "forward_count": 266,
+    "missing_forward_definitions": [
+      {
+        "name": "OnGangRespectLoaded",
+        "line": 3103
+      },
+      {
+        "name": "OnGangHQPointModelSaved",
+        "line": 3142
+      }
+    ],
+    "known_preexisting_missing_forwards": [
+      "OnGangRespectLoaded",
+      "OnGangHQPointModelSaved"
+    ]
+  },
+  "semantic_parking": {
+    "runtime_capacity": 1024,
+    "search_radii_m": [
+      250,
+      500,
+      1000
+    ],
+    "find_semantic_call_count_in_spawn_path": 1,
+    "dynamic_solver_call_count_in_spawn_path": 0,
+    "legacy_global_call_count_in_spawn_path": 0,
+    "parked_vehicle_reference_count_in_spawn_path": 0,
+    "marker_call_count_in_spawn_path": 1,
+    "zone_table_references": 12,
+    "slot_table_references": 12,
+    "legacy_parkingpointadd_disabled_messages": 2
+  },
+  "sql": [
+    {
+      "path": "database/apply/apply_saif_v0.26A.1.31.7_semantic_public_parking_zone_runtime.sql",
+      "lines": 213,
+      "parentheses_open": 87,
+      "parentheses_close": 87,
+      "lexical_end_state": "code"
+    },
+    {
+      "path": "database/migrations/20260616_saif_v0.26A.1.31.7_semantic_public_parking_zone_runtime.sql",
+      "lines": 112,
+      "parentheses_open": 61,
+      "parentheses_close": 61,
+      "lexical_end_state": "code"
+    },
+    {
+      "path": "database/rollback/rollback_saif_v0.26A.1.31.7_semantic_public_parking_zone_runtime.sql",
+      "lines": 95,
+      "parentheses_open": 13,
+      "parentheses_close": 13,
+      "lexical_end_state": "code"
+    },
+    {
+      "path": "database/verify/verify_saif_v0.26A.1.31.7_semantic_public_parking_zone_runtime.sql",
+      "lines": 104,
+      "parentheses_open": 95,
+      "parentheses_close": 95,
+      "lexical_end_state": "code"
+    }
+  ],
+  "notes": [
+    "Pawn compiler was not available in the validation container; Qawno F5 is the final compile gate.",
+    "Two missing forward definitions are pre-existing in the source and not introduced by v0.26A.1.31.7.",
+    "Facility imports create candidate zones only; approved runtime slots require admin curation or legacy admin_custom conversion."
+  ]
+}

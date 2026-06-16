@@ -1,7 +1,11 @@
 16147f31f01cee2c76356953afdf1ed9b2aa36ad695c7972316c97c0b84a7b1c  ./COLANDREAS_DEPENDENCY_v0.26A.1.31.6.md
-1690731524f4de0d84c344cdbc2e36c5e7e4f5ba00f5a521964ebcd1f868f7ad  ./README_SAIF_v0.26A.1.31.6.1.md
-88ccb46aad57902f4524667a99c2003b74443b7a3187f4f75ec15f63c070ce29  ./gamemodes/lsif.pwn
-a2b8906dc825578e383acf39e1ce3b382e84ca06a84165de629f0cd9b18dedb5  ./lsif_v0.26A.1.31.6.1.patch
-bb239237c93088e3115f39aa8d1a18732e0e256ddf95e13f27e70b7e2b5ca1e9  ./reports/STATIC_VALIDATION_v0.26A.1.31.6.1.json
-91c4b2d85fabdc25be91f57a432a07ca1cda5e2a8525fc047c5c787ca9145497  ./reports/STATIC_VALIDATION_v0.26A.1.31.6.1.md
+285ac6f7d63538f315bdee21afa44044c1e8b666253f9c61d6694c6653d9a6fb  ./README_SAIF_v0.26A.1.31.7.md
+a79487fa4fb9c279588e56f31df13123363261973d8849e677b04bb6134933a3  ./database/apply/apply_saif_v0.26A.1.31.7_semantic_public_parking_zone_runtime.sql
+c67ec44c8442f825001765340ad03c77290e9f98eb7c5ecb1af3b5cf96deb000  ./database/migrations/20260616_saif_v0.26A.1.31.7_semantic_public_parking_zone_runtime.sql
+b480e397d5e12402403b3dc916689da7330b59f0461fe5b68bdb04a112944c4b  ./database/rollback/rollback_saif_v0.26A.1.31.7_semantic_public_parking_zone_runtime.sql
+8a54e03d24da95b4507d170635acf2200d7c8c0746f4bee288266689a4c48080  ./database/verify/verify_saif_v0.26A.1.31.7_semantic_public_parking_zone_runtime.sql
+d0cc123613cbd31620294b11b680078615ea5d658afbe011eeac5ee6509918f6  ./gamemodes/lsif.pwn
+8d72320e19996424b2765260a0d52277641082da00a0f7d2a3e84099660a1745  ./lsif_v0.26A.1.31.7.patch
+05460df7be033207ddf1332b007863f12d85f30765e143f7a8a70aacbf82feef  ./reports/STATIC_VALIDATION_v0.26A.1.31.7.json
+ea2cf26cff82b85d5ca52df540c6c206f9b081fa2a866205ab334e47b12ce4a5  ./reports/STATIC_VALIDATION_v0.26A.1.31.7.md
 fc16a90d41894c9e79e9fbb4f82d1bf85fcea8c40f75c2de16d867623fe20ef6  ./tools/verify/verify_colandreas_v0.26A.1.31.6.sh

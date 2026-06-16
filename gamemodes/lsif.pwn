@@ -1052,6 +1052,50 @@ new Float:PlayerDynamicParkingLastY[MAX_PLAYERS];
 new Float:PlayerDynamicParkingLastZ[MAX_PLAYERS];
 new Float:PlayerDynamicParkingLastA[MAX_PLAYERS];
 
+
+// v0.26A.1.31.7: Semantic Public Parking Zone Runtime.
+// Owned vehicles may only be remotely spawned into explicitly approved public
+// parking slots grouped by semantic facility zones. Parked-vehicle origins,
+// garage slots, mission points, and arbitrary collision-generated ground are
+// intentionally excluded from the owned-vehicle spawn path.
+#define MAX_SEMANTIC_PUBLIC_PARKING_SLOTS 1024
+#define SEMANTIC_PARKING_ZONE_NAME_SIZE 64
+#define SEMANTIC_PARKING_ZONE_TYPE_SIZE 32
+#define SEMANTIC_PARKING_DEFAULT_CLEAR_RADIUS 4.5
+#define SEMANTIC_PARKING_DEFAULT_NEAR_RADIUS 250.0
+#define SEMANTIC_PARKING_DEFAULT_MID_RADIUS 500.0
+#define SEMANTIC_PARKING_DEFAULT_FAR_RADIUS 1000.0
+#define SEMANTIC_PARKING_RESERVATION_MS 15000
+
+new bool:SemanticPublicParkingPolicyReady = false;
+new bool:SemanticPublicParkingSlotsReady = false;
+new SemanticPublicParkingPolicyEnabled = 0;
+new SemanticPublicParkingRequireColAndreas = 1;
+new SemanticPublicParkingRejectWhenUnavailable = 1;
+new Float:SemanticPublicParkingSearchNear = SEMANTIC_PARKING_DEFAULT_NEAR_RADIUS;
+new Float:SemanticPublicParkingSearchMid = SEMANTIC_PARKING_DEFAULT_MID_RADIUS;
+new Float:SemanticPublicParkingSearchFar = SEMANTIC_PARKING_DEFAULT_FAR_RADIUS;
+new SemanticPublicParkingSlotCount = 0;
+new SemanticPublicParkingSlotID[MAX_SEMANTIC_PUBLIC_PARKING_SLOTS];
+new SemanticPublicParkingZoneID[MAX_SEMANTIC_PUBLIC_PARKING_SLOTS];
+new SemanticPublicParkingSlotNumber[MAX_SEMANTIC_PUBLIC_PARKING_SLOTS];
+new SemanticPublicParkingInterior[MAX_SEMANTIC_PUBLIC_PARKING_SLOTS];
+new SemanticPublicParkingVW[MAX_SEMANTIC_PUBLIC_PARKING_SLOTS];
+new SemanticPublicParkingPriority[MAX_SEMANTIC_PUBLIC_PARKING_SLOTS];
+new Float:SemanticPublicParkingZoneX[MAX_SEMANTIC_PUBLIC_PARKING_SLOTS];
+new Float:SemanticPublicParkingZoneY[MAX_SEMANTIC_PUBLIC_PARKING_SLOTS];
+new Float:SemanticPublicParkingZoneZ[MAX_SEMANTIC_PUBLIC_PARKING_SLOTS];
+new Float:SemanticPublicParkingZoneRadius[MAX_SEMANTIC_PUBLIC_PARKING_SLOTS];
+new Float:SemanticPublicParkingSlotX[MAX_SEMANTIC_PUBLIC_PARKING_SLOTS];
+new Float:SemanticPublicParkingSlotY[MAX_SEMANTIC_PUBLIC_PARKING_SLOTS];
+new Float:SemanticPublicParkingSlotZ[MAX_SEMANTIC_PUBLIC_PARKING_SLOTS];
+new Float:SemanticPublicParkingSlotA[MAX_SEMANTIC_PUBLIC_PARKING_SLOTS];
+new Float:SemanticPublicParkingClearRadius[MAX_SEMANTIC_PUBLIC_PARKING_SLOTS];
+new SemanticPublicParkingReservedBy[MAX_SEMANTIC_PUBLIC_PARKING_SLOTS];
+new SemanticPublicParkingReservedUntil[MAX_SEMANTIC_PUBLIC_PARKING_SLOTS];
+new SemanticPublicParkingZoneName[MAX_SEMANTIC_PUBLIC_PARKING_SLOTS][SEMANTIC_PARKING_ZONE_NAME_SIZE];
+new SemanticPublicParkingZoneType[MAX_SEMANTIC_PUBLIC_PARKING_SLOTS][SEMANTIC_PARKING_ZONE_TYPE_SIZE];
+
 new bool:PlayerOwnedVehicleSpawnMarkerActive[MAX_PLAYERS];
 new Float:PlayerOwnedVehicleSpawnMarkerX[MAX_PLAYERS];
 new Float:PlayerOwnedVehicleSpawnMarkerY[MAX_PLAYERS];
@@ -2981,6 +3025,16 @@ forward OnOwnedVehicleStatesNormalized(playerid);
 forward OnOwnedVehicleStorageStatesNormalized(playerid);
 forward Float:GetParkedVehicleRuntimeZ(index);
 forward OnOwnedVehicleSpawnPointsLoaded();
+forward OnSemanticPublicParkingPolicyLoaded();
+forward OnSemanticPublicParkingSlotsLoaded();
+forward OnSemanticPublicParkingZoneCreated(playerid);
+forward OnSemanticPublicParkingSlotSaved(playerid, zoneid);
+forward OnSemanticPublicParkingZoneDisabled(playerid, zoneid);
+forward OnSemanticPublicParkingSlotDisabled(playerid, slotid);
+forward OnSemanticPublicParkingZoneCenterSaved(playerid, zoneid);
+forward OnSemanticPublicParkingAuditLoaded(playerid);
+forward OnSemanticPublicParkingZoneListLoaded(playerid);
+forward OnSemanticPublicParkingZoneGotoLoaded(playerid, zoneid);
 forward VehicleLifecycleTick();
 forward OnOwnedVehicleDespawned(playerid, slotIndex);
 forward OnOwnedVehicleRemoteSpawned(playerid, slotIndex);
@@ -7599,21 +7653,21 @@ stock ShowDynamicParkingSolverAudit(playerid)
 {
     if (!CanUseOfflineImportAudit(playerid)) return 0;
 
-    new readyText[4], fallbackText[4], foundText[4];
+    new readyText[4], semanticText[4], foundText[4];
     if (DynamicParkingColAndreasReady) format(readyText, sizeof(readyText), "YES");
     else format(readyText, sizeof(readyText), "NO");
-    if (OwnedVehicleSpawnPointsReady) format(fallbackText, sizeof(fallbackText), "YES");
-    else format(fallbackText, sizeof(fallbackText), "NO");
+    if (SemanticPublicParkingSlotsReady) format(semanticText, sizeof(semanticText), "YES");
+    else format(semanticText, sizeof(semanticText), "NO");
     if (PlayerDynamicParkingLastFound[playerid]) format(foundText, sizeof(foundText), "YES");
     else format(foundText, sizeof(foundText), "NO");
 
     new body[1800];
     format(body, sizeof(body),
-        "Dynamic Parking Solver v0.26A.1.31.6.1\n\nColAndreas ready: %s\nNearest spawn policy: %d\nDynamic solver domain: exterior Interior 0 / VW 0\nFallback catalog ready: %s (%d rows)\n\nLast solver result: %s\nTransform: %.3f, %.3f, %.3f, %.2f\n\nCandidate audit\nTested: %d\nNo ground: %d\nWater: %d\nSteep surface: %d\nHeight delta: %d\nEdge support: %d\nWorld collision: %d\nVehicle occupied: %d\nPlayer occupied: %d\nReserved: %d\nValid: %d\n\nCommand\n/parkingprobe - read-only solver probe using active owned model or model 411",
+        "Dynamic Parking Diagnostic v0.26A.1.31.7\n\nColAndreas ready: %s\nNearest spawn policy: %d\nSemantic parking runtime: %s (%d approved slots)\nDynamic arbitrary-ground spawn: DISABLED for /myveh\nDiagnostic solver domain: exterior Interior 0 / VW 0\n\nLast diagnostic result: %s\nTransform: %.3f, %.3f, %.3f, %.2f\n\nCandidate audit\nTested: %d\nNo ground: %d\nWater: %d\nSteep surface: %d\nHeight delta: %d\nEdge support: %d\nWorld collision: %d\nVehicle occupied: %d\nPlayer occupied: %d\nReserved: %d\nValid: %d\n\nCommand\n/parkingprobe - read-only collision diagnostic; it never becomes an owned-vehicle spawn source",
         readyText,
         VehicleStorageNearestSpawnEnabled,
-        fallbackText,
-        OwnedVehicleSpawnPointCount,
+        semanticText,
+        SemanticPublicParkingSlotCount,
         foundText,
         PlayerDynamicParkingLastX[playerid],
         PlayerDynamicParkingLastY[playerid],
@@ -7657,9 +7711,611 @@ stock RunDynamicParkingSolverProbe(playerid)
     return 1;
 }
 
+
+stock ResetSemanticPublicParkingRuntime()
+{
+    SemanticPublicParkingPolicyReady = false;
+    SemanticPublicParkingSlotsReady = false;
+    SemanticPublicParkingPolicyEnabled = 0;
+    SemanticPublicParkingRequireColAndreas = 1;
+    SemanticPublicParkingRejectWhenUnavailable = 1;
+    SemanticPublicParkingSearchNear = SEMANTIC_PARKING_DEFAULT_NEAR_RADIUS;
+    SemanticPublicParkingSearchMid = SEMANTIC_PARKING_DEFAULT_MID_RADIUS;
+    SemanticPublicParkingSearchFar = SEMANTIC_PARKING_DEFAULT_FAR_RADIUS;
+    SemanticPublicParkingSlotCount = 0;
+
+    for (new i = 0; i < MAX_SEMANTIC_PUBLIC_PARKING_SLOTS; i++)
+    {
+        SemanticPublicParkingSlotID[i] = 0;
+        SemanticPublicParkingZoneID[i] = 0;
+        SemanticPublicParkingSlotNumber[i] = 0;
+        SemanticPublicParkingInterior[i] = 0;
+        SemanticPublicParkingVW[i] = 0;
+        SemanticPublicParkingPriority[i] = 100;
+        SemanticPublicParkingZoneX[i] = 0.0;
+        SemanticPublicParkingZoneY[i] = 0.0;
+        SemanticPublicParkingZoneZ[i] = 0.0;
+        SemanticPublicParkingZoneRadius[i] = 180.0;
+        SemanticPublicParkingSlotX[i] = 0.0;
+        SemanticPublicParkingSlotY[i] = 0.0;
+        SemanticPublicParkingSlotZ[i] = 0.0;
+        SemanticPublicParkingSlotA[i] = 0.0;
+        SemanticPublicParkingClearRadius[i] = SEMANTIC_PARKING_DEFAULT_CLEAR_RADIUS;
+        SemanticPublicParkingReservedBy[i] = INVALID_PLAYER_ID;
+        SemanticPublicParkingReservedUntil[i] = 0;
+        format(SemanticPublicParkingZoneName[i], SEMANTIC_PARKING_ZONE_NAME_SIZE, "Public Parking");
+        format(SemanticPublicParkingZoneType[i], SEMANTIC_PARKING_ZONE_TYPE_SIZE, "public_parking");
+    }
+    return 1;
+}
+
+stock LoadSemanticPublicParkingRuntime()
+{
+    ResetSemanticPublicParkingRuntime();
+    if (!g_DatabaseReady || g_SQL == MYSQL_INVALID_HANDLE) return 0;
+
+    mysql_tquery(g_SQL,
+        "SELECT enabled,require_colandreas,reject_when_unavailable,search_near_radius,search_mid_radius,search_far_radius FROM public_parking_policy WHERE id=1 LIMIT 1",
+        "OnSemanticPublicParkingPolicyLoaded");
+    return 1;
+}
+
+public OnSemanticPublicParkingPolicyLoaded()
+{
+    if (cache_num_rows() <= 0)
+    {
+        print("[SAIF][SEMANTIC-PARKING] Policy row missing. Semantic public parking spawn remains disabled.");
+        return 1;
+    }
+
+    cache_get_value_name_int(0, "enabled", SemanticPublicParkingPolicyEnabled);
+    cache_get_value_name_int(0, "require_colandreas", SemanticPublicParkingRequireColAndreas);
+    cache_get_value_name_int(0, "reject_when_unavailable", SemanticPublicParkingRejectWhenUnavailable);
+    cache_get_value_name_float(0, "search_near_radius", SemanticPublicParkingSearchNear);
+    cache_get_value_name_float(0, "search_mid_radius", SemanticPublicParkingSearchMid);
+    cache_get_value_name_float(0, "search_far_radius", SemanticPublicParkingSearchFar);
+
+    if (SemanticPublicParkingSearchNear < 50.0) SemanticPublicParkingSearchNear = SEMANTIC_PARKING_DEFAULT_NEAR_RADIUS;
+    if (SemanticPublicParkingSearchMid < SemanticPublicParkingSearchNear) SemanticPublicParkingSearchMid = SEMANTIC_PARKING_DEFAULT_MID_RADIUS;
+    if (SemanticPublicParkingSearchFar < SemanticPublicParkingSearchMid) SemanticPublicParkingSearchFar = SEMANTIC_PARKING_DEFAULT_FAR_RADIUS;
+    SemanticPublicParkingPolicyReady = true;
+
+    mysql_tquery(g_SQL,
+        "SELECT s.id slot_id,z.id zone_id,z.zone_name,z.zone_type,z.center_x,z.center_y,z.center_z,z.search_radius,z.interior_id,z.virtual_world,z.priority,s.slot_number,s.pos_x,s.pos_y,s.pos_z,s.pos_a,s.clear_radius FROM public_parking_slots s INNER JOIN public_parking_zones z ON z.id=s.zone_id WHERE z.enabled=1 AND z.review_status='approved' AND s.enabled=1 AND s.review_status='approved' ORDER BY z.priority ASC,z.id ASC,s.slot_number ASC LIMIT 1024",
+        "OnSemanticPublicParkingSlotsLoaded");
+    return 1;
+}
+
+public OnSemanticPublicParkingSlotsLoaded()
+{
+    new rows = cache_num_rows();
+    if (rows > MAX_SEMANTIC_PUBLIC_PARKING_SLOTS) rows = MAX_SEMANTIC_PUBLIC_PARKING_SLOTS;
+
+    for (new i = 0; i < rows; i++)
+    {
+        cache_get_value_name_int(i, "slot_id", SemanticPublicParkingSlotID[i]);
+        cache_get_value_name_int(i, "zone_id", SemanticPublicParkingZoneID[i]);
+        cache_get_value_name_int(i, "slot_number", SemanticPublicParkingSlotNumber[i]);
+        cache_get_value_name_int(i, "interior_id", SemanticPublicParkingInterior[i]);
+        cache_get_value_name_int(i, "virtual_world", SemanticPublicParkingVW[i]);
+        cache_get_value_name_int(i, "priority", SemanticPublicParkingPriority[i]);
+        cache_get_value_name_float(i, "center_x", SemanticPublicParkingZoneX[i]);
+        cache_get_value_name_float(i, "center_y", SemanticPublicParkingZoneY[i]);
+        cache_get_value_name_float(i, "center_z", SemanticPublicParkingZoneZ[i]);
+        cache_get_value_name_float(i, "search_radius", SemanticPublicParkingZoneRadius[i]);
+        cache_get_value_name_float(i, "pos_x", SemanticPublicParkingSlotX[i]);
+        cache_get_value_name_float(i, "pos_y", SemanticPublicParkingSlotY[i]);
+        cache_get_value_name_float(i, "pos_z", SemanticPublicParkingSlotZ[i]);
+        cache_get_value_name_float(i, "pos_a", SemanticPublicParkingSlotA[i]);
+        cache_get_value_name_float(i, "clear_radius", SemanticPublicParkingClearRadius[i]);
+        cache_get_value_name(i, "zone_name", SemanticPublicParkingZoneName[i], SEMANTIC_PARKING_ZONE_NAME_SIZE);
+        cache_get_value_name(i, "zone_type", SemanticPublicParkingZoneType[i], SEMANTIC_PARKING_ZONE_TYPE_SIZE);
+        SemanticPublicParkingReservedBy[i] = INVALID_PLAYER_ID;
+        SemanticPublicParkingReservedUntil[i] = 0;
+    }
+
+    SemanticPublicParkingSlotCount = rows;
+    SemanticPublicParkingSlotsReady = true;
+    new msg[192];
+    format(msg, sizeof(msg), "[SAIF][SEMANTIC-PARKING] Approved public parking slots loaded: %d/%d. Parked-vehicle and arbitrary-ground sources are excluded.", SemanticPublicParkingSlotCount, MAX_SEMANTIC_PUBLIC_PARKING_SLOTS);
+    print(msg);
+    return 1;
+}
+
+stock IsValidSemanticPublicParkingZoneType(const zoneType[])
+{
+    if (!strcmp(zoneType, "restaurant_parking", true)) return 1;
+    if (!strcmp(zoneType, "shop_parking", true)) return 1;
+    if (!strcmp(zoneType, "hospital_parking", true)) return 1;
+    if (!strcmp(zoneType, "police_parking", true)) return 1;
+    if (!strcmp(zoneType, "government_parking", true)) return 1;
+    if (!strcmp(zoneType, "mall_parking", true)) return 1;
+    if (!strcmp(zoneType, "hotel_parking", true)) return 1;
+    if (!strcmp(zoneType, "gym_parking", true)) return 1;
+    if (!strcmp(zoneType, "casino_parking", true)) return 1;
+    if (!strcmp(zoneType, "facility_parking", true)) return 1;
+    if (!strcmp(zoneType, "public_parking", true)) return 1;
+    return 0;
+}
+
+stock IsSemanticPublicParkingReservedForOther(playerid, slotIndex)
+{
+    if (slotIndex < 0 || slotIndex >= SemanticPublicParkingSlotCount) return 1;
+    if (SemanticPublicParkingReservedBy[slotIndex] == INVALID_PLAYER_ID) return 0;
+    if (GetTickCount() >= SemanticPublicParkingReservedUntil[slotIndex])
+    {
+        SemanticPublicParkingReservedBy[slotIndex] = INVALID_PLAYER_ID;
+        SemanticPublicParkingReservedUntil[slotIndex] = 0;
+        return 0;
+    }
+    return SemanticPublicParkingReservedBy[slotIndex] != playerid;
+}
+
+stock ReserveSemanticPublicParkingSlot(playerid, slotIndex)
+{
+    if (slotIndex < 0 || slotIndex >= SemanticPublicParkingSlotCount) return 0;
+    SemanticPublicParkingReservedBy[slotIndex] = playerid;
+    SemanticPublicParkingReservedUntil[slotIndex] = GetTickCount() + SEMANTIC_PARKING_RESERVATION_MS;
+    return 1;
+}
+
+stock ClearSemanticPublicParkingSlotReservation(playerid, slotIndex)
+{
+    if (slotIndex < 0 || slotIndex >= SemanticPublicParkingSlotCount) return 0;
+    if (SemanticPublicParkingReservedBy[slotIndex] == playerid)
+    {
+        SemanticPublicParkingReservedBy[slotIndex] = INVALID_PLAYER_ID;
+        SemanticPublicParkingReservedUntil[slotIndex] = 0;
+    }
+    return 1;
+}
+
+stock ClearSemanticPublicParkingReservationsForPlayer(playerid)
+{
+    for (new i = 0; i < SemanticPublicParkingSlotCount; i++)
+    {
+        if (SemanticPublicParkingReservedBy[i] == playerid)
+        {
+            SemanticPublicParkingReservedBy[i] = INVALID_PLAYER_ID;
+            SemanticPublicParkingReservedUntil[i] = 0;
+        }
+    }
+    return 1;
+}
+
+stock ValidateSemanticPublicParkingSlot(playerid, modelid, slotIndex, &Float:validatedZ)
+{
+    if (slotIndex < 0 || slotIndex >= SemanticPublicParkingSlotCount) return 0;
+    if (IsSemanticPublicParkingReservedForOther(playerid, slotIndex)) return 0;
+
+    new Float:clearRadius = SemanticPublicParkingClearRadius[slotIndex];
+    if (clearRadius < 2.5) clearRadius = SEMANTIC_PARKING_DEFAULT_CLEAR_RADIUS;
+    if (IsAnyVehicleNearOwnedSpawn(SemanticPublicParkingSlotX[slotIndex], SemanticPublicParkingSlotY[slotIndex], SemanticPublicParkingSlotZ[slotIndex], clearRadius)) return 0;
+    if (IsAnyPlayerNearOwnedSpawn(SemanticPublicParkingInterior[slotIndex], SemanticPublicParkingVW[slotIndex], SemanticPublicParkingSlotX[slotIndex], SemanticPublicParkingSlotY[slotIndex], SemanticPublicParkingSlotZ[slotIndex], OWNED_VEHICLE_SPAWN_PLAYER_CLEAR_RADIUS)) return 0;
+
+    validatedZ = SemanticPublicParkingSlotZ[slotIndex];
+    if (!DynamicParkingColAndreasReady)
+    {
+        if (SemanticPublicParkingRequireColAndreas || SemanticPublicParkingRejectWhenUnavailable) return 0;
+        return 1;
+    }
+
+    new Float:halfWidth, Float:halfLength, Float:minZ;
+    GetDynamicParkingVehicleBounds(modelid, halfWidth, halfLength, minZ);
+    new dynamicStats[DYNAMIC_STAT_COUNT];
+    ResetDynamicParkingStats(dynamicStats);
+    new Float:groundZ;
+    if (!ValidateDynamicParkingPoint(
+        playerid,
+        SemanticPublicParkingSlotX[slotIndex],
+        SemanticPublicParkingSlotY[slotIndex],
+        SemanticPublicParkingSlotZ[slotIndex],
+        minZ,
+        halfWidth,
+        halfLength,
+        groundZ,
+        validatedZ,
+        dynamicStats
+    )) return 0;
+    if (!IsDynamicParkingOrientationSafe(
+        modelid,
+        SemanticPublicParkingSlotX[slotIndex],
+        SemanticPublicParkingSlotY[slotIndex],
+        groundZ,
+        validatedZ,
+        SemanticPublicParkingSlotA[slotIndex],
+        halfWidth,
+        halfLength,
+        dynamicStats
+    )) return 0;
+    return 1;
+}
+
+stock FindNearestSemanticPublicParkingSlot(playerid, modelid, &Float:x, &Float:y, &Float:z, &Float:a, &slotIndex)
+{
+    slotIndex = -1;
+    if (!SemanticPublicParkingPolicyReady || !SemanticPublicParkingPolicyEnabled) return 0;
+    if (!SemanticPublicParkingSlotsReady || SemanticPublicParkingSlotCount <= 0) return 0;
+
+    new interior = GetPlayerInterior(playerid);
+    new virtualWorld = GetPlayerVirtualWorld(playerid);
+    new Float:searchRadii[3];
+    searchRadii[0] = SemanticPublicParkingSearchNear;
+    searchRadii[1] = SemanticPublicParkingSearchMid;
+    searchRadii[2] = SemanticPublicParkingSearchFar;
+
+    for (new pass = 0; pass < sizeof(searchRadii); pass++)
+    {
+        new best = -1;
+        new bestPriority = 32767;
+        new Float:bestDistance = searchRadii[pass] + 1000.0;
+        new Float:bestZ = 0.0;
+
+        for (new i = 0; i < SemanticPublicParkingSlotCount; i++)
+        {
+            if (SemanticPublicParkingInterior[i] != interior || SemanticPublicParkingVW[i] != virtualWorld) continue;
+
+            new Float:zoneDistance = GetPlayerDistanceFromPoint(playerid, SemanticPublicParkingZoneX[i], SemanticPublicParkingZoneY[i], SemanticPublicParkingZoneZ[i]);
+            if (zoneDistance > searchRadii[pass]) continue;
+
+            new Float:slotZoneDX = SemanticPublicParkingSlotX[i] - SemanticPublicParkingZoneX[i];
+            new Float:slotZoneDY = SemanticPublicParkingSlotY[i] - SemanticPublicParkingZoneY[i];
+            new Float:slotZoneDZ = SemanticPublicParkingSlotZ[i] - SemanticPublicParkingZoneZ[i];
+            new Float:slotZoneDistance = floatsqroot((slotZoneDX * slotZoneDX) + (slotZoneDY * slotZoneDY) + (slotZoneDZ * slotZoneDZ));
+            new Float:zoneRadius = SemanticPublicParkingZoneRadius[i];
+            if (zoneRadius < 20.0) zoneRadius = 180.0;
+            if (slotZoneDistance > zoneRadius) continue;
+
+            new Float:slotDistance = GetPlayerDistanceFromPoint(playerid, SemanticPublicParkingSlotX[i], SemanticPublicParkingSlotY[i], SemanticPublicParkingSlotZ[i]);
+            new Float:validatedZ;
+            if (!ValidateSemanticPublicParkingSlot(playerid, modelid, i, validatedZ)) continue;
+
+            if (best == -1 || slotDistance < bestDistance - 0.01 ||
+                (floatabs(slotDistance - bestDistance) <= 5.0 && SemanticPublicParkingPriority[i] < bestPriority))
+            {
+                best = i;
+                bestDistance = slotDistance;
+                bestPriority = SemanticPublicParkingPriority[i];
+                bestZ = validatedZ;
+            }
+        }
+
+        if (best != -1)
+        {
+            slotIndex = best;
+            x = SemanticPublicParkingSlotX[best];
+            y = SemanticPublicParkingSlotY[best];
+            z = bestZ;
+            a = SemanticPublicParkingSlotA[best];
+            return 1;
+        }
+    }
+    return 0;
+}
+
+stock SaveSemanticPublicParkingZoneAtPlayer(playerid, const zoneType[], const zoneName[])
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER)) return 0;
+    if (GetPlayerInterior(playerid) != 0 || GetPlayerVirtualWorld(playerid) != 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Semantic public parking zone hanya dapat dibuat di exterior Interior 0 / Virtual World 0.");
+        return 0;
+    }
+    if (!IsValidSemanticPublicParkingZoneType(zoneType))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Tipe tidak valid. Gunakan restaurant_parking, shop_parking, hospital_parking, police_parking, government_parking, mall_parking, hotel_parking, gym_parking, casino_parking, facility_parking, atau public_parking.");
+        return 0;
+    }
+    new nameLength = strlen(zoneName);
+    if (nameLength < 3 || nameLength > 63)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Nama zona harus 3 sampai 63 karakter.");
+        return 0;
+    }
+
+    new Float:x, Float:y, Float:z, Float:a;
+    new vehicleid = GetPlayerVehicleID(playerid);
+    if (GetPlayerState(playerid) == PLAYER_STATE_DRIVER && vehicleid != INVALID_VEHICLE_ID && IsValidVehicle(vehicleid))
+    {
+        GetVehiclePos(vehicleid, x, y, z);
+        GetVehicleZAngle(vehicleid, a);
+    }
+    else
+    {
+        GetPlayerPos(playerid, x, y, z);
+        GetPlayerFacingAngle(playerid, a);
+    }
+
+    new query[1280];
+    mysql_format(g_SQL, query, sizeof(query),
+        "INSERT INTO public_parking_zones (zone_key,zone_name,zone_type,facility_type,facility_reference_id,center_x,center_y,center_z,center_a,interior_id,virtual_world,search_radius,priority,review_status,enabled,source_tag) VALUES (CONCAT('manual_',SHA1(CONCAT(%d,'-',UNIX_TIMESTAMP(NOW(6)),'-',RAND()))),'%e','%e','%e',NULL,%f,%f,%f,%f,%d,%d,180.0,40,'approved',1,'saif_semantic_public_parking_manual_v0.26A.1.31.7')",
+        PlayerDBID[playerid], zoneName, zoneType, zoneType, x, y, z, a, GetPlayerInterior(playerid), GetPlayerVirtualWorld(playerid));
+    mysql_tquery(g_SQL, query, "OnSemanticPublicParkingZoneCreated", "i", playerid);
+    return 1;
+}
+
+public OnSemanticPublicParkingZoneCreated(playerid)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+    if (cache_affected_rows() <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Zona parkir gagal dibuat. Periksa log database.");
+        return 1;
+    }
+    new zoneid = cache_insert_id();
+    new msg[160];
+    format(msg, sizeof(msg), "Zona parkir semantic ID %d dibuat. Parkirkan kendaraan pada garis slot lalu gunakan /parkingslotadd %d.", zoneid, zoneid);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    LoadSemanticPublicParkingRuntime();
+    return 1;
+}
+
+stock SaveSemanticPublicParkingSlotAtPlayer(playerid, zoneid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER)) return 0;
+    if (GetPlayerInterior(playerid) != 0 || GetPlayerVirtualWorld(playerid) != 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Semantic public parking slot hanya dapat dibuat di exterior Interior 0 / Virtual World 0.");
+        return 0;
+    }
+    if (zoneid <= 0)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Usage: /parkingslotadd [zone_id]");
+        return 0;
+    }
+
+    new Float:x, Float:y, Float:z, Float:a;
+    new vehicleid = GetPlayerVehicleID(playerid);
+    if (GetPlayerState(playerid) == PLAYER_STATE_DRIVER && vehicleid != INVALID_VEHICLE_ID && IsValidVehicle(vehicleid))
+    {
+        GetVehiclePos(vehicleid, x, y, z);
+        GetVehicleZAngle(vehicleid, a);
+    }
+    else
+    {
+        GetPlayerPos(playerid, x, y, z);
+        GetPlayerFacingAngle(playerid, a);
+    }
+
+    new query[1600];
+    mysql_format(g_SQL, query, sizeof(query),
+        "INSERT INTO public_parking_slots (zone_id,slot_number,slot_name,pos_x,pos_y,pos_z,pos_a,clear_radius,review_status,enabled,source_tag) SELECT z.id,COALESCE(MAX(s.slot_number),0)+1,CONCAT('Slot ',COALESCE(MAX(s.slot_number),0)+1),%f,%f,%f,%f,4.5,'approved',1,'saif_semantic_public_parking_manual_v0.26A.1.31.7' FROM public_parking_zones z LEFT JOIN public_parking_slots s ON s.zone_id=z.id WHERE z.id=%d AND z.enabled=1 AND z.review_status='approved' AND SQRT(POW(z.center_x-%f,2)+POW(z.center_y-%f,2)+POW(z.center_z-%f,2))<=z.search_radius GROUP BY z.id",
+        x, y, z, a, zoneid, x, y, z);
+    mysql_tquery(g_SQL, query, "OnSemanticPublicParkingSlotSaved", "ii", playerid, zoneid);
+    return 1;
+}
+
+public OnSemanticPublicParkingSlotSaved(playerid, zoneid)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+    if (cache_affected_rows() <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Slot gagal disimpan. Pastikan zone ada, enabled, approved, dan posisi slot masih di dalam radius zone.");
+        return 1;
+    }
+    LoadSemanticPublicParkingRuntime();
+    new msg[144];
+    format(msg, sizeof(msg), "Slot parkir disimpan ke semantic zone ID %d dan runtime direload.", zoneid);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    return 1;
+}
+
+stock SaveSemanticPublicParkingZoneCenter(playerid, zoneid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER)) return 0;
+    if (GetPlayerInterior(playerid) != 0 || GetPlayerVirtualWorld(playerid) != 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Center semantic public parking harus berada di exterior Interior 0 / Virtual World 0.");
+        return 0;
+    }
+    new Float:x, Float:y, Float:z, Float:a;
+    GetPlayerPos(playerid, x, y, z);
+    GetPlayerFacingAngle(playerid, a);
+    new query[512];
+    mysql_format(g_SQL, query, sizeof(query),
+        "UPDATE public_parking_zones SET center_x=%f,center_y=%f,center_z=%f,center_a=%f,interior_id=%d,virtual_world=%d,review_status='approved',updated_at=NOW() WHERE id=%d AND enabled=1 LIMIT 1",
+        x, y, z, a, GetPlayerInterior(playerid), GetPlayerVirtualWorld(playerid), zoneid);
+    mysql_tquery(g_SQL, query, "OnSemanticPublicParkingZoneCenterSaved", "ii", playerid, zoneid);
+    return 1;
+}
+
+public OnSemanticPublicParkingZoneCenterSaved(playerid, zoneid)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+    if (cache_affected_rows() <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Zone ID tidak ditemukan atau sudah disabled.");
+        return 1;
+    }
+    LoadSemanticPublicParkingRuntime();
+    new msg[128];
+    format(msg, sizeof(msg), "Center semantic parking zone ID %d diperbarui.", zoneid);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    return 1;
+}
+
+stock DisableSemanticPublicParkingZone(playerid, zoneid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER)) return 0;
+    new query[384];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE public_parking_zones SET enabled=0,updated_at=NOW() WHERE id=%d LIMIT 1", zoneid);
+    mysql_tquery(g_SQL, query, "OnSemanticPublicParkingZoneDisabled", "ii", playerid, zoneid);
+    return 1;
+}
+
+public OnSemanticPublicParkingZoneDisabled(playerid, zoneid)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+    if (cache_affected_rows() <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Zone ID tidak ditemukan.");
+        return 1;
+    }
+    LoadSemanticPublicParkingRuntime();
+    new msg[128];
+    format(msg, sizeof(msg), "Semantic parking zone ID %d dinonaktifkan.", zoneid);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    return 1;
+}
+
+stock DisableSemanticPublicParkingSlot(playerid, slotid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER)) return 0;
+    new query[384];
+    mysql_format(g_SQL, query, sizeof(query), "UPDATE public_parking_slots SET enabled=0,updated_at=NOW() WHERE id=%d LIMIT 1", slotid);
+    mysql_tquery(g_SQL, query, "OnSemanticPublicParkingSlotDisabled", "ii", playerid, slotid);
+    return 1;
+}
+
+public OnSemanticPublicParkingSlotDisabled(playerid, slotid)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+    if (cache_affected_rows() <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Slot ID tidak ditemukan.");
+        return 1;
+    }
+    LoadSemanticPublicParkingRuntime();
+    new msg[128];
+    format(msg, sizeof(msg), "Semantic parking slot ID %d dinonaktifkan.", slotid);
+    SendClientMessage(playerid, COLOR_GREEN, msg);
+    return 1;
+}
+
+
+stock GotoSemanticPublicParkingZone(playerid, zoneid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER)) return 0;
+    if (IsPlayerInAnyVehicle(playerid))
+    {
+        SendClientMessage(playerid, COLOR_RED, "Turun dari kendaraan sebelum menggunakan /parkingzonegoto.");
+        return 0;
+    }
+    if (zoneid <= 0)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Usage: /parkingzonegoto [zone_id]");
+        return 0;
+    }
+    new query[384];
+    mysql_format(g_SQL, query, sizeof(query),
+        "SELECT zone_name,center_x,center_y,center_z,center_a,interior_id,virtual_world,review_status,enabled FROM public_parking_zones WHERE id=%d LIMIT 1", zoneid);
+    mysql_tquery(g_SQL, query, "OnSemanticPublicParkingZoneGotoLoaded", "ii", playerid, zoneid);
+    return 1;
+}
+
+public OnSemanticPublicParkingZoneGotoLoaded(playerid, zoneid)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+    if (cache_num_rows() <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Semantic parking zone ID tidak ditemukan.");
+        return 1;
+    }
+    new Float:x, Float:y, Float:z, Float:a;
+    new interior, virtualWorld, enabled;
+    new zoneName[64], reviewStatus[24], msg[192];
+    cache_get_value_name_float(0, "center_x", x);
+    cache_get_value_name_float(0, "center_y", y);
+    cache_get_value_name_float(0, "center_z", z);
+    cache_get_value_name_float(0, "center_a", a);
+    cache_get_value_name_int(0, "interior_id", interior);
+    cache_get_value_name_int(0, "virtual_world", virtualWorld);
+    cache_get_value_name_int(0, "enabled", enabled);
+    cache_get_value_name(0, "zone_name", zoneName, sizeof(zoneName));
+    cache_get_value_name(0, "review_status", reviewStatus, sizeof(reviewStatus));
+    SetPlayerInterior(playerid, interior);
+    SetPlayerVirtualWorld(playerid, virtualWorld);
+    SetPlayerPos(playerid, x, y, z + 0.8);
+    SetPlayerFacingAngle(playerid, a);
+    SetCameraBehindPlayer(playerid);
+    format(msg, sizeof(msg), "Goto zone #%d: %s | review=%s | enabled=%d. Tentukan center dengan /parkingzonesetcenter %d lalu tambah slot.", zoneid, zoneName, reviewStatus, enabled, zoneid);
+    SendClientMessage(playerid, COLOR_CYAN, msg);
+    return 1;
+}
+
+stock QuerySemanticPublicParkingAudit(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER)) return 0;
+    mysql_tquery(g_SQL,
+        "SELECT (SELECT COUNT(*) FROM public_parking_zones) zone_total,(SELECT COUNT(*) FROM public_parking_zones WHERE enabled=1) zone_enabled,(SELECT COUNT(*) FROM public_parking_zones WHERE enabled=1 AND review_status='approved') zone_approved,(SELECT COUNT(*) FROM public_parking_slots) slot_total,(SELECT COUNT(*) FROM public_parking_slots WHERE enabled=1) slot_enabled,(SELECT COUNT(*) FROM public_parking_slots WHERE enabled=1 AND review_status='approved') slot_approved,(SELECT COUNT(*) FROM public_parking_slots s LEFT JOIN public_parking_zones z ON z.id=s.zone_id WHERE z.id IS NULL) orphan_slots,(SELECT COUNT(*) FROM public_parking_slots WHERE enabled=1 AND (pos_x=0 OR pos_y=0 OR pos_z=0)) zero_slots,(SELECT COUNT(*) FROM public_parking_slots WHERE source_tag LIKE '%parked_vehicle%') parked_source_slots,(SELECT enabled FROM public_parking_policy WHERE id=1) policy_enabled",
+        "OnSemanticPublicParkingAuditLoaded", "i", playerid);
+    return 1;
+}
+
+public OnSemanticPublicParkingAuditLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+    if (cache_num_rows() <= 0)
+    {
+        SendClientMessage(playerid, COLOR_RED, "Semantic parking audit gagal membaca database.");
+        return 1;
+    }
+    new zoneTotal, zoneEnabled, zoneApproved, slotTotal, slotEnabled, slotApproved;
+    new orphanSlots, zeroSlots, parkedSourceSlots, policyEnabled;
+    cache_get_value_name_int(0, "zone_total", zoneTotal);
+    cache_get_value_name_int(0, "zone_enabled", zoneEnabled);
+    cache_get_value_name_int(0, "zone_approved", zoneApproved);
+    cache_get_value_name_int(0, "slot_total", slotTotal);
+    cache_get_value_name_int(0, "slot_enabled", slotEnabled);
+    cache_get_value_name_int(0, "slot_approved", slotApproved);
+    cache_get_value_name_int(0, "orphan_slots", orphanSlots);
+    cache_get_value_name_int(0, "zero_slots", zeroSlots);
+    cache_get_value_name_int(0, "parked_source_slots", parkedSourceSlots);
+    cache_get_value_name_int(0, "policy_enabled", policyEnabled);
+
+    new body[1800];
+    format(body, sizeof(body),
+        "Semantic Public Parking v0.26A.1.31.7\n\nPolicy enabled: %d\nRuntime ready: %d\nRuntime approved slots: %d / %d\nColAndreas ready: %d\n\nZones\nTotal: %d\nEnabled: %d\nApproved: %d\n\nSlots\nTotal: %d\nEnabled: %d\nApproved: %d\nOrphan: %d\nZero transform: %d\nParked-vehicle source slots: %d (must be 0)\n\nSpawn contract\n- Only approved public_parking_zones + public_parking_slots are used.\n- Dynamic arbitrary ground is disabled for owned vehicle calls.\n- vehicle_spawn_points and parked_vehicles are excluded.\n- If no official parking slot exists nearby, /myveh is rejected.\n\nCommands\n/parkingzonelist\n/parkingzonegoto [zone_id]\n/parkingzonecreate [type] [name]\n/parkingzonesetcenter [zone_id]\n/parkingslotadd [zone_id]\n/parkingzonedisable [zone_id]\n/parkingslotdisable [slot_id]\n/parkingzonereload",
+        policyEnabled, SemanticPublicParkingSlotsReady, SemanticPublicParkingSlotCount, MAX_SEMANTIC_PUBLIC_PARKING_SLOTS, DynamicParkingColAndreasReady,
+        zoneTotal, zoneEnabled, zoneApproved, slotTotal, slotEnabled, slotApproved, orphanSlots, zeroSlots, parkedSourceSlots);
+    ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_MSGBOX, "Semantic Public Parking Audit", body, "Close", "");
+    return 1;
+}
+
+stock QuerySemanticPublicParkingZoneList(playerid)
+{
+    if (!IsAdminLevel(playerid, ADMIN_OWNER)) return 0;
+    mysql_tquery(g_SQL,
+        "SELECT z.id,z.zone_name,z.zone_type,z.review_status,z.enabled,COUNT(s.id) slot_total,SUM(s.enabled=1 AND s.review_status='approved') approved_slots FROM public_parking_zones z LEFT JOIN public_parking_slots s ON s.zone_id=z.id GROUP BY z.id ORDER BY z.enabled DESC,z.id ASC LIMIT 80",
+        "OnSemanticPublicParkingZoneListLoaded", "i", playerid);
+    return 1;
+}
+
+public OnSemanticPublicParkingZoneListLoaded(playerid)
+{
+    if (!IsPlayerConnected(playerid)) return 1;
+    new rows = cache_num_rows();
+    if (rows <= 0)
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Belum ada semantic public parking zone.");
+        return 1;
+    }
+    new body[3800];
+    format(body, sizeof(body), "ID\tZone / Type\tSlots\n");
+    for (new i = 0; i < rows; i++)
+    {
+        new zoneid, enabled, slotTotal, approvedSlots;
+        new zoneName[64], zoneType[32], reviewStatus[24], enabledText[4], line[192];
+        cache_get_value_name_int(i, "id", zoneid);
+        cache_get_value_name_int(i, "enabled", enabled);
+        cache_get_value_name_int(i, "slot_total", slotTotal);
+        cache_get_value_name_int(i, "approved_slots", approvedSlots);
+        cache_get_value_name(i, "zone_name", zoneName, sizeof(zoneName));
+        cache_get_value_name(i, "zone_type", zoneType, sizeof(zoneType));
+        cache_get_value_name(i, "review_status", reviewStatus, sizeof(reviewStatus));
+        if (enabled) format(enabledText, sizeof(enabledText), "ON");
+        else format(enabledText, sizeof(enabledText), "OFF");
+        format(line, sizeof(line), "%d\t%s [%s] %s/%s\t%d/%d\n", zoneid, zoneName, zoneType, reviewStatus, enabledText, approvedSlots, slotTotal);
+        strcat(body, line, sizeof(body));
+    }
+    ShowPlayerDialog(playerid, DIALOG_INFO, DIALOG_STYLE_TABLIST_HEADERS, "Semantic Parking Zones", body, "Close", "");
+    return 1;
+}
+
 stock ClearOwnedVehicleSpawnReservationsForPlayer(playerid)
 {
     ClearDynamicParkingReservationsForPlayer(playerid);
+    ClearSemanticPublicParkingReservationsForPlayer(playerid);
     for (new i = 0; i < OwnedVehicleSpawnPointCount; i++)
     {
         if (OwnedVehicleSpawnPointReservedBy[i] == playerid)
@@ -7824,9 +8480,7 @@ stock ProcessOwnedVehicleSpawnRequest(playerid, slotIndex)
     }
 
     new Float:x, Float:y, Float:z, Float:a;
-    new spawnPointIndex = -1;
-    new dynamicReservationIndex = -1;
-    new bool:usedDynamicSolver = false;
+    new semanticSlotIndex = -1;
     if (PlayerGarageLifecycle[playerid][slotIndex] == OWNED_VEHICLE_STATE_DEALER_PENDING)
     {
         GetPlayerPos(playerid, x, y, z);
@@ -7835,32 +8489,22 @@ stock ProcessOwnedVehicleSpawnRequest(playerid, slotIndex)
     }
     else
     {
-        if (!VehicleStorageNearestSpawnEnabled)
+        if (!VehicleStorageNearestSpawnEnabled || !SemanticPublicParkingPolicyReady || !SemanticPublicParkingPolicyEnabled)
         {
-            SendClientMessage(playerid, COLOR_RED, "Pemanggilan nearest parking sedang dinonaktifkan oleh policy.");
+            SendClientMessage(playerid, COLOR_RED, "Pemanggilan semantic public parking sedang dinonaktifkan oleh policy.");
             return 0;
         }
-
-        new dynamicStats[DYNAMIC_STAT_COUNT];
-        if (FindDynamicNearPlayerParking(playerid, PlayerGarageModel[playerid][slotIndex], x, y, z, a, dynamicStats))
+        if (SemanticPublicParkingRequireColAndreas && !DynamicParkingColAndreasReady)
         {
-            new Float:halfWidth, Float:halfLength, Float:minZ;
-            GetDynamicParkingVehicleBounds(PlayerGarageModel[playerid][slotIndex], halfWidth, halfLength, minZ);
-            new Float:dynamicRadius = halfLength;
-            if (halfWidth > dynamicRadius) dynamicRadius = halfWidth;
-            dynamicRadius += 1.25;
-            dynamicReservationIndex = ReserveDynamicParkingSpawn(playerid, GetPlayerInterior(playerid), GetPlayerVirtualWorld(playerid), x, y, z, dynamicRadius);
-            usedDynamicSolver = true;
-        }
-        else if (!FindNearestOwnedVehicleSpawn(playerid, x, y, z, a, spawnPointIndex))
-        {
-            SendClientMessage(playerid, COLOR_RED, "Dynamic solver dan global parking fallback tidak menemukan tempat parkir aman di sekitar posisi aktifmu.");
+            SendClientMessage(playerid, COLOR_RED, "ColAndreas belum ready. Owned vehicle tidak akan dipanggil ke slot parkir tanpa validasi collision.");
             return 0;
         }
-        else
+        if (!FindNearestSemanticPublicParkingSlot(playerid, PlayerGarageModel[playerid][slotIndex], x, y, z, a, semanticSlotIndex))
         {
-            ReserveOwnedVehicleSpawnPoint(playerid, spawnPointIndex);
+            SendClientMessage(playerid, COLOR_RED, "Tidak ada slot parkir publik resmi yang kosong di sekitar posisi aktifmu. Dekati restoran, toko, rumah sakit, kantor polisi, mall, atau fasilitas yang sudah memiliki semantic parking zone.");
+            return 0;
         }
+        ReserveSemanticPublicParkingSlot(playerid, semanticSlotIndex);
     }
 
     DestroyStoredOwnedVehicleRuntime(playerid, slotIndex);
@@ -7873,21 +8517,15 @@ stock ProcessOwnedVehicleSpawnRequest(playerid, slotIndex)
     SetActiveVehicleFromGarage(playerid, slotIndex);
     if (!SpawnOwnedVehicle(playerid))
     {
-        ClearOwnedVehicleSpawnPointReservation(playerid, spawnPointIndex);
-        ClearDynamicParkingReservation(playerid, dynamicReservationIndex);
+        ClearSemanticPublicParkingSlotReservation(playerid, semanticSlotIndex);
         return 0;
     }
-    ClearOwnedVehicleSpawnPointReservation(playerid, spawnPointIndex);
-    ClearDynamicParkingReservation(playerid, dynamicReservationIndex);
+    ClearSemanticPublicParkingSlotReservation(playerid, semanticSlotIndex);
     ShowOwnedVehicleSpawnMapMarker(playerid, x, y, z);
-    if (usedDynamicSolver)
+    if (semanticSlotIndex >= 0 && semanticSlotIndex < SemanticPublicParkingSlotCount)
     {
-        SendClientMessage(playerid, COLOR_YELLOW, "Owned vehicle dipanggil ke ruang parkir aman dinamis dekat posisi aktifmu (ColAndreas). Ikuti marker kuning.");
-    }
-    else if (spawnPointIndex >= 0 && spawnPointIndex < OwnedVehicleSpawnPointCount)
-    {
-        new spawnMsg[176];
-        format(spawnMsg, sizeof(spawnMsg), "Dynamic solver tidak menemukan kandidat; fallback ke %s (%s). Ikuti marker kuning.", OwnedVehicleSpawnPointName[spawnPointIndex], OwnedVehicleSpawnPointSource[spawnPointIndex]);
+        new spawnMsg[208];
+        format(spawnMsg, sizeof(spawnMsg), "Owned vehicle dipanggil ke %s, zone #%d slot %d / DB #%d (%s). Ikuti marker kuning.", SemanticPublicParkingZoneName[semanticSlotIndex], SemanticPublicParkingZoneID[semanticSlotIndex], SemanticPublicParkingSlotNumber[semanticSlotIndex], SemanticPublicParkingSlotID[semanticSlotIndex], SemanticPublicParkingZoneType[semanticSlotIndex]);
         SendClientMessage(playerid, COLOR_YELLOW, spawnMsg);
     }
 
@@ -7914,7 +8552,7 @@ public OnOwnedVehicleRemoteSpawned(playerid, slotIndex)
 {
     if (!IsPlayerConnected(playerid)) return 1;
     if (cache_affected_rows() <= 0) SendClientMessage(playerid, COLOR_YELLOW, "Kendaraan spawn, tetapi lifecycle DB perlu diperiksa.");
-    else SendClientMessage(playerid, COLOR_GREEN, "Owned vehicle aktif di titik parkir terdekat.");
+    else SendClientMessage(playerid, COLOR_GREEN, "Owned vehicle aktif di slot parkir publik resmi terdekat.");
     return 1;
 }
 
@@ -10304,6 +10942,7 @@ public OnHouseStorageEditorSaved(playerid, actionType)
     }
     LoadVehicleStorageLocations();
     LoadOwnedVehicleSpawnPoints();
+    LoadSemanticPublicParkingRuntime();
     switch (actionType)
     {
         case 1: SendClientMessage(playerid, COLOR_GREEN, "Posisi checkpoint merah disimpan.");
@@ -17335,16 +17974,16 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.31.6.1 Dynamic Parking Stat Tag Compile Hotfix");
+    SetGameModeText("SAIF Dev v0.26A.1.31.7 Semantic Public Parking");
 
     DynamicParkingColAndreasReady = (CA_Init() != 0);
     if (DynamicParkingColAndreasReady)
     {
-        print("[SAIF][DYNAMIC-PARKING] ColAndreas map loaded. Near-player collision solver enabled; global catalog remains fallback.");
+        print("[SAIF][SEMANTIC-PARKING] ColAndreas map loaded. Collision validation is available for approved public parking slots.");
     }
     else
     {
-        print("[SAIF][DYNAMIC-PARKING] ColAndreas data unavailable. Dynamic solver disabled; global parking catalog fallback remains active.");
+        print("[SAIF][SEMANTIC-PARKING] ColAndreas data unavailable. Semantic slot calls will be rejected while policy requires collision validation.");
     }
     for (new reservationIndex = 0; reservationIndex < DYNAMIC_PARKING_MAX_RESERVATIONS; reservationIndex++)
     {
@@ -17402,6 +18041,7 @@ public OnGameModeInit()
     LoadWorldGarageCatalog();
     LoadUnifiedVehicleStoragePolicy();
     LoadOwnedVehicleSpawnPoints();
+    LoadSemanticPublicParkingRuntime();
     CreateWorldInteractionMarkers();
     LoadGangTerritories();
     LoadGangWeaponStash();
@@ -17527,7 +18167,7 @@ public OnGameModeInit()
     print("[LSIF] Fuel system timer aktif setiap 60 detik.");
     print("[SAIF] House map icon registry aktif: 29 canonical savehouse fixed + 5 context slots, safety refresh 30 detik.");
     print("[SAIF] House Vehicle Storage runtime aktif: red checkpoint + ALT store/retrieve + owner validation.");
-    print("[SAIF] Owned vehicle call marker aktif: map slot 99, icon kotak warna kuning, hilang saat kendaraan didekati.");
+    print("[SAIF] Owned vehicle call marker aktif: map slot 99. Spawn remote hanya memakai approved semantic public parking slot.");
     print("[LSIF] Firefighter mission tick aktif untuk water/APAR extinguish.");
     print("[SAIF] Turf war timer aktif setiap 1 detik.");
     print("[LSIF] Closed beta whitelist system aktif.");
@@ -18398,8 +19038,9 @@ stock ShowAdminToolsMenu(playerid)
     strcat(body, "Maintenance Reference\t/maintref\tOwner\n", sizeof(body));
     strcat(body, "Command Reference\t/amenus\tHelper+\n", sizeof(body));
     strcat(body, "House Vehicle Storage Editor\t/houseparkeditor\tOwner\n", sizeof(body));
-    strcat(body, "Dynamic Parking Solver\t/parkingsolver\tOwner\n", sizeof(body));
-    strcat(body, "Global Parking Point Editor\t/parkingpointaudit\tOwner\n", sizeof(body));
+    strcat(body, "Semantic Public Parking\t/parkingzoneaudit\tOwner\n", sizeof(body));
+    strcat(body, "Dynamic Parking Diagnostic\t/parkingsolver\tOwner\n", sizeof(body));
+    strcat(body, "Legacy Global Parking Audit\t/parkingpointaudit\tOwner\n", sizeof(body));
     strcat(body, "GTA Offline Import Audit\t/offlineaudit\tOwner\n", sizeof(body));
 
     ShowPlayerDialog(playerid, DIALOG_ADMIN_TOOLS_MENU, DIALOG_STYLE_TABLIST_HEADERS, "SAIF Admin Menus Hub", body, "Open", "Close");
@@ -18414,7 +19055,7 @@ stock ShowAdminToolsReference(playerid)
     strcat(body, "SAIF Admin Menus Hub (/amenus)\n\n", sizeof(body));
     strcat(body, "Core Admin:\n/adminmenu, /betamenu\n/ahelp, /admins, /playerlist, /onlineadmins\n/goto [id], /gethere [id], /playerinfo [id]\n/serverinfo, /dbping, /saveall\n\n", sizeof(body));
     strcat(body, "Dynamic World Editors:\n/locmenu | /locedit | /locationmenu\n/objmenu | /objedit | /objectmenu\n/parkvehmenu | /parkvehedit\n/wpickupmenu | /wpickupedit\n/pubintmenu | /pubintedit | /pubintpoints [id]\n/pubintinteriorid [id] [interior] | /pubintvw [id] [vw] | /pubintpickupmodel [id] [side] [model]\n/pubintmapicon [id] [icon_id]\n/turfmenu | /turfedit\n\n", sizeof(body));
-    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlinecontext\n/offlinepairs | /offlinepairbatches | /offlineplan [id]\n/offlineservicepoints | /offlineservicelist | /offlinepoint [id]\n/offlineruntimedryrun | /offlinearchivestatus | /offlinecapacity\n/offlinefullapply | /offlineapplystatus | /offlineoverlaystatus | /offlineexactreload\n/offlinevehicles | /offlinevehiclelist | /offlinevehicle [queue_id]\n/offlinevehicleplans | /offlinevehiclebatches | /offlinevehicleplan [plan_id]\n/offlinevehicledryrun | /offlinevehiclearchive | /offlinevehiclecapacity\n/offlinevehicleapplystatus | /offlinevehiclereload\n/offlinepickups | /offlinepickuplist | /offlinepickup [queue_id]\n/offlineproperties | /offlinepropertylist | /offlineproperty [evidence_id]\n/offlinehouseplans | /offlinehouseplanlist | /offlinehouseplan [plan_id]\n/offlinegarages | /offlinegaragelist | /offlinegarage [garage_id]\n/garagecatalog | /garagecatalogstatus | /garagecatalogreload\n/garagegeometry | /garagegeometrylist | /garagegeometrydetail [geometry_id]\n/vehiclestorage | /vehiclestorageaudit | /vehiclestoragereload\n/houseparkeditor | /houseparkedit [house_id] | /houseparkreload\n/parkingpointaudit | /parkingpointadd [name] | /parkingpointdisable [id] | /parkingpointreload\n/parkingsolver | /parkingprobe\n/housecatalog | /housecatalogstatus | /housecatalogreload\n/houseownershipplan | /housemigrationplan\n/offlinehouseapplystatus | /offlinehousereload\n/offlinehousedryrun | /offlinehousearchive | /offlinehousecapacity\n/offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
+    strcat(body, "Offline/Exact Source Tools:\n/offlineaudit | /offlineworld | /offlineimport\n/offlinesources | /offlineinteriors | /offlineenex | /offlinecontext\n/offlinepairs | /offlinepairbatches | /offlineplan [id]\n/offlineservicepoints | /offlineservicelist | /offlinepoint [id]\n/offlineruntimedryrun | /offlinearchivestatus | /offlinecapacity\n/offlinefullapply | /offlineapplystatus | /offlineoverlaystatus | /offlineexactreload\n/offlinevehicles | /offlinevehiclelist | /offlinevehicle [queue_id]\n/offlinevehicleplans | /offlinevehiclebatches | /offlinevehicleplan [plan_id]\n/offlinevehicledryrun | /offlinevehiclearchive | /offlinevehiclecapacity\n/offlinevehicleapplystatus | /offlinevehiclereload\n/offlinepickups | /offlinepickuplist | /offlinepickup [queue_id]\n/offlineproperties | /offlinepropertylist | /offlineproperty [evidence_id]\n/offlinehouseplans | /offlinehouseplanlist | /offlinehouseplan [plan_id]\n/offlinegarages | /offlinegaragelist | /offlinegarage [garage_id]\n/garagecatalog | /garagecatalogstatus | /garagecatalogreload\n/garagegeometry | /garagegeometrylist | /garagegeometrydetail [geometry_id]\n/vehiclestorage | /vehiclestorageaudit | /vehiclestoragereload\n/houseparkeditor | /houseparkedit [house_id] | /houseparkreload\n/parkingzoneaudit | /parkingzonelist | /parkingzonegoto [zone_id] | /parkingzonecreate [type] [name]\n/parkingzonesetcenter [zone_id] | /parkingslotadd [zone_id]\n/parkingzonedisable [zone_id] | /parkingslotdisable [slot_id] | /parkingzonereload\n/parkingsolver | /parkingprobe (diagnostic only)\n/housecatalog | /housecatalogstatus | /housecatalogreload\n/houseownershipplan | /housemigrationplan\n/offlinehouseapplystatus | /offlinehousereload\n/offlinehousedryrun | /offlinehousearchive | /offlinehousecapacity\n/offlineintgoto [queue_id] [a/b] | /offlineintreturn\n/sourceauditmenu | /sourceaudit | /sourcedetail | /sourcedeprecated\n/sourcecleanup | /sourcedisabletag [dataset] [tag] | /sourcerelabeltag [dataset] [old] [new]\n/saifaudit | /exactaudit | /sourcecheck | /sourcepolicy\n/livedbaudit | /dbtables | /dbcleanupcandidates | /dbintegrity | /maintref\n/parkvehimportdb, /parkvehexactinfo, /parkvehexactclear\n/wpickupimportdb, /wpickupexactinfo, /wpickupexactclear\n/pubintimportdb, /pubintexactinfo, /pubintexactclear\n\n", sizeof(body));
     strcat(body, "Config Editors:\n/gangpresetmenu | /gangdbmenu\n/gangpresetinfo [gang_id], /gangpresetreload\n/gangpresetenable [gang_id] [0/1]\n/setganghqpoint [gang_id], /setgangdoorpoint [gang_id]\n/ganghqpoints [gang_id] editor utama exterior/interior\n/setganghqpoint [gang_id] = Pickup ALT join gang, /setgangdoorpoint [gang_id] = Pickup panah exterior, /setganginterior [gang_id] = spawn interior\n/gangpickupmodel [gang_id] [modelid], /gangdoormodel [gang_id] [modelid], /gangmapicon [gang_id] [iconid]\n/bizpresetmenu | /businessdbmenu | /bizdbmenu\n/orgeconomy, /orgeconomyaudit, /orgstatus, /orgeconomyhealth, /orgbiz, /orgbusiness, /orgfinance\n/ammuconfig, /ammuprice, /ammuammo, /ammureload\n/serviceconfig, /servicereload, /servicestatus, /serviceaudit\n/vehmission, /vehiclemissions, /vmission, /mission2, /jobmissions, /vehmissionaudit, /vehmissioncloseout, /vehiclemissionhealth, /missiontarget, /vehmissionconfig, /missionpointmenu, /missionpool, /vehmissionpool, /jobpointpool, /vmpool, /pointpool, /jobpool, /jobpointmenu, /taxirequest, /taxistatus, /canceltaxi, /busrequest, /busstatus, /cancelbus, /medicrequest, /medicstatus, /cancelmedic, /firestatus, /firemission\n/skinshop, /skins, /clothes, /skinfilter, /skincategories, /wardrobefilter, /wardrobe, /myskins, /myskin, /skinprofile, /skinmovement, /cjmovement, /skinpreviewconfig, /previewskinconfig, /skinrestore, /cancelpreview, /skinaudit, /skinstatus, /skincloseout, /skinconfig, /skincatalog, /skinreload\n/deathconfig, /hospitalconfig, /sethospitalfee [amount], /setdeathdroplifetime [seconds], /deathdrops, /cleardeathdrops, /deathlogs\n/wantedstatus, /wanted, /wantedtools, /setwanted [id] [0-6], /addwanted [id] [1-6], /clearwanted [id], /crimewanted, /crimehooks, /arrest [id], /arrestconfig, /setarrestradius [2-20], /setarrestfine [0-100000], /arrestbooking, /setarrestbooking, /gotoarrestbooking, /togglearrestbooking [0/1], /togglearrestjail [0/1], /setarrestjailseconds [0-600], /setarrestrelease, /gotoarrestrelease, /arrestpoints, /releasejail [id], /jailstatus, /jailhelp, /arrestlogs, /jailreleaselogs, /jaildisconnectlogs, /persistentjails, /dbjails, /arresthelp, /wantedhelp, /policeref\n\n", sizeof(body));
     strcat(body, "Gang Runtime / HQ Utility:\n/ganghq, /enterganghq, /exitganghq\n/gangstash, /gangtakeweapon, /gangrestock\n/setganginterior [gang_id], /ganginteriorinfo [gang_id]\nGang ALT pickup = direct join; pickup panah exterior = enter interior; pickup panah interior = exit.\n\n", sizeof(body));
     strcat(body, "Policy:\nGang = preset/offline-like, bukan player-created.\nDisabled gang disembunyikan dari pickup/map icon dan tidak bisa join/enter HQ.\n/sourceaudit dipakai untuk melihat summary; /sourcedetail dan /sourcedeprecated dipakai untuk review record sebelum cleanup.\n/sourcecleanup menjelaskan disable/relabel aman; exact/manual dilindungi dari bulk disable.\nMenu Owner-only tetap menolak jika level admin belum cukup.", sizeof(body));
@@ -23586,7 +24227,7 @@ stock ShowHelpCategory(playerid, category)
             strcat(body, "/dealerships, /finddealer, /vehicleshop.\n", sizeof(body));
             strcat(body, "/buyvehicle [id]: beli kendaraan fallback.\n", sizeof(body));
             strcat(body, "/garage: lihat slot kendaraan.\n", sizeof(body));
-            strcat(body, "/myveh [slot]: spawn kendaraan ke global parking point kosong terdekat.\n", sizeof(body));
+            strcat(body, "/myveh [slot]: spawn kendaraan hanya ke slot parkir publik resmi terdekat.\n", sizeof(body));
             strcat(body, "/sellveh [slot]: jual kendaraan.\n", sizeof(body));
             strcat(body, "/despawn: kembalikan kendaraan aktif ke home garage.\n", sizeof(body));
             strcat(body, "/lock: kunci/buka kendaraan.\n", sizeof(body));
@@ -46893,7 +47534,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
         if (!CanUseOfflineImportAudit(playerid)) return 1;
         LoadUnifiedVehicleStoragePolicy();
         LoadOwnedVehicleSpawnPoints();
-        SendClientMessage(playerid, COLOR_GREEN, "Reload vehicle storage policy, locations, dan parking spawn points dijalankan dari database.");
+        LoadSemanticPublicParkingRuntime();
+        SendClientMessage(playerid, COLOR_GREEN, "Reload vehicle storage policy, semantic public parking, dan legacy parking audit dijalankan dari database.");
         return 1;
     }
 
@@ -46909,6 +47551,136 @@ public OnPlayerCommandText(playerid, cmdtext[])
         return 1;
     }
 
+    if (!strcmp(cmdtext, "/parkingzoneaudit", true) || !strcmp(cmdtext, "/semanticparking", true))
+    {
+        QuerySemanticPublicParkingAudit(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/parkingzonelist", true))
+    {
+        QuerySemanticPublicParkingZoneList(playerid);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/parkingzonegoto", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Usage: /parkingzonegoto [zone_id]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/parkingzonegoto ", true) == 0)
+    {
+        new zoneStr[16];
+        if (!GetOneParam(cmdtext[17], zoneStr, sizeof(zoneStr)) || !IsNumericString(zoneStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Usage: /parkingzonegoto [zone_id]");
+            return 1;
+        }
+        GotoSemanticPublicParkingZone(playerid, strval(zoneStr));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/parkingzonereload", true))
+    {
+        if (!IsAdminLevel(playerid, ADMIN_OWNER)) return 1;
+        LoadSemanticPublicParkingRuntime();
+        SendClientMessage(playerid, COLOR_GREEN, "Semantic public parking policy dan approved slots direload dari database.");
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/parkingzonecreate", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Usage: /parkingzonecreate [type] [nama zona]");
+        SendClientMessage(playerid, COLOR_WHITE, "Contoh: /parkingzonecreate restaurant_parking Idlewood Burger Shot Parking");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/parkingzonecreate ", true) == 0)
+    {
+        new zoneType[32], zoneName[64];
+        if (!GetFirstParamAndRest(cmdtext[19], zoneType, sizeof(zoneType), zoneName, sizeof(zoneName)))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Usage: /parkingzonecreate [type] [nama zona]");
+            return 1;
+        }
+        SaveSemanticPublicParkingZoneAtPlayer(playerid, zoneType, zoneName);
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/parkingslotadd", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Usage: /parkingslotadd [zone_id]");
+        SendClientMessage(playerid, COLOR_WHITE, "Parkirkan kendaraan tepat pada garis slot; posisi/facing kendaraan akan disimpan.");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/parkingslotadd ", true) == 0)
+    {
+        new zoneStr[16];
+        if (!GetOneParam(cmdtext[16], zoneStr, sizeof(zoneStr)) || !IsNumericString(zoneStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Usage: /parkingslotadd [zone_id]");
+            return 1;
+        }
+        SaveSemanticPublicParkingSlotAtPlayer(playerid, strval(zoneStr));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/parkingzonesetcenter", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Usage: /parkingzonesetcenter [zone_id]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/parkingzonesetcenter ", true) == 0)
+    {
+        new zoneStr[16];
+        if (!GetOneParam(cmdtext[22], zoneStr, sizeof(zoneStr)) || !IsNumericString(zoneStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Usage: /parkingzonesetcenter [zone_id]");
+            return 1;
+        }
+        SaveSemanticPublicParkingZoneCenter(playerid, strval(zoneStr));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/parkingzonedisable", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Usage: /parkingzonedisable [zone_id]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/parkingzonedisable ", true) == 0)
+    {
+        new zoneStr[16];
+        if (!GetOneParam(cmdtext[20], zoneStr, sizeof(zoneStr)) || !IsNumericString(zoneStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Usage: /parkingzonedisable [zone_id]");
+            return 1;
+        }
+        DisableSemanticPublicParkingZone(playerid, strval(zoneStr));
+        return 1;
+    }
+
+    if (!strcmp(cmdtext, "/parkingslotdisable", true))
+    {
+        SendClientMessage(playerid, COLOR_YELLOW, "Usage: /parkingslotdisable [slot_id]");
+        return 1;
+    }
+
+    if (strfind(cmdtext, "/parkingslotdisable ", true) == 0)
+    {
+        new slotStr[16];
+        if (!GetOneParam(cmdtext[20], slotStr, sizeof(slotStr)) || !IsNumericString(slotStr))
+        {
+            SendClientMessage(playerid, COLOR_YELLOW, "Usage: /parkingslotdisable [slot_id]");
+            return 1;
+        }
+        DisableSemanticPublicParkingSlot(playerid, strval(slotStr));
+        return 1;
+    }
+
     if (!strcmp(cmdtext, "/parkingpointaudit", true) || !strcmp(cmdtext, "/parkingaudit", true))
     {
         QueryGlobalParkingPointAudit(playerid);
@@ -46919,20 +47691,19 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         if (!IsAdminLevel(playerid, ADMIN_OWNER)) return 1;
         LoadOwnedVehicleSpawnPoints();
-        SendClientMessage(playerid, COLOR_GREEN, "Global parking point runtime direload dari database.");
+        SendClientMessage(playerid, COLOR_YELLOW, "Legacy vehicle_spawn_points direload untuk audit saja. Owned vehicle v0.26A.1.31.7 hanya memakai semantic public parking slots.");
         return 1;
     }
 
     if (!strcmp(cmdtext, "/parkingpointadd", true))
     {
-        SendClientMessage(playerid, COLOR_YELLOW, "Usage: /parkingpointadd [nama lokasi]");
-        SendClientMessage(playerid, COLOR_WHITE, "Posisikan kendaraan/admin pada slot parkir yang valid lalu jalankan command.");
+        SendClientMessage(playerid, COLOR_RED, "Command legacy dinonaktifkan untuk spawn owned vehicle. Gunakan /parkingzonecreate lalu /parkingslotadd.");
         return 1;
     }
 
     if (strfind(cmdtext, "/parkingpointadd ", true) == 0)
     {
-        SaveGlobalParkingPointAtPlayer(playerid, cmdtext[17]);
+        SendClientMessage(playerid, COLOR_RED, "Legacy /parkingpointadd tidak digunakan oleh owned vehicle. Gunakan /parkingzonecreate dan /parkingslotadd.");
         return 1;
     }
 
@@ -50138,7 +50909,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.31.6.1 Dynamic Parking Stat Tag Compile Hotfix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.31.7 Semantic Public Parking Zone Runtime");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -50148,7 +50919,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
-        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.31.6.1: Compile hotfix untuk dynamic parking stat array, const input, dan model bounding-box validation.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.31.7: owned vehicle hanya spawn pada approved semantic public parking zone/slot; parked vehicle dan arbitrary ground dikeluarkan.");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.31.6.1: dynamic parking solver dipertahankan hanya sebagai diagnostic/validator slot ColAndreas.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.31.5: owned vehicle mencari seluruh global parking catalog terdekat; parked origin, sisi parkir, mission spawn, garage slot, dan admin custom point.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.31.2: ALT di kendaraan dirutekan dari KEY_FIRE ke vehicle mission dan house storage; ALT berjalan kaki tetap KEY_WALK.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.31: dealer_pending, home garage, /despawn, nearest parking spawn, /park disabled, dan warna commit saat garage save.");

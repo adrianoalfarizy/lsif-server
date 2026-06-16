@@ -992,6 +992,14 @@ new g_VehicleStorageCheckpointTimer;
 #define STORED_OWNED_VEHICLE_STREAM_LIMIT 6
 #define PARKED_VEHICLE_LIFECYCLE_TICK_MS 10000
 #define OWNED_VEHICLE_DESTROYED_COOLDOWN_DEFAULT 120
+#define OWNED_VEHICLE_SPAWN_MAPICON_SLOT 99
+#define OWNED_VEHICLE_SPAWN_MAPICON_TYPE 0
+#define OWNED_VEHICLE_SPAWN_MAPICON_COLOR 0xFFFF00FF
+#define OWNED_VEHICLE_SPAWN_MARKER_CLEAR_DISTANCE 18.0
+new bool:PlayerOwnedVehicleSpawnMarkerActive[MAX_PLAYERS];
+new Float:PlayerOwnedVehicleSpawnMarkerX[MAX_PLAYERS];
+new Float:PlayerOwnedVehicleSpawnMarkerY[MAX_PLAYERS];
+new Float:PlayerOwnedVehicleSpawnMarkerZ[MAX_PLAYERS];
 new bool:OwnedVehicleSpawnPointsReady = false;
 new OwnedVehicleSpawnPointCount = 0;
 new OwnedVehicleSpawnPointID[MAX_OWNED_VEHICLE_SPAWN_POINTS];
@@ -7010,6 +7018,10 @@ stock ResetOwnedVehicleData(playerid)
     OwnedVehicleHomeStorageLocationID[playerid] = 0;
     OwnedVehicleHomeStorageSlot[playerid] = 0;
     OwnedVehicleDestroyedCooldownSeconds[playerid] = 0;
+    PlayerOwnedVehicleSpawnMarkerActive[playerid] = false;
+    PlayerOwnedVehicleSpawnMarkerX[playerid] = 0.0;
+    PlayerOwnedVehicleSpawnMarkerY[playerid] = 0.0;
+    PlayerOwnedVehicleSpawnMarkerZ[playerid] = 0.0;
 
     OwnedVehicleX[playerid] = SPAWN_X + 3.0;
     OwnedVehicleY[playerid] = SPAWN_Y;
@@ -7178,6 +7190,67 @@ stock FindNearestOwnedVehicleSpawn(playerid, &Float:x, &Float:y, &Float:z, &Floa
     return 1;
 }
 
+stock RemoveOwnedVehicleSpawnMapMarker(playerid)
+{
+    if (IsPlayerConnected(playerid))
+    {
+        RemovePlayerMapIcon(playerid, OWNED_VEHICLE_SPAWN_MAPICON_SLOT);
+    }
+    PlayerOwnedVehicleSpawnMarkerActive[playerid] = false;
+    PlayerOwnedVehicleSpawnMarkerX[playerid] = 0.0;
+    PlayerOwnedVehicleSpawnMarkerY[playerid] = 0.0;
+    PlayerOwnedVehicleSpawnMarkerZ[playerid] = 0.0;
+    return 1;
+}
+
+stock ApplyOwnedVehicleSpawnMapMarker(playerid)
+{
+    if (!IsPlayerConnected(playerid) || !PlayerOwnedVehicleSpawnMarkerActive[playerid]) return 0;
+    SetPlayerMapIcon(
+        playerid,
+        OWNED_VEHICLE_SPAWN_MAPICON_SLOT,
+        PlayerOwnedVehicleSpawnMarkerX[playerid],
+        PlayerOwnedVehicleSpawnMarkerY[playerid],
+        PlayerOwnedVehicleSpawnMarkerZ[playerid],
+        OWNED_VEHICLE_SPAWN_MAPICON_TYPE,
+        OWNED_VEHICLE_SPAWN_MAPICON_COLOR,
+        MAPICON_GLOBAL
+    );
+    return 1;
+}
+
+stock ShowOwnedVehicleSpawnMapMarker(playerid, Float:x, Float:y, Float:z)
+{
+    RemovePlayerMapIcon(playerid, OWNED_VEHICLE_SPAWN_MAPICON_SLOT);
+    PlayerOwnedVehicleSpawnMarkerActive[playerid] = true;
+    PlayerOwnedVehicleSpawnMarkerX[playerid] = x;
+    PlayerOwnedVehicleSpawnMarkerY[playerid] = y;
+    PlayerOwnedVehicleSpawnMarkerZ[playerid] = z;
+    ApplyOwnedVehicleSpawnMapMarker(playerid);
+    SendClientMessage(playerid, COLOR_YELLOW, "Marker kuning menunjukkan lokasi owned vehicle yang baru dipanggil.");
+    return 1;
+}
+
+stock RefreshOwnedVehicleSpawnMapMarker(playerid)
+{
+    if (!PlayerOwnedVehicleSpawnMarkerActive[playerid]) return 0;
+    if (OwnedVehicleID[playerid] == INVALID_VEHICLE_ID || !IsValidVehicle(OwnedVehicleID[playerid]))
+    {
+        RemoveOwnedVehicleSpawnMapMarker(playerid);
+        return 0;
+    }
+    if (IsPlayerInVehicle(playerid, OwnedVehicleID[playerid]) ||
+        GetPlayerDistanceFromPoint(playerid,
+            PlayerOwnedVehicleSpawnMarkerX[playerid],
+            PlayerOwnedVehicleSpawnMarkerY[playerid],
+            PlayerOwnedVehicleSpawnMarkerZ[playerid]) <= OWNED_VEHICLE_SPAWN_MARKER_CLEAR_DISTANCE)
+    {
+        RemoveOwnedVehicleSpawnMapMarker(playerid);
+        return 0;
+    }
+    return 1;
+}
+
 stock GetOwnedVehicleHomeTransform(playerid, &Float:x, &Float:y, &Float:z, &Float:a)
 {
     if (OwnedVehicleHomeStorageLocationID[playerid] <= 0) return 0;
@@ -7240,6 +7313,7 @@ stock ProcessOwnedVehicleSpawnRequest(playerid, slotIndex)
     PlayerGarageLifecycle[playerid][slotIndex] = OWNED_VEHICLE_STATE_ACTIVE;
     SetActiveVehicleFromGarage(playerid, slotIndex);
     if (!SpawnOwnedVehicle(playerid)) return 0;
+    ShowOwnedVehicleSpawnMapMarker(playerid, x, y, z);
 
     new query[1024];
     mysql_format(g_SQL, query, sizeof(query),
@@ -7336,6 +7410,7 @@ public OnOwnedVehicleDespawned(playerid, slotIndex)
         DestroyVehicle(OwnedVehicleID[playerid]);
         OwnedVehicleID[playerid] = INVALID_VEHICLE_ID;
     }
+    RemoveOwnedVehicleSpawnMapMarker(playerid);
     PlayerGarageStored[playerid][slotIndex] = 1;
     PlayerGarageLifecycle[playerid][slotIndex] = OWNED_VEHICLE_STATE_STORED;
     OwnedVehicleLifecycle[playerid] = OWNED_VEHICLE_STATE_STORED;
@@ -9077,7 +9152,11 @@ public VehicleStorageCheckpointTick()
 {
     for (new playerid = 0; playerid < MAX_PLAYERS; playerid++)
     {
-        if (IsPlayerConnected(playerid) && PlayerLoggedIn[playerid]) RefreshPlayerHouseVehicleStorageCheckpoint(playerid);
+        if (IsPlayerConnected(playerid) && PlayerLoggedIn[playerid])
+        {
+            RefreshPlayerHouseVehicleStorageCheckpoint(playerid);
+            RefreshOwnedVehicleSpawnMapMarker(playerid);
+        }
     }
     return 1;
 }
@@ -9360,6 +9439,7 @@ public OnHouseVehicleStored(playerid, slotIndex, locationIndex)
         PlayerPendingHouseStorageToken[playerid], PlayerGarageDBID[playerid][slotIndex]);
     mysql_tquery(g_SQL, query);
 
+    RemoveOwnedVehicleSpawnMapMarker(playerid);
     PlayerGarageStored[playerid][slotIndex] = 1;
     PlayerGarageStorageLocationID[playerid][slotIndex] = VehicleStorageLocationID[locationIndex];
     PlayerGarageStorageSlot[playerid][slotIndex] = storageSlot;
@@ -16553,7 +16633,7 @@ public OnGameModeInit()
     DisableInteriorEnterExits();
     ManualVehicleEngineAndLights();
     UsePlayerPedAnims();
-    SetGameModeText("SAIF Dev v0.26A.1.31.2 In-Vehicle ALT Routing Hotfix");
+    SetGameModeText("SAIF Dev v0.26A.1.31.3 Yellow Vehicle Spawn Map Marker");
 
     new MySQLOpt:mysqlOptions = mysql_init_options();
     mysql_set_option(mysqlOptions, AUTO_RECONNECT, true);
@@ -16730,6 +16810,7 @@ public OnGameModeInit()
     print("[LSIF] Fuel system timer aktif setiap 60 detik.");
     print("[SAIF] House map icon registry aktif: 29 canonical savehouse fixed + 5 context slots, safety refresh 30 detik.");
     print("[SAIF] House Vehicle Storage runtime aktif: red checkpoint + ALT store/retrieve + owner validation.");
+    print("[SAIF] Owned vehicle call marker aktif: map slot 99, icon kotak warna kuning, hilang saat kendaraan didekati.");
     print("[LSIF] Firefighter mission tick aktif untuk water/APAR extinguish.");
     print("[SAIF] Turf war timer aktif setiap 1 detik.");
     print("[LSIF] Closed beta whitelist system aktif.");
@@ -16928,6 +17009,7 @@ public OnPlayerDisconnect(playerid, reason)
             mysql_tquery(g_SQL, query);
         }
     }
+    RemoveOwnedVehicleSpawnMapMarker(playerid);
     RemoveLSIFMapIcons(playerid);
     DestroyPlayerHouseExitPickup(playerid);
     if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID)
@@ -38831,6 +38913,7 @@ stock ApplyHouseStreamMapIcons(playerid)
 
     PlayerMapIconCanonicalHouseRendered[playerid] = canonicalRendered;
     PlayerMapIconContextHouseRendered[playerid] = contextRendered;
+    ApplyOwnedVehicleSpawnMapMarker(playerid);
     return canonicalRendered + contextRendered;
 }
 
@@ -43169,6 +43252,7 @@ public OnOwnedVehicleSaved(playerid, notify)
 
 public OnOwnedVehicleSold(playerid, sellPrice)
 {
+    RemoveOwnedVehicleSpawnMapMarker(playerid);
     if (!IsPlayerConnected(playerid))
     {
         return 1;
@@ -43216,6 +43300,7 @@ public OnVehicleDeath(vehicleid, killerid)
     for (new playerid = 0; playerid < MAX_PLAYERS; playerid++)
     {
         if (!IsPlayerConnected(playerid) || OwnedVehicleID[playerid] != vehicleid) continue;
+        RemoveOwnedVehicleSpawnMapMarker(playerid);
         DestroyOwnedVehicleLabel(playerid);
         OwnedVehicleID[playerid] = INVALID_VEHICLE_ID;
         ResetOwnedVehiclePendingModification(playerid);
@@ -43310,6 +43395,7 @@ public OnPlayerStateChange(playerid, PLAYER_STATE:newstate, PLAYER_STATE:oldstat
     {
         if (OwnedVehicleID[playerid] != INVALID_VEHICLE_ID && GetPlayerVehicleID(playerid) == OwnedVehicleID[playerid])
         {
+            RemoveOwnedVehicleSpawnMapMarker(playerid);
             if (OwnedVehicleFuel[playerid] <= 0)
             {
                 OwnedVehicleFuel[playerid] = 0;
@@ -49227,7 +49313,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF VERSION ==========");
         SendClientMessage(playerid, COLOR_WHITE, "Server: LSIF - Los Santos Indonesia Freeroam");
-        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.31.2 In-Vehicle ALT Key Routing Hotfix");
+        SendClientMessage(playerid, COLOR_WHITE, "Version: v0.26A.1.31.3 Owned Vehicle Yellow Spawn Map Marker");
         SendClientMessage(playerid, COLOR_WHITE, "Policy: exact-source-first; curated templates deprecated/disabled.");
         SendClientMessage(playerid, COLOR_WHITE, "Stage: Closed Beta Candidate");
         SendClientMessage(playerid, COLOR_CYAN, "Gunakan /changelog untuk melihat ringkasan update.");
@@ -49237,6 +49323,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (!strcmp(cmdtext, "/changelog", true))
     {
         SendClientMessage(playerid, COLOR_YELLOW, "========== LSIF CHANGELOG ==========");
+        SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.31.3: pemanggilan owned vehicle memberi marker kuning pada lokasi spawn sampai kendaraan didekati/diambil.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.31.2: ALT di kendaraan dirutekan dari KEY_FIRE ke vehicle mission dan house storage; ALT berjalan kaki tetap KEY_WALK.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.31: dealer_pending, home garage, /despawn, nearest parking spawn, /park disabled, dan warna commit saat garage save.");
         SendClientMessage(playerid, COLOR_WHITE, "v0.26A.1.29: controlled apply 12 baseline savehouse garage definitions; runtime interaction/storage/door policy tetap disabled.");

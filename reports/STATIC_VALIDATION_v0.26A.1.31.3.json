@@ -1,0 +1,13 @@
+{
+  "lines": 55022,
+  "curly_open": 6321,
+  "curly_close": 6321,
+  "paren_open": 28508,
+  "paren_close": 28508,
+  "bracket_open": 11251,
+  "bracket_close": 11251,
+  "SetPlayerMapIcon": 6,
+  "RemovePlayerMapIcon": 4,
+  "marker_slot": 4,
+  "sql_changed": 0
+}
